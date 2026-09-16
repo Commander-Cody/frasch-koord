@@ -1,0 +1,10 @@
+{
+  "search": {
+    "placeholder": "Ort suchen…",
+    "noResults": "Keine Ergebnisse"
+  },
+  "dialect": {
+    "label": "Dialekt"
+  },
+  "attribution": "© OpenStreetMap contributors, © OpenMapTiles"
+}

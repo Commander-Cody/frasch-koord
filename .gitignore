@@ -1,0 +1,20 @@
+# tile build inputs/outputs (large, reproducible)
+tiles/data/
+tiles/planetiler.jar
+*.pmtiles
+*.mbtiles
+*.osm.pbf
+
+# python
+.venv/
+__pycache__/
+
+# node
+node_modules/
+web/dist/
+
+# misc
+.DS_Store
+
+# name pipeline scratch
+names/work/
