@@ -64,44 +64,77 @@ then reads TileJSON straight out of the archive itself.
   2026-09-15, when the `place`-layer label group was restructured for
   Frisian place kinds (see "Label classes" below). Everything else in the
   file is still stock OSM Bright.
-- `src/style/localize.ts` — `buildStyle(baseStyle, tilesUrl, dialect)` keeps
+- `src/style/localize.ts` — `buildStyle(baseStyle, tilesUrl, labels)` keeps
   doing only what has to stay dynamic at runtime:
   - points the `openmaptiles` source at `tilesUrl` and adds OSM/OpenMapTiles
     attribution to it;
-  - rewrites every name-based symbol layer's `text-field` to the
-    dialect-aware expression below;
+  - rewrites every name-based symbol layer's `text-field` to
+    `nameExpression(labels)` below;
   - points `glyphs`/`sprite` at the locally hosted copies below, resolved
     as absolute URLs against the page origin (MapLibre requires this for
     sprites).
 
   Layers labelling something else (e.g. `{ref}` road shields) are left
-  untouched. Changing the dialect selector calls `map.setStyle()` with a
-  freshly built style for the new dialect.
+  untouched. Changing the selector calls `map.setStyle()` with a freshly
+  built style for the new label option.
 
-### Language chain
+### Dialect registry and the selector
 
-`text-field` on every name-based symbol layer becomes:
+`names/dialects.csv` is the single list of North Frisian dialects for the
+whole project; the exporter writes it to `src/generated/dialects.json`
+(`{tag, column, label, status, view}` per dialect, registry order) which
+`src/config.ts` imports — **generated, do not edit by hand.** `config.ts`
+derives the one dropdown from it:
+
+- one option per dialect with `view = yes` (today only Mooring — the other
+  dialects' name coverage is too thin for a whole map view), labelled from
+  the registry;
+- plus the **local dialect** view, `LOCAL_TAG = 'frr-x-local'`. That is not a
+  real dialect and has no `name:<tag>` tile property: it labels every place
+  the way the people of that place speak (the injector's `frasch:local`), so
+  one map shows Mooring around Niebüll, Fering on Föhr, Sölring on Sylt…
+
+Each option carries a `uiLanguage`, and `App.tsx` calls
+`i18n.changeLanguage(option.uiLanguage)` when the selection changes, so map
+labels and UI chrome move together. A dialect view uses its own dialect;
+the local view has no dialect of its own and borrows one —
+`LOCAL_VIEW_UI_LANGUAGE` in `config.ts` (Mooring today) is the single place
+to change that. i18next falls back to German for every language without
+resources, so an option whose UI is unwritten is harmless.
+
+### Label chain
+
+`nameExpression(tag)` in `src/style/localize.ts` produces the `text-field` of
+every name-based symbol layer. Dialect view (`tag = "frr-x-mooring"`):
 
 ```
-coalesce(name:<dialect>, name:frr, name:nds, name:de, name:latin, name)
+coalesce(name:frr-x-mooring, frasch:local, name:frr, name:nds, name:de, name:latin, name)
 ```
 
-e.g. for `dialect = "frr-x-mooring"`: `coalesce(get "name:frr-x-mooring", get
-"name:frr", get "name:nds", get "name:de", get "name:latin", get "name")`.
-Verified against the tiles baseline: early in development `name:frr-x-mooring`
-wasn't populated yet, so labels fell back to the generic `name:frr` field, as
-designed; once the name CSV is merged into a tile build (now the case — see
-"Tile attributes contract" below), dialect-specific names are picked up
-automatically.
+i.e. `coalesce(get "name:frr-x-mooring", get "frasch:local", get "name:frr",
+get "name:nds", get "name:de", get "name:latin", get "name")`. `frasch:local`
+sits right behind the selected dialect so that a place the dialect has no
+name for still gets a *Frisian* label (the Fering name on Föhr) rather than
+dropping to German.
 
-This chain is **Germany-only** for now (all Phase 1 covers). Planned, not yet
-implemented: outside Germany, drop `name:de` and prefer `name:en` instead.
-The approach when that's built: two symbol layers per label layer sharing the
-same base filter, one filtered with `within` a Germany polygon using this
-chain, the other filtered to its complement using an English-preferring chain
-(`coalesce(name:<dialect>, name:frr, name:en, name:latin, name)`). Not
-implemented today because there's no Germany polygon wired into the style
-yet.
+Local view (`tag = LOCAL_TAG`):
+
+```
+coalesce(frasch:local, name:nds, name:latin, name)
+```
+
+Deliberately **no `name:frr`** — that is some other dialect's name, which is
+exactly what this view avoids — and **no `name:de`**: German still arrives
+via `name:latin`/`name`, but only after Low Saxon has had its turn.
+
+Both chains assume Low Saxon is the local majority language wherever there is
+no Frisian name, which holds for Phase 1 (Schleswig-Holstein tiles only) and
+breaks as soon as the tiles leave northern Germany. Planned for the planet
+build, not yet implemented: two symbol layers per label layer sharing the same
+base filter, one filtered `within` a northern-Germany polygon using these
+chains, the other filtered to its complement using a chain without `name:nds`
+(and, outside Germany, preferring `name:en` over `name:de`). Not implemented
+today because there is no such polygon in the style yet.
 
 ### Tile attributes contract (source-layer `place`)
 
@@ -120,8 +153,18 @@ OpenMapTiles schema plus our extras, injected by the `tiles/` build
   feature must not be labelled below that zoom.
 - `frasch:maxzoom` (**string**, only where curated): the feature must not
   be labelled above that zoom (inclusive).
-- Names: `name:frr-x-mooring`, `name:frr`, `name:nds`, `name:de`, `name:da`,
-  `name:latin`, `name`.
+- `frasch:dialect` (string, only inside a Frisian dialect area): tag of the
+  dialect area the feature lies in, e.g. `frr-x-fering`. Not used by the
+  style today; it is what `frasch:local` was computed from.
+- `frasch:local` (string, only where known): the name the people of the
+  place use themselves — the area dialect's name, or the `local` column of
+  `names/places.csv` where a sub-dialect differs (Fahretoft). Drives the
+  local view.
+- `frasch:variety` (string, rare): the sub-dialect the local name belongs to,
+  e.g. `Foortuftinge`. Informational; nothing in the style reads it yet.
+- Names: `name:<tag>` for every dialect of the registry that has a name for
+  the feature (`name:frr-x-mooring`, `name:frr-x-fering`, …), plus
+  `name:frr`, `name:nds`, `name:de`, `name:da`, `name:latin`, `name`.
 
 The style degrades gracefully when `frasch:*` is absent (an archive built
 before the name-list merge): every `frasch:kind`-based filter has a
@@ -229,35 +272,50 @@ place):
 
 ```jsonc
 {
-  "id": "string",       // stable identifier
-  "name": "string",     // dialect/Frisian display name
-  "name_de": "string",  // German name, shown alongside as a hint
+  "id": "string",                 // stable identifier, e.g. "node/240044177"
+  "names": { "frr-x-mooring": "Naibel" },  // by registry tag; only non-empty ones
+  "local": "string",              // omitted when unknown: the place's own name
+  "dialect": "frr-x-fering",      // omitted outside the Frisian dialect areas
+  "variety": "Foortuftinge",      // omitted: sub-dialect of the local name
+  "name_de": "string",            // German name, shown alongside as a hint
   "lon": 0,
   "lat": 0,
-  "kind": "string"      // e.g. "town", "island", "hallig"
+  "kind": "string"                // e.g. "settlement", "island", "hallig"
 }
 ```
 
-Currently an empty array (`[]`) — populate it (or point somewhere else) once
-the names pipeline in `names/` produces coordinates. Selecting a search
-result flies the map to it.
+Written by `names/export_search_index.py`; only non-empty values are
+exported, so an absent field really means "no such name".
+
+**All** of an entry's names (every dialect, the local one and the German one)
+are flattened into one indexed string, so a place stays findable under any of
+its names whichever view is selected — typing "Naibel" while the map is in
+Fering still finds Niebüll. Which name a result *shows* follows the selected
+option, mirroring the label chain above: dialect view `names[tag] ?? local ??
+name_de`, local view `local ?? name_de`, with the German name on the second
+line when it differs. Selecting a result flies the map to it.
 
 ## i18n
 
-`i18next` + `react-i18next`, configured in `src/i18n.ts`. One JSON file per
-dialect in `src/locales/`, same keys in each:
+`i18next` + `react-i18next`, configured in `src/i18n.ts`; the UI language
+follows the selected label option (see "Dialect registry and the selector").
+One JSON file per dialect in `src/locales/`, same keys in each:
 
 - `de.json` — German UI strings (search placeholder, dialect label, "no
   results", attribution text). This is the fallback language
   (`fallbackLng: 'de'`).
-- `frr-x-mooring.json` — **Mooring UI strings are not written yet.** All
-  values are intentionally left as empty strings so the UI falls back to
-  German rather than showing blank text (`returnEmptyString: false` makes
-  i18next treat an empty string as "missing" for fallback purposes). Fill
-  these in once Mooring translations for the UI chrome exist.
+- `frr-x-mooring.json` — Mooring UI strings. Strings nobody has written yet
+  (`attribution`, `dialect.local`) are left as **empty strings — never
+  invented** — so the UI falls back to German rather than showing blank text
+  (`returnEmptyString: false` makes i18next treat an empty string as
+  "missing" for fallback purposes). Fill them in once real Mooring wording
+  exists.
 
 ## Not done / left as-is
 
-- Real content for `public/data/names.json` (schema documented above,
-  currently `[]`) — depends on the `names/` pipeline producing coordinates.
-- Mooring UI translations (see i18n section above).
+- Mooring UI translations for the remaining keys (see i18n section above),
+  including the name of the local-dialect view (`dialect.local`).
+- Nothing reads `frasch:dialect`/`frasch:variety` yet — they are exported so
+  a later UI can say which dialect a label is in.
+- The `within`-polygon split of the label chain for non-German areas (see
+  "Label chain").

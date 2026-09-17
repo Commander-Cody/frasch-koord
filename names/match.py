@@ -48,7 +48,7 @@ import unicodedata
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import placelist  # noqa: E402
-from placelist import format_osm, label, parse_osm, primary, variants  # noqa: E402
+from placelist import any_name, format_osm, label, local_ref, parse_osm, primary, variants  # noqa: E402
 
 CSV_PATH = placelist.DEFAULT_PATH
 CAND_PATH = os.path.join(HERE, "work", "candidates.jsonl")
@@ -601,7 +601,7 @@ def match_row(row, index: Index, hints: HintResolver):
     out = dict(row)
     out.update(osm_type="", osm_id="", match_name="", match_tags="",
                lon="", lat="", candidates="")
-    if not (label(row) or primary(row.get("other"))):
+    if not any_name(row):
         out["status"] = "not_found"
         out["note"] = _addnote(row, "no Frisian name")
         return out
@@ -710,6 +710,8 @@ def _addnote(row, txt):
 
 def owned_by_matcher(row):
     """May match.py (re)write this row's osm / wikidata / status?"""
+    if local_ref(row["osm"]):
+        return False              # a local reference: OSM has no object for it
     if row["kind"] == "not_a_place" or row["status"] == "skip":
         return False
     if row["status"] == "auto":
@@ -719,7 +721,7 @@ def owned_by_matcher(row):
 
 def find_duplicates(rows):
     """Two rows pointing at one OSM object -- usually the list has a place
-    twice (Mooring spelling + older spelling).  Only one of the names can end
+    twice (two spellings, or two rows from different sheet sections).  Only one of the names can end
     up on the map."""
     by_obj = collections.defaultdict(list)
     for r in rows:
@@ -739,14 +741,16 @@ def write_report(rows, results, path=REPORT_PATH, timings=None):
             return "not a place"
         if r["status"] == "skip":
             return "skip"
-        if not (label(r) or primary(r["other"])):
+        if not any_name(r):
             return "no Frisian name"
+        if local_ref(r["osm"]):
+            return "own point"
         if r["osm"] or r["wikidata"]:
             return "auto" if r["status"] == "auto" else "by hand"
         res = results.get(r["_line"])
         return "ambiguous" if res and res["status"] == "ambiguous" else "not found"
 
-    states = ["auto", "by hand", "ambiguous", "not found", "skip",
+    states = ["auto", "by hand", "own point", "ambiguous", "not found", "skip",
               "no Frisian name", "not a place"]
     by_kind = collections.defaultdict(collections.Counter)
     total = collections.Counter()
@@ -756,7 +760,7 @@ def write_report(rows, results, path=REPORT_PATH, timings=None):
         total[st] += 1
 
     def ref(r):
-        return f"{r['_line']} | {r['kind']} | {label(r) or primary(r['other'])} | {primary(r['de']) or primary(r['da'])}"
+        return f"{r['_line']} | {r['kind']} | {any_name(r)} | {primary(r['de']) or primary(r['da'])}"
 
     L = []
     L.append("# Name matching report\n")
@@ -768,7 +772,10 @@ def write_report(rows, results, path=REPORT_PATH, timings=None):
              "look the feature up on openstreetmap.org yourself. Put `ok` in "
              "`status` when you have checked a row (or leave it empty), `skip` when "
              "the row must never be put on the map. `match.py` only ever rewrites "
-             "rows with `status=auto` or with empty `osm`/`wikidata` cells.\n")
+             "rows with `status=auto` or with empty `osm`/`wikidata` cells. "
+             "**own point** rows carry a local reference (`local/<slug>`, a place "
+             "OSM does not have, positioned in `names/curation.csv`) and are never "
+             "touched.\n")
     L.append("## Counts\n")
     L.append("| kind | " + " | ".join(states) + " | total |")
     L.append("|---|" + "---:|" * (len(states) + 1))
@@ -782,7 +789,7 @@ def write_report(rows, results, path=REPORT_PATH, timings=None):
     amb = [r for r in rows if state(r) == "ambiguous"]
     L.append(f"## Ambiguous ({len(amb)})\n")
     L.append("`candidates` format: `type/id:name:class:km-from-NF-centre`\n")
-    L.append("| line | kind | Mooring | German | hint | why | candidates |")
+    L.append("| line | kind | Frisian | German | hint | why | candidates |")
     L.append("|---:|---|---|---|---|---|---|")
     for r in amb:
         res = results[r["_line"]]
@@ -792,14 +799,14 @@ def write_report(rows, results, path=REPORT_PATH, timings=None):
 
     dups = find_duplicates(rows)
     L.append(f"## Rows sharing one OSM object ({len(dups)})\n")
-    L.append("The list has these places twice (usually a Mooring spelling and an "
-             "older one). Only one name can be injected -- the first row wins; "
+    L.append("The list has these places twice (two spellings, or rows from two "
+             "sheet sections). Only one name can be injected -- the first row wins; "
              "decide which, and `skip` the other.\n")
-    L.append("| OSM object | lines | Mooring names | German |")
+    L.append("| OSM object | lines | Frisian names | German |")
     L.append("|---|---|---|---|")
     for key, g in sorted(dups.items(), key=lambda kv: kv[1][0]["_line"]):
         L.append(f"| `{format_osm([key])}` | " + ", ".join(str(x["_line"]) for x in g)
-                 + " | " + ", ".join(label(x) or primary(x["other"]) for x in g)
+                 + " | " + ", ".join(any_name(x) for x in g)
                  + f" | {primary(g[0]['de'])} |")
     L.append("")
 
@@ -809,7 +816,7 @@ def write_report(rows, results, path=REPORT_PATH, timings=None):
              "differently. `near misses` lists objects that do carry the German "
              "name but are the wrong kind of thing (a street, a bus stop, a "
              "building) -- occasionally one of them is still the right answer.\n")
-    L.append("| line | kind | Mooring | German | note | near misses |")
+    L.append("| line | kind | Frisian | German | note | near misses |")
     L.append("|---:|---|---|---|---|---|")
     for r in nf:
         res = results.get(r["_line"], {})
@@ -832,7 +839,7 @@ def write_matches(rows, results, index, path=MATCH_PATH):
         for r in rows:
             res = results.get(r["_line"])
             rec = {"line": r["_line"], "kind": r["kind"],
-                   "name": label(r) or primary(r["other"]),
+                   "name": any_name(r),
                    "de": primary(r["de"]), "osm": r["osm"],
                    "wikidata": r["wikidata"], "status": r["status"]}
             if res is not None:
@@ -843,6 +850,7 @@ def write_matches(rows, results, index, path=MATCH_PATH):
             else:
                 rec["result"] = "skip" if r["status"] == "skip" else \
                     "not a place" if r["kind"] == "not_a_place" else \
+                    "own point" if local_ref(r["osm"]) else \
                     "by hand" if (r["osm"] or r["wikidata"]) else ""
                 refs = parse_osm(r["osm"])
                 hit = index.by_key.get(refs[0]) if refs else None
@@ -878,8 +886,7 @@ def main(argv=None):
           f"({time.time()-t0:.0f}s)")
     hints = HintResolver(index)
 
-    todo = [r for r in rows if owned_by_matcher(r)
-            and (label(r) or primary(r["other"]))]
+    todo = [r for r in rows if owned_by_matcher(r) and any_name(r)]
     country_rows = [r for r in todo if r["kind"] == "country"]
     qids = wikidata_countries([primary(r["de"]) for r in country_rows],
                               offline=args.offline)

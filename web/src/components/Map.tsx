@@ -28,8 +28,12 @@ const NORTH_FRISIA_CENTER: [number, number] = [8.85, 54.6];
 const INITIAL_ZOOM = 9;
 
 export interface MapViewProps {
-  /** BCP 47 dialect tag, e.g. "frr-x-mooring". Rebuilds the style on change. */
-  dialect: string;
+  /**
+   * Label option tag: a dialect ("frr-x-mooring") or the local-dialect view
+   * (LOCAL_TAG). Passed straight to `buildStyle`; the style is rebuilt on
+   * every change.
+   */
+  labels: string;
 }
 
 /**
@@ -50,11 +54,11 @@ export interface MapViewHandle {
  * Full-viewport MapLibre map. Exposes a small imperative handle via ref so
  * parents (e.g. search) can fly to a location and drop a marker.
  */
-const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView({ dialect }, ref) {
+const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView({ labels }, ref) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markerRef = useRef<Marker | null>(null);
-  const appliedDialect = useRef(dialect);
+  const appliedLabels = useRef(labels);
 
   // NOTE: the handle must not capture mapRef.current directly. This hook runs
   // in the layout phase, before the effect below has created the map, so a
@@ -92,7 +96,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView({ diale
 
     const map = new MapLibreMap({
       container: containerRef.current,
-      style: buildStyle(fraschBright as unknown as StyleSpecification, TILES_URL, dialect),
+      style: buildStyle(fraschBright as unknown as StyleSpecification, TILES_URL, labels),
       center: NORTH_FRISIA_CENTER,
       zoom: INITIAL_ZOOM,
       // Reflects viewport (zoom/lat/lon[/bearing/pitch]) in the URL hash and
@@ -122,19 +126,19 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView({ diale
       }
       mapRef.current = null;
     };
-    // Only the initial dialect matters here; changes are handled below.
+    // Only the initial label option matters here; changes are handled below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Rebuild the style whenever the dialect actually changes. Tracking the
-  // applied dialect (rather than a first-run flag) also survives React
+  // Rebuild the style whenever the label option actually changes. Tracking
+  // the applied option (rather than a first-run flag) also survives React
   // StrictMode's double effect invocation in development.
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || appliedDialect.current === dialect) return;
-    appliedDialect.current = dialect;
-    map.setStyle(buildStyle(fraschBright as unknown as StyleSpecification, TILES_URL, dialect));
-  }, [dialect]);
+    if (!map || appliedLabels.current === labels) return;
+    appliedLabels.current = labels;
+    map.setStyle(buildStyle(fraschBright as unknown as StyleSpecification, TILES_URL, labels));
+  }, [labels]);
 
   return <div ref={containerRef} className="map-container" />;
 });

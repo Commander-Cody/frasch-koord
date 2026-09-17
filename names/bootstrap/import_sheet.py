@@ -44,8 +44,13 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_IN = os.path.join(HERE, "sheet-export.csv")
 DEFAULT_OUT = os.path.join(HERE, "places-from-sheet.csv")
 
-sys.path.insert(0, os.path.dirname(HERE))
-from placelist import COLUMNS  # noqa: E402
+# The places.csv schema of September 2026, frozen here on purpose: this is a
+# historical one-off and must keep producing the file it produced then.  The
+# `other` column was dissolved into one column per dialect on 2026-09-16 by
+# migrate_dialect_columns.py next door -- run that afterwards to get today's
+# schema.
+COLUMNS = ["kind", "mooring", "older", "other", "de", "hint", "da",
+           "osm", "wikidata", "status", "note"]
 
 # ---------------------------------------------------------------- sections ---
 # sheet_row (1-based incl. header) of each heading row -> (section label, kind)

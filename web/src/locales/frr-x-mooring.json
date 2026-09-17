@@ -4,7 +4,8 @@
     "noResults": "Niinj riseltoote"
   },
   "dialect": {
-    "label": "Spräkewise"
+    "label": "Spräkewise",
+    "local": "Toorpsspräkewise"
   },
   "attribution": ""
 }

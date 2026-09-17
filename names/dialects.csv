@@ -1,0 +1,12 @@
+tag,column,label,status,view,note
+frr-x-mooring,mooring,Mooring,living,yes,Bökingharde (Niebüll/Risum-Lindholm/Dagebüll); UI language
+frr-x-wieding,wieding,Wiedingharder,living,no,Wiedingharde
+frr-x-karrhard,karrhard,Karrharder,living,no,Karrharde
+frr-x-nordgoes,nordgoes,Nordergoesharder,living,no,"Nordergoesharde (Ockholm, Langenhorn)"
+frr-x-midgoes,midgoes,Mittelgoesharder,living,no,"Mittelgoesharde (Drelsdorf, Bohmstedt)"
+frr-x-suedgoes,suedgoes,Südergoesharder,extinct,no,Südergoesharde (Hattstedt); extinct 1981 – historic names shown in the local view
+frr-x-fering,fering,Fering,living,no,Föhr
+frr-x-oomrang,oomrang,Öömrang,living,no,Amrum
+frr-x-solring,solring,Sölring,living,no,Sylt
+frr-x-hallig,hallig,Halligfriesisch,living,no,Halligen (halifreesk / Hålifrasch)
+frr-x-halunder,halunder,Halunder,living,no,Helgoland

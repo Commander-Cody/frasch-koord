@@ -1,14 +1,15 @@
-osm,name,set_tags,minzoom,maxzoom,polygon_km2,note
-way/177387348,Habel,place=island,,,,Hallig; OSM tags it place=islet and OpenMapTiles drops islets entirely
-way/1472528449,Norderoog,place=island,,,,Hallig; OSM tags it place=islet
-way/1472528446,Südfall,place=island,,,,Hallig; OSM tags it place=islet
-node/85929111,Nordstrand (synthetic island polygon),place=island;frasch:kind=island,,11,50,"Nordstrand has no island polygon in OSM (only place=village and natural=peninsula nodes; it is a peninsula now, so the coastline does not close around it). OpenMapTiles labels place=island NODES only from z12, so the injector adds a synthetic 50 km² square (roughly the real area, which sets OMT's rank and first zoom) centred on the village node; Planetiler labels a polygon at its interior point = the node. It carries the node's names (e Strönj from the row below) and hands over to the village label at z12 (maxzoom 11). Earlier the municipality relation was the island polygon, but its interior point lies 2 km north-west of the village"
-relation/5713606,Süderoogsand,frasch:kind=sand,9,,,"already place=island in OSM; not in the sheet, so it needs its kind here. minzoom 9 puts it with Norderoogsand"
-relation/5713403,Japsand,frasch:kind=sand,,,,"already place=island in OSM; not in the sheet, so it needs its kind here"
-node/1259327161,Tilli,,10,,,no Frisian name; must not show before Dagebüll (z10)
-node/355956234,Tammensiel,,10,,,must not show before Dagebüll (z10)
-node/240074898,Friedrich-Wilhelm-Lübke-Koog,,11,,,"place=village with 166 inhabitants, first in the tiles at z9 like the real villages; far too prominent, so two zoom levels later"
-node/954942814,Rodenäs - Kirche,,11,,,"place=village in OSM but only the church end of Rodenäs; first at z9, far too prominent, so two zoom levels later"
-node/85929111,Nordstrand (village node),name:frr-x-mooring=e Strönj,12,,,"the municipality's place=village node: same name as the island, held back to z12 so it takes over from the synthetic island label above at the same spot (like Pellworm's village node)"
-relation/5615880,Hamburger Hallig,place=island,12,,,"only a dwelling node and an admin_level=10 boundary in OSM; the boundary becomes the island polygon. Small Hallig, so z12 like Habel"
-way/44051131; way/44051132; way/44051133; way/628205597; way/628205598; way/628205599,Arlau (segments outside the relation),name:frr-x-mooring=Arlou;frasch:kind=water,,,,six short waterway=river ways named Arlau that are not members of relation/535603 (the places.csv row for Arlau); give them the same name so the line label is continuous
+osm,name,lat,lon,set_tags,minzoom,maxzoom,polygon_km2,note
+way/177387348,Habel,,,place=island,,,,Hallig; OSM tags it place=islet and OpenMapTiles drops islets entirely
+way/1472528449,Norderoog,,,place=island,,,,Hallig; OSM tags it place=islet
+way/1472528446,Südfall,,,place=island,,,,Hallig; OSM tags it place=islet
+node/85929111,Nordstrand (synthetic island polygon),,,place=island;frasch:kind=island,,11,50,"Nordstrand has no island polygon in OSM (only place=village and natural=peninsula nodes; it is a peninsula now, so the coastline does not close around it). OpenMapTiles labels place=island NODES only from z12, so the injector adds a synthetic 50 km² square (roughly the real area, which sets OMT's rank and first zoom) centred on the village node; Planetiler labels a polygon at its interior point = the node. It carries the node's names (e Strönj from the row below) and hands over to the village label at z12 (maxzoom 11). Earlier the municipality relation was the island polygon, but its interior point lies 2 km north-west of the village"
+relation/5713606,Süderoogsand,,,frasch:kind=sand,9,,,"already place=island in OSM; not in the sheet, so it needs its kind here. minzoom 9 puts it with Norderoogsand"
+relation/5713403,Japsand,,,frasch:kind=sand,,,,"already place=island in OSM; not in the sheet, so it needs its kind here"
+node/1259327161,Tilli,,,,10,,,no Frisian name; must not show before Dagebüll (z10)
+node/355956234,Tammensiel,,,,10,,,must not show before Dagebüll (z10)
+node/240074898,Friedrich-Wilhelm-Lübke-Koog,,,,11,,,"place=village with 166 inhabitants, first in the tiles at z9 like the real villages; far too prominent, so two zoom levels later"
+node/954942814,Rodenäs - Kirche,,,,11,,,"place=village in OSM but only the church end of Rodenäs; first at z9, far too prominent, so two zoom levels later"
+node/85929111,Nordstrand (village node),,,name:frr-x-mooring=e Strönj,12,,,"the municipality's place=village node: same name as the island, held back to z12 so it takes over from the synthetic island label above at the same spot (like Pellworm's village node)"
+relation/5615880,Hamburger Hallig,,,place=island,12,,,"only a dwelling node and an admin_level=10 boundary in OSM; the boundary becomes the island polygon. Small Hallig, so z12 like Habel"
+way/44051131; way/44051132; way/44051133; way/628205597; way/628205598; way/628205599,Arlau (segments outside the relation),,,name:frr-x-mooring=Arlou;frasch:kind=water,,,,six short waterway=river ways named Arlau that are not members of relation/535603 (the places.csv row for Arlau); give them the same name so the line label is continuous
+local/westerheide-amrum,Westerheide (Amrum),54.65097,8.34019,,,,,nicht in OSM (Waasterhias bei Nebel); Lage von Hand gesetzt

@@ -1,36 +1,59 @@
 import type { StyleSpecification, LayerSpecification } from 'maplibre-gl';
 import type { ExpressionSpecification } from '@maplibre/maplibre-gl-style-spec';
 
+import { LOCAL_TAG } from '../config';
+
 // `../style/frasch-bright.json` started as a fork of upstream OSM Bright
 // (openmaptiles/osm-bright-gl-style, openmaptiles:version "3.x", fetched
 // 2026-09-15 - see web/README.md for details) and is now edited directly as
 // our own style (place-label layers restructured for Frisian place kinds,
 // see the "Label classes" section of the README). This module keeps doing
 // only what must stay dynamic at runtime: pointing the vector source at the
-// configured tiles URL, building the dialect-aware name expression, and
-// resolving glyph/sprite URLs against the page origin.
+// configured tiles URL, building the label expression for the selected
+// dialect (or the local-dialect view), and resolving glyph/sprite URLs
+// against the page origin.
 
 /**
- * Builds a name-based text-field expression that prefers the given dialect,
- * then falls back through other Frisian names, Low German, German, a
- * transliterated Latin name, then the generic OSM `name` field.
+ * Builds the `text-field` expression for a label option.
  *
- * `dialect` is a BCP 47 tag such as "frr-x-mooring"; the corresponding tile
- * property is literally "name:frr-x-mooring".
+ * `tag` is either a dialect tag such as "frr-x-mooring" (the corresponding
+ * tile property is literally "name:frr-x-mooring") or LOCAL_TAG, the "local
+ * dialect" view.
  *
- * This is Germany-only for now (which is all Phase 1 covers). Planned, not
- * yet implemented: outside Germany, drop `name:de` and prefer `name:en`
- * instead. The approach when that's built: two symbol layers per label
- * layer sharing the same base filter, one filtered with `within` a Germany
- * polygon using this chain, the other filtered to its complement using an
- * English-preferring chain (`coalesce(name:<dialect>, name:frr, name:en,
- * name:latin, name)`). Not implemented today because there's no Germany
- * polygon wired into the style yet.
+ *  - dialect view: the dialect's own name first, then the local Frisian name
+ *    of the place (`frasch:local`, e.g. a Fering name on Föhr while the map
+ *    is in Mooring) so a Frisian name is preferred over a German one even
+ *    where this dialect has none, then generic Frisian, Low Saxon, German,
+ *    a transliterated Latin name, and finally the generic OSM `name`.
+ *  - local view: ONLY the name the people of the place use themselves, then
+ *    the local majority language. Deliberately no `name:frr` (that is some
+ *    other dialect's name, which is exactly what this view avoids) and no
+ *    `name:de` — German comes in via `name:latin`/`name` anyway, but only
+ *    after Low Saxon has had its turn.
+ *
+ * Phase 1 covers Schleswig-Holstein only, so `name:nds` (Low Saxon) is always
+ * the local majority language outside the Frisian areas. That assumption
+ * breaks as soon as the tiles leave northern Germany. Planned for the planet
+ * build, not yet implemented: two symbol layers per label layer sharing the
+ * same base filter, one filtered `within` a northern-Germany polygon using
+ * this chain, the other filtered to its complement using a chain without
+ * `name:nds` (and, outside Germany, preferring `name:en` over `name:de`).
+ * Not implemented today because there is no such polygon in the style yet.
  */
-function dialectNameExpression(dialect: string): ExpressionSpecification {
+export function nameExpression(tag: string): ExpressionSpecification {
+  if (tag === LOCAL_TAG) {
+    return [
+      'coalesce',
+      ['get', 'frasch:local'],
+      ['get', 'name:nds'],
+      ['get', 'name:latin'],
+      ['get', 'name'],
+    ] as unknown as ExpressionSpecification;
+  }
   return [
     'coalesce',
-    ['get', `name:${dialect}`],
+    ['get', `name:${tag}`],
+    ['get', 'frasch:local'],
     ['get', 'name:frr'],
     ['get', 'name:nds'],
     ['get', 'name:de'],
@@ -57,17 +80,18 @@ function referencesName(textField: unknown): boolean {
 }
 
 /**
- * Rewrites `baseStyle` into a dialect-aware, self-hosted style:
+ * Rewrites `baseStyle` into a label-aware, self-hosted style:
  *  - points the `openmaptiles` source at `tilesUrl`
- *  - rewrites every symbol layer's name-based `text-field` to prefer the
- *    given dialect, falling back to other Frisian, then German, then the
- *    plain `name` field
+ *  - rewrites every symbol layer's name-based `text-field` to the chain of
+ *    `nameExpression(labels)` above
  *  - points `glyphs`/`sprite` at locally hosted, absolute-path URLs
+ *
+ * `labels` is a dialect tag or LOCAL_TAG (see `nameExpression`).
  */
 export function buildStyle(
   baseStyle: StyleSpecification,
   tilesUrl: string,
-  dialect: string,
+  labels: string,
 ): StyleSpecification {
   const style: StyleSpecification = structuredClone(baseStyle);
 
@@ -84,8 +108,8 @@ export function buildStyle(
     },
   };
 
-  // (b) Rewrite name-based text-fields to be dialect-aware.
-  const nameExpression = dialectNameExpression(dialect);
+  // (b) Rewrite name-based text-fields to follow the selected label chain.
+  const textFieldExpression = nameExpression(labels);
   style.layers = style.layers.map((layer: LayerSpecification): LayerSpecification => {
     if (layer.type !== 'symbol' || !layer.layout) return layer;
     const textField = (layer.layout as Record<string, unknown>)['text-field'];
@@ -94,7 +118,7 @@ export function buildStyle(
       ...layer,
       layout: {
         ...layer.layout,
-        'text-field': nameExpression,
+        'text-field': textFieldExpression,
       },
     };
   });
