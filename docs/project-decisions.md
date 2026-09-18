@@ -195,8 +195,33 @@ place in the name list, needs no new column in `places.csv`, and gives the
 search index a stable id. Cost: a hand-placed place now needs two rows, one
 per file.
 
+## Decided 2026-09-19: name list under ODbL 1.0
+
+The published name list, named **"Frasche stääsnoome"** (`names/places.csv` and the other hand-edited files in
+`names/`) is licensed under the **Open Database License 1.0**, contents under
+DbCL 1.0; full text in `names/LICENSE`. Attribution string: "Frasch name list,
+Thore Andresen, ODbL 1.0".
+
+**Why**: the tiles are ODbL anyway (derived from OSM), so nothing else was
+gained by a more permissive choice; ODbL lets anyone push names into OSM
+without a waiver, and share-alike guarantees that an extended or merged list
+(another dialect, another region) comes back to the public. Cost accepted:
+third parties cannot carry the names into Wikidata (CC0); the author can do so
+personally as the rights holder. CC BY-SA was ruled out because OSM cannot
+import it. Preconditions checked: the sheet's sources are many cited
+publications (Hoekstra 2015, Nordfriisk Instituut, Löfstedt 1931, literary
+texts), not a bulk extraction from one database; `places.csv` holds only OSM
+*references*, not OSM names or coordinates (those live in `curation.csv` and
+the build). Still to confirm by the owner: that no one else contributed rows to
+the original sheet (co-authors would have to agree to the license).
+
+Code license (MIT, proposed 2026-09-15) remains undecided; the style fork must
+keep the OSM Bright BSD notice whatever is chosen. The map's attribution
+control must show "© OpenStreetMap contributors" and the OpenMapTiles credit
+before launch; the Mooring locale's attribution string is still empty.
+
 ## Remaining open questions
-1. License of the published name list (owner's choice; ODbL suggested).
+1. Code license (MIT proposed).
 2. Hosting provider (R2 + Pages proposed, nothing set up yet).
 3. When to do the planet build (needs the VM; only after the North Frisia build looks right).
 4. Whether to also push confirmed names to OSM `name:frr` (separate track; import guidelines).

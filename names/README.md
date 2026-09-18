@@ -404,6 +404,21 @@ injected row; `set_tags` is how an object the list does not mention gets one.
 `tiles/build.sh` passes the file to `inject_names.py` automatically;
 `--no-curation` ignores it, `--curation OTHER.csv` swaps it.
 
+## License
+
+The name list, **"Frasche stääsnoome"** (`places.csv`, `dialects.csv`, `dialect_areas.csv`,
+`dialect_areas.geojson`, `curation.csv`) is published under the **Open
+Database License (ODbL) 1.0**, see `names/LICENSE` (decided 2026-09-19).
+Attribution: "Frasche stääsnoome, Thore Andresen, ODbL 1.0". Share-alike: an
+extended or merged version of the list must be published under ODbL too; a
+map drawn from it only needs the attribution. The tiles are ODbL in any case
+(derived from OpenStreetMap). ODbL data can go into OpenStreetMap without a
+waiver; Wikidata (CC0) cannot take it from third parties, but the author can
+contribute names there directly.
+
+Keep OSM-derived data out of `places.csv` beyond the `osm`/`wikidata`
+references: coordinates and tag fixes belong in `curation.csv` and the build.
+
 ## Files
 
 | file | what |
