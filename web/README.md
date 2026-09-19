@@ -313,7 +313,10 @@ Every pick (an OSM reference, a local reference, or a skip) is appended to
 `names/places.csv` and `names/curation.csv`. Nothing in `names/` is written by
 the browser directly. The selected row is mirrored into the URL
 (`?curate&line=481`, next to MapLibre's view hash), so a reload or a pasted
-link reopens the same row; ↑/↓ or `j`/`k` walk the list.
+link reopens the same row; ↑/↓ or `j`/`k` walk the list. A place that is
+several OSM objects is picked by ticking candidates and lookup results (or
+shift-clicking their pins) and "Pick N selected": one entry with
+`osm: "a; b; c"`, plus a wikidata id only when the ticked objects agree on one.
 
 The "Nominatim" and "Overpass" lookups are **called from the browser** against
 the public instances (`nominatim.openstreetmap.org`, `overpass-api.de`), bounded

@@ -7,6 +7,10 @@
  * numbered pins, and writes every pick to `names/work/curate-patch.jsonl`
  * through the dev-server endpoints in `web/vite-plugins/curate.ts`.
  * `names/curate.py apply` later folds that patch into places.csv/curation.csv.
+ *
+ * One place can be several OSM objects (a node and its area, a landscape made
+ * of relations): tick candidates or lookup results — or shift-click their pins
+ * — and "Pick selected" saves them as one `osm` cell, `a; b; c`.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RefObject } from 'react';
@@ -212,6 +216,11 @@ function pinElement(label: string, color: string, title: string): HTMLElement {
   return el;
 }
 
+/** Drops `el` from the ref -> pin map, leaving another pin under the same ref alone. */
+function unregisterPin(pins: Map<string, HTMLElement>, el: HTMLElement): void {
+  for (const [ref, pin] of pins) if (pin === el) pins.delete(ref);
+}
+
 /** Rough circle in degrees; good enough to show "the hint said within N km". */
 function circleRing(lon: number, lat: number, radiusKm: number): [number, number][] {
   const ring: [number, number][] = [];
@@ -300,6 +309,8 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
   const [pickingPosition, setPickingPosition] = useState(false);
   const [polygonKm2, setPolygonKm2] = useState('');
   const [postError, setPostError] = useState<string | null>(null);
+  /** Refs ticked for a multi-object pick, in tick order (= order in the cell). */
+  const [checkedRefs, setCheckedRefs] = useState<{ ref: string; wikidata?: string }[]>([]);
 
   const listRef = useRef<HTMLUListElement | null>(null);
 
@@ -401,11 +412,27 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
 
   /* ----------------------------------------------------------- map pins */
 
+  /**
+   * Stable (functional update) so the pin effects below can call it without
+   * depending on the selection — re-running them would re-fit the map.
+   */
+  const toggleChecked = useCallback((ref: string, wikidata?: string) => {
+    setCheckedRefs((prev) =>
+      prev.some((item) => item.ref === ref)
+        ? prev.filter((item) => item.ref !== ref)
+        : [...prev, { ref, ...(wikidata ? { wikidata } : {}) }],
+    );
+  }, []);
+
+  /** Pin element per ref, so ticking only toggles a class instead of re-adding markers. */
+  const pinEls = useRef(new Map<string, HTMLElement>());
+
   useEffect(() => {
     const map = mapRef.current?.getMap();
     if (!map || !selected) return;
 
     const markers: Marker[] = [];
+    const pins = pinEls.current;
     const bounds = new LngLatBounds();
     let any = false;
 
@@ -419,8 +446,10 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
       el.addEventListener('click', (event) => {
         // Otherwise the click would also reach the map (position picking).
         event.stopPropagation();
-        setActiveRef(candidate.ref);
+        if (event.shiftKey) toggleChecked(candidate.ref, candidate.wikidata);
+        else setActiveRef(candidate.ref);
       });
+      pins.set(candidate.ref, el);
       markers.push(new Marker({ element: el }).setLngLat([candidate.lon, candidate.lat]).addTo(map));
       bounds.extend([candidate.lon, candidate.lat]);
       any = true;
@@ -460,33 +489,51 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
     return () => {
       cancelled = true;
       map.off('load', drawCircle);
-      for (const marker of markers) marker.remove();
+      for (const marker of markers) {
+        unregisterPin(pins, marker.getElement());
+        marker.remove();
+      }
       try {
         removeHintCircle(map);
       } catch {
         // Style already torn down — nothing left to clean.
       }
     };
-  }, [selected, worklist, mapRef]);
+  }, [selected, worklist, mapRef, toggleChecked]);
 
   /* ------------------------------------------------------- lookup pins */
 
   useEffect(() => {
     const map = mapRef.current?.getMap();
     if (!map || lookupResults.length === 0) return;
+    const pins = pinEls.current;
     const markers = lookupResults.map((result, i) => {
       const el = pinElement(String(i + 1), COLOR_LOOKUP, `${result.ref} ${result.name}`);
       el.classList.add('curate-pin-lookup');
       el.addEventListener('click', (event) => {
         event.stopPropagation();
-        map.flyTo({ center: [result.lon, result.lat], zoom: 14, essential: true });
+        if (event.shiftKey) toggleChecked(result.ref, result.wikidata);
+        else map.flyTo({ center: [result.lon, result.lat], zoom: 14, essential: true });
       });
+      // A ref that is also a candidate keeps its candidate pin in the map.
+      if (!pins.has(result.ref)) pins.set(result.ref, el);
       return new Marker({ element: el }).setLngLat([result.lon, result.lat]).addTo(map);
     });
     return () => {
-      for (const marker of markers) marker.remove();
+      for (const marker of markers) {
+        unregisterPin(pins, marker.getElement());
+        marker.remove();
+      }
     };
-  }, [lookupResults, mapRef]);
+  }, [lookupResults, mapRef, toggleChecked]);
+
+  // Declared after the pin effects so their elements are registered first.
+  useEffect(() => {
+    const checked = new Set(checkedRefs.map((item) => item.ref));
+    for (const [ref, el] of pinEls.current) {
+      el.classList.toggle('curate-pin-checked', checked.has(ref));
+    }
+  }, [checkedRefs, selected, lookupResults]);
 
   /* ------------------------------------------------ position picking */
 
@@ -543,6 +590,7 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
       setLookupQuery(row ? de || primary(row.da) || row.name : '');
       setSlug(row ? slugify(de || row.name) : '');
       setActiveRef(null);
+      setCheckedRefs([]);
       setLookupResults([]);
       setLookupSource('');
       setLookupError(null);
@@ -761,6 +809,9 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
   const refsValid = parseRefs(manualRef) !== null;
   const polygonRelevant = selected ? POLYGON_KINDS.has(selected.kind) : false;
   const canSaveLocal = Boolean(selected) && isValidSlug(slug) && position !== null;
+  const checkedSet = new Set(checkedRefs.map((item) => item.ref));
+  // Only an unambiguous wikidata id goes along; `apply` cannot choose between two.
+  const checkedQids = [...new Set(checkedRefs.flatMap((item) => (item.wikidata ? [item.wikidata] : [])))];
 
   return (
     <div className="curate-panel">
@@ -915,8 +966,22 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
             {selected.candidates.map((candidate, i) => (
               <li
                 key={candidate.ref}
-                className={candidate.ref === activeRef ? 'is-active' : undefined}
+                className={
+                  [
+                    candidate.ref === activeRef ? 'is-active' : '',
+                    checkedSet.has(candidate.ref) ? 'is-checked' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ') || undefined
+                }
               >
+                <input
+                  type="checkbox"
+                  className="curate-check-ref"
+                  aria-label={`select ${candidate.ref}`}
+                  checked={checkedSet.has(candidate.ref)}
+                  onChange={() => toggleChecked(candidate.ref, candidate.wikidata)}
+                />
                 <button
                   type="button"
                   className="curate-candidate"
@@ -989,7 +1054,17 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
           {lookupSource && !lookupError && <p className="curate-hint-text">{lookupSource}</p>}
           <ul className="curate-candidates">
             {lookupResults.map((result, i) => (
-              <li key={`${result.ref}-${i}`}>
+              <li
+                key={`${result.ref}-${i}`}
+                className={checkedSet.has(result.ref) ? 'is-checked' : undefined}
+              >
+                <input
+                  type="checkbox"
+                  className="curate-check-ref"
+                  aria-label={`select ${result.ref}`}
+                  checked={checkedSet.has(result.ref)}
+                  onChange={() => toggleChecked(result.ref, result.wikidata)}
+                />
                 <button
                   type="button"
                   className="curate-candidate"
@@ -1024,6 +1099,37 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
               </li>
             ))}
           </ul>
+
+          {checkedRefs.length > 0 && (
+            <div className="curate-multi">
+              <span className="curate-mono">
+                {checkedRefs.length} selected: {checkedRefs.map((item) => item.ref).join('; ')}
+              </span>
+              {checkedQids.length > 1 && (
+                <p className="curate-hint-text">
+                  different wikidata ids ({checkedQids.join(', ')}) — none saved
+                </p>
+              )}
+              <div className="curate-row">
+                <button
+                  type="button"
+                  onClick={() =>
+                    void send(selected, {
+                      action: 'osm',
+                      osm: checkedRefs.map((item) => item.ref).join('; '),
+                      ...(checkedQids.length === 1 ? { wikidata: checkedQids[0] } : {}),
+                      ...(note.trim() ? { note: note.trim() } : {}),
+                    })
+                  }
+                >
+                  Pick {checkedRefs.length} selected
+                </button>
+                <button type="button" onClick={() => setCheckedRefs([])}>
+                  clear selection
+                </button>
+              </div>
+            </div>
+          )}
 
           <h3 className="curate-section">OSM reference by hand</h3>
           <input
