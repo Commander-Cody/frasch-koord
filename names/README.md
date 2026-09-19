@@ -210,6 +210,28 @@ and the *not found* rows with near misses. Resolve a row by writing the right
 `osm` reference into `places.csv` (and `ok` into `status` if you like), or
 `skip` if it should never appear.
 
+**Review on the map** — the same worklist as pins, which is usually faster
+than looking every candidate up on openstreetmap.org:
+
+```bash
+$PY names/curate.py export     # -> work/curate.json (needs a match.py run)
+cd web && npm run dev          # then open /?curate -- dev server only
+$PY names/curate.py apply --dry-run
+$PY names/curate.py apply
+```
+
+`export` writes every ambiguous and not-found row the matcher still owns, with
+its candidates' positions and its location hint, to `work/curate.json`; rows
+whose line has moved since the match run are dropped with a note (re-run
+`match.py`). In the browser you pick a candidate, drop a point of your own, or
+`skip` the row; every decision is appended as one line to
+`work/curate-patch.jsonl`, so you can stop and resume. `apply` reads that file
+back — the last entry per row wins — and writes `osm`, `wikidata` and
+`status` (`ok`, or `skip`) into `places.csv`, plus one `curation.csv` row per
+place OSM does not have. It touches only the rows `match.py` owns and refuses
+the rest, then renames the patch file (`--keep` leaves it). Re-run `match.py`
+afterwards and export again.
+
 **Build**:
 
 ```bash
@@ -433,7 +455,8 @@ references: coordinates and tag fixes belong in `curation.csv` and the build.
 | `match.py` | fills `osm`/`wikidata` in `places.csv`; writes `work/matches.csv` and `REPORT.md` |
 | `build_dialect_areas.py` | `dialect_areas.csv` + OSM extract → `dialect_areas.geojson` |
 | `dialect_areas.geojson` | generated, **committed**: one polygon set per dialect |
+| `curate.py` | the review worklist as pins on the map: `export` → `work/curate.json`, `apply` writes the browser's decisions back into `places.csv` / `curation.csv` |
 | `export_search_index.py` | `places.csv` + `work/matches.csv` → `web/public/data/names.json` and `web/src/generated/dialects.json` |
 | `REPORT.md` | generated worklist |
-| `work/` | git-ignored caches (candidates, matches, Wikidata lookups) |
+| `work/` | git-ignored caches (candidates, matches, Wikidata lookups) and the curation view's `curate.json` / `curate-patch.jsonl` |
 | `bootstrap/` | the original sheet export, its one-time importer and the one-time `other` → dialect-column migration |

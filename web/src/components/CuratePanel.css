@@ -1,0 +1,372 @@
+/* Curation review view (?curate). Dev tool: dense, plain, always light —
+   the map behind it is light too, and this never ships to the public site. */
+
+.curate-panel {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  bottom: 12px;
+  z-index: 1;
+  width: min(420px, calc(100vw - 24px));
+  overflow-y: auto;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-family: system-ui, sans-serif;
+  font-size: 13px;
+  color-scheme: light;
+  color: #222;
+}
+
+.curate-title {
+  margin: 0;
+  font-size: 15px;
+}
+
+.curate-counts {
+  margin: 0;
+  color: #666;
+  font-size: 12px;
+}
+
+.curate-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: sticky;
+  top: -10px;
+  background: white;
+  padding-top: 2px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #eee;
+  z-index: 2;
+}
+
+.curate-input {
+  font: inherit;
+  padding: 5px 7px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  width: 100%;
+  box-sizing: border-box;
+  background: #fff;
+  color: #222;
+}
+
+.curate-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.curate-row .curate-input {
+  flex: 1 1 0;
+}
+
+.curate-panel button {
+  font: inherit;
+  padding: 5px 9px;
+  border: 1px solid #bbb;
+  border-radius: 4px;
+  background: #f7f7f7;
+  color: #222;
+  cursor: pointer;
+}
+
+.curate-panel button:hover:not(:disabled) {
+  background: #ececec;
+}
+
+.curate-panel button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.curate-panel button.is-armed {
+  background: #ffe9b3;
+  border-color: #d9a300;
+}
+
+.curate-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #444;
+}
+
+/* ------------------------------------------------------------- worklist */
+
+.curate-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  /* The panel scrolls as a whole; without this a long detail block would
+     shrink the list to nothing (flex items may shrink below their content). */
+  flex-shrink: 0;
+  max-height: 40vh;
+  overflow-y: auto;
+  border: 1px solid #eee;
+  border-radius: 4px;
+}
+
+.curate-item {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.curate-item:last-child {
+  border-bottom: none;
+}
+
+.curate-item > button {
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-radius: 0;
+  background: none;
+  padding: 5px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.curate-item.is-selected > button {
+  background: #e8f0fe;
+}
+
+.curate-item.is-done > button {
+  color: #888;
+}
+
+.curate-item-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.curate-item-name {
+  font-weight: 600;
+}
+
+.curate-item-de {
+  color: #777;
+  font-size: 12px;
+}
+
+.curate-item-hint,
+.curate-item-done {
+  font-size: 11px;
+  color: #777;
+}
+
+.curate-item-done {
+  color: #2e7d32;
+}
+
+.curate-badge {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  border-radius: 8px;
+  background: #eee;
+  color: #555;
+  margin-left: auto;
+}
+
+/* The badge doubles as the result marker: ambiguous had candidates to choose
+   from, not_found had none — worth telling apart at a glance. */
+.curate-badge-ambiguous {
+  background: #fff1c2;
+  color: #7a5900;
+}
+
+.curate-badge-not_found {
+  background: #ffe0e0;
+  color: #8a1f1f;
+}
+
+.curate-empty {
+  padding: 6px;
+  color: #777;
+}
+
+/* --------------------------------------------------------------- detail */
+
+.curate-detail {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 6px;
+  border-top: 1px solid #eee;
+  padding-top: 6px;
+}
+
+.curate-detail-title {
+  margin: 0;
+  font-size: 14px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.curate-detail-line {
+  font-size: 11px;
+  font-weight: normal;
+  color: #888;
+}
+
+.curate-facts {
+  margin: 0;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 1px 8px;
+  font-size: 12px;
+}
+
+.curate-facts > div {
+  display: contents;
+}
+
+.curate-facts dt {
+  color: #888;
+}
+
+.curate-facts dd {
+  margin: 0;
+}
+
+.curate-section {
+  margin: 6px 0 0;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #666;
+}
+
+.curate-done-note {
+  margin: 0;
+  font-size: 12px;
+  color: #2e7d32;
+}
+
+.curate-candidates {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.curate-candidates li {
+  display: flex;
+  gap: 4px;
+  align-items: stretch;
+  border: 1px solid #eee;
+  border-radius: 4px;
+}
+
+.curate-candidates li.is-active {
+  border-color: #1e88e5;
+  background: #e8f0fe;
+}
+
+.curate-candidate {
+  flex: 1 1 auto;
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  text-align: left;
+  border: none !important;
+  background: none !important;
+  padding: 4px 5px !important;
+  min-width: 0;
+}
+
+.curate-candidate-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.curate-candidate-name {
+  font-weight: 600;
+}
+
+.curate-candidate-meta {
+  font-size: 11px;
+  color: #777;
+  overflow-wrap: anywhere;
+}
+
+.curate-pick {
+  align-self: center;
+  margin-right: 4px;
+}
+
+.curate-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  border-radius: 50%;
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.curate-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: #555;
+  overflow-wrap: anywhere;
+}
+
+.curate-error {
+  margin: 0;
+  color: #b3261e;
+  font-size: 12px;
+}
+
+.curate-hint-text {
+  margin: 0;
+  color: #777;
+  font-size: 12px;
+}
+
+/* ------------------------------------------------------------- map pins */
+
+.curate-pin {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid white;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  color: white;
+  font: 700 12px/1 system-ui, sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+/* The hint and lookup pins are not candidates; a different shape keeps them
+   from being mistaken for one. */
+.curate-pin-hint {
+  border-radius: 4px;
+}
+
+.curate-pin-lookup {
+  border-radius: 4px;
+  border-style: dashed;
+}

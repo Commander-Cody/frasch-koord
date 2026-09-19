@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import CuratePanel from './components/CuratePanel';
 import MapView from './components/Map';
 import type { MapViewHandle } from './components/Map';
 import SearchPanel from './components/SearchPanel';
@@ -21,6 +22,13 @@ const ZOOM_BY_KIND: Record<string, number> = {
   warft: 15,
 };
 const DEFAULT_TARGET_ZOOM = 14;
+
+/**
+ * `?curate` opens the name-list curation review instead of the search panel
+ * (dev only, see components/CuratePanel.tsx). Read once at module load: the
+ * two modes are different tools, not a state the user toggles.
+ */
+const CURATE_MODE = new URLSearchParams(window.location.search).has('curate');
 
 function App() {
   const { i18n } = useTranslation();
@@ -45,7 +53,13 @@ function App() {
   return (
     <div className="app">
       <MapView ref={mapRef} labels={labels} />
-      <SearchPanel labels={labels} onLabelsChange={handleLabelsChange} onSelect={handleSelect} />
+      {CURATE_MODE ? (
+        // The curation view keeps the default labels/UI language: it is about
+        // which OSM object a row means, not about how the map reads.
+        <CuratePanel mapRef={mapRef} />
+      ) : (
+        <SearchPanel labels={labels} onLabelsChange={handleLabelsChange} onSelect={handleSelect} />
+      )}
     </div>
   );
 }

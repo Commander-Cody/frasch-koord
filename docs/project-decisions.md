@@ -220,6 +220,37 @@ keep the OSM Bright BSD notice whatever is chosen. The map's attribution
 control must show "© OpenStreetMap contributors" and the OpenMapTiles credit
 before launch; the Mooring locale's attribution string is still empty.
 
+## Decided 2026-09-19: review the matcher's leftovers on the map (issue #1)
+
+375 rows of `places.csv` had no OSM object after the first match run (325
+*not found*, 38 *ambiguous*). Deciding them from `REPORT.md` meant looking
+every candidate up on openstreetmap.org and editing the CSV by hand, so the
+web app gained a **dev-only curation view** (`http://localhost:5173/?curate`,
+Vite dev server only) and `names/` a companion script `curate.py`:
+
+- `curate.py export` turns `work/matches.csv` + `work/candidates.jsonl` into
+  `work/curate.json`: the open rows in priority order (settlements, islands,
+  Halligen first; Köge and Warften last), each with its candidates' positions
+  and the resolved location hint.
+- The browser shows the rows as a list and the candidates as pins; Nominatim
+  and Overpass lookups (public instances, called from the browser) help with
+  the *not found* rows. Every decision — an OSM reference, a `local/<slug>`
+  with a position clicked on the map, or `skip` — is appended by a Vite dev
+  middleware to `work/curate-patch.jsonl`. The browser never touches
+  `places.csv`; done rows are read back from the patch, so a session resumes.
+- `curate.py apply` writes the patch into `places.csv` (`status=ok`/`skip`,
+  the same three cells `match.py` owns and only rows it still owns) and, for a
+  local reference, appends the position row to `curation.csv`. Review with
+  `git diff`, as after a match run.
+
+**Why a patch file and a script instead of editing the CSV from the browser**:
+`places.csv` stays the single hand-edited source of truth, the ownership rule
+of `match.py` (never a row with `status=ok`/`skip` or a hand-filled `osm`)
+is enforced in one place, and a decision made against a stale line number
+(rows shift when one is added) is refused rather than silently misapplied —
+rows are identified by kind + Frisian name + German name, the line is only the
+fast path.
+
 ## Remaining open questions
 1. Code license (MIT proposed).
 2. Hosting provider (R2 + Pages proposed, nothing set up yet).

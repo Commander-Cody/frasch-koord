@@ -295,6 +295,32 @@ option, mirroring the label chain above: dialect view `names[tag] ?? local ??
 name_de`, local view `local ?? name_de`, with the German name on the second
 line when it differs. Selecting a result flies the map to it.
 
+## Curation view (dev only)
+
+`http://localhost:5173/?curate` swaps the search panel for
+`src/components/CuratePanel.tsx`: the rows `names/match.py` left `ambiguous`
+or `not_found`, each with its candidates as numbered pins on the map. Export
+the worklist first — `names/curate.py export` writes `names/work/curate.json`
+— and run it under `npm run dev`; the endpoints live in a Vite plugin with
+`apply: 'serve'` (`vite-plugins/curate.ts`, `GET /__curate/worklist`,
+`GET`/`POST /__curate/patch`), so a production build has none of this and the
+panel then just says the dev server is missing. English only on purpose: it is
+a tool for the name list, not part of the map.
+
+Every pick (an OSM reference, a local reference, or a skip) is appended to
+`names/work/curate-patch.jsonl` — append-only, last entry per row wins, a
+`clear` withdraws one — which `names/curate.py apply` folds back into
+`names/places.csv` and `names/curation.csv`. Nothing in `names/` is written by
+the browser directly. The selected row is mirrored into the URL
+(`?curate&line=481`, next to MapLibre's view hash), so a reload or a pasted
+link reopens the same row; ↑/↓ or `j`/`k` walk the list.
+
+The "Nominatim" and "Overpass" lookups are **called from the browser** against
+the public instances (`nominatim.openstreetmap.org`, `overpass-api.de`), bounded
+to the North Frisia bbox of the worklist. Light, hand-driven use only — that is
+what those instances' usage policies allow; errors and rate limits show up as a
+message in the panel.
+
 ## i18n
 
 `i18next` + `react-i18next`, configured in `src/i18n.ts`; the UI language
