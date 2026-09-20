@@ -24,31 +24,21 @@ frr-x-hallig,relation/1420554,Hallig Hooge,municipality
 frr-x-hallig,relation/1420553,Langeneß,municipality (incl. Oland)
 frr-x-hallig,relation/1420557,Gröde,municipality
 frr-x-hallig,way/177387348,Habel,island polygon
-frr-x-wieding,relation/1418654,Aventoft,municipality; high
 frr-x-wieding,relation/1420452,Emmelsbüll-Horsbüll,municipality; high
 frr-x-wieding,relation/1418657,Friedrich-Wilhelm-Lübke-Koog,municipality; high
 frr-x-wieding,relation/1418656,Klanxbüll,municipality; high
 frr-x-wieding,relation/1418943,Neukirchen,municipality; high
 frr-x-wieding,relation/1418655,Rodenäs,municipality; high
-frr-x-mooring,relation/1420451,Galmsbüll,"municipality; low: historically Horsbüllharde = old name of Wiedingharde, per 1462 church record; later became part of Amt Bökingharde; the Gotteskoog here was settled jointly by "
+frr-x-mooring,relation/1420451,Galmsbüll,"municipality; low: historically Horsbüllharde = old name of Wiedingharde, per 1462 church record; later became part of Amt Bökingharde"
 frr-x-mooring,relation/1420450,Dagebüll,municipality; high
-frr-x-mooring,relation/1420394,Holm,"municipality; low: sits on the Gotteskoog boundary between Bökingharde and Karrharde, borders both Niebüll and Bosbüll/Braderup; no explicit source found, best-guess Bökingharde a"
 frr-x-mooring,relation/1428482,Niebüll,municipality; medium: town; historic administrative/church centre of the Bökingharde and of the Westermooring dialect area
 frr-x-mooring,relation/1417210,Risum-Lindholm,municipality; high
-frr-x-karrhard,relation/1417214,Achtrup,municipality; medium
+frr-x-karrhard,relation/1420394,Holm,"municipality; low: sits on the Gotteskoog boundary between Bökingharde and Karrharde, borders both Niebüll and Bosbüll/Braderup; no explicit source found, best-guess Bökingharde"
 frr-x-karrhard,relation/1420392,Bosbüll,municipality; high
-frr-x-karrhard,relation/1420395,Braderup,"municipality; low: no direct source found; ~7 km NE of Niebüll amid Karrharde villages, sources loosely link it to Karrharde"
 frr-x-karrhard,relation/1416962,Enge-Sande,municipality; high
-frr-x-karrhard,relation/1418942,Humptrup,municipality; high
-frr-x-karrhard,relation/1418484,Karlum,municipality; high
 frr-x-karrhard,relation/1420393,Klixbüll,municipality; high
 frr-x-karrhard,relation/1417213,Leck,municipality; high
-frr-x-karrhard,relation/1417211,Lexgaard,"municipality; low: no direct source found; the village is enclosed on three sides by confirmed Karrharde villages Süderlügum, Westre, Karlum and Tinningstedt"
-frr-x-karrhard,relation/1416964,Sprakebüll,municipality; medium
-frr-x-karrhard,relation/1416963,Stadum,municipality; medium
-frr-x-karrhard,relation/1416965,Stedesand,"municipality; medium: the surviving Karrharder Friesisch dialect, incl. its Trollebüll hamlet, is spoken here per ISFAS/Karrharder-Friesisch sources; administratively the village was"
-frr-x-karrhard,relation/1418485,Süderlügum,municipality; high
-frr-x-karrhard,relation/1417216,Tinningstedt,municipality; medium
+frr-x-karrhard,relation/1416965,Stedesand,"municipality; medium: the surviving Karrharder Friesisch dialect, incl. its Trollebüll hamlet, is spoken here per ISFAS/Karrharder-Friesisch sources"
 frr-x-karrhard,relation/1420391,Uphusum,"municipality; low: lies in the Gotteskoog tripoint zone bordering Karrharde, Bökingharde and Wiedingharde, next to Humptrup/Karrharde and Neukirchen/Wiedingharde; best guess only"
 frr-x-nordgoes,relation/1416814,Bargum,municipality; high
 frr-x-nordgoes,relation/1416728,Bordelum,municipality; high
@@ -64,21 +54,12 @@ frr-x-midgoes,relation/1571761,Breklum,municipality; high
 frr-x-midgoes,relation/1415599,Struckum,"municipality; medium: via former Kirchspielslandgemeinde Breklum, confirmed Nordergoesharde"
 frr-x-midgoes,relation/1415326,Norstedt,municipality; high
 frr-x-midgoes,relation/1567454,Almdorf,"municipality; medium: via former Kirchspielslandgemeinde Breklum, confirmed Nordergoesharde"
-frr-x-midgoes,relation/1406816,Ahrenshöft,"municipality; medium: historic Nordergoesharde; forms one Kirchspiel/parish cluster with Bohmstedt and Drelsdorf, the core Mittelgoesharder-Friesisch villages; no direct dialect stat"
+frr-x-midgoes,relation/1406816,Ahrenshöft,"municipality; medium: historic Nordergoesharde; forms one Kirchspiel/parish cluster with Bohmstedt and Drelsdorf, the core Mittelgoesharder-Friesisch villages"
 frr-x-midgoes,relation/1405507,Bohmstedt,municipality; high
 frr-x-midgoes,relation/1415602,Drelsdorf,municipality; high
-frr-x-suedgoes,relation/1406979,Ahrenviöl,municipality; high
-frr-x-suedgoes,relation/1406977,Ahrenviölfeld,"municipality; medium: split off from Ahrenviöl/former Kirchspielslandgemeinde Schwesing, confirmed Südergoesharde"
 frr-x-suedgoes,relation/1405506,Arlewatt,municipality; high
-frr-x-suedgoes,relation/1403983,Fresendelf,"municipality; medium: via former Kirchspielslandgemeinde Schwabstedt, confirmed Südergoesharde"
 frr-x-suedgoes,relation/1405430,Hattstedt,municipality; high
 frr-x-suedgoes,relation/1415601,Hattstedtermarsch,municipality; high
 frr-x-suedgoes,relation/1405508,Horstedt,municipality; high
-frr-x-suedgoes,relation/1403982,Hude,"municipality; medium: via former Kirchspielslandgemeinde Schwabstedt, confirmed Südergoesharde"
-frr-x-suedgoes,relation/1405167,Oldersbek,"municipality; medium: via former Kirchspielslandgemeinde Mildstedt, confirmed Südergoesharde"
-frr-x-suedgoes,relation/1405166,Ramstedt,"municipality; medium: via former Kirchspielslandgemeinde Schwabstedt, confirmed Südergoesharde"
-frr-x-suedgoes,relation/1403981,Süderhöft,"municipality; medium: via former Kirchspielslandgemeinde Schwabstedt; article notes it sits at the landscape transition toward Stapelholm to the south, i.e. close to the Südergoeshar"
-frr-x-suedgoes,relation/1405170,Südermarsch,municipality; high
-frr-x-suedgoes,relation/1404153,Winnert,municipality; high
-frr-x-suedgoes,relation/1405168,Wisch,"municipality; medium: via former Kirchspielslandgemeinde Schwabstedt, confirmed Südergoesharde"
 frr-x-suedgoes,relation/1405431,Wobbenbüll,municipality; high
+frr-x-suedgoes,relation/1405432,Husum,municipality; high

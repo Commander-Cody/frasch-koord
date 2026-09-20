@@ -324,6 +324,51 @@ to the North Frisia bbox of the worklist. Light, hand-driven use only — that i
 what those instances' usage policies allow; errors and rate limits show up as a
 message in the panel.
 
+## Dialect-area review (dev only)
+
+`http://localhost:5173/?areas` swaps the search panel for
+`src/components/AreaPanel.tsx`: every municipality of
+`names/dialect_areas.csv` drawn in its dialect's colour, so the mainland
+assignments — a researched draft nobody has checked — can be reviewed on the
+map instead of in a spreadsheet. Clicking a polygon or a list row shows the
+municipality, the dialect and the row's research `note` verbatim. The
+municipalities **no row claims** are drawn in grey: those places get no dialect
+at all, and the detail block hands you the `relation/<id>` to paste into a new
+CSV row. `?areas&area=<line>` reopens a row (line in `dialect_areas.csv`); ↑/↓
+or `j`/`k` walk the list. English only on purpose, like the curation view.
+
+Build the geometry first —
+`names/build_dialect_areas.py tiles/data/schleswig-holstein-latest.osm.pbf`
+writes `names/dialect_areas_parts.geojson` — and run under `npm run dev`; the
+endpoint is a Vite plugin with `apply: 'serve'` (`vite-plugins/areas.ts`,
+`GET /__areas/parts`), so a production build has none of it. That is deliberate
+as well as tidy: the notes quote research prose about assignments nobody has
+confirmed ("best guess only", "no direct source found"), which should not ship
+to the public site. **The view is read-only** — unlike `?curate`, nothing
+writes back. Edit `names/dialect_areas.csv`, re-run the build, press *Reload*.
+
+The four layers (`src/components/areaLayers.ts`) are inserted before
+`waterway-name`, the style's first symbol layer, so no place label is ever
+covered. The outline is drawn in the **same hue as the fill at ~3x the alpha**:
+that is what keeps two adjacent municipalities *of the same dialect* apart,
+which is the whole job, since what is being reviewed is a per-municipality
+assignment. `fill-antialias` cannot do it — it draws the fill's own edge in the
+fill colour.
+
+The eleven dialect colours were not picked by eye. The hues come from the
+data-viz reference palette, and the assignment was solved against the dialect
+adjacency computed from the geometry itself (which turned up
+Sölring/Wiedingharder as a touching pair, out in the Wattenmeer): every
+touching pair, and every pair within ~6 km, clears the colour-vision gates with
+~1.5x margin. Eleven categories cannot all be pairwise colourblind-safe — no
+choice of eleven hues can — so pairs that never touch may look alike under
+protan, Karrharder/Südergoesharder most of all. Colour is therefore never the
+only channel: the legend pairs each swatch with its name, the list is grouped
+by dialect, the detail block spells the dialect out, and clicking a legend row
+draws that dialect alone.
+
+The checklist of rows to confirm is `docs/dialect-area-review.md`.
+
 ## i18n
 
 `i18next` + `react-i18next`, configured in `src/i18n.ts`; the UI language

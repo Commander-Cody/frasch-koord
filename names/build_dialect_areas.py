@@ -12,6 +12,7 @@ dialect.  This script turns those references into geometry.
     build_dialect_areas.py <in.osm.pbf> [<in.osm.pbf> ...]
                            [--areas names/dialect_areas.csv]
                            [--out names/dialect_areas.geojson]
+                           [--parts-out names/dialect_areas_parts.geojson]
 
 The result is **committed**: it is a handful of kilobytes, the injector and
 the search exporter need it on every build, and a planet build must not have
@@ -19,6 +20,26 @@ to re-extract boundaries.  Re-run it when dialect_areas.csv changes or when a
 municipality boundary in OSM has moved -- with a Schleswig-Holstein extract
 (`tiles/data/schleswig-holstein-latest.osm.pbf`), which covers every Frisian
 area there is.
+
+Two files come out of one run, from the same in-memory geometry so that they
+cannot disagree:
+
+  --out        one Feature per *dialect*, municipalities dissolved.  This is
+               the lookup file: the injector and the search exporter read it
+               through dialects.AreaIndex ("smallest containing area wins").
+  --parts-out  one Feature per *municipality*, carrying the `name` and the
+               research `note` of its dialect_areas.csv row -- plus the Kreis
+               Nordfriesland municipalities that no row claims at all, marked
+               `assigned: false`.  This one is for the review overlay only
+               (web `?areas`, see web/src/components/AreaPanel.tsx); a reviewer
+               needs to see which municipality got which dialect and why, and
+               an unassigned one is a hole in the coverage.
+
+  NOTHING in the Python pipeline may read --parts-out.  Its features are
+  municipalities, not dialects, so feeding it to AreaIndex would silently
+  change the unit of every dialect lookup.  The unassigned features carry no
+  `dialect` property at all, which makes AreaIndex refuse the file outright
+  rather than quietly loading it.
 
 How it stays within a few hundred MB of RAM: instead of letting pyosmium build
 every area of the file (which needs a location cache for the whole extract),
@@ -48,20 +69,46 @@ import placelist  # noqa: E402
 DEFAULT_AREAS = os.path.join(HERE, "dialect_areas.csv")
 DEFAULT_OUT = dialects.DEFAULT_AREAS
 SIMPLIFY_DEG = 0.0005            # ~50 m
+# Neighbouring municipalities are simplified independently, so a shared
+# boundary drifts by up to the tolerance in *each* of them.  At 0.0005 that is
+# a ~50 m crack between two areas that actually touch -- 2-3 px at the zoom the
+# review happens at.  0.0001 is sub-pixel below z16.
+PARTS_SIMPLIFY_DEG = 0.0001      # ~11 m
+DEFAULT_PARTS_OUT = os.path.join(HERE, "dialect_areas_parts.geojson")
 ROUND = 5
+
+# German municipality key, used to scope the "not assigned to any dialect"
+# features.  Every admin_level=8 relation in the Schleswig-Holstein extract
+# carries one of these keys, and Kreis Nordfriesland is 01054 -- the district
+# that is (or was) Frisian-speaking, so a municipality outside it is not a gap
+# in the dialect map but simply not part of it.  Helgoland is the one assigned
+# area outside (Kreis Pinneberg, 01056); it is named by the CSV, so the scan
+# never has to find it.
+AGS_KEYS = ("de:regionalschluessel", "de:amtlicher_gemeindeschluessel")
+DEFAULT_UNASSIGNED_AGS = "01054"
 
 
 def read_areas(path, reg):
-    """-> ({(type, id): dialect_tag}, {(type, id): label}) in file order."""
+    """-> ({(type, id): dialect_tag}, {(type, id): label}, [row]) in file order.
+
+    The third value is one dict per non-blank row -- {"line", "dialect",
+    "name", "note", "osm", "refs"} -- for the per-municipality parts output.
+    The two indexes stay keyed by OSM reference because that is what the
+    dissolve loop and the "not in the extract" report need.
+    """
     if not os.path.exists(path):
         raise SystemExit(f"dialect area list not found: {path}")
     known = set(dialects.tags(reg))
-    by_ref, labels = {}, {}
+    by_ref, labels, rows = {}, {}, []
     with open(path, encoding="utf-8", newline="") as fh:
         reader = csv.DictReader(fh)
         for col in ("dialect", "osm"):
             if col not in (reader.fieldnames or []):
                 raise SystemExit(f"{path}: missing column {col!r}")
+        for col in ("name", "note"):
+            # Only the review overlay needs these; an older CSV still builds.
+            if col not in (reader.fieldnames or []):
+                print(f"{path}: no {col!r} column -- parts output leaves it empty")
         for n, row in enumerate(reader, start=2):
             tag = (row.get("dialect") or "").strip()
             if not tag and not (row.get("osm") or "").strip():
@@ -78,7 +125,15 @@ def read_areas(path, reg):
                                      f"is already {by_ref[ref]}")
                 by_ref[ref] = tag
                 labels[ref] = (row.get("name") or "").strip()
-    return by_ref, labels
+            rows.append({
+                "line": n,
+                "dialect": tag,
+                "name": (row.get("name") or "").strip(),
+                "note": (row.get("note") or "").strip(),
+                "osm": placelist.format_osm(refs),
+                "refs": refs,
+            })
+    return by_ref, labels, rows
 
 
 # ------------------------------------------------------------- reading ----
@@ -98,6 +153,41 @@ def read_relations(path, ids):
             rings["inner" if m.role == "inner" else "outer"].append(m.ref)
         out[r.id] = rings
     return out
+
+
+def read_admin_relations(path, ags_prefix, skip):
+    """Municipality relations of one district that no dialect claims.
+
+    -> ({rel_id: {'outer': [...], 'inner': [...]}}, {rel_id: name})
+
+    Scans every relation rather than filtering by id, because the whole point
+    is to find the ones nobody has written down yet.  The filter is the German
+    municipality key (`de:regionalschluessel`), not a bounding box: a box would
+    also catch the neighbouring Kreise, which are not part of the dialect map
+    at all and would read as gaps in it.  `skip` holds the relation ids the
+    CSV already assigns.
+    """
+    rings, names = {}, {}
+    fp = osmium.FileProcessor(path, osmium.osm.RELATION)
+    for r in fp:
+        tags = r.tags
+        if tags.get("boundary") != "administrative":
+            continue
+        if tags.get("admin_level") != "8":
+            continue
+        if r.id in skip:
+            continue
+        key = next((tags[k] for k in AGS_KEYS if k in tags), "")
+        if not key.startswith(ags_prefix):
+            continue
+        members = {"outer": [], "inner": []}
+        for m in r.members:
+            if m.type != "w":
+                continue
+            members["inner" if m.role == "inner" else "outer"].append(m.ref)
+        rings[r.id] = members
+        names[r.id] = tags.get("name") or ""
+    return rings, names
 
 
 def read_ways(path, ids):
@@ -230,6 +320,21 @@ def main(argv=None):
     ap.add_argument("--out", default=DEFAULT_OUT)
     ap.add_argument("--simplify", type=float, default=SIMPLIFY_DEG,
                     help=f"tolerance in degrees (default {SIMPLIFY_DEG})")
+    ap.add_argument("--parts-out", default=DEFAULT_PARTS_OUT,
+                    help="per-municipality areas for the review overlay "
+                         "(web ?areas); '' skips the file entirely")
+    ap.add_argument("--parts-simplify", type=float, default=PARTS_SIMPLIFY_DEG,
+                    help=f"tolerance for --parts-out (default "
+                         f"{PARTS_SIMPLIFY_DEG}); finer than --simplify because "
+                         f"neighbours are simplified independently and must not "
+                         f"drift apart")
+    ap.add_argument("--unassigned-ags", default=DEFAULT_UNASSIGNED_AGS,
+                    help=f"municipality-key prefix whose unclaimed "
+                         f"municipalities go into --parts-out "
+                         f"(default {DEFAULT_UNASSIGNED_AGS} = Kreis Nordfriesland)")
+    ap.add_argument("--no-unassigned", action="store_true",
+                    help="skip the extra relation scan; --parts-out then holds "
+                         "only the municipalities the CSV assigns")
     a = ap.parse_args(argv)
     try:
         from shapely.geometry import mapping
@@ -238,11 +343,14 @@ def main(argv=None):
         raise SystemExit("shapely is needed (.venv/bin/pip install shapely)")
 
     reg = dialects.read(a.registry)
-    by_ref, labels = read_areas(a.areas, reg)
+    by_ref, labels, rows = read_areas(a.areas, reg)
+    want_unassigned = bool(a.parts_out) and not a.no_unassigned
     print(f"area list : {a.areas} -> {len(by_ref)} OSM objects, "
           f"{len(set(by_ref.values()))} dialects")
 
-    geoms = {}          # ref -> [shapely geometry]
+    geoms = {}          # ref -> [shapely geometry]  (assigned by the CSV)
+    free = {}           # ref -> [shapely geometry]  (municipality, no dialect)
+    free_names = {}     # ref -> municipality name
     problems = []
     for path in a.pbf:
         t0 = time.time()
@@ -250,16 +358,37 @@ def main(argv=None):
         rel_ids = {i for t, i in want if t == "r"}
         way_ids = {i for t, i in want if t == "w"}
         rel = read_relations(path, rel_ids)
+        # The unclaimed municipalities ride along in the same way/node passes:
+        # their member ways are mostly the *same* ways, since neighbours share
+        # a boundary.
+        loose, loose_names = ({}, {})
+        if want_unassigned:
+            claimed = {i for t, i in by_ref if t == "r"}
+            loose, loose_names = read_admin_relations(path, a.unassigned_ags,
+                                                      claimed)
+            loose = {i: r for i, r in loose.items()
+                     if ("r", i) not in free}
+            rel.update(loose)
         member_ids = {w for r in rel.values() for w in r["outer"] + r["inner"]}
         ways = read_ways(path, way_ids | member_ids)
         node_ids = {n for w in ways.values() for n in w}
         nodes = read_nodes(path, node_ids)
-        print(f"{os.path.basename(path)}: {len(rel)}/{len(rel_ids)} relations, "
-              f"{len(ways):,} ways, {len(nodes):,} nodes ({time.time()-t0:.0f}s)")
+        print(f"{os.path.basename(path)}: {len(rel)-len(loose)}/{len(rel_ids)} "
+              f"relations, {len(ways):,} ways, {len(nodes):,} nodes"
+              f"{f', {len(loose)} unclaimed municipalities' if loose else ''} "
+              f"({time.time()-t0:.0f}s)")
         for ref in sorted(want):
             polys = polygons_for(ref, rel, ways, nodes, problems)
             if polys:
                 geoms[ref] = polys
+        for rel_id in sorted(loose):
+            ref = ("r", rel_id)
+            # Their own problems are noise: nobody has claimed these, so a
+            # broken ring means "not reviewable", not "the data is wrong".
+            polys = polygons_for(ref, rel, ways, nodes, [])
+            if polys:
+                free[ref] = polys
+                free_names[ref] = loose_names.get(rel_id, "")
 
     missing = [ref for ref in by_ref if ref not in geoms]
     features, total = [], 0
@@ -304,7 +433,84 @@ def main(argv=None):
           f"{os.path.getsize(a.out)/1e3:.0f} kB)")
     idx = dialects.AreaIndex.from_geojson(a.out)
     print(f"reads back as {len(idx)} polygon(s): {idx.summary()}")
+
+    if a.parts_out:
+        write_parts(a, reg, rows, geoms, free, free_names)
     return 0
+
+
+def simplified(geom, tol):
+    """`geom` simplified to `tol`, kept valid."""
+    if tol:
+        geom = geom.simplify(tol, preserve_topology=True)
+    if not geom.is_valid:
+        geom = geom.buffer(0)
+    return geom
+
+
+def write_parts(a, reg, rows, geoms, free, free_names):
+    """One Feature per municipality for the review overlay -- see the module
+    docstring for why this is a separate file from --out."""
+    from shapely.geometry import mapping
+    from shapely.ops import unary_union
+
+    labels_by_tag = {d["tag"]: d["label"] for d in reg}
+    features, skipped, fid = [], 0, 0
+
+    for row in rows:
+        polys = [p for ref in row["refs"] for p in geoms.get(ref, [])]
+        if not polys:
+            skipped += 1                  # already in the `missing` report
+            continue
+        geom = simplified(unary_union(polys), a.parts_simplify)
+        fid += 1
+        features.append({
+            "type": "Feature",
+            "properties": {
+                "fid": fid,
+                "assigned": True,
+                "dialect": row["dialect"],
+                "label": labels_by_tag[row["dialect"]],
+                "name": row["name"],
+                "note": row["note"],
+                "osm": row["osm"],
+                "line": row["line"],
+                "km2": round(km2(geom), 1),
+            },
+            "geometry": round_geojson(mapping(geom)),
+        })
+
+    # No `dialect` key on these on purpose: it is what stops AreaIndex from
+    # ever loading this file (see the module docstring).
+    for ref in sorted(free, key=lambda r: free_names.get(r, "")):
+        geom = simplified(unary_union(free[ref]), a.parts_simplify)
+        fid += 1
+        features.append({
+            "type": "Feature",
+            "properties": {
+                "fid": fid,
+                "assigned": False,
+                "name": free_names.get(ref, ""),
+                "osm": placelist.format_osm([ref]),
+                "km2": round(km2(geom), 1),
+            },
+            "geometry": round_geojson(mapping(geom)),
+        })
+
+    fc = {"type": "FeatureCollection",
+          "properties": {"source": os.path.basename(a.areas),
+                         "simplify_deg": a.parts_simplify,
+                         "unit": "one feature per municipality",
+                         "unassigned_ags": a.unassigned_ags if free else ""},
+          "features": features}
+    os.makedirs(os.path.dirname(a.parts_out), exist_ok=True)
+    with open(a.parts_out, "w", encoding="utf-8") as fh:
+        json.dump(fc, fh, ensure_ascii=False, separators=(",", ":"))
+        fh.write("\n")
+    print(f"wrote {a.parts_out} ({len(features)} features: "
+          f"{len(features)-len(free)} assigned, {len(free)} unassigned"
+          f"{f', {skipped} row(s) without geometry' if skipped else ''}, "
+          f"{os.path.getsize(a.parts_out)/1e3:.0f} kB)")
 
 
 if __name__ == "__main__":

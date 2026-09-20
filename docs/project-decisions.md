@@ -119,13 +119,16 @@ Sölring, Öömrang, Halunder and Hålifrasch names. They are now first-class.
    the Mooring name (when `mooring` was empty) or was dropped as an
    alternative Mooring spelling. Wallsbüll's and Lundenberg's Goesharder
    names are now Mooring/Südergoesharder cells with their remark kept.
-9. **Mainland areas are a researched draft.** The 81 municipality rows in
+9. **Mainland areas are a researched draft.** The mainland rows of
    `names/dialect_areas.csv` were assigned to the six Harden from German
    Wikipedia on 2026-09-16 (historic Harde membership; Bohmstedt, Drelsdorf and
    Ahrenshöft follow the documented Mittelgoesharder dialect instead). Rows
-   whose `note` says `medium` or `low` (29) need the owner's check, above all
-   the Gotteskoog border villages Holm, Uphusum, Lexgaard, Braderup, Galmsbüll
-   and the Stedesand/Klixbüll/Bosbüll assignment to the Karrharde.
+   whose `note` says `medium` or `low` need the owner's check, above all the
+   Gotteskoog border villages Holm, Uphusum, Lexgaard, Braderup, Galmsbüll and
+   the Stedesand/Klixbüll/Bosbüll assignment to the Karrharde.
+   *(Corrected 2026-09-20: this said "81 municipality rows" and "(29)". The
+   file has 83 rows — 58 mainland, 25 island/Hallig — and 22 of them are
+   `medium` or `low`: 17 + 5. See the 2026-09-20 entry below.)*
 
 ## Decided 2026-09-17: places OSM does not have get their own point
 
@@ -250,6 +253,83 @@ is enforced in one place, and a decision made against a stale line number
 (rows shift when one is added) is refused rather than silently misapplied —
 rows are identified by kind + Frisian name + German name, the line is only the
 fast path.
+
+## Decided 2026-09-20: review the dialect areas on the map (issue #2)
+
+The mainland dialect assignments are a researched draft nobody has eyeballed,
+and a wrong one is invisible: a place is joined to a dialect area by
+point-in-polygon at build time, never by name, so a bad row only shows up as a
+wrong label. `names/dialect_areas.geojson` cannot show them — it is dissolved
+per dialect, one Feature each, and carries neither the municipality name nor
+the research `note`.
+
+So `build_dialect_areas.py` gained a **second output**,
+`names/dialect_areas_parts.geojson`: one Feature per municipality
+(`fid`, `assigned`, `dialect`, `label`, `name`, `note`, `osm`, `line`, `km2`),
+written from the same in-memory geometry in the same run, so the two files
+cannot disagree. It also carries the Kreis Nordfriesland municipalities that
+**no row claims**, marked `assigned: false` — a hole in the coverage is a bug
+you have to be able to see. Those are found by scanning `admin_level=8`
+relations for a `de:regionalschluessel` starting `01054`, not by a bounding
+box: a box would also catch the neighbouring Kreise, which are not part of the
+dialect map at all. 135 features, 284 kB, **committed** for the same reason as
+the dissolved file — regenerating it needs the gitignored 158 MB extract.
+
+Simplified to 0.0001° (~11 m) rather than the dissolved file's 0.0005°.
+Neighbours are simplified independently, so a shared boundary drifts by up to
+the tolerance in *each* of them; at 50 m that is a visible crack between two
+municipalities that actually touch, at exactly the zoom the review happens at.
+
+Nothing in the Python pipeline may read the parts file: its unit is the
+municipality, not the dialect, so feeding it to `AreaIndex` would silently
+change every dialect lookup. The unassigned features carry no `dialect`
+property at all, which makes `AreaIndex.from_geojson` refuse the file outright
+instead of quietly loading it.
+
+The web app gained a dev-only review view, `http://localhost:5173/?areas`
+(`web/src/components/AreaPanel.tsx`), a sibling of `?curate`: the parts file as
+a coloured fill inserted before `waterway-name` so it sits under every label,
+one colour per dialect, and a near-opaque outline **in the same hue** so
+municipality boundaries stay visible *inside* one dialect's block — which is
+the point, since what is being checked is a per-municipality assignment.
+Clicking a polygon or a list row shows the name, the dialect and the `note`
+verbatim; `?areas&area=<line>` reopens a row. `web/vite-plugins/areas.ts`
+serves the file in dev only, so the research prose ("best guess only", "no
+direct source found") about unconfirmed assignments does not ship to the public
+site.
+
+The eleven dialect colours (`web/src/components/areaLayers.ts`) were not picked
+by eye. The hues come from the data-viz reference palette and the *assignment*
+was solved against the adjacency computed from the geometry itself — which
+turned up Sölring/Wiedingharder as a touching pair, out in the Wattenmeer.
+Every touching pair, and every pair within ~6 km, clears the colour-vision
+gates with ~1.5x margin. Eleven categories cannot all be pairwise
+colourblind-safe — no assignment of any eleven hues can — so colour is never
+the only channel: the legend pairs each swatch with its name, the list is
+grouped by dialect, the detail block spells the dialect out, and clicking a
+legend row draws that dialect alone.
+
+**Confidence is deliberately not modelled**: no `confidence` column, no parsing
+of the `note`, no hatching or dimming. Colour is the dialect and nothing else;
+the raw note on selection is the whole story. **The view is read-only**, unlike
+`?curate`: `dialect_areas.csv` is 83 hand-edited lines and the build takes
+seconds, so a patch file would only add a second way to change the data.
+
+The checklist is `docs/dialect-area-review.md`, keyed by name rather than line
+(rows shift). Five notes had been truncated mid-word at ~180 characters by the
+research run (Galmsbüll, Holm, Stedesand, Ahrenshöft, Süderhöft) and were
+trimmed to their last complete clause — no re-research, nothing added.
+
+**Open, and the first thing the review turned up:** `dialect_areas.geojson` and
+`dialect_areas.csv` disagree. The committed geojson still covers **23
+municipalities no row claims any more** (Ladelund, Westre, Viöl, Schwabstedt,
+Mildstedt, Ostenfeld …) and still has Galmsbüll as Wiedingharder rather than
+Mooring. Rebuilding it from today's CSV would strip those 23 of their dialect
+area — every place inside them loses its area-derived local name — so the file
+was left untouched pending a decision. The CSV's own notes cite Westre as a
+"confirmed Karrharde village" and Schwabstedt and Mildstedt as the
+Kirchspielslandgemeinden justifying six Südergoesharde rows, which suggests
+rows went missing rather than being retired. Priority 0 of the checklist.
 
 ## Remaining open questions
 1. Code license (MIT proposed).

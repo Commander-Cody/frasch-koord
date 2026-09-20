@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AreaPanel from './components/AreaPanel';
 import CuratePanel from './components/CuratePanel';
 import MapView from './components/Map';
 import type { MapViewHandle } from './components/Map';
@@ -30,6 +31,13 @@ const DEFAULT_TARGET_ZOOM = 14;
  */
 const CURATE_MODE = new URLSearchParams(window.location.search).has('curate');
 
+/**
+ * `?areas` opens the dialect-area review instead of the search panel (dev
+ * only, see components/AreaPanel.tsx). Read once at module load, like
+ * CURATE_MODE: the modes are separate tools, not a state the user toggles.
+ */
+const AREAS_MODE = new URLSearchParams(window.location.search).has('areas');
+
 function App() {
   const { i18n } = useTranslation();
   // The selected label option: a dialect tag, or LOCAL_TAG for the local view.
@@ -50,16 +58,21 @@ function App() {
     mapRef.current?.flyTo([entry.lon, entry.lat], zoom, { title: name });
   };
 
+  // Both dev views keep the default labels/UI language: they are about which
+  // OSM object a row means, and which dialect an area is, not about how the
+  // map reads. `?curate` wins if both are set.
+  const panel = CURATE_MODE ? (
+    <CuratePanel mapRef={mapRef} />
+  ) : AREAS_MODE ? (
+    <AreaPanel mapRef={mapRef} />
+  ) : (
+    <SearchPanel labels={labels} onLabelsChange={handleLabelsChange} onSelect={handleSelect} />
+  );
+
   return (
     <div className="app">
       <MapView ref={mapRef} labels={labels} />
-      {CURATE_MODE ? (
-        // The curation view keeps the default labels/UI language: it is about
-        // which OSM object a row means, not about how the map reads.
-        <CuratePanel mapRef={mapRef} />
-      ) : (
-        <SearchPanel labels={labels} onLabelsChange={handleLabelsChange} onSelect={handleSelect} />
-      )}
+      {panel}
     </div>
   );
 }

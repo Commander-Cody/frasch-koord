@@ -1,0 +1,251 @@
+/* Dialect-area review view (?areas). Dev tool: dense, plain, always light —
+   the map behind it is light too, and this never ships to the public site. */
+
+.area-panel {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  bottom: 12px;
+  z-index: 1;
+  width: min(420px, calc(100vw - 24px));
+  overflow-y: auto;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-family: system-ui, sans-serif;
+  font-size: 13px;
+  color-scheme: light;
+  color: #222;
+}
+
+.area-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: sticky;
+  top: -10px;
+  background: white;
+  padding-top: 2px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #eee;
+  z-index: 2;
+}
+
+.area-title {
+  margin: 0;
+  font-size: 15px;
+}
+
+.area-counts {
+  margin: 0;
+  color: #666;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.area-reload {
+  font: inherit;
+  font-size: 11px;
+  margin-left: auto;
+  padding: 2px 6px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #fff;
+  color: #222;
+  cursor: pointer;
+}
+
+.area-input {
+  font: inherit;
+  padding: 5px 7px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  width: 100%;
+  box-sizing: border-box;
+  background: #fff;
+  color: #222;
+}
+
+/* Legend. Doubles as the map filter, so every row is a button. */
+.area-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.area-legend-item {
+  font: inherit;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 6px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: none;
+  color: #222;
+  cursor: pointer;
+}
+
+.area-legend-item:hover {
+  background: #f3f3f3;
+}
+
+.area-legend-item.is-active {
+  background: #e8f0fe;
+  border-color: #b5cbf5;
+}
+
+.area-legend-count {
+  color: #888;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The one place colour is shown next to its name, in the legend and again in
+   the detail block — identity is never colour alone. */
+.area-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  border: 1px solid rgba(0, 0, 0, 0.25);
+  vertical-align: -1px;
+  flex: none;
+}
+
+.area-detail {
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: #fafafa;
+}
+
+.area-detail-name {
+  margin: 0;
+  font-size: 14px;
+}
+
+.area-facts {
+  margin: 0;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 1px 8px;
+  font-size: 12px;
+}
+
+.area-facts > div {
+  display: contents;
+}
+
+.area-facts dt {
+  color: #888;
+}
+
+.area-facts dd {
+  margin: 0;
+}
+
+.area-facts dd a {
+  margin-right: 8px;
+}
+
+/* The research note, verbatim: it is the reason the row says what it says. */
+.area-note {
+  margin: 0;
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: #333;
+  border-left: 3px solid #ddd;
+  padding-left: 7px;
+}
+
+.area-add {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  align-items: flex-start;
+}
+
+.area-add button {
+  font: inherit;
+  font-size: 12px;
+  padding: 3px 7px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #fff;
+  color: #222;
+  cursor: pointer;
+}
+
+.area-section {
+  margin: 6px 0 2px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #666;
+}
+
+.area-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.area-item {
+  font: inherit;
+  display: flex;
+  width: 100%;
+  gap: 8px;
+  align-items: baseline;
+  padding: 3px 6px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: #222;
+  text-align: left;
+  cursor: pointer;
+}
+
+.area-item:hover {
+  background: #f3f3f3;
+}
+
+.area-item.is-selected {
+  background: #e8f0fe;
+}
+
+.area-line {
+  margin-left: auto;
+  color: #aaa;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.area-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+
+.area-hint {
+  margin: 0;
+  color: #666;
+  font-size: 12px;
+}
+
+.area-error {
+  margin: 0;
+  color: #b3261e;
+}

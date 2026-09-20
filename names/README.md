@@ -136,6 +136,22 @@ a Schleswig-Holstein extract covers every Frisian area there is. The report
 lists every area with its polygon count and size, and every referenced object
 that is not in the extract.
 
+The same run also writes `names/dialect_areas_parts.geojson` (`--parts-out`):
+one Feature per *municipality* rather than per dialect, carrying the row's
+`name` and research `note`, plus every Kreis Nordfriesland municipality that no
+row claims, marked `assigned: false`. It exists for the review overlay in the
+web app (`?areas`, see `web/README.md`) and is simplified finer, to 0.0001°
+(~11 m), because neighbours are simplified independently and at 50 m the cracks
+between two municipalities that actually touch become visible. Committed, for
+the same reason as the dissolved file. `--no-unassigned` skips the extra
+relation scan.
+
+**No Python consumer may read the parts file.** Its unit is the municipality,
+not the dialect, so handing it to `dialects.AreaIndex` would silently change
+every dialect lookup. The unassigned features deliberately carry no `dialect`
+property, which makes `AreaIndex.from_geojson` refuse the file outright rather
+than load it by accident.
+
 ## Migration from the old `other` and `older` columns
 
 Until 2026-09-16 every non-Mooring name lived in one `other` column with its
@@ -453,8 +469,9 @@ references: coordinates and tag fixes belong in `curation.csv` and the build.
 | `dialects.py` | the registry, the dialect name logic and the area lookup; shared by injector, exporter and matcher |
 | `build_candidates.py` | OSM extract(s) → `work/candidates.jsonl` |
 | `match.py` | fills `osm`/`wikidata` in `places.csv`; writes `work/matches.csv` and `REPORT.md` |
-| `build_dialect_areas.py` | `dialect_areas.csv` + OSM extract → `dialect_areas.geojson` |
-| `dialect_areas.geojson` | generated, **committed**: one polygon set per dialect |
+| `build_dialect_areas.py` | `dialect_areas.csv` + OSM extract → `dialect_areas.geojson` + `dialect_areas_parts.geojson` |
+| `dialect_areas.geojson` | generated, **committed**: one polygon set per dialect — the lookup file |
+| `dialect_areas_parts.geojson` | generated, **committed**: one polygon per municipality with its `note`, plus the unassigned ones; for the `?areas` review view only, never read by Python |
 | `curate.py` | the review worklist as pins on the map: `export` → `work/curate.json`, `apply` writes the browser's decisions back into `places.csv` / `curation.csv` |
 | `export_search_index.py` | `places.csv` + `work/matches.csv` → `web/public/data/names.json` and `web/src/generated/dialects.json` |
 | `REPORT.md` | generated worklist |
