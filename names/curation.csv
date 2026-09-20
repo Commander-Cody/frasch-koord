@@ -8,7 +8,7 @@ relation/5713403,Japsand,,,frasch:kind=sand,,,,"already place=island in OSM; not
 node/1259327161,Tilli,,,,10,,,no Frisian name; must not show before Dagebüll (z10)
 node/355956234,Tammensiel,,,,10,,,must not show before Dagebüll (z10)
 node/240074898,Friedrich-Wilhelm-Lübke-Koog,,,,11,,,"place=village with 166 inhabitants, first in the tiles at z9 like the real villages; far too prominent, so two zoom levels later"
-node/954942814,Rodenäs - Kirche,,,,11,,,"place=village in OSM but only the church end of Rodenäs; first at z9, far too prominent, so two zoom levels later"
+node/954942814,Rodenäs - Kirche,,,place=hamlet,,,,"place=village in OSM but only the church end of Rodenäs; first at z9, far too prominent, so set to hamlet"
 node/85929111,Nordstrand (village node),,,name:frr-x-mooring=e Strönj,12,,,"the municipality's place=village node: same name as the island, held back to z12 so it takes over from the synthetic island label above at the same spot (like Pellworm's village node)"
 relation/5615880,Hamburger Hallig,,,place=island,12,,,"only a dwelling node and an admin_level=10 boundary in OSM; the boundary becomes the island polygon. Small Hallig, so z12 like Habel"
 way/44051131; way/44051132; way/44051133; way/628205597; way/628205598; way/628205599,Arlau (segments outside the relation),,,name:frr-x-mooring=Arlou;frasch:kind=water,,,,six short waterway=river ways named Arlau that are not members of relation/535603 (the places.csv row for Arlau); give them the same name so the line label is continuous
@@ -16,15 +16,15 @@ local/westerheide-amrum,Westerheide (Amrum),54.65097,8.34019,,,,,nicht in OSM (W
 local/huelltoft,Hülltoft,54.881287,8.771304,,,,,
 local/sibbershusum,Sibbershusum,54.894894,8.674238,,,,,
 local/bramstedt,Bramstedt,54.841343,9.084811,,,,,
-local/emmelsbuell,Emmelsbüll,54.810998,8.695429,,,,,
+local/emmelsbuell,Emmelsbüll,54.810998,8.695429,place=village,,,,main settlement; shown as a village
 local/benninghusum,Benninghusum,54.835675,8.648816,,,,,
-local/horsbuell,Horsbüll,54.830598,8.653066,,,,,
+local/horsbuell,Horsbüll,54.830598,8.653066,place=village,,,,main settlement; shown as a village
 local/neuhorsbuell,Neuhorsbüll,54.831981,8.658431,,,,,
 local/ebbuell,Ebbüll,54.810005,8.685719,,,,,
 local/fegetasch,Fegetasch,54.872359,8.735385,,,,,
 local/bevertoft,Bevertoft,54.871209,8.720949,,,,,
 local/sued-bevertoft,Süd-Bevertoft,54.864346,8.715228,,,,,
-local/waygaard,Waygaard,54.702831,8.83708,,,,,
+local/waygaard,Waygaard,54.702831,8.83708,place=village,,,,main settlement; shown as a village
 local/froddegaard,Froddegaard,54.718113,8.85798,,,,,
 local/leckeng,Leckeng,54.773359,8.929193,,,,,
 local/nordmarsch,Nordmarsch,54.630651,8.556603,,,,,
@@ -63,3 +63,6 @@ local/suederhoern,Süderhörn (Wiedingharde),54.859583,8.676182,,,,,
 local/teglmark,Teglmark,54.903565,8.825046,,,,,
 local/warmhoern,Warmhörn,54.374516,8.859296,,,,,
 local/norderreihe,Norderreihe,54.396193,8.84544,,,,,
+node/1594588153,Norder-Waygaard,,,place=hamlet,,,,part of Waygaard; shown as a hamlet
+node/1594588995,Süder-Waygaard,,,place=hamlet,,,,part of Waygaard; shown as a hamlet
+local/fockebuell,Fockebüll,54.894341,8.787174,,,,,
