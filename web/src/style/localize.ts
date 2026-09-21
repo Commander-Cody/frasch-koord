@@ -63,6 +63,18 @@ export function nameExpression(tag: string): ExpressionSpecification {
 }
 
 /**
+ * The ids of the layers that label places — what a click on the map has to
+ * hit to open a place card. Read off the style rather than hardcoded, so the
+ * two cannot drift apart when a label class is added (see the "Label classes"
+ * section of web/README.md).
+ */
+export function placeLayerIds(style: StyleSpecification): string[] {
+  return style.layers
+    .filter((l) => l.type === 'symbol' && 'source-layer' in l && l['source-layer'] === 'place')
+    .map((l) => l.id);
+}
+
+/**
  * Does this symbol layer's text-field render the feature's `name`
  * (possibly combined with `name:latin`/`name:nonlatin` in various
  * OpenMapTiles/OSM Bright templating styles)? Layers that label something

@@ -49,6 +49,6 @@ echo "== building $OUT"
   --download \
   --output="$OUT" \
   --languages="de,da,nds,frr,${TAGS}" \
-  --extra_name_tags=frasch:kind,frasch:minzoom,frasch:maxzoom,frasch:dialect,frasch:local,frasch:variety \
+  --extra_name_tags=frasch:kind,frasch:minzoom,frasch:maxzoom,frasch:dialect,frasch:local,frasch:variety,frasch:ref \
   --force "$@"
 ls -la "$OUT"

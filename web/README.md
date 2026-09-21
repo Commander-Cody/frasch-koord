@@ -161,7 +161,13 @@ OpenMapTiles schema plus our extras, injected by the `tiles/` build
   `names/places.csv` where a sub-dialect differs (Fahretoft). Drives the
   local view.
 - `frasch:variety` (string, rare): the sub-dialect the local name belongs to,
-  e.g. `Foortuftinge`. Informational; nothing in the style reads it yet.
+  e.g. `Foortuftinge`. Shown by the place card; nothing in the style reads it.
+- `frasch:ref` (string, only on features from our name list): which row of
+  `names/places.csv` the names come from — `node/240042766`,
+  `relation/3352541`, `local/huelltoft`, or a QID for a row without an `osm`
+  column. It is the `id` of that row's entry in the search index, which is how
+  a click on a label finds the rest of the place's names (see "Place info
+  card"). Absent on everything the name list does not cover.
 - Names: `name:<tag>` for every dialect of the registry that has a name for
   the feature (`name:frr-x-mooring`, `name:frr-x-fering`, …), plus
   `name:frr`, `name:nds`, `name:de`, `name:da`, `name:latin`, `name`.
@@ -267,8 +273,8 @@ single Warft (which in any case doesn't render before `place-warft`'s
 ## Search
 
 `src/components/SearchPanel.tsx` builds a MiniSearch index over
-`public/data/names.json`, fetched once at startup. Schema (one entry per
-place):
+`public/data/names.json`, which `App` fetches once at startup (`useNames` in
+`src/names.ts`) and shares with the place card. Schema (one entry per place):
 
 ```jsonc
 {
@@ -278,11 +284,17 @@ place):
   "dialect": "frr-x-fering",      // omitted outside the Frisian dialect areas
   "variety": "Foortuftinge",      // omitted: sub-dialect of the local name
   "name_de": "string",            // German name, shown alongside as a hint
+  "name_da": "string",            // omitted: Danish name, where the list has one
+  "wikidata": "Q3127",            // omitted: QID of the place, where the row has one
   "lon": 0,
   "lat": 0,
   "kind": "string"                // e.g. "settlement", "island", "hallig"
 }
 ```
+
+`id` is `placelist.entry_id` — the row's first `osm` reference, else its QID —
+and the tiles carry the same string as `frasch:ref`. That is the whole link
+between a label on the map and its row in the name list.
 
 Written by `names/export_search_index.py`; only non-empty values are
 exported, so an absent field really means "no such name".
@@ -294,6 +306,52 @@ Fering still finds Niebüll. Which name a result *shows* follows the selected
 option, mirroring the label chain above: dialect view `names[tag] ?? local ??
 name_de`, local view `local ?? name_de`, with the German name on the second
 line when it differs. Selecting a result flies the map to it.
+
+## Place info card
+
+`src/components/PlaceCard.tsx`. Clicking a place label — or picking a search
+result — opens a card with the whole name list of that place: the name in the
+selected view large at the top, then every other dialect that has a name (in
+`names/dialects.csv` order, labelled from the registry, extinct dialects
+marked with †), the local form with its `frasch:variety` remark, German,
+Danish, and links to the OpenStreetMap object and to Wikidata.
+
+Where the data comes from (`src/names.ts`):
+
+- `App` loads `public/data/names.json` once (`useNames`) and keeps it as
+  `byRef`, entries by `id`.
+- `Map` hit-tests a 13 px box around the click against the label layers of the
+  current style (`placeLayerIds` in `style/localize.ts` reads them off the
+  style, so a new label class is clickable without touching the map) and hands
+  the topmost feature up.
+- The feature's `frasch:ref` looks the row up in `byRef`. `cardEntry` then
+  merges the two: the name-list entry wins field by field, the tile fills what
+  the list does not have — which is how Föhr shows a Danish name (OSM's
+  `name:da`) although our own `da` column is empty there.
+- A feature with no row in the list (a plain German village, or an object only
+  `names/curation.csv` touches) still gets a card, built from the tile
+  attributes alone, with the OSM link decoded from the tile feature id
+  (Planetiler writes `osmId * 10 + type`). No QID, and the only Frisian name
+  it can show is OSM's dialect-less `name:frr` — which the style labels with
+  too, so the card would otherwise contradict the label that was clicked. It
+  is marked as coming from OSM (`card.frisian`) and left out wherever it only
+  repeats a name the card already shows.
+
+Two details worth knowing:
+
+- **The area dialect's name and the local form are often the same string.**
+  `names/dialects.py:dialect_name()` falls the dialect of the place's own area
+  back to the `local` column, so e.g. `names["frr-x-fering"]` on Föhr *is* the
+  local form. The card shows such a name once, on the local line, which names
+  the dialect it belongs to.
+- **The headline never lies about which dialect it is in.** When the selected
+  dialect has no name for the place, `displayName` falls back to the local or
+  the German name, and the line under the headline says so instead of naming
+  the selected dialect.
+
+Escape, the × button and a click on the map (that hits no label) close the
+card. Selection is not in the URL — that is issue #4 — and the "report a wrong
+or missing name" link is issue #8.
 
 ## Curation view (dev only)
 
@@ -376,11 +434,14 @@ follows the selected label option (see "Dialect registry and the selector").
 One JSON file per dialect in `src/locales/`, same keys in each:
 
 - `de.json` — German UI strings (search placeholder, dialect label, "no
-  results", attribution text). This is the fallback language
-  (`fallbackLng: 'de'`).
+  results", the place card's row labels under `card.*`, the kind names under
+  `kind.*` — both our own `frasch:kind` values and the OpenMapTiles `class`
+  values a place outside the name list has — and the attribution text). This
+  is the fallback language (`fallbackLng: 'de'`).
 - `frr-x-mooring.json` — Mooring UI strings. Strings nobody has written yet
-  (`attribution`, `dialect.local`) are left as **empty strings — never
-  invented** — so the UI falls back to German rather than showing blank text
+  (`attribution`, `dialect.local`, all of `card.*` and `kind.*`) are left as
+  **empty strings — never invented** — so the UI falls back to German rather
+  than showing blank text
   (`returnEmptyString: false` makes i18next treat an empty string as
   "missing" for fallback purposes). Fill them in once real Mooring wording
   exists.
@@ -389,7 +450,7 @@ One JSON file per dialect in `src/locales/`, same keys in each:
 
 - Mooring UI translations for the remaining keys (see i18n section above),
   including the name of the local-dialect view (`dialect.local`).
-- Nothing reads `frasch:dialect`/`frasch:variety` yet — they are exported so
-  a later UI can say which dialect a label is in.
+- Nothing in the *style* reads `frasch:dialect`/`frasch:variety`; the place
+  card does.
 - The `within`-polygon split of the label chain for non-German areas (see
   "Label chain").

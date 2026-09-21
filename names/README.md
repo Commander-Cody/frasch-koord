@@ -473,7 +473,7 @@ references: coordinates and tag fixes belong in `curation.csv` and the build.
 | `dialect_areas.geojson` | generated, **committed**: one polygon set per dialect — the lookup file |
 | `dialect_areas_parts.geojson` | generated, **committed**: one polygon per municipality with its `note`, plus the unassigned ones; for the `?areas` review view only, never read by Python |
 | `curate.py` | the review worklist as pins on the map: `export` → `work/curate.json`, `apply` writes the browser's decisions back into `places.csv` / `curation.csv` |
-| `export_search_index.py` | `places.csv` + `work/matches.csv` → `web/public/data/names.json` and `web/src/generated/dialects.json` |
+| `export_search_index.py` | `places.csv` + `work/matches.csv` → `web/public/data/names.json` (every dialect name, the local form, German, Danish, the QID; keyed by `placelist.entry_id`, the same string the tiles carry as `frasch:ref`) and `web/src/generated/dialects.json` |
 | `REPORT.md` | generated worklist |
 | `work/` | git-ignored caches (candidates, matches, Wikidata lookups) and the curation view's `curate.json` / `curate-patch.jsonl` |
 | `bootstrap/` | the original sheet export, its one-time importer and the one-time `other` → dialect-column migration |

@@ -1,32 +1,11 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useId, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import MiniSearch from 'minisearch';
 
-import { LABEL_OPTIONS, LOCAL_TAG } from '../config';
-
-/**
- * One entry of public/data/names.json, written by names/export_search_index.py.
- * Only non-empty values are exported, so every optional field is genuinely
- * absent rather than an empty string.
- */
-export interface NameEntry {
-  /** Stable identifier, e.g. "node/240044177" (or "<osm id>#<csv line>" for a second row on the same object), or "local/<slug>" for a place OSM does not have. */
-  id: string;
-  /** Dialect names by registry tag, e.g. { "frr-x-mooring": "Naibel" }. */
-  names: Record<string, string>;
-  /** Name used by the people of the place itself (tile attribute `frasch:local`). */
-  local?: string;
-  /** Dialect area the place lies in, e.g. "frr-x-fering". */
-  dialect?: string;
-  /** Sub-dialect remark of the local name, e.g. "Foortuftinge". */
-  variety?: string;
-  /** German name, shown as a hint next to a Frisian one. */
-  name_de: string;
-  lon: number;
-  lat: number;
-  kind: string;
-}
+import { LABEL_OPTIONS } from '../config';
+import type { NameEntry } from '../names';
+import { displayName } from '../names';
 
 /**
  * Index document: every name of an entry flattened into one searchable
@@ -39,6 +18,8 @@ interface IndexedEntry extends NameEntry {
 }
 
 export interface SearchPanelProps {
+  /** The name list, loaded once by App (see names.ts). */
+  entries: NameEntry[];
   /** Selected label option tag (a dialect, or LOCAL_TAG). */
   labels: string;
   onLabelsChange: (labels: string) => void;
@@ -47,19 +28,6 @@ export interface SearchPanelProps {
 }
 
 const MAX_RESULTS = 8;
-
-/**
- * The name to show for an entry in the selected view: the selected dialect's
- * own name, else the local Frisian one, else German — the search-result
- * counterpart of the label chain in style/localize.ts. The local view shows
- * only the local name (plus German as a last resort), never another dialect's.
- */
-function displayName(entry: NameEntry, labels: string): string {
-  if (labels === LOCAL_TAG) return entry.local ?? entry.name_de;
-  // `?.` because names.json is fetched, not type-checked: an archive built
-  // before the multi-dialect schema has no `names` object at all.
-  return entry.names?.[labels] ?? entry.local ?? entry.name_de;
-}
 
 function createIndex() {
   return new MiniSearch<IndexedEntry>({
@@ -75,33 +43,26 @@ function toIndexed(entry: NameEntry): IndexedEntry {
   return { ...entry, text: [...new Set(all.filter(Boolean))].join(' ') };
 }
 
-export default function SearchPanel({ labels, onLabelsChange, onSelect }: SearchPanelProps) {
+export default function SearchPanel({
+  entries,
+  labels,
+  onLabelsChange,
+  onSelect,
+}: SearchPanelProps) {
   const { t } = useTranslation();
   const listId = useId();
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const [index, setIndex] = useState<MiniSearch<IndexedEntry> | null>(null);
   const [query, setQuery] = useState('');
   // Results are hidden after a selection until the user types again.
   const [open, setOpen] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
 
-  useEffect(() => {
-    let cancelled = false;
-    fetch('/data/names.json')
-      .then((res) => res.json())
-      .then((entries: NameEntry[]) => {
-        if (cancelled) return;
-        const idx = createIndex();
-        idx.addAll(entries.map(toIndexed));
-        setIndex(idx);
-      })
-      .catch((err: unknown) => {
-        console.error('Failed to load names.json', err);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const index = useMemo(() => {
+    if (entries.length === 0) return null;
+    const idx = createIndex();
+    idx.addAll(entries.map(toIndexed));
+    return idx;
+  }, [entries]);
 
   const results = useMemo<NameEntry[]>(() => {
     if (!index || query.trim().length === 0) return [];

@@ -15,6 +15,10 @@ A row for a place OSM does not have (`osm` = `local/<slug>`) takes its position
 from the curation row with the same reference (names/curation.csv), and that
 reference is the entry's id.
 
+An entry's `id` is `placelist.entry_id` -- the same string the injector writes
+into the tiles as `frasch:ref`, which is how a click on a map label finds the
+entry it belongs to (web/src/names.ts).
+
 Usage: names/export_search_index.py [--names names/places.csv]
                                     [--dialects names/dialects.csv]
                                     [--areas names/dialect_areas.geojson]
@@ -106,8 +110,7 @@ def main():
         area_tag = areas.lookup(float(lon), float(lat)) if areas else None
         if area_tag:
             n_area += 1
-        refs = placelist.parse_osm(r["osm"])
-        ident = placelist.format_osm(refs[:1]) if refs else r["wikidata"]
+        ident = placelist.entry_id(r)
         # several rows may point at the same object (two spellings, two
         # sheet sections); keep both searchable with a unique id
         if ident in seen:
@@ -134,6 +137,11 @@ def main():
         variety = dialects.variety(r)
         if variety:
             entry["variety"] = variety
+        name_da = placelist.primary(r["da"])
+        if name_da:
+            entry["name_da"] = name_da
+        if r["wikidata"]:
+            entry["wikidata"] = r["wikidata"]
         out.append(entry)
 
     for path, data in ((a.out, out),

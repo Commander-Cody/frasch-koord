@@ -17,6 +17,10 @@ that is not `skip` tags the object(s) in its `osm` column with
     frasch:dialect   the dialect spoken where the object lies
     frasch:local     what the people of the place themselves call it
     frasch:variety   the name of that local variety, e.g. `Foortuftinge`
+    frasch:ref       the row's reference (`node/240042766`, `local/huelltoft`
+                     or, for a row with no `osm`, its QID) -- the id of the
+                     row's entry in the search index, so that the frontend can
+                     go from a clicked label back to the name-list row
 
 Rows with a `wikidata` QID additionally tag every object whose `wikidata` tag
 equals that QID; for the countries, which have no `osm`, that is the only key.
@@ -42,12 +46,18 @@ the *local* one at this spot (`frasch:local`, the "local dialect" map view),
 and which dialect a place's own `local` column belongs to.  The smallest area
 containing the object wins.  Without the file the injector still runs -- it
 warns and writes `frasch:local` only for rows with an explicit `local` name.
-A node is placed by its own location; a way by its first node; a relation by
-its `label` / `admin_centre` member or the first node of its first member way.
-Those positions are collected in three id-filtered pre-passes over the file
-(matched relations -> their member ways -> those ways' first nodes), never in
-a location cache for the whole extract -- the dev machine does not have the
-memory for one.  Objects matched only through their Wikidata QID get no area.
+A node is asked at its own location; a way or relation that closes into a
+polygon first at an interior point of *that* polygon and only then at its
+outline -- an island's coastline runs outside the municipality boundaries the
+areas are cut from, so a coastline vertex answers "no dialect" for the very
+island the area was drawn around (see `locate_ways_and_relations`).  What does
+not close -- an open way, a relation whose members the extract does not hold --
+is asked, as before, at the relation's `label` / `admin_centre` member, else
+at its first vertex.  Those positions are collected in three id-filtered
+pre-passes over the file (matched relations -> their member ways -> those
+ways' nodes), never in a location cache for the whole extract -- the dev
+machine does not have the memory for one.  Objects matched only through their
+Wikidata QID get no area.
 
 `names/curation.csv` (per-feature map tuning) -- for every listed object the
 `set_tags` (`k=v` pairs separated by `;`) are applied *verbatim*, after the
@@ -91,6 +101,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.normpath(os.path.join(HERE, "..", "names")))
 import placelist  # noqa: E402
 import dialects  # noqa: E402
+import build_dialect_areas  # noqa: E402  (ring assembly, see locate_ways_and_relations)
 
 DEFAULT_NAMES = placelist.DEFAULT_PATH
 DEFAULT_DIALECTS = dialects.DEFAULT_PATH
@@ -102,6 +113,7 @@ MAXZOOM_KEY = "frasch:maxzoom"
 DIALECT_KEY = "frasch:dialect"
 LOCAL_KEY = "frasch:local"
 VARIETY_KEY = "frasch:variety"
+REF_KEY = "frasch:ref"
 
 # The default `place=` of the node added for a local reference, by the row's
 # kind.  Only kinds whose OSM equivalent is unambiguous are listed; any other
@@ -202,6 +214,11 @@ def name_tags(rows, area_tag, reg):
         variety = dialects.variety(row)
         if variety:
             tags[VARIETY_KEY] = variety
+            break
+    for row in rows:
+        ref = placelist.entry_id(row)
+        if ref:
+            tags[REF_KEY] = ref
             break
     return tags
 
@@ -360,35 +377,37 @@ def scan_relations(path, by_id):
       OpenMapTiles waterway layer is built from the member WAYS, so the label
       has to go on them (the main pass applies it only to members carrying the
       relation's own name, so side arms like "Alte Eider" keep theirs)
-    * where a matched relation *is*: its `label` or `admin_centre` member
-      node, else the first node of its first member way -- enough to ask the
-      dialect-area index which dialect is spoken there.
+    * what a matched relation is made of: its `label` / `admin_centre` member
+      node and its member ways by ring role -- enough to rebuild its polygon
+      and ask the dialect-area index which dialect is spoken inside it.
 
-    -> (members, rel_node, rel_way) with
-       members  {('w', id): (relation key, the relation's OSM name)}
-       rel_node {rel id: node id}, rel_way {rel id: way id}"""
+    -> (members, rel_node, rel_rings) with
+       members    {('w', id): (relation key, the relation's OSM name)}
+       rel_node   {rel id: node id}
+       rel_rings  {rel id: {'outer': [way ids], 'inner': [way ids]}}, the
+                  shape names/build_dialect_areas.polygons_for expects"""
     wanted = {i for t, i in by_id if t == "r"}
-    members, rel_node, rel_way = {}, {}, {}
+    members, rel_node, rel_rings = {}, {}, {}
     if not wanted:
-        return members, rel_node, rel_way
+        return members, rel_node, rel_rings
     fp = osmium.FileProcessor(path, osmium.osm.RELATION) \
                .with_filter(osmium.filter.IdFilter(wanted))
     for r in fp:
         waterway = r.tags.get("type") == "waterway" or "waterway" in r.tags
+        rings = rel_rings.setdefault(r.id, {"outer": [], "inner": []})
         for m in r.members:
             if m.type == "n" and m.role in ("label", "admin_centre"):
                 rel_node.setdefault(r.id, m.ref)
             elif m.type == "w":
-                if r.id not in rel_way:
-                    rel_way[r.id] = m.ref
+                rings["inner" if m.role == "inner" else "outer"].append(m.ref)
                 if waterway:
                     members.setdefault(("w", m.ref),
                                        (("r", r.id), r.tags.get("name", "")))
-    return members, rel_node, rel_way
+    return members, rel_node, rel_rings
 
 
-def scan_way_starts(path, way_ids):
-    """-> {way id: first node id} for the given ways (id-filtered pass)."""
+def scan_way_nodes(path, way_ids):
+    """-> {way id: [node ids]} for the given ways (id-filtered pass)."""
     out = {}
     if not way_ids:
         return out
@@ -396,7 +415,7 @@ def scan_way_starts(path, way_ids):
                .with_filter(osmium.filter.IdFilter(way_ids))
     for w in fp:
         if len(w.nodes):
-            out[w.id] = w.nodes[0].ref
+            out[w.id] = [n.ref for n in w.nodes]
     return out
 
 
@@ -413,25 +432,69 @@ def scan_node_locations(path, node_ids):
     return out
 
 
-def locate_ways_and_relations(path, by_id, rel_node, rel_way):
-    """-> {('w'|'r', id): (lon, lat)} for the matched ways and relations.
+def locate_ways_and_relations(path, by_id, rel_node, rel_rings):
+    """-> ({('w'|'r', id): [(lon, lat), ...]}, n_from_polygon) for the matched
+    ways and relations: the points at which each is asked which dialect is
+    spoken there, best first (see `area_of`).  Nodes are not in here: the main
+    pass has their location anyway.
 
-    Nodes are not in here: the main pass has their location anyway."""
-    way_ids = {i for t, i in by_id if t == "w"} | set(rel_way.values())
-    starts = scan_way_starts(path, way_ids)
-    node_ids = set(starts.values()) | set(rel_node.values())
+    An island is not where its coastline starts.  The first vertex of a way
+    lies *on* the outline of the place, i.e. where the dialect area that was
+    cut from municipality boundaries has already ended (Amrum's coastline
+    begins 1.6 km south of the Amrum municipalities, on the Kniepsand), so
+    that point answered "no dialect at all" for exactly the places whose own
+    island the area was drawn around.  Whatever closes into a polygon is
+    therefore asked at an interior point of that polygon first -- a point of
+    the place itself, and still a single point, so the "smallest containing
+    area wins" rule of the index is untouched.
+
+    The outline point stays as a second try, because the two miss in opposite
+    directions: where an area covers only part of an island (the Langeneß
+    municipality holds only the south-west third of Oland) the interior point
+    falls outside it while a vertex still lands in it.  An object gets the
+    dialect of the first point that is in an area at all, so nothing that had
+    one can lose it.  What has no polygon -- an open way, a relation whose
+    members the extract does not hold -- is asked only at the old point: the
+    relation's `label` / `admin_centre` member, else the first vertex.
+
+    Ring assembly is names/build_dialect_areas.py's -- the same code that
+    builds the dialect areas themselves, so a place and the areas it is
+    compared against are read out of OSM the same way."""
+    way_ids = {i for t, i in by_id if t == "w"}
+    for rings in rel_rings.values():
+        way_ids |= set(rings["outer"]) | set(rings["inner"])
+    ways = scan_way_nodes(path, way_ids)
+    node_ids = {n for nodes in ways.values() for n in nodes} | set(rel_node.values())
     locs = scan_node_locations(path, node_ids)
-    out = {}
-    for t, i in by_id:
-        if t == "w" and starts.get(i) in locs:
-            out[(t, i)] = locs[starts[i]]
-        elif t == "r":
-            nid = rel_node.get(i)
-            if nid is None:
-                nid = starts.get(rel_way.get(i, 0))
-            if nid in locs:
-                out[(t, i)] = locs[nid]
-    return out
+    out, from_polygon, problems = {}, 0, []
+    for key in by_id:
+        t, i = key
+        if t not in ("w", "r"):
+            continue
+        points = []
+        for geom in build_dialect_areas.polygons_for(key, rel_rings, ways, locs, problems):
+            if geom.is_empty:
+                continue
+            try:
+                p = geom.representative_point()
+            except Exception:          # a ring OSM leaves in a state shapely
+                continue               # cannot make a point of; the outline does
+            points.append((p.x, p.y))
+            from_polygon += 1
+            break
+        # the old point: the relation's own label node, else the first vertex
+        # of the (first) way
+        nid = rel_node.get(i) if t == "r" else None
+        if nid is None:
+            first = ways.get(i) if t == "w" else next(
+                (ways[w] for w in rel_rings.get(i, {}).get("outer", []) if w in ways),
+                None)
+            nid = first[0] if first else None
+        if nid in locs:
+            points.append(locs[nid])
+        if points:
+            out[key] = points
+    return out, from_polygon
 
 
 # -------------------------------------------------------------- injector ----
@@ -474,19 +537,20 @@ class Injector:
         self.n_objects = 0
 
     def area_of(self, key, o):
-        """The dialect spoken where this object lies, or None."""
+        """The dialect spoken where this object lies, or None.  A node is
+        asked at its own location, a way / relation at the points
+        `locate_ways_and_relations` found for it, best first."""
         if self.areas is None:
             return None
         if key[0] == "n":
             if not o.location.valid():
                 return None
-            lon, lat = o.location.lon, o.location.lat
-        else:
-            pos = self.coords.get(key)
-            if pos is None:
-                return None
-            lon, lat = pos
-        return self.areas.lookup(lon, lat)
+            return self.areas.lookup(o.location.lon, o.location.lat)
+        for lon, lat in self.coords.get(key, ()):
+            tag = self.areas.lookup(lon, lat)
+            if tag:
+                return tag
+        return None
 
     def flush(self, t):
         """Write the synthetic nodes (t='w': before the first way) or ways
@@ -599,7 +663,7 @@ class Injector:
             # the row's tags
             ptags = {k: v for k, v in tags.items()
                      if k == "name" or k.startswith("name:")
-                     or k in (DIALECT_KEY, LOCAL_KEY, VARIETY_KEY)}
+                     or k in (DIALECT_KEY, LOCAL_KEY, VARIETY_KEY, REF_KEY)}
             ptags.update(synth["tags"])
             self.pending.append({"key": key, "label": synth["label"], "km2": synth["km2"],
                                  "lon": o.location.lon, "lat": o.location.lat, "tags": ptags})
@@ -667,14 +731,16 @@ def run(inp, out, names_csv, dialects_csv, areas_geojson, dry_run=False,
               f"-- nothing added")
 
     t0 = time.time()
-    members, rel_node, rel_way = scan_relations(inp, by_id)
-    coords = locate_ways_and_relations(inp, by_id, rel_node, rel_way) if areas else {}
+    members, rel_node, rel_rings = scan_relations(inp, by_id)
+    coords, from_polygon = (locate_ways_and_relations(inp, by_id, rel_node, rel_rings)
+                            if areas else ({}, 0))
     if members:
         print(f"waterways : {len(members)} member ways of matched waterway relations")
     if areas:
         print(f"positions : {len(coords)} of "
               f"{sum(1 for t, _ in by_id if t in ('w', 'r'))} ways/relations located "
-              f"({time.time()-t0:.0f}s in 3 id-filtered pre-passes)")
+              f"({from_polygon} inside their own polygon, the rest at their label "
+              f"node / first vertex; {time.time()-t0:.0f}s in 3 id-filtered pre-passes)")
 
     writer = None
     if not dry_run:

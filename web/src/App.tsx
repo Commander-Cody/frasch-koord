@@ -1,12 +1,15 @@
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { MapGeoJSONFeature } from 'maplibre-gl';
 import { useTranslation } from 'react-i18next';
 
 import AreaPanel from './components/AreaPanel';
 import CuratePanel from './components/CuratePanel';
 import MapView from './components/Map';
 import type { MapViewHandle } from './components/Map';
+import PlaceCard from './components/PlaceCard';
 import SearchPanel from './components/SearchPanel';
-import type { NameEntry } from './components/SearchPanel';
+import type { NameEntry, PlaceSelection, TileProps } from './names';
+import { useNames } from './names';
 import { DEFAULT_LABELS, labelOption } from './config';
 import './App.css';
 
@@ -42,7 +45,11 @@ function App() {
   const { i18n } = useTranslation();
   // The selected label option: a dialect tag, or LOCAL_TAG for the local view.
   const [labels, setLabels] = useState(DEFAULT_LABELS);
+  // The place whose card is open, from a map click or a search result.
+  const [selection, setSelection] = useState<PlaceSelection | null>(null);
   const mapRef = useRef<MapViewHandle | null>(null);
+  // One fetch of the name list for both the search index and the card.
+  const { entries, byRef } = useNames();
 
   // Map labels and UI chrome move together: each option names the UI language
   // it comes with (the local view has no dialect of its own and borrows one,
@@ -56,22 +63,75 @@ function App() {
   const handleSelect = (entry: NameEntry, name: string) => {
     const zoom = ZOOM_BY_KIND[entry.kind] ?? DEFAULT_TARGET_ZOOM;
     mapRef.current?.flyTo([entry.lon, entry.lat], zoom, { title: name });
+    setSelection({ entry });
   };
+
+  const closeCard = useCallback(() => {
+    setSelection(null);
+    mapRef.current?.clearMarker();
+  }, []);
+
+  /**
+   * A click on a place label. `frasch:ref` is the id of the feature's row in
+   * the name list (tiles/inject_names.py writes it, names/export_search_index.py
+   * uses it as the entry id); a feature without one, or one the list does not
+   * have, still gets a card — from the tile's own attributes.
+   */
+  const handleFeature = useCallback(
+    (feature: MapGeoJSONFeature | null) => {
+      if (!feature) {
+        closeCard();
+        return;
+      }
+      const props = feature.properties as TileProps;
+      const ref = props['frasch:ref'];
+      setSelection({
+        entry: typeof ref === 'string' ? byRef.get(ref) : undefined,
+        props,
+        featureId: feature.id,
+      });
+      // The label the user just clicked says where the place is; a search
+      // marker from before would only sit somewhere else.
+      mapRef.current?.clearMarker();
+    },
+    [byRef, closeCard],
+  );
+
+  // Escape closes the card, like any transient panel.
+  useEffect(() => {
+    if (!selection) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeCard();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [selection, closeCard]);
 
   // Both dev views keep the default labels/UI language: they are about which
   // OSM object a row means, and which dialect an area is, not about how the
   // map reads. `?curate` wins if both are set.
+  const devMode = CURATE_MODE || AREAS_MODE;
   const panel = CURATE_MODE ? (
     <CuratePanel mapRef={mapRef} />
   ) : AREAS_MODE ? (
     <AreaPanel mapRef={mapRef} />
   ) : (
-    <SearchPanel labels={labels} onLabelsChange={handleLabelsChange} onSelect={handleSelect} />
+    <div className="side-panel">
+      <SearchPanel
+        entries={entries}
+        labels={labels}
+        onLabelsChange={handleLabelsChange}
+        onSelect={handleSelect}
+      />
+      {selection && <PlaceCard selection={selection} labels={labels} onClose={closeCard} />}
+    </div>
   );
 
   return (
     <div className="app">
-      <MapView ref={mapRef} labels={labels} />
+      {/* The dev views bring their own click handling, so they get no
+          place card and no click handler of ours. */}
+      <MapView ref={mapRef} labels={labels} onSelectFeature={devMode ? undefined : handleFeature} />
       {panel}
     </div>
   );

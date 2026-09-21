@@ -185,6 +185,23 @@ def local_ref(cell: str | None) -> str | None:
     return None
 
 
+def entry_id(row: dict) -> str:
+    """The row's identity as the rest of the project spells it: its FIRST OSM
+    reference (`node/240042766`, `local/huelltoft`), or -- for a row that has
+    none, i.e. the countries -- its Wikidata QID.  `""` when it has neither.
+
+    The injector writes it into the tiles as `frasch:ref` and the exporter
+    uses it as the id of a search-index entry, which is how a click on a map
+    label finds the row it came from; the two must therefore derive the same
+    string, and that is why it lives here.  A row claiming several objects
+    gives all of them the same ref -- they are one place.
+    """
+    refs = parse_osm(row.get("osm"))
+    if refs:
+        return format_osm(refs[:1])
+    return (row.get("wikidata") or "").strip()
+
+
 def parse_point(lat: str | None, lon: str | None, where: str = ""):
     """`("54.65097", "8.34019")` -> `(8.34019, 54.65097)` as (lon, lat) floats,
     None when both cells are empty.  One without the other is an error."""

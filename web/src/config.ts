@@ -49,6 +49,14 @@ export const LOCAL_TAG = 'frr-x-local';
  */
 export const LOCAL_VIEW_UI_LANGUAGE = 'frr-x-mooring';
 
+/**
+ * The registry entry of a dialect tag, or undefined for a tag the registry
+ * does not have (LOCAL_TAG, a stale URL, an older archive's `name:<tag>`).
+ */
+export function dialect(tag: string): DialectEntry | undefined {
+  return DIALECTS.find((d) => d.tag === tag);
+}
+
 /** Label option selected on first load. */
 export const DEFAULT_LABELS = 'frr-x-mooring';
 

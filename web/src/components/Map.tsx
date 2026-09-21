@@ -6,12 +6,12 @@ import {
   AttributionControl,
   addProtocol,
 } from 'maplibre-gl';
-import type { LngLatLike, StyleSpecification } from 'maplibre-gl';
+import type { LngLatLike, MapGeoJSONFeature, StyleSpecification } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { Protocol } from 'pmtiles';
 
 import fraschBright from '../style/frasch-bright.json';
-import { buildStyle } from '../style/localize';
+import { buildStyle, placeLayerIds } from '../style/localize';
 import { TILES_URL } from '../config';
 
 // Register the pmtiles:// protocol with MapLibre exactly once, no matter
@@ -27,6 +27,9 @@ function ensurePmtilesProtocol(): void {
 const NORTH_FRISIA_CENTER: [number, number] = [8.85, 54.6];
 const INITIAL_ZOOM = 9;
 
+/** Half-width in pixels of the box a click queries: a finger is not a pixel. */
+const CLICK_SLOP = 6;
+
 export interface MapViewProps {
   /**
    * Label option tag: a dialect ("frr-x-mooring") or the local-dialect view
@@ -34,6 +37,11 @@ export interface MapViewProps {
    * every change.
    */
   labels: string;
+  /**
+   * Called with the place label a click hit, or `null` when it hit none.
+   * Left out by the dev views, which bring their own click handling.
+   */
+  onSelectFeature?: (feature: MapGeoJSONFeature | null) => void;
 }
 
 /**
@@ -54,11 +62,21 @@ export interface MapViewHandle {
  * Full-viewport MapLibre map. Exposes a small imperative handle via ref so
  * parents (e.g. search) can fly to a location and drop a marker.
  */
-const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView({ labels }, ref) {
+const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
+  { labels, onSelectFeature },
+  ref,
+) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markerRef = useRef<Marker | null>(null);
   const appliedLabels = useRef(labels);
+  // The click handler is registered once, on the map rather than on layer
+  // ids (those would have to be re-registered after every setStyle), so it
+  // reads the current callback through a ref instead of capturing it.
+  const selectRef = useRef(onSelectFeature);
+  useEffect(() => {
+    selectRef.current = onSelectFeature;
+  }, [onSelectFeature]);
 
   // NOTE: the handle must not capture mapRef.current directly. This hook runs
   // in the layout phase, before the effect below has created the map, so a
@@ -94,9 +112,10 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView({ label
     ensurePmtilesProtocol();
     if (!containerRef.current) return;
 
+    const style = buildStyle(fraschBright as unknown as StyleSpecification, TILES_URL, labels);
     const map = new MapLibreMap({
       container: containerRef.current,
-      style: buildStyle(fraschBright as unknown as StyleSpecification, TILES_URL, labels),
+      style,
       center: NORTH_FRISIA_CENTER,
       zoom: INITIAL_ZOOM,
       // Reflects viewport (zoom/lat/lon[/bearing/pitch]) in the URL hash and
@@ -105,6 +124,31 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView({ label
       hash: true,
       attributionControl: false,
     });
+    // Place labels are clickable: hit-test a small box around the pointer
+    // against the label layers of the current style and hand the topmost
+    // feature to the parent. A click that hits none clears the selection.
+    // Read off the style once — every label option rebuilds the same layers,
+    // only their text-field changes — and skip the ones a style in flight has
+    // not added yet.
+    const placeLayers = placeLayerIds(style);
+    const labelLayers = () => placeLayers.filter((id) => map.getLayer(id));
+    const hit = (point: { x: number; y: number }) =>
+      map.queryRenderedFeatures(
+        [
+          [point.x - CLICK_SLOP, point.y - CLICK_SLOP],
+          [point.x + CLICK_SLOP, point.y + CLICK_SLOP],
+        ],
+        { layers: labelLayers() },
+      )[0];
+    map.on('click', (e) => {
+      if (!selectRef.current) return;
+      selectRef.current(hit(e.point) ?? null);
+    });
+    map.on('mousemove', (e) => {
+      if (!selectRef.current) return;
+      map.getCanvas().style.cursor = hit(e.point) ? 'pointer' : '';
+    });
+
     map.addControl(new NavigationControl(), 'top-right');
     map.addControl(new AttributionControl({ compact: false }), 'bottom-right');
 

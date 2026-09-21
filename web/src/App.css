@@ -9,12 +9,30 @@
   inset: 0;
 }
 
-.search-panel {
+/* The left column of the public view: the search panel and, below it, the
+   place card. A column rather than two absolutely positioned panels so the
+   card never has to know how tall the search panel is. */
+.side-panel {
   position: absolute;
   top: 12px;
   left: 12px;
+  bottom: 12px;
   z-index: 1;
   width: min(320px, calc(100vw - 24px));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  /* The column spans the viewport height; only its panels take clicks, the
+     gap below them stays map. */
+  pointer-events: none;
+}
+
+.side-panel > * {
+  pointer-events: auto;
+}
+
+.search-panel {
+  flex: none;
   background: white;
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
@@ -100,4 +118,22 @@
   padding: 6px 4px;
   color: #777;
   font-size: 13px;
+}
+
+/* Phone width: the search panel stays a bar at the top, the place card
+   becomes a bottom sheet. (Issue #6 is the full mobile layout.) */
+@media (max-width: 600px) {
+  .side-panel {
+    bottom: auto;
+  }
+
+  .place-card {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-height: 60vh;
+    border-radius: 12px 12px 0 0;
+  }
 }

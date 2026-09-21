@@ -1,0 +1,113 @@
+/* Place info card: the name list of one place. Sits in the left column below
+   the search panel on desktop and becomes a bottom sheet on phone width (the
+   media query lives in App.css, next to the column it escapes from). */
+
+.place-card {
+  position: relative;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  padding: 12px;
+  overflow-y: auto;
+  /* Lets the card shrink inside the flex column instead of pushing the
+     search panel out of the viewport. */
+  min-height: 0;
+  font-family: system-ui, sans-serif;
+  /* Like the search panel: always light, whatever the OS is set to. */
+  color-scheme: light;
+  color: #222;
+}
+
+.place-card-close {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  border: none;
+  background: none;
+  padding: 4px 8px;
+  font: inherit;
+  font-size: 20px;
+  line-height: 1;
+  color: #777;
+  cursor: pointer;
+}
+
+.place-card-close:hover {
+  color: #222;
+}
+
+.place-card-name {
+  margin: 0;
+  padding-right: 24px;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.place-card-meta {
+  margin: 3px 0 10px;
+  font-size: 12px;
+  color: #777;
+}
+
+.place-card-kind::before {
+  content: ' · ';
+}
+
+.place-card-names {
+  margin: 0;
+  border-top: 1px solid #eee;
+}
+
+.place-card-names > div {
+  display: grid;
+  grid-template-columns: 8.5em 1fr;
+  gap: 10px;
+  padding: 5px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.place-card-names > div:last-child {
+  border-bottom: none;
+}
+
+.place-card-names dt {
+  font-size: 12px;
+  color: #777;
+}
+
+.place-card-names dd {
+  margin: 0;
+  font-size: 14px;
+}
+
+.place-card-names abbr {
+  text-decoration: none;
+  cursor: help;
+}
+
+.place-card-note {
+  margin-left: 6px;
+  font-size: 12px;
+  color: #777;
+}
+
+.place-card-note::before {
+  content: '(';
+}
+
+.place-card-note::after {
+  content: ')';
+}
+
+.place-card-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 10px 0 0;
+  font-size: 12px;
+}
+
+.place-card-links a {
+  color: #36c;
+}
