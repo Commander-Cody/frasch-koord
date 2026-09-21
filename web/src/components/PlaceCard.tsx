@@ -1,7 +1,8 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DIALECTS, LOCAL_TAG, dialect } from '../config';
+import { DIALECTS, LOCAL_TAG, dialect, dialectLabelKey } from '../config';
+import type { DialectEntry } from '../config';
 import type { NameEntry, PlaceSelection } from '../names';
 import { cardEntry, displayName, osmUrl, placeRef, wikidataUrl } from '../names';
 import './PlaceCard.css';
@@ -47,12 +48,19 @@ function headlineTag(entry: NameEntry, labels: string) {
 export default function PlaceCard({ selection, labels, onClose }: PlaceCardProps) {
   const { t } = useTranslation();
   const entry = useMemo(() => cardEntry(selection), [selection]);
+  // Dialect names are translated like any other UI string; the registry
+  // label covers a dialect the locale files do not know yet.
+  const dialectLabel = useCallback(
+    (d: DialectEntry) => t(dialectLabelKey(d.tag), { defaultValue: d.label }),
+    [t],
+  );
 
   const headline = displayName(entry, labels);
   const shownAs = headlineTag(entry, labels);
   const area = entry.dialect ? dialect(entry.dialect) : undefined;
+  const shownDialect = dialect(shownAs);
   const kind = entry.kind ? t(`kind.${entry.kind}`, { defaultValue: '' }) : '';
-  const localLabel = area ? `${t('card.local')} · ${area.label}` : t('card.local');
+  const localLabel = area ? `${t('card.local')} · ${dialectLabel(area)}` : t('card.local');
   // What the headline actually is, said honestly: the selected dialect only
   // when that dialect has a name for the place.
   const headlineLabel =
@@ -62,7 +70,7 @@ export default function PlaceCard({ selection, labels, onClose }: PlaceCardProps
         ? t('card.frisian')
         : shownAs === 'de'
           ? t('card.german')
-          : dialect(shownAs)?.label;
+          : shownDialect && dialectLabel(shownDialect);
 
   const lines = useMemo<Line[]>(() => {
     const out: Line[] = [];
@@ -75,7 +83,7 @@ export default function PlaceCard({ selection, labels, onClose }: PlaceCardProps
       // names/dialects.py, so its name can be the very same string as the
       // local form. Show it once, on the local line, which names the dialect.
       if (d.tag === entry.dialect && name === entry.local) continue;
-      out.push({ key: d.tag, label: d.label, extinct: d.status === 'extinct', name });
+      out.push({ key: d.tag, label: dialectLabel(d), extinct: d.status === 'extinct', name });
     }
     // Not when the headline is already that form: the selected dialect's
     // name and the local one are the same string wherever the place lies in
@@ -96,7 +104,7 @@ export default function PlaceCard({ selection, labels, onClose }: PlaceCardProps
       out.push({ key: 'da', label: t('card.danish'), name: entry.name_da });
     }
     return out;
-  }, [entry, shownAs, headline, localLabel, t]);
+  }, [entry, shownAs, headline, localLabel, dialectLabel, t]);
 
   const ref = placeRef(selection);
   const osm = osmUrl(ref ?? undefined);

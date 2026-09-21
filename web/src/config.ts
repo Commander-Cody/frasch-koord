@@ -20,7 +20,11 @@ export interface DialectEntry {
   tag: string;
   /** Column of that dialect in names/places.csv. Not used by the frontend, kept for traceability. */
   column: string;
-  /** Human-readable label, e.g. "Mooring". */
+  /**
+   * Human-readable label, e.g. "Mooring". Only the last-resort fallback for
+   * display: the UI shows `dialects.<tag>` from the locale files (see
+   * dialectLabelKey), so the name follows the UI language.
+   */
   label: string;
   /** "living" | "extinct" — Südergoesharde names are historic. */
   status: string;
@@ -57,6 +61,15 @@ export function dialect(tag: string): DialectEntry | undefined {
   return DIALECTS.find((d) => d.tag === tag);
 }
 
+/**
+ * i18n key of a dialect's display name. Callers pass the registry label as
+ * `defaultValue`, so a dialect newly added to the registry still shows a name
+ * before the locale files catch up.
+ */
+export function dialectLabelKey(tag: string): string {
+  return `dialects.${tag}`;
+}
+
 /** Label option selected on first load. */
 export const DEFAULT_LABELS = 'frr-x-mooring';
 
@@ -64,10 +77,10 @@ export const DEFAULT_LABELS = 'frr-x-mooring';
 export interface LabelOption {
   /** Dialect tag, or LOCAL_TAG for the local view. Drives the label expression. */
   tag: string;
-  /** Ready-made label from the registry (dialect names are the same in every UI language). */
+  /** i18n key of the option's name. */
+  labelKey: string;
+  /** Fallback name where the key has no translation (the registry label of a dialect). */
   label?: string;
-  /** i18n key instead of `label`, for options whose name is translated (the local view). */
-  labelKey?: string;
   /** UI language to switch to when this option is picked. */
   uiLanguage: string;
 }
@@ -80,6 +93,7 @@ export interface LabelOption {
 export const LABEL_OPTIONS: LabelOption[] = [
   ...DIALECTS.filter((d) => d.view === 'yes').map((d) => ({
     tag: d.tag,
+    labelKey: dialectLabelKey(d.tag),
     label: d.label,
     // A dialect view speaks its own dialect.
     uiLanguage: d.tag,

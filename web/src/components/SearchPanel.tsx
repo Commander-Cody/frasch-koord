@@ -124,7 +124,7 @@ export default function SearchPanel({
           <option key={option.tag} value={option.tag}>
             {/* Dialect names come from the registry as-is; only the local
                 view's name is translated. */}
-            {option.label ?? (option.labelKey ? t(option.labelKey) : option.tag)}
+            {t(option.labelKey, { defaultValue: option.label ?? option.tag })}
           </option>
         ))}
       </select>
