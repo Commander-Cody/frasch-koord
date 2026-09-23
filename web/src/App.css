@@ -59,6 +59,68 @@
   color: #222;
 }
 
+.search-panel-row {
+  display: flex;
+  gap: 6px;
+}
+
+.search-panel-row .dialect-select {
+  flex: 1;
+  min-width: 0;
+}
+
+.share {
+  position: relative;
+  flex: none;
+  display: flex;
+}
+
+.share-button {
+  width: 32px;
+  padding: 0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #fff;
+  color: #444;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.share-button:hover {
+  background: #f0f0f0;
+}
+
+.share-button svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* The "link copied" confirmation: a small tag under the button, announced
+   through role=status. Empty (and invisible) the rest of the time. */
+.share-status {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  white-space: nowrap;
+  font-size: 12px;
+  background: #222;
+  color: #fff;
+  border-radius: 4px;
+  padding: 3px 6px;
+  pointer-events: none;
+}
+
+.share-status:empty {
+  display: none;
+}
+
 .search-results {
   list-style: none;
   margin: 0;

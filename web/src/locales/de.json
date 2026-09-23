@@ -20,6 +20,11 @@
     "frr-x-hallig": "Halligfriesisch",
     "frr-x-halunder": "Halunder"
   },
+  "share": {
+    "label": "Link teilen",
+    "copied": "Link kopiert",
+    "copyManually": "Link zum Kopieren:"
+  },
   "card": {
     "title": "Ort",
     "close": "Schließen",

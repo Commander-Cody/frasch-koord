@@ -54,6 +54,8 @@ export interface MapViewHandle {
   getMap(): MapLibreMap | null;
   /** Animate to `center` at `zoom` and drop a single marker there. */
   flyTo(center: LngLatLike, zoom: number, marker?: { title?: string }): void;
+  /** Drop the single marker at `center` without moving the map. */
+  showMarker(center: LngLatLike, marker?: { title?: string }): void;
   /** Remove the marker placed by flyTo, if any. */
   clearMarker(): void;
 }
@@ -82,30 +84,32 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   // in the layout phase, before the effect below has created the map, so a
   // captured value would be null forever. Reading the ref inside each method
   // sidesteps that.
-  useImperativeHandle(
-    ref,
-    () => ({
+  useImperativeHandle(ref, () => {
+    const showMarker = (center: LngLatLike, marker?: { title?: string }) => {
+      const map = mapRef.current;
+      if (!map) return;
+      if (!markerRef.current) {
+        markerRef.current = new Marker({ color: '#d33' });
+      }
+      const m = markerRef.current;
+      m.setLngLat(center);
+      const el = m.getElement();
+      if (marker?.title) el.title = marker.title;
+      else el.removeAttribute('title');
+      m.addTo(map);
+    };
+    return {
       getMap: () => mapRef.current,
       flyTo: (center, zoom, marker) => {
-        const map = mapRef.current;
-        if (!map) return;
-        if (!markerRef.current) {
-          markerRef.current = new Marker({ color: '#d33' });
-        }
-        const m = markerRef.current;
-        m.setLngLat(center);
-        const el = m.getElement();
-        if (marker?.title) el.title = marker.title;
-        else el.removeAttribute('title');
-        m.addTo(map);
-        map.flyTo({ center, zoom, essential: true });
+        showMarker(center, marker);
+        mapRef.current?.flyTo({ center, zoom, essential: true });
       },
+      showMarker,
       clearMarker: () => {
         markerRef.current?.remove();
       },
-    }),
-    [],
-  );
+    };
+  }, []);
 
   // Create the map once on mount.
   useEffect(() => {
@@ -120,7 +124,8 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
       zoom: INITIAL_ZOOM,
       // Reflects viewport (zoom/lat/lon[/bearing/pitch]) in the URL hash and
       // reads an initial view from it if present, e.g. `#12/54.64/8.77`.
-      // Handy for linking to / screenshotting a specific view.
+      // Handy for linking to / screenshotting a specific view. The label
+      // option and the open place ride along in the query (urlState.ts).
       hash: true,
       attributionControl: false,
     });

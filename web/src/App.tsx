@@ -9,8 +9,9 @@ import type { MapViewHandle } from './components/Map';
 import PlaceCard from './components/PlaceCard';
 import SearchPanel from './components/SearchPanel';
 import type { NameEntry, PlaceSelection, TileProps } from './names';
-import { useNames } from './names';
-import { DEFAULT_LABELS, labelOption } from './config';
+import { displayName, useNames } from './names';
+import { labelOption } from './config';
+import { INITIAL_LABELS, readUrlState, writeUrlState } from './urlState';
 import './App.css';
 
 /** Target zoom per feature kind: large areas get a wider view than villages. */
@@ -41,12 +42,22 @@ const CURATE_MODE = new URLSearchParams(window.location.search).has('curate');
  */
 const AREAS_MODE = new URLSearchParams(window.location.search).has('areas');
 
+/**
+ * The place a shared link opens the card of (`?place=`, see urlState.ts), and
+ * whether the link also says where to look (`#zoom/lat/lon`). Read at module
+ * load, before the map mounts and starts writing a hash of its own.
+ */
+const LINKED_PLACE = readUrlState().place;
+const LINKED_VIEWPORT = window.location.hash.length > 1;
+
 function App() {
   const { i18n } = useTranslation();
   // The selected label option: a dialect tag, or LOCAL_TAG for the local view.
-  const [labels, setLabels] = useState(DEFAULT_LABELS);
+  const [labels, setLabels] = useState(INITIAL_LABELS);
   // The place whose card is open, from a map click or a search result.
   const [selection, setSelection] = useState<PlaceSelection | null>(null);
+  // The linked place until the name list has loaded and it can be looked up.
+  const [linkedPlace, setLinkedPlace] = useState(LINKED_PLACE);
   const mapRef = useRef<MapViewHandle | null>(null);
   // One fetch of the name list for both the search index and the card.
   const { entries, byRef } = useNames();
@@ -99,6 +110,33 @@ function App() {
     [byRef, closeCard],
   );
 
+  // Open the card of a linked place once the name list is there. Only
+  // name-list places can be linked: a tile feature the list does not have
+  // (a plain German village) has nothing to look it up by before its tile is
+  // on screen. Without a viewport in the link, fly there as a search would.
+  useEffect(() => {
+    if (!linkedPlace || byRef.size === 0) return;
+    setLinkedPlace(undefined);
+    const entry = byRef.get(linkedPlace);
+    if (!entry) return;
+    const name = displayName(entry, labels);
+    if (LINKED_VIEWPORT) {
+      setSelection({ entry });
+      mapRef.current?.showMarker([entry.lon, entry.lat], { title: name });
+    } else {
+      handleSelect(entry, name);
+    }
+    // Runs once per link; `labels` only names the marker.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [byRef, linkedPlace]);
+
+  // Keep the address bar a shareable link to what is on screen (MapLibre adds
+  // the viewport). The dev views have no selector and no card to link to.
+  useEffect(() => {
+    if (CURATE_MODE || AREAS_MODE) return;
+    writeUrlState({ view: labels, place: selection?.entry?.id ?? linkedPlace });
+  }, [labels, selection, linkedPlace]);
+
   // Escape closes the card, like any transient panel.
   useEffect(() => {
     if (!selection) return;
@@ -109,9 +147,9 @@ function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [selection, closeCard]);
 
-  // Both dev views keep the default labels/UI language: they are about which
-  // OSM object a row means, and which dialect an area is, not about how the
-  // map reads. `?curate` wins if both are set.
+  // Neither dev view offers the selector: they are about which OSM object a
+  // row means, and which dialect an area is, not about how the map reads, so
+  // they stay in the view the page opened in. `?curate` wins if both are set.
   const devMode = CURATE_MODE || AREAS_MODE;
   const panel = CURATE_MODE ? (
     <CuratePanel mapRef={mapRef} />

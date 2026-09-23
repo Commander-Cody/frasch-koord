@@ -23,6 +23,23 @@ initial view can be linked to or loaded directly, e.g.
 `http://localhost:5173/#12/54.64/8.77`. Useful for sharing a view or for
 scripted screenshots at a specific place/zoom.
 
+MapLibre rewrites the whole hash on every move, so the rest of what a link
+carries lives in the query string (`src/urlState.ts`), which it leaves alone:
+
+- `?view=<tag>` — the selected label option (`frr-x-mooring`, `frr-x-local`,
+  …). A tag the selector does not offer falls back to the default.
+- `?place=<id>` — the name-list id of the place whose card is open
+  (`node/240042766`, `local/<slug>`). Only name-list places can be linked; a
+  card built from a tile feature alone has nothing to look it up by before
+  its tile is on screen. With a `#zoom/lat/lon` the link opens there and just
+  marks the place; without one the map flies to it, like a search result.
+
+App keeps both in sync with `history.replaceState`, so the address bar always
+is a link to what is on screen, e.g.
+`/?view=frr-x-local&place=node/240042766#12/54.79/8.83`. The share button
+next to the dialect selector hands that URL to the system share sheet on
+touch devices and copies it everywhere else (`src/components/ShareButton.tsx`).
+
 ## Tile hosting
 
 The **only** place this frontend depends on how/where tiles are hosted is
@@ -350,7 +367,7 @@ Two details worth knowing:
   the selected dialect.
 
 Escape, the × button and a click on the map (that hits no label) close the
-card. Selection is not in the URL — that is issue #4 — and the "report a wrong
+card. The open card is in the URL (`?place=`, see above); the "report a wrong
 or missing name" link is issue #8.
 
 ## Curation view (dev only)

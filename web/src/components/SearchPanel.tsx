@@ -6,6 +6,7 @@ import MiniSearch from 'minisearch';
 import { LABEL_OPTIONS } from '../config';
 import type { NameEntry } from '../names';
 import { displayName } from '../names';
+import ShareButton from './ShareButton';
 
 /**
  * Index document: every name of an entry flattened into one searchable
@@ -114,20 +115,23 @@ export default function SearchPanel({
 
   return (
     <div className="search-panel">
-      <select
-        className="dialect-select"
-        aria-label={t('dialect.label')}
-        value={labels}
-        onChange={(e) => onLabelsChange(e.target.value)}
-      >
-        {LABEL_OPTIONS.map((option) => (
-          <option key={option.tag} value={option.tag}>
-            {/* Dialect names come from the registry as-is; only the local
-                view's name is translated. */}
-            {t(option.labelKey, { defaultValue: option.label ?? option.tag })}
-          </option>
-        ))}
-      </select>
+      <div className="search-panel-row">
+        <select
+          className="dialect-select"
+          aria-label={t('dialect.label')}
+          value={labels}
+          onChange={(e) => onLabelsChange(e.target.value)}
+        >
+          {LABEL_OPTIONS.map((option) => (
+            <option key={option.tag} value={option.tag}>
+              {/* Dialect names come from the registry as-is; only the local
+                  view's name is translated. */}
+              {t(option.labelKey, { defaultValue: option.label ?? option.tag })}
+            </option>
+          ))}
+        </select>
+        <ShareButton />
+      </div>
       <input
         ref={inputRef}
         type="search"

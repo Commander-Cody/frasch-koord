@@ -20,6 +20,11 @@
     "frr-x-hallig": "Hålifrasch",
     "frr-x-halunder": "Halunder"
   },
+  "share": {
+    "label": "Link diilje",
+    "copied": "Link kopiird",
+    "copyManually": "Kopiir e link:"
+  },
   "card": {
     "title": "Stää",
     "close": "Tumååge",
