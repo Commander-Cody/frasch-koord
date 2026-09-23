@@ -1,7 +1,7 @@
 import type { StyleSpecification, LayerSpecification } from 'maplibre-gl';
 import type { ExpressionSpecification } from '@maplibre/maplibre-gl-style-spec';
 
-import { DIALECTS, LOCAL_TAG } from '../config';
+import { labelChain } from '../labelChain';
 
 // `../style/frasch-bright.json` started as a fork of upstream OSM Bright
 // (openmaptiles/osm-bright-gl-style, openmaptiles:version "3.x", fetched
@@ -14,54 +14,14 @@ import { DIALECTS, LOCAL_TAG } from '../config';
 // against the page origin.
 
 /**
- * Builds the `text-field` expression for a label option.
- *
- * `tag` is either a dialect tag such as "frr-x-mooring" (the corresponding
- * tile property is literally "name:frr-x-mooring") or LOCAL_TAG, the "local
- * dialect" view.
- *
- *  - dialect view: the dialect's own name first, then the local Frisian name
- *    of the place (`frasch:local`, e.g. a Fering name on Föhr while the map
- *    is in Mooring) so a Frisian name is preferred over a German one even
- *    where this dialect has none, then every other dialect's name in
- *    registry order (a place outside the dialect areas has no local name,
- *    but may still have a Wieding one), then generic Frisian, Low Saxon, German,
- *    a transliterated Latin name, and finally the generic OSM `name`.
- *  - local view: ONLY the name the people of the place use themselves, then
- *    the local majority language. Deliberately no `name:frr` (that is some
- *    other dialect's name, which is exactly what this view avoids) and no
- *    `name:de` — German comes in via `name:latin`/`name` anyway, but only
- *    after Low Saxon has had its turn.
- *
- * Phase 1 covers Schleswig-Holstein only, so `name:nds` (Low Saxon) is always
- * the local majority language outside the Frisian areas. That assumption
- * breaks as soon as the tiles leave northern Germany. Planned for the planet
- * build, not yet implemented: two symbol layers per label layer sharing the
- * same base filter, one filtered `within` a northern-Germany polygon using
- * this chain, the other filtered to its complement using a chain without
- * `name:nds` (and, outside Germany, preferring `name:en` over `name:de`).
- * Not implemented today because there is no such polygon in the style yet.
+ * Builds the `text-field` expression for a label option: a `coalesce` over
+ * the tile properties of `labelChain(tag)`, the chain the place card and the
+ * search results follow too (see labelChain.ts).
  */
 export function nameExpression(tag: string): ExpressionSpecification {
-  if (tag === LOCAL_TAG) {
-    return [
-      'coalesce',
-      ['get', 'frasch:local'],
-      ['get', 'name:nds'],
-      ['get', 'name:latin'],
-      ['get', 'name'],
-    ] as unknown as ExpressionSpecification;
-  }
   return [
     'coalesce',
-    ['get', `name:${tag}`],
-    ['get', 'frasch:local'],
-    ...DIALECTS.filter((d) => d.tag !== tag).map((d) => ['get', `name:${d.tag}`]),
-    ['get', 'name:frr'],
-    ['get', 'name:nds'],
-    ['get', 'name:de'],
-    ['get', 'name:latin'],
-    ['get', 'name'],
+    ...labelChain(tag).map((key) => ['get', key]),
   ] as unknown as ExpressionSpecification;
 }
 

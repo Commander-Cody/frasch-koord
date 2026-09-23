@@ -27,8 +27,8 @@ interface Line {
 
 /**
  * The card for one place: its name in the selected view, every other dialect
- * the name list has a name in, the local form, German and Danish, and links
- * to the objects behind it.
+ * the name list has a name in, the local form, Low Saxon, German and Danish,
+ * and links to the objects behind it.
  *
  * Its data is `cardEntry(selection)` — the name-list entry where the place has
  * one, filled up from the clicked tile feature (see names.ts).
@@ -60,11 +60,13 @@ export default function PlaceCard({ selection, labels, onClose }: PlaceCardProps
       ? localLabel
       : shownAs === 'frr'
         ? t('card.frisian')
-        : shownAs === 'de'
-          ? t('card.german')
-          : shownAs === 'da'
-            ? t('card.danish')
-            : shownDialect && dialectLabel(shownDialect);
+        : shownAs === 'nds'
+          ? t('card.lowSaxon')
+          : shownAs === 'de'
+            ? t('card.german')
+            : shownAs === 'da'
+              ? t('card.danish')
+              : shownDialect && dialectLabel(shownDialect);
 
   const lines = useMemo<Line[]>(() => {
     const out: Line[] = [];
@@ -90,6 +92,11 @@ export default function PlaceCard({ selection, labels, onClose }: PlaceCardProps
     // same word as the dialect's), it says nothing worth a line.
     if (entry.name_frr && ![headline, ...out.map((l) => l.name)].includes(entry.name_frr)) {
       out.push({ key: 'frr', label: t('card.frisian'), name: entry.name_frr });
+    }
+    // Low Saxon only where it says something German does not: most places
+    // are the same word in both (Husum).
+    if (entry.name_nds && entry.name_nds !== headline && entry.name_nds !== entry.name_de) {
+      out.push({ key: 'nds', label: t('card.lowSaxon'), name: entry.name_nds });
     }
     if (entry.name_de && entry.name_de !== headline) {
       out.push({ key: 'de', label: t('card.german'), name: entry.name_de });

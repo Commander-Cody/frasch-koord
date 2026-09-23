@@ -15,7 +15,8 @@ What gets written where
                           with a status other than `auto`) or marked `skip`
                           is never touched.  Review the result with `git diff`.
   names/work/matches.csv  per-row details of the run: what was matched, the
-                          decisive tags, lon/lat (used by export_search_index.py),
+                          decisive tags, lon/lat and the OSM object's Low Saxon
+                          name (both used by export_search_index.py),
                           the candidate list of ambiguous rows.  Git-ignored.
   names/REPORT.md         the hand-review worklist.
 
@@ -58,7 +59,7 @@ WD_CACHE = os.path.join(HERE, "work", "wikidata-countries.json")
 
 MATCH_COLUMNS = ["line", "kind", "name", "de", "osm", "wikidata", "status",
                  "result", "match_name", "match_tags", "lon", "lat",
-                 "candidates", "note"]
+                 "name_nds", "candidates", "note"]
 
 NF_CENTRE = (8.9, 54.7)                      # lon, lat
 NF_BBOX = (7.8, 54.15, 9.55, 55.12)   # North Frisia incl. Helgoland
@@ -449,7 +450,7 @@ def row_query_names(row):
 MINOR_PLACES = {"hamlet", "isolated_dwelling", "locality", "farm",
                 "neighbourhood", "suburb", "quarter"}
 # these features exist only in North Frisia -- a match elsewhere is wrong
-NF_ONLY_KINDS = {"koog", "hallig", "sand", "warft", "road", "harde"}
+NF_ONLY_KINDS = {"koog", "hallig", "sand", "warft", "harde"}
 
 CORE_MIN_KM = 1.0       # two settlement nodes this close are one village
 CORE_PLACES = {"city", "town", "village", "hamlet", "isolated_dwelling",
@@ -831,17 +832,24 @@ def write_report(rows, results, path=REPORT_PATH, timings=None):
 
 def write_matches(rows, results, index, path=MATCH_PATH):
     """work/matches.csv: one line per places.csv row, with the match details
-    (and lon/lat also for rows a human filled in, looked up by id)."""
+    (and lon/lat also for rows a human filled in, looked up by id).
+
+    `name_nds` is the Low Saxon name of the row's (first) OSM object.  The name
+    list has no Low Saxon column, but the map falls back to `name:nds` before
+    German, so the search index needs it to name a place as its label does."""
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=MATCH_COLUMNS, lineterminator="\n")
         w.writeheader()
         for r in rows:
             res = results.get(r["_line"])
+            refs = parse_osm(r["osm"])
+            hit = index.by_key.get(refs[0]) if refs else None
             rec = {"line": r["_line"], "kind": r["kind"],
                    "name": any_name(r),
                    "de": primary(r["de"]), "osm": r["osm"],
-                   "wikidata": r["wikidata"], "status": r["status"]}
+                   "wikidata": r["wikidata"], "status": r["status"],
+                   "name_nds": hit["tags"].get("name:nds", "") if hit else ""}
             if res is not None:
                 rec.update(result=res["status"], match_name=res.get("match_name", ""),
                            match_tags=res.get("match_tags", ""), lon=res.get("lon", ""),
@@ -852,8 +860,6 @@ def write_matches(rows, results, index, path=MATCH_PATH):
                     "not a place" if r["kind"] == "not_a_place" else \
                     "own point" if local_ref(r["osm"]) else \
                     "by hand" if (r["osm"] or r["wikidata"]) else ""
-                refs = parse_osm(r["osm"])
-                hit = index.by_key.get(refs[0]) if refs else None
                 if hit is not None:
                     rec.update(match_name=hit["tags"].get("name", ""),
                                match_tags=decisive_tags(hit),

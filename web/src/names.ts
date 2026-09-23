@@ -4,7 +4,8 @@
 
 import { useEffect, useState } from 'react';
 
-import { DIALECTS, LOCAL_TAG } from './config';
+import { DIALECTS } from './config';
+import { labelChain } from './labelChain';
 
 /**
  * One entry of public/data/names.json, written by names/export_search_index.py.
@@ -30,6 +31,13 @@ export interface NameEntry {
    * would contradict the label the user just clicked.
    */
   name_frr?: string;
+  /**
+   * Low Saxon name — OSM's `name:nds`, never our name list (it has no Low
+   * Saxon column). names/export_search_index.py takes it from the matched OSM
+   * object, a tile feature carries it itself. The label chain falls back to it
+   * before German, so the card needs it for the same reason as `name_frr`.
+   */
+  name_nds?: string;
   /** German name, shown as a hint next to a Frisian one. */
   name_de: string;
   /** Danish name, where the list has one. */
@@ -54,43 +62,49 @@ export interface PlaceSelection {
   featureId?: string | number;
 }
 
-/** A name together with where it came from: a dialect tag, or `local`, `frr`, `de`, `da`. */
+/** A name together with where it came from: a dialect tag, or `local`, `frr`, `nds`, `de`, `da`. */
 export interface ShownName {
   name: string;
   source: string;
 }
 
+/** The entry's value for one tile property of the label chain, and its source. */
+function chainStep(entry: NameEntry, key: string): { name?: string; source: string } {
+  switch (key) {
+    case 'frasch:local':
+      return { name: entry.local, source: 'local' };
+    case 'name:frr':
+      return { name: entry.name_frr, source: 'frr' };
+    case 'name:nds':
+      return { name: entry.name_nds, source: 'nds' };
+    // `name_de` already is the tile's `name:de`, else its plain `name` (see
+    // entryFromTile), so the generic tail of the chain lands here too.
+    case 'name:de':
+    case 'name:latin':
+    case 'name':
+      return { name: entry.name_de, source: 'de' };
+  }
+  const tag = key.replace(/^name:/, '');
+  // `?.` because names.json is fetched, not type-checked: an archive built
+  // before the multi-dialect schema has no `names` object at all.
+  return { name: entry.names?.[tag], source: tag };
+}
+
 /**
- * The name to show for an entry in the selected view, and which one it is —
- * the counterpart of the label chain in style/localize.ts:
- *
- *  - dialect view: the selected dialect's own name, else the local Frisian
- *    one, else any other dialect's name the list has, else OSM's generic
- *    Frisian one, and German only when there is no Frisian name at all.
- *  - local view: only the local name, never another dialect's, then German.
+ * The name to show for an entry in the selected view, and which one it is:
+ * the same label chain the map follows (labelChain.ts), walked over the
+ * entry instead of the tile properties, so the card and the search results
+ * name a place exactly as its map label does.
  *
  * Danish is the last resort for the few places the list knows no German
  * name for (Aalborg, Skagen).
  */
 export function resolveName(entry: NameEntry, labels: string): ShownName {
-  // `?.` because names.json is fetched, not type-checked: an archive built
-  // before the multi-dialect schema has no `names` object at all.
-  const names = entry.names ?? {};
-  const chain: [string, string | undefined][] =
-    labels === LOCAL_TAG
-      ? [['local', entry.local]]
-      : [
-          [labels, names[labels]],
-          ['local', entry.local],
-          ...DIALECTS.filter((d) => d.tag !== labels).map(
-            (d): [string, string | undefined] => [d.tag, names[d.tag]],
-          ),
-          ['frr', entry.name_frr],
-        ];
-  chain.push(['de', entry.name_de], ['da', entry.name_da]);
-  for (const [source, name] of chain) {
+  for (const key of labelChain(labels)) {
+    const { name, source } = chainStep(entry, key);
     if (name) return { name, source };
   }
+  if (entry.name_da) return { name: entry.name_da, source: 'da' };
   return { name: '', source: 'de' };
 }
 
@@ -159,6 +173,7 @@ export function entryFromTile(props: TileProps): NameEntry {
     dialect: str(props, 'frasch:dialect'),
     variety: str(props, 'frasch:variety'),
     name_frr: str(props, 'name:frr'),
+    name_nds: str(props, 'name:nds'),
     // `name_de` is OpenMapTiles' own German field; `name` is whatever OSM
     // calls the place, which in this region is the German name.
     name_de: str(props, 'name:de') ?? str(props, 'name_de') ?? str(props, 'name') ?? '',
@@ -186,6 +201,10 @@ export function cardEntry(selection: PlaceSelection): NameEntry {
     dialect: entry.dialect ?? tile.dialect,
     variety: entry.variety ?? tile.variety,
     name_frr: tile.name_frr,
+    // The tile's own value first: it is what the label the user just clicked
+    // shows, while the entry's comes from the OSM extract the name list was
+    // matched against, which may be older.
+    name_nds: tile.name_nds ?? entry.name_nds,
     name_de: entry.name_de || tile.name_de,
     name_da: entry.name_da ?? tile.name_da,
     kind: entry.kind || tile.kind,

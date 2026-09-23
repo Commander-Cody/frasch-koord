@@ -121,8 +121,13 @@ resources, so an option whose UI is unwritten is harmless.
 
 ### Label chain
 
-`nameExpression(tag)` in `src/style/localize.ts` produces the `text-field` of
-every name-based symbol layer. Dialect view (`tag = "frr-x-mooring"`):
+`labelChain(tag)` in `src/labelChain.ts` is the one definition of which name
+a place is shown by. `nameExpression(tag)` in `src/style/localize.ts` turns it
+into the `text-field` of every name-based symbol layer, and `resolveName` in
+`src/names.ts` walks the same chain over a name-list entry for the place card
+and the search results — so neither can drift from the map label again (it
+did once: the card said Flensburg where the map said Flensborg). Dialect view
+(`tag = "frr-x-mooring"`):
 
 ```
 coalesce(name:frr-x-mooring, frasch:local, name:frr, name:nds, name:de, name:latin, name)
@@ -300,6 +305,7 @@ single Warft (which in any case doesn't render before `place-warft`'s
   "local": "string",              // omitted when unknown: the place's own name
   "dialect": "frr-x-fering",      // omitted outside the Frisian dialect areas
   "variety": "Foortuftinge",      // omitted: sub-dialect of the local name
+  "name_nds": "string",           // omitted: OSM's Low Saxon name of the matched object
   "name_de": "string",            // German name, shown alongside as a hint
   "name_da": "string",            // omitted: Danish name, where the list has one
   "wikidata": "Q3127",            // omitted: QID of the place, where the row has one
@@ -316,13 +322,12 @@ between a label on the map and its row in the name list.
 Written by `names/export_search_index.py`; only non-empty values are
 exported, so an absent field really means "no such name".
 
-**All** of an entry's names (every dialect, the local one and the German one)
+**All** of an entry's names (every dialect, the local one, Low Saxon and German)
 are flattened into one indexed string, so a place stays findable under any of
 its names whichever view is selected — typing "Naibel" while the map is in
 Fering still finds Niebüll. Which name a result *shows* follows the selected
-option, mirroring the label chain above: dialect view `names[tag] ?? local ??
-name_de`, local view `local ?? name_de`, with the German name on the second
-line when it differs. Selecting a result flies the map to it.
+option through `resolveName`, i.e. the label chain above, with the German
+name on the second line when it differs. Selecting a result flies the map to it.
 
 ## Place info card
 
@@ -353,6 +358,12 @@ Where the data comes from (`src/names.ts`):
   too, so the card would otherwise contradict the label that was clicked. It
   is marked as coming from OSM (`card.frisian`) and left out wherever it only
   repeats a name the card already shows.
+- Low Saxon (`name_nds`) is the same kind of name: the list has no column for
+  it, but both chains fall back to `name:nds` before German. A clicked card
+  takes it from the tile, one opened from search from `names.json`
+  (`export_search_index.py` reads it off the matched OSM object in
+  `names/work/matches.csv`). It gets its own line (`card.lowSaxon`) only where
+  it differs from both the headline and the German name.
 
 Two details worth knowing:
 

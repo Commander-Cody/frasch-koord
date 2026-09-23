@@ -11,6 +11,9 @@ search results and tile labels agree.
 
 Coordinates come from names/work/matches.csv, which names/match.py writes --
 run match.py first (it also looks up the position of rows a human filled in).
+The Low Saxon name (`name_nds`) comes from there too: the name list has no Low
+Saxon column, but the map labels with OSM's `name:nds` before German, and the
+card and search results have to agree with it.
 A row for a place OSM does not have (`osm` = `local/<slug>`) takes its position
 from the curation row with the same reference (names/curation.csv), and that
 reference is the entry's id.
@@ -68,9 +71,15 @@ def main():
     # added to or deleted from places.csv.  Coordinates are therefore looked
     # up by OSM reference first; the line is only trusted when the row it
     # points at is still the same place (`de`).
-    by_osm, by_line = {}, {}
+    by_osm, by_line, nds_by_osm = {}, {}, {}
     with open(a.matches, encoding="utf-8", newline="") as fh:
-        for m in csv.DictReader(fh):
+        reader = csv.DictReader(fh)
+        if "name_nds" not in (reader.fieldnames or []):
+            print(f"note: {os.path.relpath(a.matches, ROOT)} has no name_nds column "
+                  f"-- re-run names/match.py to export Low Saxon names")
+        for m in reader:
+            if m["osm"] and m.get("name_nds"):
+                nds_by_osm[m["osm"]] = m["name_nds"]
             pos = (m["lon"], m["lat"])
             if not (pos[0] and pos[1]):
                 continue
@@ -137,6 +146,9 @@ def main():
         variety = dialects.variety(r)
         if variety:
             entry["variety"] = variety
+        name_nds = nds_by_osm.get(r["osm"])
+        if name_nds:
+            entry["name_nds"] = name_nds
         name_da = placelist.primary(r["da"])
         if name_da:
             entry["name_da"] = name_da
@@ -152,7 +164,8 @@ def main():
             fh.write("\n")
     print(f"wrote {len(out)} entries to {a.out} ({os.path.getsize(a.out)/1e3:.0f} kB); "
           f"{n_area} in a dialect area, "
-          f"{sum(1 for e in out if 'local' in e)} with a local name; "
+          f"{sum(1 for e in out if 'local' in e)} with a local name, "
+          f"{sum(1 for e in out if 'name_nds' in e)} with a Low Saxon one; "
           f"skipped {skipped} without coordinates, {unnamed} without a Frisian name")
     if stale:
         print(f"note: {stale} row(s) have moved to another line since "

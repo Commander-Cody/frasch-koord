@@ -33,14 +33,15 @@ const MAX_RESULTS = 8;
 function createIndex() {
   return new MiniSearch<IndexedEntry>({
     fields: ['text'],
-    storeFields: ['id', 'names', 'local', 'dialect', 'variety', 'name_de', 'lon', 'lat', 'kind'],
+    // Everything `displayName` reads, so a result is named as its map label is.
+    storeFields: ['id', 'names', 'local', 'dialect', 'variety', 'name_nds', 'name_de', 'name_da', 'lon', 'lat', 'kind'],
     searchOptions: { prefix: true, fuzzy: 0.2 },
   });
 }
 
 /** Flattens all of an entry's names into the indexed `text` field, deduplicated. */
 function toIndexed(entry: NameEntry): IndexedEntry {
-  const all = [...Object.values(entry.names ?? {}), entry.local, entry.name_de];
+  const all = [...Object.values(entry.names ?? {}), entry.local, entry.name_nds, entry.name_de];
   return { ...entry, text: [...new Set(all.filter(Boolean))].join(' ') };
 }
 
