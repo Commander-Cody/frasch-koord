@@ -54,17 +54,49 @@ export interface PlaceSelection {
   featureId?: string | number;
 }
 
+/** A name together with where it came from: a dialect tag, or `local`, `frr`, `de`, `da`. */
+export interface ShownName {
+  name: string;
+  source: string;
+}
+
 /**
- * The name to show for an entry in the selected view: the selected dialect's
- * own name, else the local Frisian one, else German — the counterpart of the
- * label chain in style/localize.ts. The local view shows only the local name
- * (plus German as a last resort), never another dialect's.
+ * The name to show for an entry in the selected view, and which one it is —
+ * the counterpart of the label chain in style/localize.ts:
+ *
+ *  - dialect view: the selected dialect's own name, else the local Frisian
+ *    one, else any other dialect's name the list has, else OSM's generic
+ *    Frisian one, and German only when there is no Frisian name at all.
+ *  - local view: only the local name, never another dialect's, then German.
+ *
+ * Danish is the last resort for the few places the list knows no German
+ * name for (Aalborg, Skagen).
  */
-export function displayName(entry: NameEntry, labels: string): string {
-  if (labels === LOCAL_TAG) return entry.local ?? entry.name_frr ?? entry.name_de;
+export function resolveName(entry: NameEntry, labels: string): ShownName {
   // `?.` because names.json is fetched, not type-checked: an archive built
   // before the multi-dialect schema has no `names` object at all.
-  return entry.names?.[labels] ?? entry.local ?? entry.name_frr ?? entry.name_de;
+  const names = entry.names ?? {};
+  const chain: [string, string | undefined][] =
+    labels === LOCAL_TAG
+      ? [['local', entry.local]]
+      : [
+          [labels, names[labels]],
+          ['local', entry.local],
+          ...DIALECTS.filter((d) => d.tag !== labels).map(
+            (d): [string, string | undefined] => [d.tag, names[d.tag]],
+          ),
+          ['frr', entry.name_frr],
+        ];
+  chain.push(['de', entry.name_de], ['da', entry.name_da]);
+  for (const [source, name] of chain) {
+    if (name) return { name, source };
+  }
+  return { name: '', source: 'de' };
+}
+
+/** The name to show for an entry in the selected view, see `resolveName`. */
+export function displayName(entry: NameEntry, labels: string): string {
+  return resolveName(entry, labels).name;
 }
 
 // ------------------------------------------------------------- loading ----

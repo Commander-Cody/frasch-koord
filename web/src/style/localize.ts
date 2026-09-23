@@ -1,7 +1,7 @@
 import type { StyleSpecification, LayerSpecification } from 'maplibre-gl';
 import type { ExpressionSpecification } from '@maplibre/maplibre-gl-style-spec';
 
-import { LOCAL_TAG } from '../config';
+import { DIALECTS, LOCAL_TAG } from '../config';
 
 // `../style/frasch-bright.json` started as a fork of upstream OSM Bright
 // (openmaptiles/osm-bright-gl-style, openmaptiles:version "3.x", fetched
@@ -23,7 +23,9 @@ import { LOCAL_TAG } from '../config';
  *  - dialect view: the dialect's own name first, then the local Frisian name
  *    of the place (`frasch:local`, e.g. a Fering name on Föhr while the map
  *    is in Mooring) so a Frisian name is preferred over a German one even
- *    where this dialect has none, then generic Frisian, Low Saxon, German,
+ *    where this dialect has none, then every other dialect's name in
+ *    registry order (a place outside the dialect areas has no local name,
+ *    but may still have a Wieding one), then generic Frisian, Low Saxon, German,
  *    a transliterated Latin name, and finally the generic OSM `name`.
  *  - local view: ONLY the name the people of the place use themselves, then
  *    the local majority language. Deliberately no `name:frr` (that is some
@@ -54,6 +56,7 @@ export function nameExpression(tag: string): ExpressionSpecification {
     'coalesce',
     ['get', `name:${tag}`],
     ['get', 'frasch:local'],
+    ...DIALECTS.filter((d) => d.tag !== tag).map((d) => ['get', `name:${d.tag}`]),
     ['get', 'name:frr'],
     ['get', 'name:nds'],
     ['get', 'name:de'],

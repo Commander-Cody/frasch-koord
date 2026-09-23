@@ -63,7 +63,9 @@ function App() {
   const handleSelect = (entry: NameEntry, name: string) => {
     const zoom = ZOOM_BY_KIND[entry.kind] ?? DEFAULT_TARGET_ZOOM;
     mapRef.current?.flyTo([entry.lon, entry.lat], zoom, { title: name });
-    setSelection({ entry });
+    // A search result carries only the index's stored fields — no Danish
+    // name, no Wikidata id — so the card gets the full name-list entry.
+    setSelection({ entry: byRef.get(entry.id) ?? entry });
   };
 
   const closeCard = useCallback(() => {

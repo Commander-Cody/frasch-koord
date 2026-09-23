@@ -1,10 +1,10 @@
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DIALECTS, LOCAL_TAG, dialect, dialectLabelKey } from '../config';
+import { DIALECTS, dialect, dialectLabelKey } from '../config';
 import type { DialectEntry } from '../config';
-import type { NameEntry, PlaceSelection } from '../names';
-import { cardEntry, displayName, osmUrl, placeRef, wikidataUrl } from '../names';
+import type { PlaceSelection } from '../names';
+import { cardEntry, osmUrl, placeRef, resolveName, wikidataUrl } from '../names';
 import './PlaceCard.css';
 
 export interface PlaceCardProps {
@@ -26,18 +26,6 @@ interface Line {
 }
 
 /**
- * Which name the headline actually shows — the selected dialect's own name if
- * it has one, else what `displayName` fell back to. The card must not label a
- * fallback with the dialect the map claims to be in.
- */
-function headlineTag(entry: NameEntry, labels: string) {
-  if (labels !== LOCAL_TAG && entry.names?.[labels]) return labels;
-  if (entry.local) return 'local';
-  if (entry.name_frr) return 'frr';
-  return 'de';
-}
-
-/**
  * The card for one place: its name in the selected view, every other dialect
  * the name list has a name in, the local form, German and Danish, and links
  * to the objects behind it.
@@ -55,14 +43,18 @@ export default function PlaceCard({ selection, labels, onClose }: PlaceCardProps
     [t],
   );
 
-  const headline = displayName(entry, labels);
-  const shownAs = headlineTag(entry, labels);
+  // What the headline actually is — the selected dialect only when that
+  // dialect has a name for the place. The card must not label a fallback
+  // with the dialect the map claims to be in.
+  const { name: headline, source: shownAs } = resolveName(entry, labels);
   const area = entry.dialect ? dialect(entry.dialect) : undefined;
   const shownDialect = dialect(shownAs);
   const kind = entry.kind ? t(`kind.${entry.kind}`, { defaultValue: '' }) : '';
-  const localLabel = area ? `${t('card.local')} · ${dialectLabel(area)}` : t('card.local');
-  // What the headline actually is, said honestly: the selected dialect only
-  // when that dialect has a name for the place.
+  // The local form is named after the area's dialect only when it IS that
+  // dialect's name. Where the place has a form of its own (Woiguurd, while
+  // Mooring says Waiguurd), calling both "Mooring" would contradict itself.
+  const localIsAreaName = area !== undefined && entry.names?.[area.tag] === entry.local;
+  const localLabel = localIsAreaName ? `${t('card.local')} · ${dialectLabel(area)}` : t('card.local');
   const headlineLabel =
     shownAs === 'local'
       ? localLabel
@@ -70,7 +62,9 @@ export default function PlaceCard({ selection, labels, onClose }: PlaceCardProps
         ? t('card.frisian')
         : shownAs === 'de'
           ? t('card.german')
-          : shownDialect && dialectLabel(shownDialect);
+          : shownAs === 'da'
+            ? t('card.danish')
+            : shownDialect && dialectLabel(shownDialect);
 
   const lines = useMemo<Line[]>(() => {
     const out: Line[] = [];
@@ -100,7 +94,7 @@ export default function PlaceCard({ selection, labels, onClose }: PlaceCardProps
     if (entry.name_de && entry.name_de !== headline) {
       out.push({ key: 'de', label: t('card.german'), name: entry.name_de });
     }
-    if (entry.name_da) {
+    if (entry.name_da && entry.name_da !== headline) {
       out.push({ key: 'da', label: t('card.danish'), name: entry.name_da });
     }
     return out;
@@ -116,7 +110,7 @@ export default function PlaceCard({ selection, labels, onClose }: PlaceCardProps
       <button type="button" className="place-card-close" aria-label={t('card.close')} onClick={onClose}>
         ×
       </button>
-      <h2 className="place-card-name">{headline || entry.name_de}</h2>
+      <h2 className="place-card-name">{headline}</h2>
       <p className="place-card-meta">
         {headlineLabel}
         {/* Where the headline IS the local form, its variety remark belongs
