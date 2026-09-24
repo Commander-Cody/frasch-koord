@@ -6,7 +6,7 @@ import {
   AttributionControl,
   addProtocol,
 } from 'maplibre-gl';
-import type { LngLatLike, MapGeoJSONFeature, StyleSpecification } from 'maplibre-gl';
+import type { LngLat, LngLatLike, MapGeoJSONFeature, StyleSpecification } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { Protocol } from 'pmtiles';
 
@@ -30,6 +30,9 @@ const INITIAL_ZOOM = 9;
 /** Half-width in pixels of the box a click queries: a finger is not a pixel. */
 const CLICK_SLOP = 6;
 
+/** How close (px) to the edge of a bottom inset a place may sit before `reveal` pans. */
+const REVEAL_MARGIN = 24;
+
 export interface MapViewProps {
   /**
    * Label option tag: a dialect ("frr-x-mooring") or the local-dialect view
@@ -38,10 +41,11 @@ export interface MapViewProps {
    */
   labels: string;
   /**
-   * Called with the place label a click hit, or `null` when it hit none.
-   * Left out by the dev views, which bring their own click handling.
+   * Called with the place label a click hit, or `null` when it hit none, and
+   * where the click was. Left out by the dev views, which bring their own
+   * click handling.
    */
-  onSelectFeature?: (feature: MapGeoJSONFeature | null) => void;
+  onSelectFeature?: (feature: MapGeoJSONFeature | null, at: LngLat) => void;
 }
 
 /**
@@ -52,8 +56,17 @@ export interface MapViewProps {
 export interface MapViewHandle {
   /** The underlying maplibre-gl Map, or null before mount / after unmount. */
   getMap(): MapLibreMap | null;
-  /** Animate to `center` at `zoom` and drop a single marker there. */
-  flyTo(center: LngLatLike, zoom: number, marker?: { title?: string }): void;
+  /**
+   * Animate to `center` at `zoom` and drop a single marker there. `inset` is
+   * how many pixels at the bottom of the map something covers (the phone
+   * bottom sheet): the place lands in the middle of what stays visible.
+   */
+  flyTo(center: LngLatLike, zoom: number, marker?: { title?: string }, inset?: number): void;
+  /**
+   * Pan up just enough to bring `center` into the middle of the part of the
+   * map above a bottom `inset`, if that inset covers it. No-op otherwise.
+   */
+  reveal(center: LngLatLike, inset: number): void;
   /** Drop the single marker at `center` without moving the map. */
   showMarker(center: LngLatLike, marker?: { title?: string }): void;
   /** Remove the marker placed by flyTo, if any. */
@@ -100,9 +113,19 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
     };
     return {
       getMap: () => mapRef.current,
-      flyTo: (center, zoom, marker) => {
+      flyTo: (center, zoom, marker, inset = 0) => {
         showMarker(center, marker);
-        mapRef.current?.flyTo({ center, zoom, essential: true });
+        // A one-off offset rather than map padding: padding would stay on
+        // the map after the sheet closes, and shift every later view.
+        mapRef.current?.flyTo({ center, zoom, offset: [0, -inset / 2], essential: true });
+      },
+      reveal: (center, inset) => {
+        const map = mapRef.current;
+        if (!map || inset <= 0) return;
+        const height = map.getContainer().clientHeight;
+        const { y } = map.project(center);
+        if (y < height - inset - REVEAL_MARGIN) return;
+        map.panBy([0, y - (height - inset) / 2]);
       },
       showMarker,
       clearMarker: () => {
@@ -147,7 +170,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
       )[0];
     map.on('click', (e) => {
       if (!selectRef.current) return;
-      selectRef.current(hit(e.point) ?? null);
+      selectRef.current(hit(e.point) ?? null, e.lngLat);
     });
     map.on('mousemove', (e) => {
       if (!selectRef.current) return;

@@ -7,6 +7,9 @@
 .map-container {
   position: absolute;
   inset: 0;
+  /* Its own stacking context: MapLibre's controls carry a z-index of their
+     own, which would otherwise paint them over the panels. */
+  z-index: 0;
 }
 
 /* The left column of the public view: the search panel and, below it, the
@@ -37,9 +40,16 @@
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
   padding: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  /* Flat markup (see SearchPanel.tsx), placed by area: selector and share
+     button on top, the search field below, the results (when there are
+     any) in a row of their own under that. */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'select share'
+    'input input';
+  row-gap: 8px;
+  column-gap: 6px;
   font-family: system-ui, sans-serif;
   /* The panel is always white, so pin its widgets to the light palette even
      when the OS/browser is in dark mode (index.css opts into `light dark`). */
@@ -59,19 +69,18 @@
   color: #222;
 }
 
-.search-panel-row {
-  display: flex;
-  gap: 6px;
+.search-input {
+  grid-area: input;
 }
 
-.search-panel-row .dialect-select {
-  flex: 1;
+.dialect-select {
+  grid-area: select;
   min-width: 0;
 }
 
 .share {
+  grid-area: share;
   position: relative;
-  flex: none;
   display: flex;
 }
 
@@ -122,6 +131,7 @@
 }
 
 .search-results {
+  grid-column: 1 / -1;
   list-style: none;
   margin: 0;
   padding: 0;
@@ -182,20 +192,86 @@
   font-size: 13px;
 }
 
-/* Phone width: the search panel stays a bar at the top, the place card
-   becomes a bottom sheet. (Issue #6 is the full mobile layout.) */
+/* Phone width. The search panel becomes a one-row bar across the top —
+   search field, dialect chip, share button — with the results as a list
+   overlaying the map below it; the place card becomes a bottom sheet (see
+   PlaceCard.css). Must match PHONE_MEDIA in App.tsx. */
 @media (max-width: 600px) {
-  .side-panel {
-    bottom: auto;
+  .app {
+    --bar-inset: 8px;
+    --bar-height: 52px;
   }
 
-  .place-card {
-    position: fixed;
+  .side-panel {
+    top: var(--bar-inset);
+    left: var(--bar-inset);
+    right: var(--bar-inset);
+    bottom: auto;
+    width: auto;
+  }
+
+  .search-panel {
+    position: relative;
+    /* Above the sheet, which the result list may reach down to. */
+    z-index: 1;
+    box-sizing: border-box;
+    height: var(--bar-height);
+    padding: 6px;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-rows: 100%;
+    grid-template-areas: 'input select share';
+  }
+
+  /* 16px: iOS Safari zooms the page into any smaller focused field. */
+  .search-input,
+  .dialect-select {
+    font-size: 16px;
+    height: 100%;
+  }
+
+  /* A chip as wide as the selected dialect's name, not as its longest
+     option. Where field-sizing is missing, the cap keeps it from eating the
+     search field. */
+  .dialect-select {
+    width: auto;
+    max-width: 40vw;
+    field-sizing: content;
+  }
+
+  .share-button {
+    width: 40px;
+  }
+
+  .search-results {
+    /* Out of the grid: positioned against the whole bar, padding included. */
+    grid-column: auto;
+    position: absolute;
+    top: calc(100% + 6px);
     left: 0;
     right: 0;
-    bottom: 0;
-    width: auto;
-    max-height: 60vh;
-    border-radius: 12px 12px 0 0;
+    max-height: min(22rem, 55dvh);
+    background: white;
+    border-top: none;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  }
+
+  /* Finger-sized rows. */
+  .search-results button,
+  .search-empty {
+    padding: 11px 12px;
+    font-size: 16px;
+  }
+
+  /* MapLibre's zoom/compass buttons, from under the bar to below it. */
+  .app .maplibregl-ctrl-top-right {
+    top: calc(var(--bar-inset) + var(--bar-height));
+  }
+
+  /* The attribution rides on top of the open sheet; App.tsx keeps
+     --sheet-height at the sheet's height while there is one. */
+  .app .maplibregl-ctrl-bottom-right,
+  .app .maplibregl-ctrl-bottom-left {
+    bottom: var(--sheet-height, 0px);
   }
 }
