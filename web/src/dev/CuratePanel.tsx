@@ -17,7 +17,7 @@ import type { RefObject } from 'react';
 import { LngLatBounds, Marker } from 'maplibre-gl';
 import type { MapMouseEvent, Map as MapLibreMap } from 'maplibre-gl';
 
-import type { MapViewHandle } from './Map';
+import type { MapViewHandle } from '../components/Map';
 import './CuratePanel.css';
 
 /* ------------------------------------------------------------------ types */

@@ -15,7 +15,56 @@ npm run dev
 ```
 
 Other scripts: `npm run build` (type-checks with `tsc -b` then builds with
-Vite), `npx tsc --noEmit` (type-check only), `npm run lint` (oxlint).
+Vite), `npm run typecheck` (`tsc -b` only; `npx tsc --noEmit` checks nothing,
+the root tsconfig has `files: []`), `npm run lint` (oxlint), `npm test`
+(Vitest, `src/**/*.test.ts(x)`), and the two checks of a production build
+below.
+
+## Production build
+
+`npm run build` writes `dist/`, which `npm run preview` serves. Two things
+make a build differ from `npm run dev`, and each has a check:
+
+- **The MapLibre worker.** MapLibre 6 looks for `maplibre-gl-worker.mjs` next
+  to its own module, a file Vite never emits; a production build would get
+  `index.html` back and parse no tile at all. `src/components/Map.tsx` imports
+  the worker with `?worker&url`, so Vite bundles it (with the shared chunk it
+  imports) as `assets/maplibre-gl-worker-<hash>.js`, and hands that URL to
+  `setWorkerUrl` before any map exists.
+- **No dev tools.** `?curate` and `?areas` (below) are chosen in
+  `src/main.tsx` behind `import.meta.env.DEV`, so the build leaves them and
+  `src/dev/` out entirely; there the parameters open the public map.
+
+After a build:
+
+```sh
+npm run check:build   # dist/ has the worker the bundle names, no dev tool strings
+npm run smoke         # vite preview + headless Chromium: map loads, search, card
+```
+
+`npm run smoke` needs the tiles and glyphs in `public/` (see below) and
+Playwright's headless Chromium, once: `npx playwright install
+chromium-headless-shell` (plus `sudo npx playwright install-deps` for the
+system libraries on a bare Linux).
+
+**Base path.** Everything the site serves itself — `data/names.json`, the
+glyphs, the sprites, the default tiles URL — goes through `siteUrl()` in
+`src/config.ts`, which prefixes Vite's `base`. So the same code runs at a
+domain root or under a sub-path, e.g. a GitHub Pages project site:
+`npx vite build --base /frasch-koord/`.
+
+**What `dist/` holds.** Vite copies `public/` as it is: the name list, the
+sprites, the ~100 MB of glyphs in `public/fonts/` (the style always loads them
+from the site) and the ~125 MB PMTiles archive. With `VITE_TILES_URL` set the
+tiles live elsewhere, and `vite-plugins/external-tiles.ts` leaves the archive
+out of `dist/`.
+
+**Load errors are shown, not just logged.** A `names.json` that fails to load
+(an HTTP error, or an SPA fallback's `index.html`) puts an error line under
+the search field instead of "no results" to every query; a map error (tiles,
+glyphs, sprites, or a first render that has not happened after 30 s) shows a
+strip at the top of the map; and a crash in the side panel is caught by
+`src/components/ErrorBoundary.tsx`, so it never takes the map with it.
 
 The map is created with MapLibre's `hash: true` option, so the URL hash
 reflects the current view (`#zoom/lat/lon`, e.g. `#13/54.52/8.65`) and an
@@ -48,11 +97,11 @@ override it (e.g. to point at a CDN-hosted PMTiles archive). Unset, it
 defaults to a PMTiles file served by this site itself:
 
 ```
-pmtiles:///tiles/schleswig-holstein.pmtiles
+pmtiles://<site>/tiles/schleswig-holstein.pmtiles
 ```
 
-i.e. `web/public/tiles/schleswig-holstein.pmtiles`, resolved relative to the
-site origin. That path is gitignored (`public/tiles/*.pmtiles`) — only
+i.e. `web/public/tiles/schleswig-holstein.pmtiles`, resolved against the page
+and the site's base path (`siteUrl()` in `src/config.ts`). That path is gitignored (`public/tiles/*.pmtiles`) — only
 `public/tiles/.gitkeep` is tracked. For local development, symlink or copy a
 built PMTiles archive there, e.g.:
 
@@ -384,14 +433,15 @@ or missing name" link is issue #8.
 ## Curation view (dev only)
 
 `http://localhost:5173/?curate` swaps the search panel for
-`src/components/CuratePanel.tsx`: the rows `names/match.py` left `ambiguous`
+`src/dev/CuratePanel.tsx`: the rows `names/match.py` left `ambiguous`
 or `not_found`, each with its candidates as numbered pins on the map. Export
 the worklist first — `names/curate.py export` writes `names/work/curate.json`
 — and run it under `npm run dev`; the endpoints live in a Vite plugin with
 `apply: 'serve'` (`vite-plugins/curate.ts`, `GET /__curate/worklist`,
-`GET`/`POST /__curate/patch`), so a production build has none of this and the
-panel then just says the dev server is missing. English only on purpose: it is
-a tool for the name list, not part of the map.
+`GET`/`POST /__curate/patch`), and `src/main.tsx` only loads the view under
+`vite dev` (`import.meta.env.DEV`), so a production build has neither the
+endpoints nor the panel: `?curate` there is just the public map. English only on purpose: it
+is a tool for the name list, not part of the map.
 
 Every pick (an OSM reference, a local reference, or a skip) is appended to
 `names/work/curate-patch.jsonl` — append-only, last entry per row wins, a
@@ -413,7 +463,7 @@ message in the panel.
 ## Dialect-area review (dev only)
 
 `http://localhost:5173/?areas` swaps the search panel for
-`src/components/AreaPanel.tsx`: every municipality of
+`src/dev/AreaPanel.tsx`: every municipality of
 `names/dialect_areas.csv` drawn in its dialect's colour, so the mainland
 assignments — a researched draft nobody has checked — can be reviewed on the
 map instead of in a spreadsheet. Clicking a polygon or a list row shows the
@@ -427,13 +477,14 @@ Build the geometry first —
 `names/build_dialect_areas.py tiles/data/schleswig-holstein-latest.osm.pbf`
 writes `names/dialect_areas_parts.geojson` — and run under `npm run dev`; the
 endpoint is a Vite plugin with `apply: 'serve'` (`vite-plugins/areas.ts`,
-`GET /__areas/parts`), so a production build has none of it. That is deliberate
+`GET /__areas/parts`), and like the curation view it is only loaded under
+`vite dev`, so a production build has none of it. That is deliberate
 as well as tidy: the notes quote research prose about assignments nobody has
 confirmed ("best guess only", "no direct source found"), which should not ship
 to the public site. **The view is read-only** — unlike `?curate`, nothing
 writes back. Edit `names/dialect_areas.csv`, re-run the build, press *Reload*.
 
-The four layers (`src/components/areaLayers.ts`) are inserted before
+The four layers (`src/dev/areaLayers.ts`) are inserted before
 `waterway-name`, the style's first symbol layer, so no place label is ever
 covered. The outline is drawn in the **same hue as the fill at ~3x the alpha**:
 that is what keeps two adjacent municipalities *of the same dialect* apart,

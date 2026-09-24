@@ -2,8 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import type { LngLat, MapGeoJSONFeature } from 'maplibre-gl';
 import { useTranslation } from 'react-i18next';
 
-import AreaPanel from './components/AreaPanel';
-import CuratePanel from './components/CuratePanel';
+import ErrorBoundary from './components/ErrorBoundary';
 import MapView from './components/Map';
 import type { MapViewHandle } from './components/Map';
 import PlaceCard from './components/PlaceCard';
@@ -35,20 +34,6 @@ const DEFAULT_TARGET_ZOOM = 14;
 const PHONE_MEDIA = '(max-width: 600px)';
 
 /**
- * `?curate` opens the name-list curation review instead of the search panel
- * (dev only, see components/CuratePanel.tsx). Read once at module load: the
- * two modes are different tools, not a state the user toggles.
- */
-const CURATE_MODE = new URLSearchParams(window.location.search).has('curate');
-
-/**
- * `?areas` opens the dialect-area review instead of the search panel (dev
- * only, see components/AreaPanel.tsx). Read once at module load, like
- * CURATE_MODE: the modes are separate tools, not a state the user toggles.
- */
-const AREAS_MODE = new URLSearchParams(window.location.search).has('areas');
-
-/**
  * The place a shared link opens the card of (`?place=`, see urlState.ts), and
  * whether the link also says where to look (`#zoom/lat/lon`). Read at module
  * load, before the map mounts and starts writing a hash of its own.
@@ -72,7 +57,7 @@ function App() {
   // Run (and cleared) as soon as the card for the new selection is laid out.
   const pendingMove = useRef<((inset: number) => void) | null>(null);
   // One fetch of the name list for both the search index and the card.
-  const { entries, byRef } = useNames();
+  const { status: namesStatus, entries, byRef } = useNames();
 
   // Map labels and UI chrome move together: each option names the UI language
   // it comes with (the local view has no dialect of its own and borrows one,
@@ -178,9 +163,8 @@ function App() {
   }, [cardOpen]);
 
   // Keep the address bar a shareable link to what is on screen (MapLibre adds
-  // the viewport). The dev views have no selector and no card to link to.
+  // the viewport).
   useEffect(() => {
-    if (CURATE_MODE || AREAS_MODE) return;
     writeUrlState({ view: labels, place: selection?.entry?.id ?? linkedPlace });
   }, [labels, selection, linkedPlace]);
 
@@ -194,34 +178,49 @@ function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [selection, closeCard]);
 
-  // Neither dev view offers the selector: they are about which OSM object a
-  // row means, and which dialect an area is, not about how the map reads, so
-  // they stay in the view the page opened in. `?curate` wins if both are set.
-  const devMode = CURATE_MODE || AREAS_MODE;
-  const panel = CURATE_MODE ? (
-    <CuratePanel mapRef={mapRef} />
-  ) : AREAS_MODE ? (
-    <AreaPanel mapRef={mapRef} />
-  ) : (
-    <div className="side-panel">
-      <SearchPanel
-        entries={entries}
-        labels={labels}
-        onLabelsChange={handleLabelsChange}
-        onSelect={handleSelect}
-      />
-      {selection && (
-        <PlaceCard ref={cardRef} selection={selection} labels={labels} onClose={closeCard} />
-      )}
-    </div>
-  );
-
   return (
     <div ref={appRef} className="app">
-      {/* The dev views bring their own click handling, so they get no
-          place card and no click handler of ours. */}
-      <MapView ref={mapRef} labels={labels} onSelectFeature={devMode ? undefined : handleFeature} />
-      {panel}
+      <MapView ref={mapRef} labels={labels} onSelectFeature={handleFeature} />
+      {/* The side panel only: a card that trips over a malformed entry must
+          not unmount the map with it. */}
+      <ErrorBoundary
+        resetKey={selection}
+        fallback={
+          <div className="side-panel">
+            <PanelError onClose={closeCard} />
+          </div>
+        }
+      >
+        <div className="side-panel">
+          <SearchPanel
+            entries={entries}
+            status={namesStatus}
+            labels={labels}
+            onLabelsChange={handleLabelsChange}
+            onSelect={handleSelect}
+          />
+          {selection && (
+            <PlaceCard ref={cardRef} selection={selection} labels={labels} onClose={closeCard} />
+          )}
+        </div>
+      </ErrorBoundary>
+    </div>
+  );
+}
+
+/**
+ * What the side panel shows after it crashed. Closing it clears the
+ * selection, which is what most likely broke it, and ErrorBoundary then
+ * brings the panel back.
+ */
+function PanelError({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <div className="panel-error" role="alert">
+      <span>{t('errors.panel')}</span>
+      <button type="button" className="place-card-close" aria-label={t('card.close')} onClick={onClose}>
+        ×
+      </button>
     </div>
   );
 }

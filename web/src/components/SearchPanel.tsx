@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import MiniSearch from 'minisearch';
 
 import { LABEL_OPTIONS } from '../config';
-import type { NameEntry } from '../names';
+import type { NameEntry, NamesData } from '../names';
 import { displayName } from '../names';
 import ShareButton from './ShareButton';
 
@@ -21,6 +21,8 @@ interface IndexedEntry extends NameEntry {
 export interface SearchPanelProps {
   /** The name list, loaded once by App (see names.ts). */
   entries: NameEntry[];
+  /** Whether that list is there yet, or failed to load. */
+  status: NamesData['status'];
   /** Selected label option tag (a dialect, or LOCAL_TAG). */
   labels: string;
   onLabelsChange: (labels: string) => void;
@@ -47,6 +49,7 @@ function toIndexed(entry: NameEntry): IndexedEntry {
 
 export default function SearchPanel({
   entries,
+  status,
   labels,
   onLabelsChange,
   onSelect,
@@ -72,7 +75,10 @@ export default function SearchPanel({
     return index.search(query).slice(0, MAX_RESULTS) as unknown as NameEntry[];
   }, [index, query]);
 
-  const showList = open && query.trim().length > 0;
+  // Without the name list there is nothing to search: say so once, under
+  // the field, instead of "no results" to every query.
+  const failed = status === 'error';
+  const showList = open && !failed && query.trim().length > 0;
 
   const select = (entry: NameEntry) => {
     const name = displayName(entry, labels);
@@ -124,6 +130,7 @@ export default function SearchPanel({
         type="search"
         className="search-input"
         placeholder={t('search.placeholder')}
+        disabled={failed}
         value={query}
         role="combobox"
         aria-autocomplete="list"
@@ -155,9 +162,18 @@ export default function SearchPanel({
         ))}
       </select>
       <ShareButton />
+      {failed && (
+        <p className="search-error" role="alert">
+          {t('search.error')}
+        </p>
+      )}
       {showList && (
         <ul id={listId} className="search-results" role="listbox">
-          {results.length === 0 && <li className="search-empty">{t('search.noResults')}</li>}
+          {results.length === 0 && (
+            <li className="search-empty">
+              {t(status === 'loading' ? 'search.loading' : 'search.noResults')}
+            </li>
+          )}
           {results.map((entry, i) => {
             const name = displayName(entry, labels);
             return (

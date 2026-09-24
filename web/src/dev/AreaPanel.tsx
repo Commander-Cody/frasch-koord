@@ -20,7 +20,7 @@ import type { RefObject } from 'react';
 import type { GeoJSONSource, Map as MapLibreMap, MapLayerMouseEvent } from 'maplibre-gl';
 import type { ExpressionSpecification } from '@maplibre/maplibre-gl-style-spec';
 
-import type { MapViewHandle } from './Map';
+import type { MapViewHandle } from '../components/Map';
 import {
   BEFORE_ID,
   COLOR_UNASSIGNED,

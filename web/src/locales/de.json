@@ -1,7 +1,9 @@
 {
   "search": {
     "placeholder": "Ort suchen…",
-    "noResults": "Keine Ergebnisse"
+    "noResults": "Keine Ergebnisse",
+    "loading": "Ortsliste wird geladen…",
+    "error": "Die Ortsliste konnte nicht geladen werden, die Suche ist nicht verfügbar."
   },
   "dialect": {
     "label": "Dialekt",
@@ -36,6 +38,11 @@
     "extinct": "ausgestorbener Dialekt",
     "osm": "OpenStreetMap",
     "wikidata": "Wikidata"
+  },
+  "errors": {
+    "map": "Teile der Karte konnten nicht geladen werden.",
+    "panel": "Hier ist etwas schiefgegangen.",
+    "dismiss": "Ausblenden"
   },
   "kind": {
     "settlement": "Ort",
