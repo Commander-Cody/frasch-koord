@@ -36,6 +36,8 @@ export interface CurateCandidate {
   /** Decisive tags as one string, e.g. "place=hamlet". */
   tags?: string;
   wikidata?: string;
+  /** In the Schleswig-Holstein extract the tiles are built from; absent in a pre-`in_sh` export. */
+  in_sh?: boolean;
 }
 
 /** One row of `names/work/curate.json`. */
@@ -124,6 +126,9 @@ const SETTLEMENT_CLASSES = new Set([
   'locality',
   'allotments',
 ]);
+
+/** How many ticked refs the selection summary spells out ("select all" can tick hundreds). */
+const MAX_LISTED_REFS = 12;
 
 /** Kinds whose curation row can carry an area instead of a bare point. */
 const POLYGON_KINDS = new Set(['koog', 'harde', 'landscape', 'island', 'hallig', 'sand']);
@@ -422,6 +427,17 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
         ? prev.filter((item) => item.ref !== ref)
         : [...prev, { ref, ...(wikidata ? { wikidata } : {}) }],
     );
+  }, []);
+
+  /** Ticks every given candidate, keeping what is already ticked (and its order). */
+  const checkAll = useCallback((candidates: CurateCandidate[]) => {
+    setCheckedRefs((prev) => {
+      const have = new Set(prev.map((item) => item.ref));
+      const added = candidates
+        .filter((candidate) => !have.has(candidate.ref))
+        .map(({ ref, wikidata }) => ({ ref, ...(wikidata ? { wikidata } : {}) }));
+      return added.length > 0 ? [...prev, ...added] : prev;
+    });
   }, []);
 
   /** Pin element per ref, so ticking only toggles a class instead of re-adding markers. */
@@ -810,6 +826,7 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
   const polygonRelevant = selected ? POLYGON_KINDS.has(selected.kind) : false;
   const canSaveLocal = Boolean(selected) && isValidSlug(slug) && position !== null;
   const checkedSet = new Set(checkedRefs.map((item) => item.ref));
+  const shCandidates = selected ? selected.candidates.filter((candidate) => candidate.in_sh) : [];
   // Only an unambiguous wikidata id goes along; `apply` cannot choose between two.
   const checkedQids = [...new Set(checkedRefs.flatMap((item) => (item.wikidata ? [item.wikidata] : [])))];
 
@@ -962,6 +979,25 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
           {selected.candidates.length === 0 && (
             <p className="curate-hint-text">no candidates — use the lookups below</p>
           )}
+          {selected.candidates.length > 1 && (
+            <div className="curate-row">
+              <button type="button" onClick={() => checkAll(selected.candidates)}>
+                select all
+              </button>
+              <button
+                type="button"
+                disabled={shCandidates.length === 0}
+                title={
+                  selected.candidates.some((candidate) => candidate.in_sh !== undefined)
+                    ? undefined
+                    : 'curate.json predates the in_sh flag — re-run names/curate.py export'
+                }
+                onClick={() => checkAll(shCandidates)}
+              >
+                select all in Schleswig-Holstein ({shCandidates.length})
+              </button>
+            </div>
+          )}
           <ul className="curate-candidates">
             {selected.candidates.map((candidate, i) => (
               <li
@@ -1103,7 +1139,12 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
           {checkedRefs.length > 0 && (
             <div className="curate-multi">
               <span className="curate-mono">
-                {checkedRefs.length} selected: {checkedRefs.map((item) => item.ref).join('; ')}
+                {checkedRefs.length} selected:{' '}
+                {checkedRefs
+                  .slice(0, MAX_LISTED_REFS)
+                  .map((item) => item.ref)
+                  .join('; ')}
+                {checkedRefs.length > MAX_LISTED_REFS ? '; …' : ''}
               </span>
               {checkedQids.length > 1 && (
                 <p className="curate-hint-text">

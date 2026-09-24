@@ -63,6 +63,11 @@ KIND_ORDER = ["settlement", "island", "hallig", "helgoland", "sand",
               "landscape", "water", "harde", "road", "country", "koog",
               "warft", "not_a_place"]
 
+# The extract (build_candidates.py `src`) the tiles are built from: only its
+# objects can carry an injected name, so it is what "in Schleswig-Holstein"
+# means for the curation view.  An object near the border can come from both.
+SH_SRC = "schleswig-holstein"
+
 RESULTS = ("ambiguous", "not_found")
 ACTIONS = ("osm", "local", "skip", "clear")
 SLUG = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
@@ -193,21 +198,26 @@ def cmd_export(args):
           f"({len(keys):,} candidates, {len(hint_norms)} hint names, "
           f"{time.time()-t0:.0f}s)")
     hints = match.HintResolver(index)
+    srcs = collections.defaultdict(set)
+    for rec in index.recs:
+        srcs[(rec["t"], rec["id"])].add(rec.get("src"))
 
     out, n_pos, n_hint = [], 0, 0
     for row, m in work:
         cands = []
         for c in parse_candidates(m["candidates"]):
-            rec = index.by_key.get(c.pop("key"))
+            key = c.pop("key")
+            rec = index.by_key.get(key)
             if rec is not None:
                 c.update(lon=rec["lon"], lat=rec["lat"],
-                         tags=match.decisive_tags(rec))
+                         tags=match.decisive_tags(rec),
+                         in_sh=SH_SRC in srcs[key])
                 if rec["tags"].get("wikidata"):
                     c["wikidata"] = rec["tags"]["wikidata"]
                 if rec["lon"] is not None:
                     n_pos += 1
             else:                       # candidates.jsonl rebuilt since the run
-                c.update(lon=None, lat=None, tags="")
+                c.update(lon=None, lat=None, tags="", in_sh=False)
             cands.append(c)
         hint_pt = hints.resolve(row["hint"].split(";")[0].strip())
         if hint_pt:

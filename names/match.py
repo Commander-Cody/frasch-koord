@@ -547,6 +547,16 @@ def fmt_cand(rec, hint_pt=None):
     return f'{rec["t"]}/{rec["id"]}:{nm}:{place}:{ds}'
 
 
+def fmt_cands(cands):
+    """The `candidates` cell: every candidate, best name hit first, then the
+    nearest to North Frisia.  Not truncated -- the curation view needs all of
+    them (a "Dorfstraße" has hundreds of ways); only REPORT.md shortens it."""
+    def key(c):
+        d = haversine(c["lon"], c["lat"], *NF_CENTRE)
+        return (c.get("rank", 99), 1e9 if d is None else d, c["t"], c["id"])
+    return ";".join(fmt_cand(c) for c in sorted(cands, key=key))
+
+
 def decisive_tags(rec):
     tags = rec["tags"]
     keys = ("place", "natural", "water", "waterway", "boundary", "admin_level",
@@ -634,7 +644,7 @@ def match_row(row, index: Index, hints: HintResolver):
         # the German name exists in OSM, but only on streets / buildings /
         # bus stops -- the feature itself is not mapped.  Not a review task.
         out["status"] = "not_found"
-        out["candidates"] = ";".join(fmt_cand(c) for c in cands[:20])
+        out["candidates"] = fmt_cands(cands)
         out["note"] = _addnote(row, f"{len(cands)} name match(es), none "
                                     f"compatible with kind={kind}")
         return out
@@ -655,7 +665,7 @@ def match_row(row, index: Index, hints: HintResolver):
 
     if winner is None or _suspicious(kind, winner):
         out["status"] = "ambiguous"
-        out["candidates"] = ";".join(fmt_cand(c) for c in plaus_all[:20])
+        out["candidates"] = fmt_cands(plaus_all)
         if winner is not None:
             out["note"] = _addnote(
                 row, f"only match is {(winner['nf_d'] or 0):.0f} km from North "
@@ -697,10 +707,19 @@ def match_row(row, index: Index, hints: HintResolver):
         status="matched",
     )
     if len(winner["members"]) > 1 or len(clusters) > 1:
-        out["candidates"] = ";".join(fmt_cand(c) for c in plaus[:20])
+        out["candidates"] = fmt_cands(plaus)
     out["note"] = _addnote(row, f"auto: {reason}") if reason != "single cluster" \
         else _addnote(row, "")
     return out
+
+
+def report_cands(cell, limit=20):
+    """A `candidates` cell shortened for REPORT.md (the full list is in
+    work/matches.csv and the curation view)."""
+    parts = [p for p in (cell or "").split(";") if p]
+    if len(parts) <= limit:
+        return ";".join(parts)
+    return ";".join(parts[:limit]) + f";... (+{len(parts) - limit} more)"
 
 
 def _addnote(row, txt):
@@ -795,7 +814,7 @@ def write_report(rows, results, path=REPORT_PATH, timings=None):
     for r in amb:
         res = results[r["_line"]]
         L.append(f"| {ref(r)} | {r['hint']} | {res.get('note', '')} "
-                 f"| `{res.get('candidates', '')}` |")
+                 f"| `{report_cands(res.get('candidates', ''))}` |")
     L.append("")
 
     dups = find_duplicates(rows)
