@@ -115,24 +115,10 @@ export default function SearchPanel({
   };
 
   return (
+    // One flat grid, arranged by App.css: on desktop the selector and the
+    // share button above the search field, on a phone all three in one bar.
+    // The field comes first, the thing a phone visitor is there for.
     <div className="search-panel">
-      <div className="search-panel-row">
-        <select
-          className="dialect-select"
-          aria-label={t('dialect.label')}
-          value={labels}
-          onChange={(e) => onLabelsChange(e.target.value)}
-        >
-          {LABEL_OPTIONS.map((option) => (
-            <option key={option.tag} value={option.tag}>
-              {/* Dialect names come from the registry as-is; only the local
-                  view's name is translated. */}
-              {t(option.labelKey, { defaultValue: option.label ?? option.tag })}
-            </option>
-          ))}
-        </select>
-        <ShareButton />
-      </div>
       <input
         ref={inputRef}
         type="search"
@@ -151,8 +137,24 @@ export default function SearchPanel({
           setActiveIdx(0);
         }}
         onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
         onKeyDown={handleKeyDown}
       />
+      <select
+        className="dialect-select"
+        aria-label={t('dialect.label')}
+        value={labels}
+        onChange={(e) => onLabelsChange(e.target.value)}
+      >
+        {LABEL_OPTIONS.map((option) => (
+          <option key={option.tag} value={option.tag}>
+            {/* Dialect names come from the registry as-is; only the local
+                view's name is translated. */}
+            {t(option.labelKey, { defaultValue: option.label ?? option.tag })}
+          </option>
+        ))}
+      </select>
+      <ShareButton />
       {showList && (
         <ul id={listId} className="search-results" role="listbox">
           {results.length === 0 && <li className="search-empty">{t('search.noResults')}</li>}

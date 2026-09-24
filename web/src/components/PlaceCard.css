@@ -1,6 +1,5 @@
 /* Place info card: the name list of one place. Sits in the left column below
-   the search panel on desktop and becomes a bottom sheet on phone width (the
-   media query lives in App.css, next to the column it escapes from). */
+   the search panel on desktop and becomes a bottom sheet on phone width. */
 
 .place-card {
   position: relative;
@@ -110,4 +109,42 @@
 
 .place-card-links a {
   color: #36c;
+}
+
+/* Phone width (App.css has the rest of that layout): a bottom sheet across
+   the full width. As tall as its content, at most half the screen — the
+   place it is about stays in view above it (App.tsx moves the map). */
+@media (max-width: 600px) {
+  .place-card {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    max-height: 50vh;
+    max-height: 50dvh;
+    padding: 14px 16px calc(14px + env(safe-area-inset-bottom));
+    border-radius: 12px 12px 0 0;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.2);
+    overscroll-behavior: contain;
+  }
+
+  .place-card-close {
+    top: 6px;
+    right: 6px;
+    padding: 8px 12px;
+    font-size: 24px;
+  }
+
+  .place-card-name {
+    padding-right: 40px;
+  }
+
+  .place-card-names dd {
+    font-size: 15px;
+  }
+
+  .place-card-links {
+    gap: 20px;
+    font-size: 14px;
+  }
 }

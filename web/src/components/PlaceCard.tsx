@@ -1,4 +1,5 @@
 import { useCallback, useMemo } from 'react';
+import type { Ref } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DIALECTS, dialect, dialectLabelKey } from '../config';
@@ -12,6 +13,8 @@ export interface PlaceCardProps {
   /** Selected label option tag (a dialect, or LOCAL_TAG) — the view the headline is in. */
   labels: string;
   onClose: () => void;
+  /** The card element: App measures it, where it is the phone bottom sheet. */
+  ref?: Ref<HTMLElement>;
 }
 
 /** One line of the name list below the headline. */
@@ -33,7 +36,7 @@ interface Line {
  * Its data is `cardEntry(selection)` — the name-list entry where the place has
  * one, filled up from the clicked tile feature (see names.ts).
  */
-export default function PlaceCard({ selection, labels, onClose }: PlaceCardProps) {
+export default function PlaceCard({ selection, labels, onClose, ref: cardRef }: PlaceCardProps) {
   const { t } = useTranslation();
   const entry = useMemo(() => cardEntry(selection), [selection]);
   // Dialect names are translated like any other UI string; the registry
@@ -113,7 +116,7 @@ export default function PlaceCard({ selection, labels, onClose }: PlaceCardProps
   // The "report a wrong or missing name" link belongs here; it is issue #8.
 
   return (
-    <aside className="place-card" aria-label={t('card.title')}>
+    <aside ref={cardRef} className="place-card" aria-label={t('card.title')}>
       <button type="button" className="place-card-close" aria-label={t('card.close')} onClick={onClose}>
         ×
       </button>

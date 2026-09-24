@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import type { MapGeoJSONFeature } from 'maplibre-gl';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type { LngLat, MapGeoJSONFeature } from 'maplibre-gl';
 import { useTranslation } from 'react-i18next';
 
 import AreaPanel from './components/AreaPanel';
@@ -27,6 +27,12 @@ const ZOOM_BY_KIND: Record<string, number> = {
   warft: 15,
 };
 const DEFAULT_TARGET_ZOOM = 14;
+
+/**
+ * Phone width, where the search panel is a top bar and the place card a
+ * bottom sheet over the map. Must match the media query in App.css.
+ */
+const PHONE_MEDIA = '(max-width: 600px)';
 
 /**
  * `?curate` opens the name-list curation review instead of the search panel
@@ -59,6 +65,12 @@ function App() {
   // The linked place until the name list has loaded and it can be looked up.
   const [linkedPlace, setLinkedPlace] = useState(LINKED_PLACE);
   const mapRef = useRef<MapViewHandle | null>(null);
+  const appRef = useRef<HTMLDivElement | null>(null);
+  const cardRef = useRef<HTMLElement | null>(null);
+  // A map move that has to wait for the card: on a phone the card is a
+  // bottom sheet, and where the place should land depends on its height.
+  // Run (and cleared) as soon as the card for the new selection is laid out.
+  const pendingMove = useRef<((inset: number) => void) | null>(null);
   // One fetch of the name list for both the search index and the card.
   const { entries, byRef } = useNames();
 
@@ -73,7 +85,8 @@ function App() {
 
   const handleSelect = (entry: NameEntry, name: string) => {
     const zoom = ZOOM_BY_KIND[entry.kind] ?? DEFAULT_TARGET_ZOOM;
-    mapRef.current?.flyTo([entry.lon, entry.lat], zoom, { title: name });
+    pendingMove.current = (inset) =>
+      mapRef.current?.flyTo([entry.lon, entry.lat], zoom, { title: name }, inset);
     // A search result carries only the index's stored fields — no Danish
     // name, no Wikidata id — so the card gets the full name-list entry.
     setSelection({ entry: byRef.get(entry.id) ?? entry });
@@ -91,11 +104,14 @@ function App() {
    * have, still gets a card — from the tile's own attributes.
    */
   const handleFeature = useCallback(
-    (feature: MapGeoJSONFeature | null) => {
+    (feature: MapGeoJSONFeature | null, at: LngLat) => {
       if (!feature) {
         closeCard();
         return;
       }
+      // A label tapped in the lower half of a phone would end up under the
+      // sheet that is about to open.
+      pendingMove.current = (inset) => mapRef.current?.reveal(at, inset);
       const props = feature.properties as TileProps;
       const ref = props['frasch:ref'];
       setSelection({
@@ -123,12 +139,43 @@ function App() {
     if (LINKED_VIEWPORT) {
       setSelection({ entry });
       mapRef.current?.showMarker([entry.lon, entry.lat], { title: name });
+      // The link keeps its viewport, but a desktop sharer never had the
+      // phone's sheet in the way.
+      pendingMove.current = (inset) => mapRef.current?.reveal([entry.lon, entry.lat], inset);
     } else {
       handleSelect(entry, name);
     }
     // Runs once per link; `labels` only names the marker.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [byRef, linkedPlace]);
+
+  // The card of a new selection is in the DOM now, so its height is known.
+  // Before paint, so the map starts moving in the same frame the sheet shows.
+  useLayoutEffect(() => {
+    const move = pendingMove.current;
+    pendingMove.current = null;
+    if (!move) return;
+    const card = cardRef.current;
+    move(card && window.matchMedia(PHONE_MEDIA).matches ? card.offsetHeight : 0);
+  }, [selection]);
+
+  // The sheet's height, for App.css to lift the attribution above it on a
+  // phone. Tracked while the card is open: its content changes with the
+  // place and the view.
+  const cardOpen = selection !== null;
+  useEffect(() => {
+    const app = appRef.current;
+    const card = cardRef.current;
+    if (!app || !card) return;
+    const observer = new ResizeObserver(() => {
+      app.style.setProperty('--sheet-height', `${card.offsetHeight}px`);
+    });
+    observer.observe(card);
+    return () => {
+      observer.disconnect();
+      app.style.removeProperty('--sheet-height');
+    };
+  }, [cardOpen]);
 
   // Keep the address bar a shareable link to what is on screen (MapLibre adds
   // the viewport). The dev views have no selector and no card to link to.
@@ -163,12 +210,14 @@ function App() {
         onLabelsChange={handleLabelsChange}
         onSelect={handleSelect}
       />
-      {selection && <PlaceCard selection={selection} labels={labels} onClose={closeCard} />}
+      {selection && (
+        <PlaceCard ref={cardRef} selection={selection} labels={labels} onClose={closeCard} />
+      )}
     </div>
   );
 
   return (
-    <div className="app">
+    <div ref={appRef} className="app">
       {/* The dev views bring their own click handling, so they get no
           place card and no click handler of ours. */}
       <MapView ref={mapRef} labels={labels} onSelectFeature={devMode ? undefined : handleFeature} />
