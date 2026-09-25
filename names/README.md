@@ -24,9 +24,10 @@ names/work/matches.csv   generated details of the last match run (git-ignored)
         |  tiles/inject_names.py   ->  tags in the OSM extract  ->  tiles
 ```
 
-`names/bootstrap/` holds the one-time import from the original Google Sheet
-(September 2026). The sheet is history; do not edit it expecting the map to
-change.
+`names/bootstrap/sheet-export.csv` is the export of the original Google Sheet
+the list was imported from (September 2026). The sheet is history; do not
+edit it expecting the map to change. The one-off import and migration scripts
+are gone from the tree; `git show b602a3f:names/bootstrap/` lists them.
 
 ## `places.csv` columns
 
@@ -159,42 +160,33 @@ dialect as a bracket remark (`Fuan (Sölring)`), and `older` ("older Mooring
 spellings" from the sheet's *Oudere noome* column) held Karrharder and
 Wiedingharder names with remarks, and, without any remark, the island
 dialects' own names — Sölring forms with đ and ā for Sylt, Fering for Föhr,
-Halunder for Helgoland. Two one-off scripts, kept as history next to
-`import_sheet.py`, dissolved both columns:
+Halunder for Helgoland. Two one-off scripts dissolved both columns (removed
+since; see `git show b602a3f:names/bootstrap/` for them and the decision
+tables inside them):
 
-`bootstrap/migrate_dialect_columns.py` sorted the remarked variants into the
-new columns (safe to re-run: a no-op on a migrated file). Two tables inside it
-hold the decisions that the data could not answer:
+`migrate_dialect_columns.py` sorted the remarked variants into the new
+columns. A `(Gooshiirdinge)` remark does not say *which* of the three
+Goesharden, so a table said where each place lies; variants without any
+remark were sorted by hand or went into `note` as `unsorted other-dialect
+name: …` rather than being dropped — `git grep "unsorted other-dialect"
+names/places.csv` lists what is still waiting for a decision.
 
-* `GOESHARDE_BY_DE` — a `(Gooshiirdinge)` remark does not say *which* of the
-  three Goesharden; the table says where the place lies.
-* `OTHER_OVERRIDES` — variants that had no remark at all. Anything unsorted
-  went into `note` as `unsorted other-dialect name: …` rather than being
-  dropped; `git grep "unsorted other-dialect" names/places.csv` lists what is
-  still waiting for a decision.
-
-`bootstrap/drop_older_column.py` then removed `older` altogether (owner's
-decision): a name in an island or Hallig area went into that dialect's column;
-a name in another mainland Harde went into that Harde's column when OSM's
-`name:frr` for the object uses the same form (evidence that locals write it);
+`drop_older_column.py` then removed `older` altogether (owner's decision): a
+name in an island or Hallig area went into that dialect's column; a name in
+another mainland Harde went into that Harde's column when OSM's `name:frr`
+for the object uses the same form (evidence that locals write it);
 everything else counted as an alternative Mooring spelling — it became the
 Mooring name where `mooring` was empty and was dropped where `mooring` was
 already filled (144 spellings; `bootstrap/sheet-export.csv` still has them).
-Its report lists every cell.
 
 That step also revealed a loss: before the first commit the owner's clean-up
 had stripped bracket remarks, so `Ualöön (Hålifrasch)` had become plain
-`Ualöön` and was dropped as a Mooring spelling. A comparison of the sheet
-export with the committed and the current list (2026-09-17) produced
-`bootstrap/restore_proposal.csv` — every Frisian name the sheet has and the
-list no longer has, with a suggested column, confidence and reason — and
-`bootstrap/restore_review.csv`, an independent linguistic second opinion.
-`bootstrap/restore_deleted_names.py` applied the proposal once, on 2026-09-17,
-appending each name as a further variant of the target column. Rows the owner
-deleted altogether were not re-created. The script now refuses to run: the
-proposal addresses rows by their 2026-09-17 line numbers, which point at other
-rows today, so a re-run would put names onto the wrong places. Add a name
-that is still missing by hand.
+`Ualöön` and was dropped as a Mooring spelling. On 2026-09-17 every Frisian
+name the sheet has and the list no longer had was listed with a suggested
+column (`restore_proposal.csv`, which also records the names the owner chose
+to keep deleted), and `restore_deleted_names.py` appended the accepted ones
+as further variants. Both are removed; add a name that is still missing by
+hand.
 
 ## Workflow
 
@@ -490,4 +482,4 @@ references: coordinates and tag fixes belong in `curation.csv` and the build.
 | `export_search_index.py` | `places.csv` + `work/matches.csv` → `web/public/data/names.json` (every dialect name, the local form, OSM's Low Saxon name, German, Danish, the QID; keyed by `placelist.entry_id`, the same string the tiles carry as `frasch:ref`) and `web/src/generated/dialects.json` |
 | `REPORT.md` | generated worklist |
 | `work/` | git-ignored caches (candidates, matches, Wikidata lookups) and the curation view's `curate.json` / `curate-patch.jsonl` |
-| `bootstrap/` | the original sheet export, its one-time importer and the one-time `other` → dialect-column migration |
+| `bootstrap/` | the original sheet export (`sheet-export.csv`) |

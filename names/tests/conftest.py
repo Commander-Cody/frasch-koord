@@ -11,9 +11,8 @@ import sys
 import pytest
 
 NAMES = os.path.normpath(os.path.join(os.path.dirname(__file__), ".."))
-for p in (NAMES, os.path.join(NAMES, "bootstrap")):
-    if p not in sys.path:
-        sys.path.insert(0, p)
+if NAMES not in sys.path:
+    sys.path.insert(0, NAMES)
 
 import placelist  # noqa: E402
 

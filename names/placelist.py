@@ -271,17 +271,10 @@ def read(path: str = DEFAULT_PATH):
     with io.StringIO(data.decode("utf-8"), newline="") as fh:
         reader = csv.DictReader(fh)
         fields = list(reader.fieldnames or [])
-        if "other" in fields:
-            raise SystemExit(f"{path}: the `other` column is gone -- one column "
-                             f"per dialect now (names/dialects.csv). Run "
-                             f"names/bootstrap/migrate_dialect_columns.py once.")
         if "lat" in fields or "lon" in fields:
             raise SystemExit(f"{path}: `lat`/`lon` moved to names/curation.csv "
                              f"(2026-09-18): reference the place as local/<slug> "
                              f"in `osm` and delete the two columns.")
-        if "older" in fields:
-            raise SystemExit(f"{path}: the `older` column is gone (2026-09-16) -- "
-                             f"run names/bootstrap/drop_older_column.py once.")
         missing = [c for c in COLUMNS if c not in fields]
         if missing:
             raise SystemExit(f"{path}: missing column(s) {missing} "

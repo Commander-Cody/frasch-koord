@@ -50,7 +50,7 @@ A Google-Maps-like web map with all labels and UI in **North Frisian**, based on
 Requirement: **the map must never be blank anywhere**. Therefore: one full planet build (OpenMapTiles schema, ~100 GB PMTiles) as the single style source. Not the "world to z7 + detail region" split (the map would be blank outside the detail region past z7, or show duplicate labels). The planet does not fit on the dev machine (WSL has 8 GB of 16 GB RAM) → build once on a rented VM (≥64 GB RAM, ~1 TB SSD, a few hours, a few euros), upload to object storage. Phase-1 development uses the Schleswig-Holstein extract (and Denmark for name matching).
 
 ### Name data
-- The list is the owner's own work. It was bootstrapped from a Google Sheet (export + one-time importer kept in `names/bootstrap/`), but **`names/places.csv` is the single source of truth** since 2026-09-15: a slim hand-edited CSV (kind, mooring, older, other, de, hint, da, osm, wikidata, status, note — `other` dissolved into per-dialect columns on 2026-09-16, see below; the sheet's inhabitant/nds/source columns were dropped on purpose). The sheet is not consulted any more. License for the published list: still to be chosen by the owner; ODbL suggested (compatible with tiles and with contributing to OSM).
+- The list is the owner's own work. It was bootstrapped from a Google Sheet (export kept in `names/bootstrap/`; the one-time importer was removed on 2026-09-25 and is in git history), but **`names/places.csv` is the single source of truth** since 2026-09-15: a slim hand-edited CSV (kind, mooring, older, other, de, hint, da, osm, wikidata, status, note — `other` dissolved into per-dialect columns on 2026-09-16, see below; the sheet's inhabitant/nds/source columns were dropped on purpose). The sheet is not consulted any more. License for the published list: still to be chosen by the owner; ODbL suggested (compatible with tiles and with contributing to OSM).
 - The sheet was richer than assumed: columns Mooring, older Mooring names, inhabitant adjectives, German, Low German, Danish, South Jutlandic, old names, source; 10 sections (towns, Köge, Harden, islands/Halligen, Warften, landscapes, waters, roads, older designations, countries, Helgoland). Only the map-relevant columns were imported into `places.csv`; the rest stays in the archived export. The pipeline lives in `names/` (see `names/README.md`).
 
 ### Smaller points
@@ -77,7 +77,7 @@ Sölring, Öömrang, Halunder and Hålifrasch names. They are now first-class.
 
 1. **One row per place, one column per dialect** in `names/places.csv`. The
    catch-all `other` column is dissolved (one-off
-   `names/bootstrap/migrate_dialect_columns.py`; what it could not sort sits in
+   `names/bootstrap/migrate_dialect_columns.py`, since removed; what it could not sort sits in
    `note` as `unsorted other-dialect name: …`).
 2. **A `local` column** holds the form the people of the place itself use where
    it differs from the dialect of the area around it (sub-dialects such as
@@ -113,7 +113,7 @@ Sölring, Öömrang, Halunder and Hålifrasch names. They are now first-class.
    Eiderstedt** get no Frisian area (Low Saxon there); the sheet's
    `(Gooshiirdinge)` names were sorted into the Goesharde the place lies in
    (`GOESHARDE_BY_DE` in the migration script). **The `older` column is
-   gone** (owner's decision, `names/bootstrap/drop_older_column.py`): island
+   gone** (owner's decision, one-off `names/bootstrap/drop_older_column.py`, since removed): island
    and Hallig names went to their dialect's column, mainland names to the
    Harde's column where OSM's `name:frr` confirms the form, the rest became
    the Mooring name (when `mooring` was empty) or was dropped as an
