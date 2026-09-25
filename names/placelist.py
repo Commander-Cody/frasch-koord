@@ -28,9 +28,14 @@ dependency must point in one direction only.
 """
 from __future__ import annotations
 
+import contextlib
 import csv
+import errno
+import hashlib
+import io
 import os
 import re
+import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_PATH = os.path.join(HERE, "places.csv")
@@ -258,7 +263,12 @@ def local_points(path: str = CURATION_PATH) -> dict[str, tuple[float, float]]:
 def read(path: str = DEFAULT_PATH):
     """-> (rows, fieldnames).  Every row gets `_line`, its physical line number
     in the file (header = 1), which is how REPORT.md refers to rows."""
-    with open(path, encoding="utf-8", newline="") as fh:
+    with open(path, "rb") as fh:
+        data = fh.read()
+    # remembered so that `write` can tell whether someone else (match.py,
+    # curate.py apply, a spreadsheet) wrote the file in the meantime
+    _read_digests[os.path.abspath(path)] = digest(data)
+    with io.StringIO(data.decode("utf-8"), newline="") as fh:
         reader = csv.DictReader(fh)
         fields = list(reader.fieldnames or [])
         if "other" in fields:
@@ -299,13 +309,120 @@ def read(path: str = DEFAULT_PATH):
 
 
 def write(rows, path: str = DEFAULT_PATH, fields=None):
+    """Write the name list -- atomically, and only if nobody else changed the
+    file since this process `read` it.
+
+    The file is the source of truth and holds uncommitted hand edits, so a
+    crash or Ctrl-C half-way must not leave it truncated (the rows go to a
+    temporary file that then replaces the original in one step), and a run
+    must not overwrite what a spreadsheet or another script saved while it
+    was busy (it stops instead; re-run it)."""
     fields = fields or COLUMNS
-    with open(path, "w", encoding="utf-8", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=fields, lineterminator="\n",
-                           extrasaction="ignore")
-        w.writeheader()
-        for r in rows:
-            w.writerow({k: r.get(k, "") for k in fields})
+    expect = _read_digests.get(os.path.abspath(path))
+    if expect is None:
+        raise RuntimeError(f"placelist.write({path!r}) without a placelist.read "
+                           f"of it first -- nothing to check for changes against")
+    buf = io.StringIO(newline="")
+    w = csv.DictWriter(buf, fieldnames=fields, lineterminator="\n",
+                       extrasaction="ignore")
+    w.writeheader()
+    for r in rows:
+        w.writerow({k: r.get(k, "") for k in fields})
+    data = buf.getvalue().encode("utf-8")
+    atomic_write(path, data, expect=expect)
+    _read_digests[os.path.abspath(path)] = digest(data)
+
+
+# ------------------------------------------------------------ safe writes ---
+_read_digests: dict[str, str] = {}      # abspath -> sha256 of what `read` saw
+
+MISSING = "missing"                     # `expect` for a file that must not exist
+
+
+def digest(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def fingerprint(path: str) -> str:
+    """The sha256 of a file's bytes, or MISSING -- what `atomic_write`
+    compares against to notice a concurrent change."""
+    try:
+        with open(path, "rb") as fh:
+            return digest(fh.read())
+    except FileNotFoundError:
+        return MISSING
+
+
+class Conflict(SystemExit):
+    """The file changed on disk between reading and writing it."""
+
+
+def atomic_write(path: str, data: bytes | str, expect: str | None = None):
+    """Replace `path` with `data` in one step: write a temporary file next to
+    it, flush it to disk, then `os.replace` it over the original.  A crash at
+    any point leaves either the old or the new file, never half of one.
+
+    `expect` (a `fingerprint`) makes it refuse -- with `Conflict`, leaving the
+    file alone -- when the file no longer is what the caller read."""
+    if isinstance(data, str):
+        data = data.encode("utf-8")
+    path = os.path.abspath(path)
+    directory = os.path.dirname(path)
+    fd, tmp = tempfile.mkstemp(dir=directory, prefix=f".{os.path.basename(path)}.",
+                               suffix=".tmp")
+    try:
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(data)
+            fh.flush()
+            os.fsync(fh.fileno())
+        try:
+            mode = os.stat(path).st_mode & 0o7777
+        except FileNotFoundError:
+            umask = os.umask(0)
+            os.umask(umask)
+            mode = 0o666 & ~umask
+        os.chmod(tmp, mode)
+        if expect is not None and fingerprint(path) != expect:
+            raise Conflict(f"{path} changed on disk while this was running "
+                           f"(a spreadsheet, match.py or curate.py apply?) -- "
+                           f"not overwriting it.  Nothing was written; save or "
+                           f"commit the other change and run this again.")
+        os.replace(tmp, path)
+    except BaseException:
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(tmp)
+        raise
+    with contextlib.suppress(OSError):  # make the rename itself durable
+        dfd = os.open(directory, os.O_RDONLY)
+        try:
+            os.fsync(dfd)
+        finally:
+            os.close(dfd)
+
+
+@contextlib.contextmanager
+def lock(names_path: str = DEFAULT_PATH):
+    """Hold `work/.lock` next to the name list for the duration of a
+    read-modify-write run, so that match.py and curate.py apply never run at
+    the same time.  Advisory (`flock`): a spreadsheet does not take it -- that
+    is what the check in `write` is for."""
+    import fcntl                        # POSIX only; the pipeline runs in WSL
+    work = os.path.join(os.path.dirname(os.path.abspath(names_path)), "work")
+    os.makedirs(work, exist_ok=True)
+    lock_path = os.path.join(work, ".lock")
+    with open(lock_path, "a") as fh:
+        try:
+            fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as exc:
+            if exc.errno not in (errno.EWOULDBLOCK, errno.EAGAIN, errno.EACCES):
+                raise
+            raise SystemExit(f"{lock_path} is held: another match.py or "
+                             f"curate.py apply is running -- wait for it to "
+                             f"finish") from None
+        try:
+            yield
+        finally:
+            fcntl.flock(fh, fcntl.LOCK_UN)
 
 
 def describe(row: dict) -> str:

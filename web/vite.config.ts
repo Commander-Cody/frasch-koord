@@ -18,6 +18,9 @@ export default defineConfig({
   worker: { format: 'es' },
   test: {
     environment: 'jsdom',
-    include: ['src/**/*.test.{ts,tsx}'],
+    // vite-plugins/curate.test.ts overrides this to 'node' itself (a
+    // `// @vitest-environment node` docblock): it drives a Vite dev-server
+    // middleware directly and has no business needing a DOM.
+    include: ['src/**/*.test.{ts,tsx}', 'vite-plugins/**/*.test.ts'],
   },
 })

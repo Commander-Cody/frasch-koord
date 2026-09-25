@@ -189,10 +189,12 @@ export with the committed and the current list (2026-09-17) produced
 `bootstrap/restore_proposal.csv` — every Frisian name the sheet has and the
 list no longer has, with a suggested column, confidence and reason — and
 `bootstrap/restore_review.csv`, an independent linguistic second opinion.
-`bootstrap/restore_deleted_names.py` applies the proposal (edit the CSV first
-if you disagree; `--dry-run`, `--min-confidence`, `--only-agreed`), appending
-each name as a further variant of the target column. Rows the owner deleted
-altogether are never re-created.
+`bootstrap/restore_deleted_names.py` applied the proposal once, on 2026-09-17,
+appending each name as a further variant of the target column. Rows the owner
+deleted altogether were not re-created. The script now refuses to run: the
+proposal addresses rows by their 2026-09-17 line numbers, which point at other
+rows today, so a re-run would put names onto the wrong places. Add a name
+that is still missing by hand.
 
 ## Workflow
 
@@ -221,6 +223,17 @@ earlier (`status=auto`). A row you filled in, marked `ok` or `skip`, or a
 `not_a_place` row is never touched, so re-running is always safe. Undo a
 single row with `git checkout -p`.
 
+A country row is matched through Wikidata (answers cached in
+`work/wikidata-countries.json`). If the lookup fails, or `--offline` finds no
+cached answer, the row keeps its cells and `match.py` exits with status 1; a
+damaged cache file stops the run (delete it to query again).
+
+`match.py` and `curate.py apply` write `places.csv` in one step, so an
+interrupted run never leaves it half written, and they refuse to write when
+the file changed on disk while they ran (a spreadsheet saved it, say): nothing
+is written, re-run. They also take `work/.lock`, so only one of them runs at
+a time.
+
 **Review**: `names/REPORT.md` lists the *ambiguous* rows with their candidates
 and the *not found* rows with near misses. Resolve a row by writing the right
 `osm` reference into `places.csv` (and `ok` into `status` if you like), or
@@ -245,8 +258,9 @@ whose line has moved since the match run are dropped with a note (re-run
 back — the last entry per row wins — and writes `osm`, `wikidata` and
 `status` (`ok`, or `skip`) into `places.csv`, plus one `curation.csv` row per
 place OSM does not have. It touches only the rows `match.py` owns and refuses
-the rest, then renames the patch file (`--keep` leaves it). Re-run `match.py`
-afterwards and export again.
+the rest. It renames the patch file before reading it (`--keep` leaves it), so
+decisions made while it runs go to a fresh patch; refused entries are appended
+back to it. Re-run `match.py` afterwards and export again.
 
 **Build**:
 

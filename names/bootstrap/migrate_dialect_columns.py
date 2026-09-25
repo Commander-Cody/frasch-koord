@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import io
 import os
 import sys
 
@@ -215,6 +216,7 @@ def main(argv=None):
     ap.add_argument("--dry-run", action="store_true", help="only print the report")
     a = ap.parse_args(argv)
 
+    expect = placelist.fingerprint(a.names)
     with open(a.names, encoding="utf-8", newline="") as fh:
         reader = csv.DictReader(fh)
         fields = list(reader.fieldnames or [])
@@ -245,12 +247,15 @@ def main(argv=None):
         return 0
 
     out = a.out or a.names
-    with open(out, "w", encoding="utf-8", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=placelist.COLUMNS, lineterminator="\n",
-                           extrasaction="ignore")
-        w.writeheader()
-        for r in rows:
-            w.writerow({k: r.get(k, "") for k in placelist.COLUMNS})
+    buf = io.StringIO(newline="")
+    w = csv.DictWriter(buf, fieldnames=placelist.COLUMNS, lineterminator="\n",
+                       extrasaction="ignore")
+    w.writeheader()
+    for r in rows:
+        w.writerow({k: r.get(k, "") for k in placelist.COLUMNS})
+    # in place: refuse if the list changed since it was read
+    placelist.atomic_write(out, buf.getvalue(),
+                           expect=expect if out == a.names else None)
     print(f"\nwrote {out}")
     placelist.read(out)          # the result must load with the new columns
     print(f"{out} reads back cleanly")

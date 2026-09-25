@@ -25,13 +25,15 @@ This script applies the proposal to names/places.csv:
   replaces the primary name; names already present are skipped; the sheet's
   remark travels along unless it merely names the target dialect
 
-Edit `restore_proposal.csv` first if you disagree with a suggestion (change
-`suggested_column`, or set it to `keep deleted`), then run:
-
-    .venv/bin/python names/bootstrap/restore_deleted_names.py --dry-run
-    .venv/bin/python names/bootstrap/restore_deleted_names.py
-
-Re-running is a no-op once the names are in.
+It was run once, on 2026-09-17 (`--min-confidence low`, without
+`--only-agreed`), and is kept as the record of what was done.  It now REFUSES
+TO RUN: the proposal finds its rows by `current_row_line`, the line numbers of
+places.csv on 2026-09-17, and every row added or deleted since has moved the
+rows below it -- re-running it would append names to the wrong places (a
+dry run in September 2026 would have put 120 names into wrong rows, e.g.
+`Ualöön` onto Südergoesharde).  Should a name still be missing, add it to
+places.csv by hand.  (Even with the guard removed, a proposal line whose `de`
+is not a German name of the row it points at is skipped.)
 """
 from __future__ import annotations
 
@@ -79,8 +81,15 @@ def main(argv=None):
     ap.add_argument("--only-agreed", action="store_true",
                     help="skip names the review did not mark `agree`")
     ap.add_argument("--dry-run", action="store_true")
-    a = ap.parse_args(argv)
+    ap.parse_args(argv)
+    raise SystemExit(
+        "restore_deleted_names.py was applied on 2026-09-17 and is history: "
+        "restore_proposal.csv points at 2026-09-17 line numbers of places.csv, "
+        "which no longer hold the same rows.  Add a missing name by hand.")
 
+
+def apply(a):
+    """The 2026-09-17 run, kept for the record (see the module docstring)."""
     reg = dialects.read()
     columns = set(dialects.columns(reg)) | {dialects.LOCAL_COLUMN}
     verdict = {}
@@ -112,6 +121,10 @@ def main(argv=None):
         row = by_line.get(int(p["current_row_line"]))
         if row is None:
             skipped.append((p, "line not found -- places.csv changed since the proposal"))
+            continue
+        if norm(p["de"]) not in {norm(v) for v in placelist.variants(row["de"])}:
+            skipped.append((p, f"line {row['_line']} is {placelist.describe(row)} now "
+                               f"-- places.csv changed since the proposal"))
             continue
         name = p["name"].strip()
         if norm(name) in {norm(v) for v in placelist.variants(row.get(col))}:

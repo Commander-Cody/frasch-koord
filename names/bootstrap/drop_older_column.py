@@ -30,6 +30,7 @@ build_candidates.py output) for the positions and OSM's name:frr.
 from __future__ import annotations
 
 import csv
+import io
 import json
 import os
 import sys
@@ -86,6 +87,7 @@ def merge_into(cell: str, entries) -> str:
 
 def main(argv=None):
     dry = "--dry-run" in (argv or sys.argv[1:])
+    expect = placelist.fingerprint(PLACES)
     with open(PLACES, encoding="utf-8", newline="") as fh:
         reader = csv.DictReader(fh)
         fields = list(reader.fieldnames or [])
@@ -145,11 +147,12 @@ def main(argv=None):
         print("(dry run -- nothing written)")
         return 0
     fields = [f for f in fields if f != "older"]
-    with open(PLACES, "w", encoding="utf-8", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=fields, lineterminator="\n", extrasaction="ignore")
-        w.writeheader()
-        for r in rows:
-            w.writerow({k: r.get(k, "") for k in fields})
+    buf = io.StringIO(newline="")
+    w = csv.DictWriter(buf, fieldnames=fields, lineterminator="\n", extrasaction="ignore")
+    w.writeheader()
+    for r in rows:
+        w.writerow({k: r.get(k, "") for k in fields})
+    placelist.atomic_write(PLACES, buf.getvalue(), expect=expect)
     print(f"wrote {PLACES} without the `older` column")
     return 0
 
