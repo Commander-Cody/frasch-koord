@@ -130,6 +130,48 @@ def test_places_csv_changed_meanwhile_writes_nothing_and_restores_the_patch(w, m
     assert archived(w) == []
 
 
+def test_curation_csv_changed_meanwhile_writes_nothing(w, monkeypatch):
+    first = entry(2, action="local", slug="taarep", lat=54.6, lon=8.9)
+    append(w.patch, first)
+    theirs = CURATION_HEADER + "local/nai,Neu,54.7,8.8,,,,,by hand\n"
+    before = w.places.read_bytes()
+    during_read(monkeypatch, lambda: w.curation.write_text(theirs, encoding="utf-8"))
+    with pytest.raises(SystemExit, match="changed on disk"):
+        w.apply()
+    assert w.places.read_bytes() == before
+    assert w.curation.read_text(encoding="utf-8") == theirs
+    assert lines(w.patch) == [first]
+    assert archived(w) == []
+
+
+def test_failed_places_write_removes_a_new_curation_csv(w, monkeypatch):
+    """curation.csv is written first; a places.csv write that then fails
+    takes it out again -- here, a file that did not exist before."""
+    w.curation.unlink()
+    append(w.patch, entry(2, action="local", slug="taarep", lat=54.6, lon=8.9))
+    theirs = places_text(ROWS + [{"kind": "settlement", "mooring": "Nai", "de": "Neu"}])
+    during_read(monkeypatch, lambda: w.places.write_text(theirs, encoding="utf-8"))
+    with pytest.raises(SystemExit, match="changed on disk"):
+        w.apply()
+    assert not w.curation.exists()
+    assert w.places.read_text(encoding="utf-8") == theirs
+
+
+def test_curation_csv_edited_during_rollback_is_left_alone(w, monkeypatch, capsys):
+    append(w.patch, entry(2, action="local", slug="taarep", lat=54.6, lon=8.9))
+    theirs = CURATION_HEADER + "local/nai,Neu,54.7,8.8,,,,,by hand\n"
+
+    def failing_write(*a, **kw):
+        w.curation.write_text(theirs, encoding="utf-8")   # a hand edit lands
+        raise OSError("disk full")
+
+    monkeypatch.setattr(curate.placelist, "write", failing_write)
+    with pytest.raises(OSError):
+        w.apply()
+    assert w.curation.read_text(encoding="utf-8") == theirs
+    assert "delete the rows for local/taarep by hand" in capsys.readouterr().err
+
+
 def test_local_decision_writes_both_files(w):
     append(w.patch, entry(2, action="local", slug="taarep", lat=54.6, lon=8.9,
                           note="by the dyke"))

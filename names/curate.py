@@ -28,12 +28,13 @@ What gets written where
                            it is read, so that a decision the browser makes
                            meanwhile starts a fresh patch (`--keep` leaves it
                            alone); an entry apply refused is appended back so
-                           it is not lost.  If apply fails before writing, the
-                           patch is put back.
+                           it is not lost.  If apply fails, the patch is put
+                           back.
 
-Apply checks everything first and then writes places.csv and curation.csv, each
-in one step and only if it did not change on disk meanwhile; names/work/.lock
-keeps it from running at the same time as match.py.
+Apply checks everything first and then writes curation.csv and places.csv, each
+in one step and only if it did not change on disk meanwhile; when the second
+write fails, the first is undone, so a failed apply changes neither file.
+names/work/.lock keeps it from running at the same time as match.py.
 
 The export never builds match.py's full candidate index (180k records, most of
 a gigabyte): it streams names/work/candidates.jsonl once and keeps only the
@@ -273,9 +274,6 @@ def patch_key(entry):
 def read_patch(path):
     """-> the last entry per row, in line order.  The browser appends, never
     rewrites, so a row decided twice simply has two lines; `clear` withdraws."""
-    if not os.path.exists(path):
-        raise SystemExit(f"{path} not found -- decide some rows in the browser "
-                         f"first (web/, `?curate`)")
     last = {}
     with open(path, encoding="utf-8") as fh:
         for n, line in enumerate(fh, start=1):
@@ -343,7 +341,8 @@ def _apply(args):
             used_slugs.add(slug)
 
     if not os.path.exists(args.patch):
-        read_patch(args.patch)           # the "decide some rows first" message
+        raise SystemExit(f"{args.patch} not found -- decide some rows in the "
+                         f"browser first (web/, `?curate`)")
     snapshot = None
     if args.dry_run or args.keep:
         source = args.patch
@@ -356,7 +355,7 @@ def _apply(args):
         snapshot = source = f"{root}.{stamp}.applied{ext}"
         os.rename(args.patch, snapshot)
 
-    names_written = False
+    cur_written = None                   # digest of the curation.csv apply wrote
     try:
         entries = read_patch(source)
         applied, refused, new_curation = 0, 0, []
@@ -470,21 +469,20 @@ def _apply(args):
             return 1 if refused else 0
 
         if applied:
-            cur_text = (curation_text(cur_data, cur_fields, new_curation)
-                        if new_curation else None)
-            # places.csv first: its `local/<slug>` rows are useless without
-            # their curation rows, so check both files are unchanged before
-            # writing either (each write is atomic and checks again)
-            if cur_text is not None and placelist.fingerprint(args.curation) != cur_digest:
-                raise placelist.Conflict(f"{args.curation} changed on disk while "
-                                         f"this was running -- nothing written, "
-                                         f"run apply again")
-            placelist.write(rows, args.names, fields)
-            names_written = True
-            if cur_text is not None:
+            # curation.csv first, places.csv last: when the places.csv write
+            # fails (a spreadsheet saved it meanwhile, say), the curation rows
+            # come out again, so a `local/<slug>` row never lands without its
+            # position and a failed apply leaves both files as they were
+            if new_curation:
+                cur_text = curation_text(cur_data, cur_fields, new_curation)
                 placelist.atomic_write(args.curation, cur_text, expect=cur_digest)
+                cur_written = placelist.digest(cur_text)
+            placelist.write(rows, args.names, fields)
     except BaseException:
-        if snapshot and not names_written:
+        if cur_written:
+            unwrite_curation(args.curation, cur_data, cur_written,
+                             [c["osm"] for c in new_curation])
+        if snapshot:
             restore_patch(snapshot, args.patch)
             print(f"nothing applied -- {args.patch} restored", file=sys.stderr)
         raise
@@ -583,6 +581,26 @@ def curation_text(data, fields, new_rows):
     for r in new_rows:
         w.writerow({k: r.get(k, "") for k in fields})
     return data + buf.getvalue().encode("utf-8")
+
+
+def unwrite_curation(path, old, written, refs):
+    """Undo apply's curation.csv write after the places.csv write failed: put
+    back `old` (its bytes before; None = there was no file), unless someone
+    changed the file after apply wrote it (`written`, its digest) -- then say
+    which rows to take out by hand."""
+    try:
+        if old is not None:
+            placelist.atomic_write(path, old, expect=written)
+        elif placelist.fingerprint(path) == written:
+            os.unlink(path)
+        else:
+            raise placelist.Conflict(f"{path} changed on disk meanwhile")
+    except (OSError, SystemExit) as exc:
+        print(f"error: could not take the new rows out of {path} again ({exc}) "
+              f"-- delete the rows for {', '.join(refs)} by hand before the next "
+              f"apply", file=sys.stderr)
+    else:
+        print(f"{path} put back as it was", file=sys.stderr)
 
 
 # ------------------------------------------------------------------- main ---

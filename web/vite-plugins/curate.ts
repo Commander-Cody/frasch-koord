@@ -79,9 +79,12 @@ function isLoopbackAddress(address: string | undefined): boolean {
  * 'no-cors'` can only send a "simple request" — no custom headers, and a
  * `Content-Type` limited to `text/plain`, form-encoded or multipart — which
  * skips CORS preflight entirely. Requiring the one media type simple
- * requests cannot set forces a real cross-origin POST through a preflight,
- * which Vite's dev server (no `Access-Control-Allow-Origin` configured here)
- * then refuses before this handler ever sees it.
+ * requests cannot set forces a real cross-origin POST through a preflight.
+ * Vite's own CORS middleware runs before this plugin and answers that
+ * preflight without `Access-Control-Allow-Origin` for any origin but
+ * localhost, so the browser never sends the POST. A page on another localhost
+ * port does pass the preflight (Vite's default allows every localhost
+ * origin); `isCrossOrigin` turns that one away.
  */
 function hasJsonContentType(req: IncomingMessage): boolean {
   const header = req.headers['content-type'];
