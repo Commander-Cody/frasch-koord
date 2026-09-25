@@ -3,8 +3,11 @@ import type { ErrorInfo, ReactNode } from 'react';
 
 export interface ErrorBoundaryProps {
   children: ReactNode;
-  /** Rendered in place of `children` once one of them threw while rendering. */
-  fallback: ReactNode;
+  /**
+   * Rendered in place of `children` once one of them threw while rendering.
+   * `reset` tries `children` again, whether or not `resetKey` changed.
+   */
+  fallback: (reset: () => void) => ReactNode;
   /**
    * Try `children` again when this changes. App passes the selection: one
    * malformed names.json entry must not take the panel away for good, only
@@ -44,7 +47,11 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
     console.error('Panel crashed', error, info.componentStack);
   }
 
+  reset = (): void => {
+    this.setState({ failed: false, failedAt: this.props.resetKey });
+  };
+
   render() {
-    return this.state.failed ? this.props.fallback : this.props.children;
+    return this.state.failed ? this.props.fallback(this.reset) : this.props.children;
   }
 }

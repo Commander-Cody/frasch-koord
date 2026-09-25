@@ -47,6 +47,24 @@ function toIndexed(entry: NameEntry): IndexedEntry {
   return { ...entry, text: [...new Set(all.filter(Boolean))].join(' ') };
 }
 
+/**
+ * The entries MiniSearch can take: it throws on one without an `id` and on a
+ * second one with the same `id`, which would take search down for the whole
+ * list. names.json is fetched, not type-checked, so skip (and log) those.
+ */
+function indexable(entries: NameEntry[]): NameEntry[] {
+  const seen = new Set<string>();
+  const kept = entries.filter((e) => {
+    if (typeof e?.id !== 'string' || seen.has(e.id)) return false;
+    seen.add(e.id);
+    return true;
+  });
+  if (kept.length < entries.length) {
+    console.warn(`names.json: skipped ${entries.length - kept.length} entries without an id or with a repeated one`);
+  }
+  return kept;
+}
+
 export default function SearchPanel({
   entries,
   status,
@@ -65,7 +83,7 @@ export default function SearchPanel({
   const index = useMemo(() => {
     if (entries.length === 0) return null;
     const idx = createIndex();
-    idx.addAll(entries.map(toIndexed));
+    idx.addAll(indexable(entries).map(toIndexed));
     return idx;
   }, [entries]);
 

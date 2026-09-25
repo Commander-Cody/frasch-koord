@@ -185,11 +185,16 @@ function App() {
           not unmount the map with it. */}
       <ErrorBoundary
         resetKey={selection}
-        fallback={
+        fallback={(reset) => (
           <div className="side-panel">
-            <PanelError onClose={closeCard} />
+            <PanelError
+              onClose={() => {
+                closeCard();
+                reset();
+              }}
+            />
           </div>
-        }
+        )}
       >
         <div className="side-panel">
           <SearchPanel
@@ -210,8 +215,8 @@ function App() {
 
 /**
  * What the side panel shows after it crashed. Closing it clears the
- * selection, which is what most likely broke it, and ErrorBoundary then
- * brings the panel back.
+ * selection, which is what most likely broke it, and brings the panel back,
+ * also when the crash came without one (the search panel's own).
  */
 function PanelError({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
