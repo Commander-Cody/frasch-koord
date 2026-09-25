@@ -1,7 +1,9 @@
 {
   "search": {
     "placeholder": "Stää säke…",
-    "noResults": "Niinj riseltoote"
+    "noResults": "Niinj riseltoote",
+    "loading": "",
+    "error": ""
   },
   "dialect": {
     "label": "Spräkewise",
@@ -36,6 +38,11 @@
     "extinct": "Spräkewise wårt ai mör spräägen",
     "osm": "OpenStreetMap",
     "wikidata": "Wikidata"
+  },
+  "errors": {
+    "map": "",
+    "panel": "",
+    "dismiss": ""
   },
   "kind": {
     "settlement": "Stää",

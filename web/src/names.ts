@@ -4,7 +4,7 @@
 
 import { useEffect, useState } from 'react';
 
-import { DIALECTS } from './config';
+import { DIALECTS, siteUrl } from './config';
 import { labelChain } from './labelChain';
 
 /**
@@ -116,29 +116,49 @@ export function displayName(entry: NameEntry, labels: string): string {
 // ------------------------------------------------------------- loading ----
 
 export interface NamesData {
+  /**
+   * `error` when names.json could not be loaded: search then has nothing to
+   * search and `?place=` links nothing to open, which the UI has to say
+   * rather than answer every query with "no results".
+   */
+  status: 'loading' | 'ready' | 'error';
   entries: NameEntry[];
   /** Entries by `id` — the same string the tiles carry as `frasch:ref`. */
   byRef: Map<string, NameEntry>;
 }
 
-const EMPTY: NamesData = { entries: [], byRef: new Map() };
+const LOADING: NamesData = { status: 'loading', entries: [], byRef: new Map() };
+const FAILED: NamesData = { status: 'error', entries: [], byRef: new Map() };
+
+/** Where the name list is served, under the site's base path. */
+export function namesUrl(): string {
+  return siteUrl('data/names.json');
+}
 
 /**
  * Loads public/data/names.json once. Both consumers (search index and place
  * card) live in App, so the fetch belongs there rather than in either panel.
  */
 export function useNames(): NamesData {
-  const [data, setData] = useState<NamesData>(EMPTY);
+  const [data, setData] = useState<NamesData>(LOADING);
   useEffect(() => {
     let cancelled = false;
-    fetch('/data/names.json')
-      .then((res) => res.json())
-      .then((entries: NameEntry[]) => {
+    fetch(namesUrl())
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        // An SPA fallback answers a missing file with index.html and a 200;
+        // res.json() rejects that, and anything else that is not the list.
+        return res.json();
+      })
+      .then((entries: unknown) => {
+        if (!Array.isArray(entries)) throw new Error('not a list of entries');
         if (cancelled) return;
-        setData({ entries, byRef: new Map(entries.map((e) => [e.id, e])) });
+        const list = entries as NameEntry[];
+        setData({ status: 'ready', entries: list, byRef: new Map(list.map((e) => [e.id, e])) });
       })
       .catch((err: unknown) => {
         console.error('Failed to load names.json', err);
+        if (!cancelled) setData(FAILED);
       });
     return () => {
       cancelled = true;

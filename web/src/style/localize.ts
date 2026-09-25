@@ -1,6 +1,7 @@
 import type { StyleSpecification, LayerSpecification } from 'maplibre-gl';
 import type { ExpressionSpecification } from '@maplibre/maplibre-gl-style-spec';
 
+import { siteUrl } from '../config';
 import { labelChain } from '../labelChain';
 
 // `../style/frasch-bright.json` started as a fork of upstream OSM Bright
@@ -11,7 +12,7 @@ import { labelChain } from '../labelChain';
 // only what must stay dynamic at runtime: pointing the vector source at the
 // configured tiles URL, building the label expression for the selected
 // dialect (or the local-dialect view), and resolving glyph/sprite URLs
-// against the page origin.
+// against the page and the site's base path.
 
 /**
  * Builds the `text-field` expression for a label option: a `coalesce` over
@@ -59,7 +60,7 @@ function referencesName(textField: unknown): boolean {
  *  - points the `openmaptiles` source at `tilesUrl`
  *  - rewrites every symbol layer's name-based `text-field` to the chain of
  *    `nameExpression(labels)` above
- *  - points `glyphs`/`sprite` at locally hosted, absolute-path URLs
+ *  - points `glyphs`/`sprite` at the copies this site hosts itself
  *
  * `labels` is a dialect tag or LOCAL_TAG (see `nameExpression`).
  */
@@ -99,11 +100,10 @@ export function buildStyle(
   });
 
   // (c) Serve glyphs and sprites locally rather than from a third party.
-  // MapLibre requires absolute sprite URLs; resolve against the page origin
-  // (falls back to the bare path when run outside a browser, e.g. in tests).
-  const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  style.glyphs = `${origin}/fonts/{fontstack}/{range}.pbf`;
-  style.sprite = `${origin}/sprites/sprite`;
+  // MapLibre requires absolute sprite URLs; siteUrl resolves them against
+  // the page and the site's base path.
+  style.glyphs = siteUrl('fonts/{fontstack}/{range}.pbf');
+  style.sprite = siteUrl('sprites/sprite');
 
   return style;
 }

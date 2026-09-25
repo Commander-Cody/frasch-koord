@@ -275,3 +275,75 @@
     bottom: var(--sheet-height, 0px);
   }
 }
+
+/* A map that failed to load (Map.tsx): a strip at the top centre, above the
+   map but below the side panel, which it must not hide. */
+.map-error {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1;
+  max-width: min(420px, calc(100vw - 24px));
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px 6px 12px;
+  border-radius: 8px;
+  background: #fdecea;
+  color: #7a1c14;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  font: 13px system-ui, sans-serif;
+}
+
+.map-error button {
+  flex: none;
+  border: none;
+  background: none;
+  padding: 2px 6px;
+  font: inherit;
+  font-size: 18px;
+  line-height: 1;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* The name list failed to load (SearchPanel.tsx): one line under the field. */
+.search-error {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #a1260d;
+  font-size: 13px;
+}
+
+/* What the side panel shows after it crashed (App.tsx), styled like a card. */
+.panel-error {
+  position: relative;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  padding: 12px 36px 12px 12px;
+  font: 14px system-ui, sans-serif;
+  color-scheme: light;
+  color: #222;
+}
+
+/* Phone width: the error strip and line move below the search bar (see the
+   phone block above). */
+@media (max-width: 600px) {
+  .map-error {
+    top: calc(var(--bar-inset) + var(--bar-height) + 8px);
+  }
+
+  .search-error {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    padding: 11px 12px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  }
+}

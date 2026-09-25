@@ -1,14 +1,23 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import {
   Map as MapLibreMap,
   Marker,
   NavigationControl,
   AttributionControl,
   addProtocol,
+  setWorkerUrl,
 } from 'maplibre-gl';
 import type { LngLat, LngLatLike, MapGeoJSONFeature, StyleSpecification } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
+// MapLibre 6 looks for its worker next to its own module
+// (`new URL('./maplibre-gl-worker.mjs', import.meta.url)`), a file Vite's
+// production build never emits: the request would get index.html and no tile
+// would ever be parsed. `?worker&url` makes Vite bundle the worker — with the
+// maplibre-gl-shared.mjs chunk it imports — as an asset of its own, and
+// setWorkerUrl points MapLibre at it, in dev and build alike.
+import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import { Protocol } from 'pmtiles';
+import { useTranslation } from 'react-i18next';
 
 import fraschBright from '../style/frasch-bright.json';
 import { buildStyle, placeLayerIds } from '../style/localize';
@@ -24,6 +33,8 @@ function ensurePmtilesProtocol(): void {
   pmtilesProtocolRegistered = true;
 }
 
+setWorkerUrl(maplibreWorkerUrl);
+
 const NORTH_FRISIA_CENTER: [number, number] = [8.85, 54.6];
 const INITIAL_ZOOM = 9;
 
@@ -32,6 +43,13 @@ const CLICK_SLOP = 6;
 
 /** How close (px) to the edge of a bottom inset a place may sit before `reveal` pans. */
 const REVEAL_MARGIN = 24;
+
+/**
+ * How long the first render may take before the map counts as broken. A
+ * worker that never starts raises no error event (MapLibre does not listen
+ * for one); the map just never loads.
+ */
+const LOAD_TIMEOUT_MS = 30_000;
 
 export interface MapViewProps {
   /**
@@ -81,7 +99,12 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   { labels, onSelectFeature },
   ref,
 ) {
+  const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement | null>(null);
+  // Something the map needs (tiles, glyphs, sprites, the worker) failed to
+  // load, or the first render is overdue. Shown until dismissed; the details
+  // go to the console.
+  const [failure, setFailure] = useState<'error' | 'timeout' | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markerRef = useRef<Marker | null>(null);
   const appliedLabels = useRef(labels);
@@ -177,6 +200,22 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
       map.getCanvas().style.cursor = hit(e.point) ? 'pointer' : '';
     });
 
+    // MapLibre logs errors itself only while nobody listens for them.
+    map.on('error', (e) => {
+      console.error('Map error', e.error);
+      setFailure('error');
+    });
+    const loadTimer = window.setTimeout(() => setFailure((f) => f ?? 'timeout'), LOAD_TIMEOUT_MS);
+    map.once('load', () => {
+      window.clearTimeout(loadTimer);
+      // Only late after all (a tab opened in the background renders nothing
+      // until it is shown).
+      setFailure((f) => (f === 'timeout' ? null : f));
+      // For the production-build smoke check (scripts/smoke.mjs), which has
+      // no other way to see the map load.
+      map.getContainer().dataset.state = 'loaded';
+    });
+
     map.addControl(new NavigationControl(), 'top-right');
     map.addControl(new AttributionControl({ compact: false }), 'bottom-right');
 
@@ -190,6 +229,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
       // before the second (real) mount ever gets to read it. Preserve and
       // restore it so both mounts see the same starting view.
       const hash = window.location.hash;
+      window.clearTimeout(loadTimer);
       markerRef.current?.remove();
       markerRef.current = null;
       map.remove();
@@ -212,7 +252,19 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
     map.setStyle(buildStyle(fraschBright as unknown as StyleSpecification, TILES_URL, labels));
   }, [labels]);
 
-  return <div ref={containerRef} className="map-container" />;
+  return (
+    <>
+      <div ref={containerRef} className="map-container" />
+      {failure && (
+        <div className="map-error" role="alert">
+          <span>{t('errors.map')}</span>
+          <button type="button" aria-label={t('errors.dismiss')} onClick={() => setFailure(null)}>
+            ×
+          </button>
+        </div>
+      )}
+    </>
+  );
 });
 
 export default MapView;

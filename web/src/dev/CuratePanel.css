@@ -1,5 +1,6 @@
 /* Curation review view (?curate). Dev tool: dense, plain, always light —
-   the map behind it is light too, and this never ships to the public site. */
+   the map behind it is light too. Never ships to the public site: main.tsx
+   only loads it under `vite dev`. */
 
 .curate-panel {
   position: absolute;

@@ -4,15 +4,35 @@
 import registry from './generated/dialects.json';
 
 /**
+ * Absolute URL of `path` (no leading slash, e.g. "data/names.json") under the
+ * site's base: `/` in dev and for a root deployment, `/frasch-koord/` for a
+ * GitHub Pages project site (Vite's `base`, `import.meta.env.BASE_URL`).
+ * Everything the site serves from web/public/ goes through here, so the build
+ * works under any base path.
+ *
+ * Absolute because MapLibre wants absolute glyph and sprite URLs; built by
+ * string concatenation rather than `new URL(path, base)`, which would
+ * percent-encode the `{fontstack}`/`{range}` placeholders of the glyph URL.
+ * Read at call time, so tests can stub BASE_URL.
+ */
+export function siteUrl(path: string): string {
+  const base = import.meta.env.BASE_URL;
+  // A relative base (`./`) is relative to the page; outside a browser there is
+  // no page to resolve against, so the base is used as it is.
+  const root = typeof window !== 'undefined' ? new URL(base, window.location.href).href : base;
+  return `${root}${path}`;
+}
+
+/**
  * URL of the PMTiles archive (or any MapLibre-compatible vector source URL).
  *
- * Defaults to a PMTiles file served from this site's own /tiles/ directory
- * (see web/public/tiles/), resolved relative to the site origin. Override via
- * the VITE_TILES_URL environment variable, e.g. to point at a CDN-hosted
- * PMTiles archive.
+ * Defaults to a PMTiles file served from this site's own tiles/ directory
+ * (see web/public/tiles/), under the site's base path. Override via the
+ * VITE_TILES_URL environment variable, e.g. to point at a CDN-hosted PMTiles
+ * archive.
  */
 export const TILES_URL: string =
-  import.meta.env.VITE_TILES_URL || 'pmtiles:///tiles/schleswig-holstein.pmtiles';
+  import.meta.env.VITE_TILES_URL || `pmtiles://${siteUrl('tiles/schleswig-holstein.pmtiles')}`;
 
 /** One dialect of the registry (names/dialects.csv, exported to generated/dialects.json). */
 export interface DialectEntry {

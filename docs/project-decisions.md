@@ -287,7 +287,7 @@ property at all, which makes `AreaIndex.from_geojson` refuse the file outright
 instead of quietly loading it.
 
 The web app gained a dev-only review view, `http://localhost:5173/?areas`
-(`web/src/components/AreaPanel.tsx`), a sibling of `?curate`: the parts file as
+(`web/src/dev/AreaPanel.tsx`), a sibling of `?curate`: the parts file as
 a coloured fill inserted before `waterway-name` so it sits under every label,
 one colour per dialect, and a near-opaque outline **in the same hue** so
 municipality boundaries stay visible *inside* one dialect's block — which is
@@ -298,7 +298,7 @@ serves the file in dev only, so the research prose ("best guess only", "no
 direct source found") about unconfirmed assignments does not ship to the public
 site.
 
-The eleven dialect colours (`web/src/components/areaLayers.ts`) were not picked
+The eleven dialect colours (`web/src/dev/areaLayers.ts`) were not picked
 by eye. The hues come from the data-viz reference palette and the *assignment*
 was solved against the adjacency computed from the geometry itself — which
 turned up Sölring/Wiedingharder as a touching pair, out in the Wattenmeer.

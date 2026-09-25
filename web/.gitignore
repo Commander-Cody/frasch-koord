@@ -31,4 +31,4 @@ dist-ssr
 public/tiles/*.pmtiles
 
 # Glyphs are ~100 MB; fetch with scripts/fetch-fonts.sh
-public/fonts/
+public/fonts
