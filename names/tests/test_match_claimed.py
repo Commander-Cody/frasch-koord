@@ -1,0 +1,51 @@
+"""The matcher never gives a row an OSM object that a human already gave to
+another row (#26, M4).  That is how two names came to claim way/28330569
+and three other objects, of which only one can reach the map."""
+from __future__ import annotations
+
+import json
+
+import placelist
+import match
+from conftest import places_text
+
+LANGERDEICH = {"src": "schleswig-holstein", "t": "w", "id": 28330569,
+               "lon": 8.865771, "lat": 54.471785,
+               "cls": ["man_made=dyke", "highway=residential"],
+               "tags": {"man_made": "dyke", "highway": "residential",
+                        "name": "Langerdeich"}}
+LUNGEDIK = {"kind": "warft", "mooring": "Lungedik", "de": "Langerdeich"}
+
+
+def run_match(world, rows, candidates):
+    places = world / "places.csv"
+    places.write_text(places_text(rows), encoding="utf-8")
+    (world / "work" / "candidates.jsonl").write_text(
+        "".join(json.dumps(c) + "\n" for c in candidates), encoding="utf-8")
+    code = match.main(["--names", str(places),
+                       "--candidates", str(world / "work" / "candidates.jsonl"),
+                       "--matches", str(world / "work" / "matches.csv"),
+                       "--report", str(world / "REPORT.md"), "--offline",
+                       "--wikidata-cache", str(world / "work" / "wd.json")])
+    assert code == 0
+    return placelist.read(str(places))[0]
+
+
+def test_an_unclaimed_object_is_matched(world):
+    [row] = run_match(world, [LUNGEDIK], [LANGERDEICH])
+    assert (row["osm"], row["status"]) == ("way/28330569", "auto")
+
+
+def test_an_object_a_human_gave_to_another_row_is_not_matched_again(world):
+    checked = {"kind": "warft", "mooring": "Lungendik", "de": "Langedeich",
+               "osm": "way/28330569", "status": "ok"}
+    _, row = run_match(world, [checked, LUNGEDIK], [LANGERDEICH])
+    assert (row["osm"], row["status"]) == ("", "")
+
+
+def test_a_skipped_row_does_not_claim_its_object(world):
+    # `skip` rows never reach the map, so their object is free.
+    skipped = {"kind": "warft", "mooring": "Lungendik", "de": "Langedeich",
+               "osm": "way/28330569", "status": "skip"}
+    _, row = run_match(world, [skipped, LUNGEDIK], [LANGERDEICH])
+    assert (row["osm"], row["status"]) == ("way/28330569", "auto")

@@ -654,7 +654,10 @@ def _suspicious(kind, winner):
     return minor and (winner["nf_d"] or 1e9) > 50
 
 
-def match_row(row, index: Index, hints: HintResolver):
+def match_row(row, index: Index, hints: HintResolver, claimed=None):
+    """`claimed`: {(type, id): line} of the objects other rows hold that
+    are not the matcher's to give away (see `claimed_objects`)."""
+    claimed = claimed or {}
     kind = row["kind"]
     out = dict(row)
     out.update(osm_type="", osm_id="", match_name="", match_tags="",
@@ -682,8 +685,14 @@ def match_row(row, index: Index, hints: HintResolver):
         rec = dict(rec)
         rec["rank"] = best_rank[key]
         cands.append(rec)
+    taken = [c for c in cands if (c["t"], c["id"]) in claimed]
+    cands = [c for c in cands if (c["t"], c["id"]) not in claimed]
     if not cands:
         out["status"] = "not_found"
+        if taken:
+            out["note"] = _addnote(row, "; ".join(
+                f"{format_osm([(c['t'], c['id'])])} is taken by line "
+                f"{claimed[(c['t'], c['id'])]}" for c in taken))
         return out
 
     plaus_all = [c for c in cands if kind_ok(kind, c["tags"], c["cls"])]
@@ -784,6 +793,20 @@ def owned_by_matcher(row):
     if row["status"] == "auto":
         return True
     return not row["osm"] and not row["wikidata"]
+
+
+def claimed_objects(rows):
+    """{(type, id): line} of the OSM objects that rows the matcher does not
+    own hold (checked or hand-filled).  It never gives them to another row:
+    only one name per object can reach the map.  A `skip` row reaches no map
+    and claims nothing."""
+    out = {}
+    for r in rows:
+        if owned_by_matcher(r) or r["status"] == "skip":
+            continue
+        for key in parse_osm(r["osm"]):
+            out.setdefault(key, r["_line"])
+    return out
 
 
 def find_duplicates(rows):
@@ -966,6 +989,7 @@ def run(args):
     hints = HintResolver(index)
 
     todo = [r for r in rows if owned_by_matcher(r) and any_name(r)]
+    claimed = claimed_objects(rows)
     country_rows = [r for r in todo if r["kind"] == "country"]
     qids, wd_failed = wikidata_countries([primary(r["de"]) for r in country_rows],
                                          cache_path=args.wikidata_cache,
@@ -995,7 +1019,7 @@ def run(args):
                 o.update(wikidata="", status="not_found",
                          note="no Wikidata country item found")
         else:
-            o = match_row(r, index, hints)
+            o = match_row(r, index, hints, claimed)
         results[r["_line"]] = o
         if o["status"] == "matched":
             r["osm"] = format_osm(parse_osm(
