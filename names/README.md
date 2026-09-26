@@ -59,6 +59,13 @@ Conventions that apply to every name cell:
   only repeats the column's own dialect is noise — the column says it already
 * no `?` inside names — say `uncertain` in `note`
 
+After editing, `.venv/bin/python names/check.py` reports every problem in
+`places.csv`, `curation.csv` and `dialects.csv` with its line: a comma too
+many or too few, unbalanced brackets, a `?`, variants not separated by `; `,
+a repeated variant, an unknown `kind` or `status`, a bad reference, one OSM
+object or Wikidata item on two rows, a `local/` reference without a position.
+CI runs it on every push.
+
 The rows are in the order of the original sheet (by section, then the owner's
 geographic order); new rows can go anywhere.
 
@@ -199,7 +206,7 @@ and let the matcher try.
 
 ```bash
 cd /home/thore/Repos/frasch-maps
-PY=.venv/bin/python
+PY=.venv/bin/python           # `uv sync` creates it, see the root README.md
 
 # once per OSM extract (~6 min for SH + DK, ~250 MB, git-ignored)
 $PY names/build_candidates.py tiles/data/schleswig-holstein-latest.osm.pbf \

@@ -202,8 +202,8 @@ per file.
 
 The published name list, named **"Frasche stääsnoome"** (`names/places.csv` and the other hand-edited files in
 `names/`) is licensed under the **Open Database License 1.0**, contents under
-DbCL 1.0; full text in `names/LICENSE`. Attribution string: "Frasch name list,
-Thore Andresen, ODbL 1.0".
+DbCL 1.0; full text in `names/LICENSE`. Attribution string: "Frasche
+stääsnoome, Thore Andresen, ODbL 1.0".
 
 **Why**: the tiles are ODbL anyway (derived from OSM), so nothing else was
 gained by a more permissive choice; ODbL lets anyone push names into OSM
@@ -218,8 +218,8 @@ texts), not a bulk extraction from one database; `places.csv` holds only OSM
 the build). Still to confirm by the owner: that no one else contributed rows to
 the original sheet (co-authors would have to agree to the license).
 
-Code license (MIT, proposed 2026-09-15) remains undecided; the style fork must
-keep the OSM Bright BSD notice whatever is chosen. The map's attribution
+The code is MIT (root `LICENSE`, 2026-09-26, #22). The style fork keeps OSM
+Bright's BSD / CC BY notice in `web/src/style/LICENSE-osm-bright.md`. The map's attribution
 control must show "© OpenStreetMap contributors" and the OpenMapTiles credit
 before launch; the Mooring locale's attribution string is still empty.
 
@@ -366,7 +366,7 @@ Open questions for the list owner (from the first run):
 
 ## Development environment notes (WSL2)
 - **JDK 21** (Temurin) installed user-locally at `~/.local/opt/jdk-21*` (no sudo in this shell); `tiles/build.sh` finds it automatically.
-- **Python**: `uv` at `~/.local/bin/uv`; project venv `.venv` (Python 3.12) with pyosmium, shapely, mapbox-vector-tile. System Python 3.14 has no pip/venv.
+- **Python**: `uv` at `~/.local/bin/uv`; `uv sync` creates the project venv `.venv` (Python 3.12) from `pyproject.toml` / `uv.lock` (osmium, shapely, requests; pytest and ruff for development), see the root `README.md`. System Python 3.14 has no pip/venv.
 - **pmtiles CLI** at `~/.local/bin/pmtiles` for inspecting archives.
 - Docker is not needed with Planetiler.
 - **Node v24.21.0 (LTS, npm 11.19.0)** installed in WSL via nvm 0.40.7 and set as the default (`lts/*`). Pin the version in `.nvmrc` once `web/` is scaffolded. Note: a Windows Node install exists at `/mnt/d/Program Files/nodejs/`; make sure WSL shells use the nvm one.
