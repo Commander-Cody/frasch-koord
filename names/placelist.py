@@ -221,7 +221,7 @@ def parse_point(lat: str | None, lon: str | None, where: str = ""):
         flat, flon = float(lat), float(lon)
     except ValueError:
         raise SystemExit(f"{where}: lat/lon {lat!r}/{lon!r} are not numbers "
-                         f"(decimal degrees, e.g. 54.65097 / 8.34019)")
+                         f"(decimal degrees, e.g. 54.65097 / 8.34019)") from None
     if not (-90 <= flat <= 90 and -180 <= flon <= 180):
         raise SystemExit(f"{where}: lat/lon {flat}/{flon} out of range")
     return flon, flat

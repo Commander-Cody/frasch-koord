@@ -330,7 +330,8 @@ def load_curation(path, required=False):
                     km2 = float(km2)
                     assert km2 > 0
                 except (ValueError, AssertionError):
-                    raise SystemExit(f"{path}:{n}: polygon_km2 {km2!r} is not a positive number")
+                    raise SystemExit(f"{path}:{n}: polygon_km2 {km2!r} is not a "
+                                     f"positive number") from None
                 if len(refs) != 1 or refs[0][0] not in ("n", placelist.LOCAL_TYPE):
                     raise SystemExit(f"{where}: polygon_km2 needs exactly one node "
                                      f"(or local reference) in `osm`")
@@ -781,7 +782,7 @@ def run(inp, out, names_csv, dialects_csv, areas_geojson, dry_run=False,
             print("  (none -- no tagged object lies in a dialect area)")
     if inj.added_points:
         print(f"\nadded {len(inj.added_points)} node(s) for places that are not in OSM:")
-        for nid, key, label, lon, lat, tags in inj.added_points:
+        for nid, key, _label, lon, lat, tags in inj.added_points:
             print(f"  node/{nid}  {placelist.format_osm([key])} "
                   f"{placelist.describe(by_id[key][0])} at {lat:.5f}, {lon:.5f}: "
                   + ", ".join(f"{a}={b}" for a, b in sorted(tags.items())

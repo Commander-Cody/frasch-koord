@@ -186,7 +186,7 @@ class AreaIndex:
             from shapely.geometry import shape
         except ImportError:                      # pragma: no cover
             raise SystemExit("shapely is needed for the dialect areas "
-                             "(.venv/bin/pip install shapely)")
+                             "(run `uv sync` in the repo root)") from None
         with open(path, encoding="utf-8") as fh:
             fc = json.load(fh)
         polygons = []

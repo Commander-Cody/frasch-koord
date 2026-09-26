@@ -56,7 +56,7 @@ import unicodedata
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import placelist  # noqa: E402
-from placelist import any_name, format_osm, label, local_ref, parse_osm, primary, variants  # noqa: E402
+from placelist import any_name, format_osm, local_ref, parse_osm, primary, variants  # noqa: E402
 
 CSV_PATH = placelist.DEFAULT_PATH
 CAND_PATH = os.path.join(HERE, "work", "candidates.jsonl")
@@ -168,7 +168,6 @@ def kind_ok(kind, tags, cls):
     bnd = tags.get("boundary")
     lvl = tags.get("admin_level")
     lu = tags.get("landuse")
-    name_l = (tags.get("name") or "").lower()
 
     if kind == "settlement":
         if place in SETTLEMENT_PLACES:

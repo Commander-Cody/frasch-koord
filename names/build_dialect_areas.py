@@ -340,7 +340,7 @@ def main(argv=None):
         from shapely.geometry import mapping
         from shapely.ops import unary_union
     except ImportError:
-        raise SystemExit("shapely is needed (.venv/bin/pip install shapely)")
+        raise SystemExit("shapely is needed (run `uv sync` in the repo root)") from None
 
     reg = dialects.read(a.registry)
     by_ref, labels, rows = read_areas(a.areas, reg)
