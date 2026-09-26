@@ -690,14 +690,12 @@ def match_row(row, index: Index, hints: HintResolver, claimed=None):
         rec = dict(rec)
         rec["rank"] = best_rank[key]
         cands.append(rec)
-    taken = [osm_key(c) for c in cands if osm_key(c) in claimed]
+    taken = [c for c in cands if osm_key(c) in claimed]
     cands = [c for c in cands if osm_key(c) not in claimed]
     if not cands:
         out["status"] = "not_found"
         if taken:
-            out["note"] = _addnote(row, "; ".join(
-                f"{format_osm([key])} is taken by line {claimed[key]}"
-                for key in taken))
+            out["note"] = _addnote(row, taken_note(taken, claimed))
         return out
 
     plaus_all = [c for c in cands if kind_ok(kind, c["tags"], c["cls"])]
@@ -736,6 +734,16 @@ def match_row(row, index: Index, hints: HintResolver, claimed=None):
                                         f"'{row['hint']}' matched no cluster")
         else:
             out["note"] = _addnote(row, f"{len(clusters)} plausible candidates")
+        return out
+
+    held = [c for c in taken if kind_ok(kind, c["tags"], c["cls"])
+            and len(cluster(winner["members"] + [c])) == 1]
+    if held:
+        # another row holds part of this very feature (a piece of the same
+        # river): the rest is not free for a second name
+        out["status"] = "not_found"
+        out["candidates"] = fmt_cands(plaus_all)
+        out["note"] = _addnote(row, taken_note(held, claimed))
         return out
 
     best = max(winner["members"],
@@ -798,6 +806,12 @@ def owned_by_matcher(row):
     if row["status"] == "auto":
         return True
     return not row["osm"] and not row["wikidata"]
+
+
+def taken_note(recs, claimed):
+    """`way/1 is taken by line 7; ...` for the candidates other rows hold."""
+    return "; ".join(f"{format_osm([osm_key(c)])} is taken by line "
+                     f"{claimed[osm_key(c)]}" for c in recs)
 
 
 def claimed_objects(rows):

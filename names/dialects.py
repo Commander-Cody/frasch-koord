@@ -88,7 +88,8 @@ def read(path: str = DEFAULT_PATH) -> list[dict]:
         what = placelist.csv_header_problem(reader.fieldnames or [], FIELDS)
         if what:
             raise SystemExit(f"{path}: {what}")
-        for n, row in enumerate(reader, start=2):
+        for row in reader:
+            n = reader.line_num
             row = {k: (v or "").strip() for k, v in row.items() if k}
             if not row["tag"]:
                 continue                       # blank spacer line

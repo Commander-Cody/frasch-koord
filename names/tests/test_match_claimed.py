@@ -43,3 +43,18 @@ def test_a_skipped_row_does_not_claim_its_object(world):
                "osm": "way/28330569", "status": "skip"}
     _, row = run_match(world, [skipped, LUNGEDIK], [LANGERDEICH])
     assert (row["osm"], row["status"]) == ("way/28330569", "auto")
+
+
+def test_the_rest_of_a_river_a_human_gave_in_part_to_another_row_is_not_matched(world):
+    # The Arlau is split into several ways.  A checked row holding one of
+    # them names the river already; handing this row the other pieces would
+    # label one river with two names.
+    pieces = [cand("w", i, 9.0, 54.6 + 0.01 * i, name="Arlau", waterway="river")
+              for i in (44051131, 44051132, 44051133)]
+    checked = {"kind": "water", "mooring": "Arlou", "de": "Arlau",
+               "osm": "way/44051131", "status": "ok"}
+    second = {"kind": "water", "mooring": "Äarlou", "de": "Arlau"}
+    _, row = run_match(world, [checked, second], pieces)
+    assert (row["osm"], row["status"]) == ("", "")
+    matches = (world / "work" / "matches.csv").read_text(encoding="utf-8")
+    assert "way/44051131 is taken by line 2" in matches

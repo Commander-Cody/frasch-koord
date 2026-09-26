@@ -22,3 +22,12 @@ def test_refuses_a_semicolon_separated_list_with_a_clear_message(tmp_path):
     path.write_text(places_text([TOFTUM]).replace(",", ";"), encoding="utf-8")
     with pytest.raises(SystemExit, match="separated by `;`"):
         placelist.read(str(path))
+
+
+def test_line_numbers_are_those_of_the_file_after_a_blank_line(tmp_path):
+    # REPORT.md, curate.py and check.py all point editors at `_line`.
+    head, first, second, _ = places_text([TOFTUM, {**TOFTUM, "mooring": "Taftem"}]).split("\n")
+    path = tmp_path / "places.csv"
+    path.write_text("\n".join([head, first, "", second]) + "\n", encoding="utf-8")
+    rows, _ = placelist.read(str(path))
+    assert [r["_line"] for r in rows] == [2, 4]

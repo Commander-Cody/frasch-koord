@@ -283,3 +283,30 @@ def test_lat_lon_columns_left_in_the_name_list_are_reported(names):
     problems = names(text)
     assert lines(problems) == [1]
     assert "curation.csv" in problems[0].message
+
+
+@pytest.mark.parametrize("row", [
+    "local/huelltoft,Hülltoft,54.881287,8.771304,,,,\n",      # a comma too few
+    "local/huelltoft,Hülltoft,54.881287,8.771304,,,,,,\n",    # a comma too many
+])
+def test_a_curation_row_with_the_wrong_number_of_cells_is_reported(names, row):
+    # Its columns shift: a zoom lands in `set_tags`, a position in `name`.
+    problems = names(places_text([HUELLTOFT]), CURATION_HEADER + row)
+    assert ("curation.csv", 2) in [(os.path.basename(p.path), p.line) for p in problems]
+    assert any("cells" in p.message for p in problems)
+
+
+def test_a_dialect_row_with_the_wrong_number_of_cells_is_reported(names):
+    problems = names(places_text([TOFTUM]),
+                     dialects=REGISTRY + "frr-x-mooring,mooring,Mooring,living,yes\n")
+    assert [(os.path.basename(p.path), p.line) for p in problems] == [("dialects.csv", 2)]
+    assert "cells" in problems[0].message
+
+
+def test_a_blank_line_is_no_problem_and_keeps_the_line_numbers(names):
+    # The reader skips it, so the check does too; the rows after it are
+    # still reported at the line an editor sees them on.
+    head, first, second, _ = places_text([TOFTUM, {**NIEBUELL, "kind": "town"}]).split("\n")
+    problems = names("\n".join([head, first, "", second]) + "\n")
+    assert lines(problems) == [4]
+    assert "town" in problems[0].message

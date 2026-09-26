@@ -290,12 +290,20 @@ def curation_rows(path: str = CURATION_PATH):
     entries, problems = [], []
     polygons, positioned = set(), set()
     with open_csv(path) as fh:
-        reader = csv.DictReader(fh)
-        what = csv_header_problem(reader.fieldnames or [], ["osm"])
+        reader = csv.reader(fh)
+        header = next(reader, [])
+        what = csv_header_problem(header, ["osm"])
         if what:
             return entries, [(1, what)]
-        for n, row in enumerate(reader, start=2):
-            row = {k: (v or "").strip() for k, v in row.items() if k}
+        for cells in reader:
+            n = reader.line_num
+            if not cells:
+                continue                          # a blank line
+            what = cell_count_problem(cells, header)
+            if what:
+                problems.append((n, what))        # its columns cannot be trusted
+                continue
+            row = {k: v.strip() for k, v in zip(header, cells, strict=True)}
             try:
                 refs = parse_osm(row.get("osm"))
                 pos = parse_point(row.get("lat"), row.get("lon"))
@@ -383,6 +391,15 @@ def csv_header_problem(fields, required) -> str | None:
     return None
 
 
+def cell_count_problem(cells, header) -> str | None:
+    """A row whose cells do not line up with the header's columns: a comma
+    too many or too few, and every cell after it is in the wrong column."""
+    if len(cells) != len(header):
+        return (f"{len(cells)} cells, the header has {len(header)} "
+                f"(a comma too many or too few?)")
+    return None
+
+
 def header_problem(fields) -> str | None:
     """What is wrong with the header of the name list, or None."""
     if "lat" in fields or "lon" in fields:
@@ -430,7 +447,8 @@ def read(path: str = DEFAULT_PATH):
         if what:
             raise SystemExit(f"{path}: {what}")
         rows = []
-        for n, row in enumerate(reader, start=2):
+        for row in reader:
+            n = reader.line_num                  # blank lines count too
             if None in row:                      # more cells than columns
                 raise SystemExit(f"{path}:{n}: row has more cells than the header "
                                  f"(a stray comma?): {row[None]}")

@@ -75,10 +75,14 @@ def cell_problem(cell: str) -> str | None:
 
 
 def _rows(path):
-    """-> (header, the other rows) of a CSV file, as lists of cells."""
+    """-> (header, [(line, cells), ...]) of a CSV file.  Blank lines are left
+    out, as the readers skip them, but still counted: `line` is the line an
+    editor sees the row on, as in placelist.read's `_line`."""
     with placelist.open_csv(path) as fh:
-        rows = list(csv.reader(fh))
-    return (rows[0] if rows else []), rows[1:]
+        reader = csv.reader(fh)
+        header = next(reader, [])
+        rows = [(reader.line_num, cells) for cells in reader if cells]
+    return header, rows
 
 
 def check_curation(path) -> tuple[list[Problem], set[str]]:
@@ -92,13 +96,15 @@ def check_curation(path) -> tuple[list[Problem], set[str]]:
 
 def check_dialects(path) -> list[Problem]:
     """The problems in the dialect registry, names/dialects.csv."""
-    header, reader = _rows(path)
+    header, rows = _rows(path)
     if (what := placelist.csv_header_problem(header, dialects.FIELDS)):
         return [Problem(path, 1, what)]
     problems, seen_tags, seen_cols = [], set(), set()
-    for n, cells in enumerate(reader, start=2):
-        row = dict.fromkeys(dialects.FIELDS, "") | {
-            k: v.strip() for k, v in zip(header, cells, strict=False)}
+    for n, cells in rows:
+        if (what := placelist.cell_count_problem(cells, header)):
+            problems.append(Problem(path, n, what))
+            continue
+        row = {k: v.strip() for k, v in zip(header, cells, strict=True)}
         if not row["tag"]:
             continue                                  # blank spacer line
         what = dialects.row_problem(row, seen_tags, seen_cols)
@@ -112,21 +118,17 @@ def check_dialects(path) -> list[Problem]:
 def check_places(path, curation, positioned) -> list[Problem]:
     """The problems in the name list; `positioned` are the local references
     `curation` has a position for."""
-    header, reader = _rows(path)
+    header, rows = _rows(path)
     if (what := placelist.header_problem(header)):
         return [Problem(path, 1, what)]   # without its columns no row can be read
     problems = []
     claimed = {}              # `way/1` or `Q1` -> line of the first row
-    # numbered like placelist.read's `_line`, which REPORT.md and curate use
-    for n, cells in enumerate(reader, start=2):
+    for n, cells in rows:
         def problem(message, n=n):
             problems.append(Problem(path, n, message))
 
-        if len(cells) != len(header):
-            # the columns of such a row cannot be trusted, so nothing else
-            # in it is worth checking
-            problem(f"{len(cells)} cells, the header has {len(header)} "
-                    f"(a comma too many or too few?)")
+        if (what := placelist.cell_count_problem(cells, header)):
+            problem(what)   # its columns cannot be trusted, nothing else is
             continue
         row = {k: v.strip() for k, v in zip(header, cells, strict=True)}
         for what in placelist.row_problems(row):
