@@ -24,10 +24,17 @@ What gets written where
   names/curation.csv       apply: one appended row per `local` decision (a
                            place OSM does not have -- it needs a position).
   names/work/curate-patch.jsonl
-                           apply: renamed to `<stamp>.applied.jsonl` when it
-                           has been read, so the next run starts empty
-                           (`--keep` leaves it alone); an entry apply refused
-                           is written back so it is not lost.
+                           apply: renamed to `<stamp>.applied.jsonl` before
+                           it is read, so that a decision the browser makes
+                           meanwhile starts a fresh patch (`--keep` leaves it
+                           alone); an entry apply refused is appended back so
+                           it is not lost.  If apply fails, the patch is put
+                           back.
+
+Apply checks everything first and then writes curation.csv and places.csv, each
+in one step and only if it did not change on disk meanwhile; when the second
+write fails, the first is undone, so a failed apply changes neither file.
+names/work/.lock keeps it from running at the same time as match.py.
 
 The export never builds match.py's full candidate index (180k records, most of
 a gigabyte): it streams names/work/candidates.jsonl once and keeps only the
@@ -41,6 +48,7 @@ from __future__ import annotations
 import argparse
 import collections
 import csv
+import io
 import json
 import os
 import re
@@ -258,12 +266,14 @@ def cmd_export(args):
 
 
 # ------------------------------------------------------------------ apply ---
+def patch_key(entry):
+    """What makes two patch entries decisions about the same row."""
+    return (entry.get("line"), entry.get("kind"), entry.get("name"), entry.get("de"))
+
+
 def read_patch(path):
     """-> the last entry per row, in line order.  The browser appends, never
     rewrites, so a row decided twice simply has two lines; `clear` withdraws."""
-    if not os.path.exists(path):
-        raise SystemExit(f"{path} not found -- decide some rows in the browser "
-                         f"first (web/, `?curate`)")
     last = {}
     with open(path, encoding="utf-8") as fh:
         for n, line in enumerate(fh, start=1):
@@ -276,7 +286,7 @@ def read_patch(path):
                 print(f"{path}:{n}: not JSON ({exc}) -- ignored", file=sys.stderr)
                 continue
             e["_patch_line"] = n
-            last[(e.get("line"), e.get("kind"), e.get("name"), e.get("de"))] = e
+            last[patch_key(e)] = e
     return sorted(last.values(), key=lambda e: (e.get("line") or 0, e["_patch_line"]))
 
 
@@ -312,173 +322,285 @@ def fmt_deg(v):
 
 
 def cmd_apply(args):
-    entries = read_patch(args.patch)
+    with placelist.lock(args.names):
+        return _apply(args)
+
+
+def _apply(args):
+    # Everything that can refuse the whole run is checked before the patch is
+    # touched: the name list, and curation.csv (read once, kept as bytes, so
+    # the rows appended to it land after exactly what was checked).
     rows, fields = placelist.read(args.names)
     by_line = {r["_line"]: r for r in rows}
     used_slugs = set(placelist.local_points(args.curation))
+    cur_data, cur_fields = read_curation(args.curation)
+    cur_digest = placelist.digest(cur_data) if cur_data is not None else placelist.MISSING
     for r in rows:
         slug = placelist.local_ref(r["osm"])
         if slug:
             used_slugs.add(slug)
 
-    applied, refused, new_curation = 0, 0, []
-
-    kept_back = []                       # refused entries survive the rename
-
-    def refuse(entry, why):
-        nonlocal refused
-        refused += 1
-        kept_back.append(entry)
-        print(f"  refused patch line {entry['_patch_line']} "
-              f"({entry.get('name')} / {entry.get('de')}): {why}")
-
-    for e in entries:
-        action = e.get("action")
-        if action == "clear":
-            continue                     # withdrawn in the browser
-        if action not in ACTIONS:
-            refuse(e, f"unknown action {action!r}")
-            continue
-        row = find_row(e, rows, by_line)
-        if row is None:
-            refuse(e, f"no row at line {e.get('line')} with this kind/name/de "
-                      f"(re-run names/curate.py export)")
-            continue
-        where = f"{args.names}:{row['_line']}"
-        if not match.owned_by_matcher(row):
-            refuse(e, f"{where} is not the matcher's to fill "
-                      f"(status={row['status'] or 'empty'}, osm={row['osm'] or '-'})")
-            continue
-
-        if action == "skip":
-            print(f"  {where} {placelist.describe(row)}: status = skip")
-            row["status"] = "skip"
-        elif action == "osm":
-            try:
-                refs = placelist.parse_osm(e.get("osm"), where)
-            except SystemExit as exc:
-                refuse(e, str(exc))
-                continue
-            if not refs:
-                refuse(e, "action=osm without an `osm` reference")
-                continue
-            if any(t == placelist.LOCAL_TYPE for t, _ in refs):
-                refuse(e, "a local reference is action=local, not action=osm")
-                continue
-            qid = (e.get("wikidata") or "").strip()
-            if qid and not re.fullmatch(r"Q\d+", qid):
-                refuse(e, f"bad wikidata id {qid!r}")
-                continue
-            row["osm"] = placelist.format_osm(refs)
-            if qid:
-                row["wikidata"] = qid
-            row["status"] = "ok"
-            print(f"  {where} {placelist.describe(row)}: osm = {row['osm']}"
-                  + (f", wikidata = {qid}" if qid else "") + ", status = ok")
-        else:                            # local: a place OSM does not have
-            slug = (e.get("slug") or "").strip()
-            if not SLUG.fullmatch(slug):
-                refuse(e, f"bad slug {slug!r} (lowercase letters, digits, hyphens)")
-                continue
-            if slug in used_slugs:
-                refuse(e, f"local/{slug} is already taken")
-                continue
-            try:
-                pos = placelist.parse_point(str(e.get("lat", "")),
-                                            str(e.get("lon", "")),
-                                            f"patch line {e['_patch_line']}")
-            except SystemExit as exc:
-                refuse(e, str(exc))
-                continue
-            if pos is None:
-                refuse(e, "action=local needs `lat` and `lon`")
-                continue
-            km2 = e.get("polygon_km2")
-            if km2 is not None:
-                try:
-                    km2 = float(km2)
-                except (TypeError, ValueError):
-                    refuse(e, f"polygon_km2 {km2!r} is not a number")
-                    continue
-                if km2 <= 0:
-                    refuse(e, f"polygon_km2 {km2} must be positive")
-                    continue
-            lon, lat = pos
-            row["osm"] = f"local/{slug}"
-            row["wikidata"] = ""
-            row["status"] = "ok"
-            used_slugs.add(slug)
-            cur = {c: "" for c in CURATION_COLUMNS}
-            cur.update(osm=row["osm"], name=curation_name(row),
-                       lat=fmt_deg(lat), lon=fmt_deg(lon),
-                       note=(e.get("note") or "").strip())
-            if km2 is not None:
-                # the README's Koog route: no labelled node, only a square of
-                # that area -- and OpenMapTiles labels a polygon only as island
-                cur.update(polygon_km2=f"{km2:g}", set_tags="place=island")
-            new_curation.append(cur)
-            print(f"  {where} {placelist.describe(row)}: osm = {row['osm']}, "
-                  f"status = ok; {args.curation} += {cur['lat']}/{cur['lon']}"
-                  + (f", polygon_km2 = {cur['polygon_km2']}" if km2 is not None else ""))
-            if km2 is None and row["kind"] not in POINT_KINDS:
-                print(f"    warning: kind={row['kind']} has no default `place=` "
-                      f"in tiles/inject_names.py -- put one into the curation "
-                      f"row's `set_tags` before the next build")
-        applied += 1
-
-    if args.dry_run:
-        print(f"dry run: {applied} row(s) would change, "
-              f"{len(new_curation)} curation row(s) would be appended, "
-              f"{refused} refused -- nothing written")
-        return 1 if refused else 0
-
-    if applied:
-        placelist.write(rows, args.names, fields)
-        if new_curation:
-            append_curation(args.curation, new_curation)
-    if not args.keep:
+    if not os.path.exists(args.patch):
+        raise SystemExit(f"{args.patch} not found -- decide some rows in the "
+                         f"browser first (web/, `?curate`)")
+    snapshot = None
+    if args.dry_run or args.keep:
+        source = args.patch
+    else:
+        # Take the patch out of the browser's way first, then read it: the dev
+        # server appends with O_APPEND, so a decision made from now on starts
+        # a fresh patch file instead of landing in one that is being archived.
         stamp = time.strftime("%Y%m%d-%H%M%S")
         root, ext = os.path.splitext(args.patch)
-        done = f"{root}.{stamp}.applied{ext}"
-        os.rename(args.patch, done)
-        print(f"patch applied, moved to {done}")
+        snapshot = source = f"{root}.{stamp}.applied{ext}"
+        os.rename(args.patch, snapshot)
+
+    cur_written = None                   # digest of the curation.csv apply wrote
+    try:
+        entries = read_patch(source)
+        applied, refused, new_curation = 0, 0, []
+        kept_back = []                   # refused entries survive the archiving
+
+        def refuse(entry, why):
+            nonlocal refused
+            refused += 1
+            kept_back.append(entry)
+            print(f"  refused patch line {entry['_patch_line']} "
+                  f"({entry.get('name')} / {entry.get('de')}): {why}")
+
+        for e in entries:
+            action = e.get("action")
+            if action == "clear":
+                continue                     # withdrawn in the browser
+            if action not in ACTIONS:
+                refuse(e, f"unknown action {action!r}")
+                continue
+            row = find_row(e, rows, by_line)
+            if row is None:
+                refuse(e, f"no row at line {e.get('line')} with this kind/name/de "
+                          f"(re-run names/curate.py export)")
+                continue
+            where = f"{args.names}:{row['_line']}"
+            if not match.owned_by_matcher(row):
+                refuse(e, f"{where} is not the matcher's to fill "
+                          f"(status={row['status'] or 'empty'}, osm={row['osm'] or '-'})")
+                continue
+
+            if action == "skip":
+                print(f"  {where} {placelist.describe(row)}: status = skip")
+                row["status"] = "skip"
+            elif action == "osm":
+                try:
+                    refs = placelist.parse_osm(e.get("osm"), where)
+                except SystemExit as exc:
+                    refuse(e, str(exc))
+                    continue
+                if not refs:
+                    refuse(e, "action=osm without an `osm` reference")
+                    continue
+                if any(t == placelist.LOCAL_TYPE for t, _ in refs):
+                    refuse(e, "a local reference is action=local, not action=osm")
+                    continue
+                qid = (e.get("wikidata") or "").strip()
+                if qid and not re.fullmatch(r"Q\d+", qid):
+                    refuse(e, f"bad wikidata id {qid!r}")
+                    continue
+                row["osm"] = placelist.format_osm(refs)
+                if qid:
+                    row["wikidata"] = qid
+                row["status"] = "ok"
+                print(f"  {where} {placelist.describe(row)}: osm = {row['osm']}"
+                      + (f", wikidata = {qid}" if qid else "") + ", status = ok")
+            else:                            # local: a place OSM does not have
+                slug = (e.get("slug") or "").strip()
+                if not SLUG.fullmatch(slug):
+                    refuse(e, f"bad slug {slug!r} (lowercase letters, digits, hyphens)")
+                    continue
+                if slug in used_slugs:
+                    refuse(e, f"local/{slug} is already taken")
+                    continue
+                try:
+                    pos = placelist.parse_point(str(e.get("lat", "")),
+                                                str(e.get("lon", "")),
+                                                f"patch line {e['_patch_line']}")
+                except SystemExit as exc:
+                    refuse(e, str(exc))
+                    continue
+                if pos is None:
+                    refuse(e, "action=local needs `lat` and `lon`")
+                    continue
+                km2 = e.get("polygon_km2")
+                if km2 is not None:
+                    try:
+                        km2 = float(km2)
+                    except (TypeError, ValueError):
+                        refuse(e, f"polygon_km2 {km2!r} is not a number")
+                        continue
+                    if km2 <= 0:
+                        refuse(e, f"polygon_km2 {km2} must be positive")
+                        continue
+                lon, lat = pos
+                row["osm"] = f"local/{slug}"
+                row["wikidata"] = ""
+                row["status"] = "ok"
+                used_slugs.add(slug)
+                cur = {c: "" for c in CURATION_COLUMNS}
+                cur.update(osm=row["osm"], name=curation_name(row),
+                           lat=fmt_deg(lat), lon=fmt_deg(lon),
+                           note=(e.get("note") or "").strip())
+                if km2 is not None:
+                    # the README's Koog route: no labelled node, only a square of
+                    # that area -- and OpenMapTiles labels a polygon only as island
+                    cur.update(polygon_km2=f"{km2:g}", set_tags="place=island")
+                new_curation.append(cur)
+                print(f"  {where} {placelist.describe(row)}: osm = {row['osm']}, "
+                      f"status = ok; {args.curation} += {cur['lat']}/{cur['lon']}"
+                      + (f", polygon_km2 = {cur['polygon_km2']}" if km2 is not None else ""))
+                if km2 is None and row["kind"] not in POINT_KINDS:
+                    print(f"    warning: kind={row['kind']} has no default `place=` "
+                          f"in tiles/inject_names.py -- put one into the curation "
+                          f"row's `set_tags` before the next build")
+            applied += 1
+
+        if args.dry_run:
+            print(f"dry run: {applied} row(s) would change, "
+                  f"{len(new_curation)} curation row(s) would be appended, "
+                  f"{refused} refused -- nothing written")
+            return 1 if refused else 0
+
+        if applied:
+            # curation.csv first, places.csv last: when the places.csv write
+            # fails (a spreadsheet saved it meanwhile, say), the curation rows
+            # come out again, so a `local/<slug>` row never lands without its
+            # position and a failed apply leaves both files as they were
+            if new_curation:
+                cur_text = curation_text(cur_data, cur_fields, new_curation)
+                placelist.atomic_write(args.curation, cur_text, expect=cur_digest)
+                cur_written = placelist.digest(cur_text)
+            placelist.write(rows, args.names, fields)
+    except BaseException:
+        if cur_written:
+            unwrite_curation(args.curation, cur_data, cur_written,
+                             [c["osm"] for c in new_curation])
+        if snapshot:
+            restore_patch(snapshot, args.patch)
+            print(f"nothing applied -- {args.patch} restored", file=sys.stderr)
+        raise
+
+    if snapshot:
+        print(f"patch applied, moved to {snapshot}")
         if kept_back:
-            # a refused decision is not lost: it stays in a fresh patch file
-            # (and so stays "done" in the browser) until fixed or cleared
-            with open(args.patch, "w", encoding="utf-8") as fh:
-                for e in kept_back:
-                    fh.write(json.dumps({k: v for k, v in e.items()
-                                         if k != "_patch_line"},
-                                        ensure_ascii=False) + "\n")
-            print(f"{len(kept_back)} refused entr{'y' if len(kept_back) == 1 else 'ies'} "
-                  f"kept in {args.patch}")
+            # a refused decision is not lost: it goes back into the patch (and
+            # so stays "done" in the browser) until fixed or cleared
+            n = append_back(args.patch, kept_back)
+            print(f"{n} refused entr{'y' if n == 1 else 'ies'} kept in {args.patch}"
+                  + (f" ({len(kept_back) - n} decided again in the browser meanwhile)"
+                     if n < len(kept_back) else ""))
     print(f"{applied} row(s) written to {args.names}, "
           f"{len(new_curation)} appended to {args.curation}, {refused} refused")
     return 1 if refused else 0
 
 
-def append_curation(path, new_rows):
-    """Append the rows for the places OSM does not have, keeping the file's own
-    column order (it is hand-edited, so it may have gained a column)."""
-    fields = CURATION_COLUMNS
+def append_back(path, entries):
+    """Append refused entries to the live patch -- appending, never
+    rewriting, because the dev server may be appending to it too.  An entry
+    whose row has been decided again since then is dropped: the newer
+    decision wins, as it would in `read_patch`.  -> how many were appended."""
+    newer = set()
+    ends_nl = True
     if os.path.exists(path):
-        with open(path, encoding="utf-8", newline="") as fh:
-            fields = next(csv.reader(fh), None) or CURATION_COLUMNS
-        with open(path, "rb") as fh:
-            fh.seek(max(0, os.path.getsize(path) - 1))
-            ends_nl = fh.read() in (b"\n", b"")
-    else:
-        ends_nl = True
+        with open(path, encoding="utf-8") as fh:
+            text = fh.read()
+        ends_nl = not text or text.endswith("\n")
+        for line in text.splitlines():
+            try:
+                e = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(e, dict):
+                newer.add(patch_key(e))
+    lines = [json.dumps({k: v for k, v in e.items() if k != "_patch_line"},
+                        ensure_ascii=False) + "\n"
+             for e in entries if patch_key(e) not in newer]
+    if lines:
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(("" if ends_nl else "\n") + "".join(lines))
+    return len(lines)
+
+
+def restore_patch(snapshot, path):
+    """Undo taking the snapshot after a failed apply: the snapshot becomes the
+    patch again, followed by whatever the browser appended in the meantime."""
+    while True:
+        try:
+            os.link(snapshot, path)          # unlike rename, never overwrites
+            os.unlink(snapshot)
+            return
+        except FileExistsError:
+            pass
+        # the browser started a new patch: move it aside (the next pick starts
+        # yet another, hence the loop) and put its entries after the old ones
+        newer = f"{snapshot}.newer"
+        os.rename(path, newer)
+        with open(newer, "rb") as fh:
+            text = fh.read()
+        with open(snapshot, "rb") as fh:
+            old = fh.read()
+        with open(snapshot, "ab") as fh:
+            fh.write((b"" if not old or old.endswith(b"\n") else b"\n") + text)
+        os.unlink(newer)
+
+
+def read_curation(path):
+    """-> (the file's bytes or None when it does not exist, its columns).  The
+    columns are the file's own (it is hand-edited, so it may have gained one);
+    the ones apply writes must be among them."""
+    if not os.path.exists(path):
+        return None, CURATION_COLUMNS
+    with open(path, "rb") as fh:
+        data = fh.read()
+    fields = next(csv.reader(io.StringIO(data.decode("utf-8"), newline="")), None)
+    fields = fields or CURATION_COLUMNS
     missing = [c for c in CURATION_COLUMNS if c not in fields]
     if missing:
         raise SystemExit(f"{path}: missing column(s) {missing}")
-    with open(path, "a", encoding="utf-8", newline="") as fh:
-        if not ends_nl:
-            fh.write("\n")
-        w = csv.DictWriter(fh, fieldnames=fields, lineterminator="\n",
-                           extrasaction="ignore")
-        for r in new_rows:
-            w.writerow({k: r.get(k, "") for k in fields})
+    return data, fields
+
+
+def curation_text(data, fields, new_rows):
+    """The whole new curation.csv: the old bytes untouched, the rows for the
+    places OSM does not have appended in the file's column order."""
+    buf = io.StringIO(newline="")
+    w = csv.DictWriter(buf, fieldnames=fields, lineterminator="\n",
+                       extrasaction="ignore")
+    if data is None:
+        w.writeheader()
+        data = b""
+    elif data and not data.endswith(b"\n"):
+        data += b"\n"
+    for r in new_rows:
+        w.writerow({k: r.get(k, "") for k in fields})
+    return data + buf.getvalue().encode("utf-8")
+
+
+def unwrite_curation(path, old, written, refs):
+    """Undo apply's curation.csv write after the places.csv write failed: put
+    back `old` (its bytes before; None = there was no file), unless someone
+    changed the file after apply wrote it (`written`, its digest) -- then say
+    which rows to take out by hand."""
+    try:
+        if old is not None:
+            placelist.atomic_write(path, old, expect=written)
+        elif placelist.fingerprint(path) == written:
+            os.unlink(path)
+        else:
+            raise placelist.Conflict(f"{path} changed on disk meanwhile")
+    except (OSError, SystemExit) as exc:
+        print(f"error: could not take the new rows out of {path} again ({exc}) "
+              f"-- delete the rows for {', '.join(refs)} by hand before the next "
+              f"apply", file=sys.stderr)
+    else:
+        print(f"{path} put back as it was", file=sys.stderr)
 
 
 # ------------------------------------------------------------------- main ---

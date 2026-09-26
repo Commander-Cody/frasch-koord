@@ -29,7 +29,14 @@ Ranking / decision
      `ambiguous` - several plausible clusters (all candidates are listed in the
                    `candidates` column: type/id:name:place:dist_km)
      `not_found` - no name match at all
-  Countries are resolved through the Wikidata API instead of OSM.
+  Countries are resolved through the Wikidata API instead of OSM (cached in
+  names/work/wikidata-countries.json).  When a lookup fails -- or `--offline`
+  without a cached answer -- the country row keeps its cells
+  (`lookup_failed` in matches.csv) and the run exits with status 1.
+
+places.csv is written in one step (never half), and not at all if it changed
+on disk during the run; names/work/.lock keeps match.py and
+`curate.py apply` from running at the same time.
 
 Run:  .venv/bin/python names/match.py
 """
@@ -386,59 +393,99 @@ class HintResolver:
 
 
 # --------------------------------------------------------------- wikidata ----
+WD_API = "https://www.wikidata.org/w/api.php"
+# Wikimedia's User-Agent policy wants a way to reach the operator
+WD_USER_AGENT = ("frasch-maps name pipeline/0.1 (North Frisian map; "
+                 "https://github.com/Commander-Cody/frasch-koord/issues)")
+WD_COUNTRY_CLASSES = {"Q6256", "Q3624078", "Q1763527", "Q112099", "Q185441"}
+
+
+def read_wikidata_cache(cache_path=WD_CACHE):
+    """The cached lookups, `{German name: QID or ""}` (`""` = the lookup worked
+    and found no country item).  A damaged file stops the run: starting from
+    an empty cache would look like "not found" for every country offline."""
+    if not os.path.exists(cache_path):
+        return {}
+    try:
+        with open(cache_path, encoding="utf-8") as fh:
+            cache = json.load(fh)
+    except (OSError, ValueError) as exc:
+        raise SystemExit(f"{cache_path}: cannot read the Wikidata cache ({exc}) "
+                         f"-- delete the file to query Wikidata afresh") from None
+    if not (isinstance(cache, dict)
+            and all(isinstance(k, str) and isinstance(v, str)
+                    for k, v in cache.items())):
+        raise SystemExit(f"{cache_path}: not a {{name: QID}} object -- delete "
+                         f"the file to query Wikidata afresh")
+    return cache
+
+
+def _wikidata_country(session, name):
+    """The QID of the country item Wikidata finds for a German name, `""` when
+    it finds none.  Raises when the lookup itself fails -- that is not the same
+    as "no such country" and must not clear a row."""
+    r = session.get(WD_API, params={"action": "wbsearchentities", "search": name,
+                                    "language": "de", "uselang": "de",
+                                    "type": "item", "limit": 10,
+                                    "format": "json"}, timeout=30)
+    r.raise_for_status()
+    data = r.json()
+    if "error" in data or "search" not in data:
+        raise RuntimeError(f"wbsearchentities: {data.get('error') or data}")
+    hits = [h["id"] for h in data["search"]]
+    if not hits:
+        return ""
+    r2 = session.get(WD_API, params={"action": "wbgetentities",
+                                     "ids": "|".join(hits[:10]),
+                                     "props": "claims|labels",
+                                     "languages": "de",
+                                     "format": "json"}, timeout=30)
+    r2.raise_for_status()
+    data = r2.json()
+    if "error" in data or "entities" not in data:
+        raise RuntimeError(f"wbgetentities: {data.get('error') or data}")
+    ents = data["entities"]
+    for h in hits:
+        e = ents.get(h) or {}
+        vals = set()
+        for c in e.get("claims", {}).get("P31", []):
+            try:
+                vals.add(c["mainsnak"]["datavalue"]["value"]["id"])
+            except (KeyError, TypeError):
+                pass                                 # novalue / somevalue
+        if vals & WD_COUNTRY_CLASSES:
+            return h
+    return ""
+
+
 def wikidata_countries(names, cache_path=WD_CACHE, offline=False):
-    """German country name -> QID, via wbsearchentities + wbgetentities."""
-    cache = {}
-    if os.path.exists(cache_path):
-        try:
-            cache = json.load(open(cache_path, encoding="utf-8"))
-        except Exception:
-            cache = {}
-    todo = [n for n in names if n and n not in cache]
-    if todo and not offline:
+    """German country name -> QID, via wbsearchentities + wbgetentities.
+
+    -> (qids, failed): `qids[name]` is the QID, or `""` when Wikidata has no
+    country item of that name; a name in `failed` has no answer at all (the
+    lookup failed, or `offline` and not cached) -- its row must keep what it
+    has."""
+    cache = read_wikidata_cache(cache_path)
+    todo = [n for n in dict.fromkeys(names) if n and n not in cache]
+    failed = set()
+    if todo and offline:
+        failed.update(todo)
+    elif todo:
         import requests
         s = requests.Session()
-        s.headers["User-Agent"] = (
-            "frasch-maps name pipeline/0.1 (North Frisian map; "
-            "https://github.com/ - contact via repo owner)")
-        API = "https://www.wikidata.org/w/api.php"
-        COUNTRY_CLASSES = {"Q6256", "Q3624078", "Q1763527", "Q112099", "Q185441"}
+        s.headers["User-Agent"] = WD_USER_AGENT
         for name in todo:
-            qid = ""
             try:
-                r = s.get(API, params={"action": "wbsearchentities", "search": name,
-                                       "language": "de", "uselang": "de",
-                                       "type": "item", "limit": 10,
-                                       "format": "json"}, timeout=30)
-                hits = [h["id"] for h in r.json().get("search", [])]
-                if hits:
-                    r2 = s.get(API, params={"action": "wbgetentities",
-                                            "ids": "|".join(hits[:10]),
-                                            "props": "claims|labels",
-                                            "languages": "de",
-                                            "format": "json"}, timeout=30)
-                    ents = r2.json().get("entities", {})
-                    for h in hits:
-                        e = ents.get(h) or {}
-                        p31 = e.get("claims", {}).get("P31", [])
-                        vals = set()
-                        for c in p31:
-                            try:
-                                vals.add(c["mainsnak"]["datavalue"]["value"]["id"])
-                            except Exception:
-                                pass
-                        if vals & COUNTRY_CLASSES:
-                            qid = h
-                            break
-            except Exception as exc:                     # network trouble
+                cache[name] = _wikidata_country(s, name)
+            except Exception as exc:                 # network trouble, API error
                 print(f"  wikidata lookup failed for {name}: {exc}", file=sys.stderr)
+                failed.add(name)
                 continue
-            cache[name] = qid
-            time.sleep(0.4)                              # be polite
+            time.sleep(0.4)                          # be polite
         os.makedirs(os.path.dirname(cache_path), exist_ok=True)
-        json.dump(cache, open(cache_path, "w", encoding="utf-8"),
-                  ensure_ascii=False, indent=1, sort_keys=True)
-    return cache
+        placelist.atomic_write(cache_path, json.dumps(
+            cache, ensure_ascii=False, indent=1, sort_keys=True))
+    return cache, failed
 
 
 # ------------------------------------------------------------------ match ----
@@ -896,11 +943,18 @@ def main(argv=None):
     ap.add_argument("--report", default=REPORT_PATH)
     ap.add_argument("--offline", action="store_true",
                     help="do not call the Wikidata API (use the cache only)")
+    ap.add_argument("--wikidata-cache", default=WD_CACHE,
+                    help="country lookups already made (default: %(default)s)")
     ap.add_argument("--dry-run", action="store_true",
                     help="write the report and work/matches.csv, but leave "
                          "places.csv alone")
     args = ap.parse_args(argv)
 
+    with placelist.lock(args.names):
+        return run(args)
+
+
+def run(args):
     t0 = time.time()
     rows, fields = placelist.read(args.names)
     print(f"loaded {len(rows)} rows from {args.names}")
@@ -913,13 +967,23 @@ def main(argv=None):
 
     todo = [r for r in rows if owned_by_matcher(r) and any_name(r)]
     country_rows = [r for r in todo if r["kind"] == "country"]
-    qids = wikidata_countries([primary(r["de"]) for r in country_rows],
-                              offline=args.offline)
+    qids, wd_failed = wikidata_countries([primary(r["de"]) for r in country_rows],
+                                         cache_path=args.wikidata_cache,
+                                         offline=args.offline)
+    unresolved = []
 
     results = {}
     changed = collections.Counter()
     for r in todo:
         before = (r["osm"], r["wikidata"], r["status"])
+        if r["kind"] == "country" and primary(r["de"]) in wd_failed:
+            # no answer is not "no country": leave the row as it is
+            unresolved.append(r)
+            results[r["_line"]] = dict(
+                r, osm_type="", osm_id="", candidates="", match_tags="",
+                match_name="", lon="", lat="", status="lookup_failed",
+                note="Wikidata lookup failed -- row left unchanged")
+            continue
         if r["kind"] == "country":
             qid = qids.get(primary(r["de"]), "")
             o = dict(r, osm_type="", osm_id="", candidates="", match_tags="",
@@ -961,6 +1025,13 @@ def main(argv=None):
           f"{changed['changed']} changed"
           + (" (dry run -- not written)" if args.dry_run else ""))
     print("wrote", args.matches, "and", args.report)
+    if unresolved:
+        print(f"error: no Wikidata answer for {len(unresolved)} country row(s) "
+              + ("(--offline and not in the cache)" if args.offline
+                 else "(lookup failed, see above)")
+              + " -- left unchanged: "
+              + ", ".join(placelist.describe(r) for r in unresolved), file=sys.stderr)
+        return 1
     return 0
 
 
