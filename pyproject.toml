@@ -12,6 +12,8 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest",
+    "pytest-github-actions-annotate-failures>=0.4.2",
+    "pytest-md-report>=0.8.0",
     "ruff",
 ]
 

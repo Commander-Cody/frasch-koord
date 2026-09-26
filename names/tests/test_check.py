@@ -247,3 +247,25 @@ def test_a_damaged_dialect_row_is_reported(names, row):
 def test_a_dialect_registered_twice_is_reported(names):
     problems = names(places_text([TOFTUM]), dialects=REGISTRY + MOORING * 2)
     assert [(os.path.basename(p.path), p.line) for p in problems] == [("dialects.csv", 3)]
+
+
+def test_the_command_can_add_its_problems_to_a_markdown_summary(world):
+    # CI passes $GITHUB_STEP_SUMMARY, so a broken places.csv shows on the
+    # run's page and not only in its log.
+    places, summary = world / "places.csv", world / "summary.md"
+    places.write_text(places_text([TOFTUM, {**NIEBUELL, "kind": "town"}]), encoding="utf-8")
+    summary.write_text("earlier step\n", encoding="utf-8")
+    check.main(["--names", str(places), "--curation", str(world / "curation.csv"),
+                "--summary", str(summary)])
+    text = summary.read_text(encoding="utf-8")
+    assert text.startswith("earlier step\n")          # appended, not replaced
+    assert "places.csv:3" in text
+    assert "unknown kind 'town'" in text
+
+
+def test_a_clean_list_says_so_in_the_summary(world):
+    places, summary = world / "places.csv", world / "summary.md"
+    places.write_text(places_text([TOFTUM]), encoding="utf-8")
+    check.main(["--names", str(places), "--curation", str(world / "curation.csv"),
+                "--summary", str(summary)])
+    assert "no problems" in summary.read_text(encoding="utf-8")

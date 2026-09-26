@@ -238,15 +238,36 @@ def check(places=placelist.DEFAULT_PATH,
             + curation_problems + check_dialects(registry))
 
 
+def markdown(problems) -> str:
+    """The result as a Markdown table, for the summary page of a CI run."""
+    out = ["### names/check.py", ""]
+    if not problems:
+        return "\n".join(out + ["no problems", ""]) + "\n"
+    out += [f"{len(problems)} problem(s):", "", "| where | problem |", "|---|---|"]
+    for p in problems:
+        path = os.path.relpath(p.path)
+        if path.startswith(".."):             # not under the working directory
+            path = os.path.abspath(p.path)
+        where = f"{path}:{p.line}"
+        out.append(f"| `{where}` | {p.message.replace('|', chr(92) + '|')} |")
+    return "\n".join(out + [""]) + "\n"
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--names", default=placelist.DEFAULT_PATH)
     ap.add_argument("--curation", default=placelist.CURATION_PATH)
     ap.add_argument("--dialects", default=placelist.DIALECTS_PATH)
+    ap.add_argument("--summary", metavar="FILE",
+                    help="also append the result as Markdown to FILE "
+                         "(CI passes $GITHUB_STEP_SUMMARY)")
     a = ap.parse_args(argv)
     problems = check(a.names, a.curation, a.dialects)
     for p in problems:
         print(p)
+    if a.summary:
+        with open(a.summary, "a", encoding="utf-8") as fh:
+            fh.write(markdown(problems))
     print(f"{len(problems)} problem(s)" if problems else "no problems",
           file=sys.stderr)
     return 1 if problems else 0
