@@ -291,6 +291,12 @@ def type_bonus(kind, rec):
 
 
 # ------------------------------------------------------------------ index ----
+def osm_key(rec):
+    """A candidate record's (type, id), as `placelist.parse_osm` spells a
+    reference: `("w", 28330569)`."""
+    return rec["t"], rec["id"]
+
+
 class Index:
     def __init__(self, path):
         self.recs = []
@@ -301,7 +307,7 @@ class Index:
                 rec = json.loads(line)
                 i = len(self.recs)
                 self.recs.append(rec)
-                self.by_key[(rec["t"], rec["id"])] = rec
+                self.by_key[osm_key(rec)] = rec
                 for k, rank in NAME_FIELD_RANK.items():
                     v = rec["tags"].get(k)
                     if not v:
@@ -675,7 +681,7 @@ def match_row(row, index: Index, hints: HintResolver, claimed=None):
     best_rank, recs = {}, {}
     for q in queries:
         for rec, rank in index.lookup(q):
-            key = (rec["t"], rec["id"])
+            key = osm_key(rec)
             recs[key] = rec
             if rank < best_rank.get(key, 99):
                 best_rank[key] = rank
@@ -684,14 +690,14 @@ def match_row(row, index: Index, hints: HintResolver, claimed=None):
         rec = dict(rec)
         rec["rank"] = best_rank[key]
         cands.append(rec)
-    taken = [c for c in cands if (c["t"], c["id"]) in claimed]
-    cands = [c for c in cands if (c["t"], c["id"]) not in claimed]
+    taken = [osm_key(c) for c in cands if osm_key(c) in claimed]
+    cands = [c for c in cands if osm_key(c) not in claimed]
     if not cands:
         out["status"] = "not_found"
         if taken:
             out["note"] = _addnote(row, "; ".join(
-                f"{format_osm([(c['t'], c['id'])])} is taken by line "
-                f"{claimed[(c['t'], c['id'])]}" for c in taken))
+                f"{format_osm([key])} is taken by line {claimed[key]}"
+                for key in taken))
         return out
 
     plaus_all = [c for c in cands if kind_ok(kind, c["tags"], c["cls"])]
@@ -797,13 +803,12 @@ def owned_by_matcher(row):
 def claimed_objects(rows):
     """{(type, id): line} of the OSM objects that rows the matcher does not
     own hold (checked or hand-filled).  It never gives them to another row:
-    only one name per object can reach the map.  A `skip` row reaches no map
-    and claims nothing."""
+    only one name per object can reach the map."""
     out = {}
     for r in rows:
-        if owned_by_matcher(r) or r["status"] == "skip":
+        if owned_by_matcher(r):
             continue
-        for key in parse_osm(r["osm"]):
+        for key in placelist.claimed_refs(r):
             out.setdefault(key, r["_line"])
     return out
 
@@ -814,9 +819,7 @@ def find_duplicates(rows):
     up on the map."""
     by_obj = collections.defaultdict(list)
     for r in rows:
-        if r["status"] == "skip" or not r["osm"]:
-            continue
-        for key in parse_osm(r["osm"]):
+        for key in placelist.claimed_refs(r):
             by_obj[key].append(r)
     return {k: g for k, g in by_obj.items() if len(g) > 1}
 

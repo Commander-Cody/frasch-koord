@@ -211,3 +211,36 @@ def test_real_name_list_round_trips_byte_identical(tmp_path):
     rows, fields = placelist.read(str(copy))
     placelist.write(rows, str(copy), fields)
     assert copy.read_bytes() == before
+
+
+# ------------------------------------------------------------ parse_set_tags ---
+def test_set_tags_are_k_equals_v_pairs():
+    assert placelist.parse_set_tags("place=island;frasch:kind=island") == {
+        "place": "island", "frasch:kind": "island"}
+
+
+def test_set_tags_ignore_blanks_and_empty_pairs():
+    assert placelist.parse_set_tags(" place = island ;; ") == {"place": "island"}
+
+
+def test_set_tags_value_may_contain_an_equals_sign():
+    assert placelist.parse_set_tags("note=a=b") == {"note": "a=b"}
+
+
+def test_set_tags_value_may_be_empty():
+    assert placelist.parse_set_tags("name:de=") == {"name:de": ""}
+
+
+def test_empty_set_tags_are_no_tags():
+    assert placelist.parse_set_tags("") == {}
+    assert placelist.parse_set_tags(None) == {}
+
+
+def test_set_tags_entry_without_equals_is_refused():
+    with pytest.raises(SystemExit, match="not key=value"):
+        placelist.parse_set_tags("place=island;islet")
+
+
+def test_set_tags_entry_with_empty_key_is_refused():
+    with pytest.raises(SystemExit, match="empty key"):
+        placelist.parse_set_tags("=island")

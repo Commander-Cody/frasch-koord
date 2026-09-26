@@ -4,10 +4,8 @@ from __future__ import annotations
 import pytest
 
 import placelist
-from conftest import places_text
+from conftest import TOFTUM, places_text
 
-TOFTUM = {"kind": "settlement", "mooring": "Toftem", "de": "Toftum",
-          "osm": "node/240044107", "status": "ok"}
 
 
 def test_reads_a_list_saved_with_a_byte_order_mark(tmp_path):

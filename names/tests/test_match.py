@@ -8,31 +8,15 @@ positions and tags as in the Schleswig-Holstein / Denmark extracts of
 September 2026), trimmed to the tags the matcher reads."""
 from __future__ import annotations
 
-import json
-
 import pytest
 
 import match
 import placelist
-
-
-def cand(t, id, lon, lat, src="schleswig-holstein", **tags):
-    """One candidates.jsonl record.  Tag keys with a colon are passed with a
-    double underscore (`name__de`)."""
-    tags = {k.replace("__", ":"): v for k, v in tags.items()}
-    cls = [f"{k}={tags[k]}" for k in ("place", "natural", "boundary", "highway")
-           if k in tags]
-    if "wikidata" in tags:
-        cls.append("wikidata")
-    return {"src": src, "t": t, "id": id, "lon": lon, "lat": lat,
-            "cls": cls, "tags": tags}
+from conftest import cand, write_candidates
 
 
 def make_index(tmp_path, *recs):
-    path = tmp_path / "candidates.jsonl"
-    path.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in recs),
-                    encoding="utf-8")
-    return match.Index(str(path))
+    return match.Index(str(write_candidates(tmp_path / "candidates.jsonl", *recs)))
 
 
 def row(**cells):

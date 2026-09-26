@@ -83,11 +83,11 @@ def read(path: str = DEFAULT_PATH) -> list[dict]:
     if not os.path.exists(path):
         raise SystemExit(f"dialect registry not found: {path}")
     reg, seen_tags, seen_cols = [], set(), set()
-    with open(path, encoding="utf-8-sig", newline="") as fh:
+    with placelist.open_csv(path) as fh:
         reader = csv.DictReader(fh)
-        missing = [c for c in FIELDS if c not in (reader.fieldnames or [])]
-        if missing:
-            raise SystemExit(f"{path}: missing column(s) {missing}")
+        what = placelist.csv_header_problem(reader.fieldnames or [], FIELDS)
+        if what:
+            raise SystemExit(f"{path}: {what}")
         for n, row in enumerate(reader, start=2):
             row = {k: (v or "").strip() for k, v in row.items() if k}
             if not row["tag"]:

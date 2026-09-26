@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import io
 import os
 import re
 import sys
@@ -23,8 +22,9 @@ import dialects
 import placelist
 
 
-# the columns following the name-cell conventions (`;` variants, remarks)
-NAME_CELLS = placelist.NAME_COLUMNS + ["de", "hint", "da"]
+# the name columns: `;`-separated variants with `(…)` remarks, the
+# conventions names/README.md sets for every name cell
+VARIANT_COLUMNS = placelist.NAME_COLUMNS + ["de", "da"]
 
 
 @dataclass(frozen=True)
@@ -75,92 +75,26 @@ def cell_problem(cell: str) -> str | None:
 
 
 def _rows(path):
-    """-> (header, csv.reader over the rest) of a CSV file, as the pipeline
-    reads it (a spreadsheet's byte order mark does no harm)."""
-    with open(path, "rb") as fh:
-        reader = csv.reader(io.StringIO(placelist.decode(fh.read()), newline=""))
-    return next(reader, []), reader
-
-
-def _header_problem(path, header, required) -> Problem | None:
-    """A header that no row of the file can be read with."""
-    if placelist.semicolon_separated(header):
-        return Problem(path, 1, placelist.SEMICOLON_SEPARATED)
-    twice = sorted({c for c in header if header.count(c) > 1})
-    if twice:
-        return Problem(path, 1, f"column(s) named twice: {', '.join(twice)}")
-    missing = [c for c in required if c not in header]
-    if missing:
-        return Problem(path, 1, f"missing column(s) {', '.join(missing)}")
-    return None
-
-
-def _reason(exc: SystemExit) -> str:
-    """The message of one of placelist's errors, without its empty `where`."""
-    return str(exc).removeprefix(": ")
+    """-> (header, the other rows) of a CSV file, as lists of cells."""
+    with placelist.open_csv(path) as fh:
+        rows = list(csv.reader(fh))
+    return (rows[0] if rows else []), rows[1:]
 
 
 def check_curation(path) -> tuple[list[Problem], set[str]]:
     """-> (the problems in names/curation.csv, the slugs of the local
-    references it positions).  The rules are those tiles/inject_names.py's
-    `load_curation` enforces when it builds the tiles."""
-    header, reader = _rows(path)
-    if (bad := _header_problem(path, header, ["osm"])):
-        return [bad], set()
-    problems, positioned = [], set()
-    for n, cells in enumerate(reader, start=2):
-        def problem(message, n=n):
-            problems.append(Problem(path, n, message))
-
-        row = {k: v.strip() for k, v in zip(header, cells, strict=False)}
-        try:
-            refs = placelist.parse_osm(row.get("osm"), "osm")
-        except SystemExit as exc:
-            problem(str(exc))
-            continue
-        try:
-            pos = placelist.parse_point(row.get("lat"), row.get("lon"))
-        except SystemExit as exc:
-            problem(_reason(exc))
-            continue
-        if not refs:
-            continue                              # blank spacer line
-        local = refs[0][1] if refs[0][0] == placelist.LOCAL_TYPE else None
-        if pos and not local:
-            problem(f"lat/lon only go with a local reference (local/<slug>), "
-                    f"not with {row['osm']!r}")
-        if local and not pos:
-            problem(f"local/{local} needs `lat` and `lon`")
-        elif local and local in positioned:
-            problem(f"second row for local/{local}")
-        elif local:
-            positioned.add(local)
-        for pair in (row.get("set_tags") or "").split(";"):
-            key, eq, _ = pair.partition("=")
-            if pair.strip() and not (eq and key.strip()):
-                problem(f"set_tags entry {pair.strip()!r} is not key=value")
-        for col in ("minzoom", "maxzoom"):
-            z = row.get(col) or ""
-            if z and not z.lstrip("-").isdigit():
-                problem(f"{col} {z!r} is not an integer")
-        km2 = row.get("polygon_km2") or ""
-        if km2:
-            try:
-                if float(km2) <= 0:
-                    raise ValueError
-            except ValueError:
-                problem(f"polygon_km2 {km2!r} is not a positive number")
-            if len(refs) != 1 or refs[0][0] not in ("n", placelist.LOCAL_TYPE):
-                problem("polygon_km2 needs exactly one node (or local reference) "
-                        "in `osm`")
-    return problems, positioned
+    references it positions).  The rules are those the tile build enforces
+    (`placelist.curation_rows`)."""
+    entries, problems = placelist.curation_rows(path)
+    positioned = {e["local"] for e in entries if e["local"]}
+    return [Problem(path, n, what) for n, what in problems], positioned
 
 
 def check_dialects(path) -> list[Problem]:
     """The problems in the dialect registry, names/dialects.csv."""
     header, reader = _rows(path)
-    if (bad := _header_problem(path, header, dialects.FIELDS)):
-        return [bad]
+    if (what := placelist.csv_header_problem(header, dialects.FIELDS)):
+        return [Problem(path, 1, what)]
     problems, seen_tags, seen_cols = [], set(), set()
     for n, cells in enumerate(reader, start=2):
         row = dict.fromkeys(dialects.FIELDS, "") | {
@@ -179,8 +113,8 @@ def check_places(path, curation, positioned) -> list[Problem]:
     """The problems in the name list; `positioned` are the local references
     `curation` has a position for."""
     header, reader = _rows(path)
-    if (bad := _header_problem(path, header, placelist.COLUMNS)):
-        return [bad]                      # without its columns no row can be read
+    if (what := placelist.header_problem(header)):
+        return [Problem(path, 1, what)]   # without its columns no row can be read
     problems = []
     claimed = {}              # `way/1` or `Q1` -> line of the first row
     # numbered like placelist.read's `_line`, which REPORT.md and curate use
@@ -195,35 +129,28 @@ def check_places(path, curation, positioned) -> list[Problem]:
                     f"(a comma too many or too few?)")
             continue
         row = {k: v.strip() for k, v in zip(header, cells, strict=True)}
-        if row["kind"] not in placelist.KINDS:
-            problem(f"unknown kind {row['kind']!r}")
-        if row["status"] not in placelist.STATUSES:
-            problem(f"unknown status {row['status']!r} (auto / ok / skip / empty)")
-        for column in NAME_CELLS:
+        for what in placelist.row_problems(row):
+            problem(what)
+        for column in VARIANT_COLUMNS:
             if row[column] and (what := cell_problem(row[column])):
                 problem(f"{column}: {what}: {row[column]!r}")
-        try:
-            refs = placelist.parse_osm(row["osm"], "osm")
-        except SystemExit as exc:
-            problem(str(exc))
-            refs = []
         if _BAD_SEPARATOR.search(row["osm"]):
             problem(f"osm: references are separated by `; `: {row['osm']!r}")
-        slug = refs[0][1] if refs and refs[0][0] == placelist.LOCAL_TYPE else None
+        try:
+            slug = placelist.local_ref(row["osm"])
+            refs = placelist.claimed_refs(row)
+        except placelist.Invalid:
+            slug, refs = None, []                 # row_problems reported it
         if slug and slug not in positioned:
             problem(f"local/{slug} has no row with `lat`/`lon` in {curation}")
-        if slug and row["wikidata"]:
-            problem("a local reference is for a place OSM does not have -- "
-                    "it cannot have a wikidata id")
-        if row["wikidata"] and not re.fullmatch(r"Q\d+", row["wikidata"]):
-            problem(f"bad wikidata id {row['wikidata']!r}")
-        if row["status"] != "skip":     # a skipped row puts nothing on the map
-            keys = [placelist.format_osm([ref]) for ref in refs]
-            for key in keys + ([row["wikidata"]] if row["wikidata"] else []):
-                if key in claimed:
-                    problem(f"{key} is already claimed by line {claimed[key]} "
-                            f"-- only one name can go on the map")
-                claimed.setdefault(key, n)
+        keys = [placelist.format_osm([ref]) for ref in refs]
+        if row["wikidata"] and row["status"] != "skip":
+            keys.append(row["wikidata"])
+        for key in keys:
+            if key in claimed:
+                problem(f"{key} is already claimed by line {claimed[key]} "
+                        f"-- only one name can go on the map")
+            claimed.setdefault(key, n)
     return problems
 
 
@@ -248,8 +175,8 @@ def markdown(problems) -> str:
         path = os.path.relpath(p.path)
         if path.startswith(".."):             # not under the working directory
             path = os.path.abspath(p.path)
-        where = f"{path}:{p.line}"
-        out.append(f"| `{where}` | {p.message.replace('|', chr(92) + '|')} |")
+        message = p.message.replace("|", "\\|")
+        out.append(f"| `{path}:{p.line}` | {message} |")
     return "\n".join(out + [""]) + "\n"
 
 

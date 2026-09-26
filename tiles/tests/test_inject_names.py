@@ -1,4 +1,4 @@
-"""inject_names.py: the curation-file helpers, the tags an object gets, and a
+"""inject_names.py: reading the curation file, the tags an object gets, and a
 whole `run()` over a tiny extract written here with pyosmium.
 
 The extract mirrors real places (ids and positions from the
@@ -19,39 +19,6 @@ import pytest
 import dialects
 import inject_names
 import placelist
-
-
-# ------------------------------------------------------------ parse_set_tags ---
-def test_set_tags_are_k_equals_v_pairs():
-    assert inject_names.parse_set_tags("place=island;frasch:kind=island") == {
-        "place": "island", "frasch:kind": "island"}
-
-
-def test_set_tags_ignore_blanks_and_empty_pairs():
-    assert inject_names.parse_set_tags(" place = island ;; ") == {"place": "island"}
-
-
-def test_set_tags_value_may_contain_an_equals_sign():
-    assert inject_names.parse_set_tags("note=a=b") == {"note": "a=b"}
-
-
-def test_set_tags_value_may_be_empty():
-    assert inject_names.parse_set_tags("name:de=") == {"name:de": ""}
-
-
-def test_empty_set_tags_are_no_tags():
-    assert inject_names.parse_set_tags("") == {}
-    assert inject_names.parse_set_tags(None) == {}
-
-
-def test_set_tags_entry_without_equals_is_refused():
-    with pytest.raises(SystemExit, match="not k=v"):
-        inject_names.parse_set_tags("place=island;islet")
-
-
-def test_set_tags_entry_with_empty_key_is_refused():
-    with pytest.raises(SystemExit, match="empty key"):
-        inject_names.parse_set_tags("=island")
 
 
 # ------------------------------------------------------------- square_around ---

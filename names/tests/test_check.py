@@ -7,10 +7,8 @@ import os
 import pytest
 
 import check
-from conftest import CURATION_HEADER, places_text
+from conftest import CURATION_HEADER, TOFTUM, places_text
 
-TOFTUM = {"kind": "settlement", "mooring": "Toftem", "de": "Toftum",
-          "osm": "node/240044107", "status": "ok"}
 NIEBUELL = {"kind": "settlement", "mooring": "Naibel", "de": "Niebüll",
             "osm": "node/240042766", "wikidata": "Q21003", "status": "ok"}
 
@@ -269,3 +267,19 @@ def test_a_clean_list_says_so_in_the_summary(world):
     check.main(["--names", str(places), "--curation", str(world / "curation.csv"),
                 "--summary", str(summary)])
     assert "no problems" in summary.read_text(encoding="utf-8")
+
+
+def test_a_second_polygon_for_one_node_is_reported(names):
+    # The tile build refuses it, so the check must too.
+    row = "node/85929111,Nordstrand,,,place=island,,,50,\n"
+    problems = names(places_text([TOFTUM]), CURATION_HEADER + row * 2)
+    assert [(os.path.basename(p.path), p.line) for p in problems] == [("curation.csv", 3)]
+
+
+def test_lat_lon_columns_left_in_the_name_list_are_reported(names):
+    # They moved to curation.csv; placelist.read refuses a list that has them.
+    head, *rest = places_text([TOFTUM]).split("\n")
+    text = "\n".join([head + ",lat,lon"] + [r + ",," for r in rest if r]) + "\n"
+    problems = names(text)
+    assert lines(problems) == [1]
+    assert "curation.csv" in problems[0].message

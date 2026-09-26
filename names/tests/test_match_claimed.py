@@ -3,25 +3,19 @@ another row (#26, M4).  That is how two names came to claim way/28330569
 and three other objects, of which only one can reach the map."""
 from __future__ import annotations
 
-import json
-
 import placelist
 import match
-from conftest import places_text
+from conftest import cand, places_text, write_candidates
 
-LANGERDEICH = {"src": "schleswig-holstein", "t": "w", "id": 28330569,
-               "lon": 8.865771, "lat": 54.471785,
-               "cls": ["man_made=dyke", "highway=residential"],
-               "tags": {"man_made": "dyke", "highway": "residential",
-                        "name": "Langerdeich"}}
+LANGERDEICH = cand("w", 28330569, 8.865771, 54.471785, man_made="dyke",
+                   highway="residential", name="Langerdeich")
 LUNGEDIK = {"kind": "warft", "mooring": "Lungedik", "de": "Langerdeich"}
 
 
 def run_match(world, rows, candidates):
     places = world / "places.csv"
     places.write_text(places_text(rows), encoding="utf-8")
-    (world / "work" / "candidates.jsonl").write_text(
-        "".join(json.dumps(c) + "\n" for c in candidates), encoding="utf-8")
+    write_candidates(world / "work" / "candidates.jsonl", *candidates)
     code = match.main(["--names", str(places),
                        "--candidates", str(world / "work" / "candidates.jsonl"),
                        "--matches", str(world / "work" / "matches.csv"),

@@ -100,7 +100,7 @@ def read_areas(path, reg):
         raise SystemExit(f"dialect area list not found: {path}")
     known = set(dialects.tags(reg))
     by_ref, labels, rows = {}, {}, []
-    with open(path, encoding="utf-8-sig", newline="") as fh:
+    with placelist.open_csv(path) as fh:
         reader = csv.DictReader(fh)
         for col in ("dialect", "osm"):
             if col not in (reader.fieldnames or []):
