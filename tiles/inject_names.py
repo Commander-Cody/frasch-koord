@@ -299,7 +299,7 @@ def load_curation(path, required=False):
             raise SystemExit(f"curation file not found: {path}")
         print(f"curation  : {path} (absent -- nothing curated)")
         return by_id, synthetic, points
-    with open(path, encoding="utf-8", newline="") as fh:
+    with open(path, encoding="utf-8-sig", newline="") as fh:
         reader = csv.DictReader(fh)
         if "osm" not in (reader.fieldnames or []):
             raise SystemExit(f"{path}: needs an `osm` column (node/ID, way/ID, "

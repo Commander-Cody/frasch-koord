@@ -47,7 +47,7 @@ def _registry_columns(path: str = DIALECTS_PATH) -> list[str]:
     """The dialect columns in registry order (`mooring`, `wieding`, ...)."""
     if not os.path.exists(path):
         raise SystemExit(f"dialect registry not found: {path}")
-    with open(path, encoding="utf-8", newline="") as fh:
+    with open(path, encoding="utf-8-sig", newline="") as fh:
         cols = [(r.get("column") or "").strip() for r in csv.DictReader(fh)]
     cols = [c for c in cols if c]
     if not cols:
@@ -77,7 +77,7 @@ _SLUG = r"[a-z0-9]+(?:-[a-z0-9]+)*"
 _REMARK = re.compile(r"\(([^()]*)\)")
 
 
-def _split(cell: str | None) -> list[str]:
+def split_variants(cell: str | None) -> list[str]:
     """Split a name cell on `;` -- but not inside brackets, because a remark
     may itself list several dialects: `Huađer; Huuger (Sölring; Wisinge)` is
     two variants, not three."""
@@ -102,7 +102,7 @@ def parts(cell: str | None) -> list[tuple[str, str]]:
     The remark comes back without its brackets; several brackets on one
     variant are joined with `; `.  Variants without a name are dropped."""
     out = []
-    for part in _split(cell):
+    for part in split_variants(cell):
         remarks = [m.group(1).strip() for m in _REMARK.finditer(part)]
         name = _REMARK.sub("", part).strip().rstrip("?").strip()
         if name:
@@ -235,7 +235,7 @@ def local_points(path: str = CURATION_PATH) -> dict[str, tuple[float, float]]:
     out = {}
     if not os.path.exists(path):
         return out
-    with open(path, encoding="utf-8", newline="") as fh:
+    with open(path, encoding="utf-8-sig", newline="") as fh:
         reader = csv.DictReader(fh)
         fields = reader.fieldnames or []
         if "osm" not in fields:
@@ -260,6 +260,22 @@ def local_points(path: str = CURATION_PATH) -> dict[str, tuple[float, float]]:
     return out
 
 
+def decode(data: bytes) -> str:
+    """The text of one of the CSV files.  A spreadsheet's "CSV UTF-8" starts
+    it with a byte order mark, which would otherwise end up in the first
+    column's name."""
+    return data.decode("utf-8-sig")
+
+
+SEMICOLON_SEPARATED = ("the cells are separated by `;`, not `,` (a German-locale "
+                       "spreadsheet export?) -- save it as comma-separated CSV")
+
+
+def semicolon_separated(fields) -> bool:
+    """Does this header come from a CSV that separates its cells by `;`?"""
+    return len(fields) == 1 and ";" in fields[0]
+
+
 def read(path: str = DEFAULT_PATH):
     """-> (rows, fieldnames).  Every row gets `_line`, its physical line number
     in the file (header = 1), which is how REPORT.md refers to rows."""
@@ -268,9 +284,11 @@ def read(path: str = DEFAULT_PATH):
     # remembered so that `write` can tell whether someone else (match.py,
     # curate.py apply, a spreadsheet) wrote the file in the meantime
     _read_digests[os.path.abspath(path)] = digest(data)
-    with io.StringIO(data.decode("utf-8"), newline="") as fh:
+    with io.StringIO(decode(data), newline="") as fh:
         reader = csv.DictReader(fh)
         fields = list(reader.fieldnames or [])
+        if semicolon_separated(fields):
+            raise SystemExit(f"{path}: {SEMICOLON_SEPARATED}")
         if "lat" in fields or "lon" in fields:
             raise SystemExit(f"{path}: `lat`/`lon` moved to names/curation.csv "
                              f"(2026-09-18): reference the place as local/<slug> "
