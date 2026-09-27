@@ -1,0 +1,30 @@
+[project]
+name = "frasch-maps"
+version = "0.0.0"
+description = "North Frisian place-name map: name pipeline (names/) and tile build (tiles/)"
+requires-python = ">=3.12"
+dependencies = [
+    "osmium>=3.7",
+    "shapely>=2.0",
+    "requests",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-github-actions-annotate-failures>=0.4.2",
+    "pytest-md-report>=0.8.0",
+    "ruff",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["names/tests", "tiles/tests"]
+
+[tool.ruff]
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["F", "E9", "B"]

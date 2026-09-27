@@ -90,7 +90,6 @@ from __future__ import annotations
 
 import argparse
 import collections
-import csv
 import os
 import sys
 import time
@@ -262,23 +261,6 @@ def check_local(by_id, points, reg):
 
 
 # -------------------------------------------------------------- curation ----
-def parse_set_tags(spec):
-    """`place=island;frasch:kind=island` -> {'place': 'island', ...}."""
-    tags = {}
-    for pair in (spec or "").split(";"):
-        pair = pair.strip()
-        if not pair:
-            continue
-        if "=" not in pair:
-            raise SystemExit(f"curation: set_tags entry {pair!r} is not k=v")
-        k, v = pair.split("=", 1)
-        k, v = k.strip(), v.strip()
-        if not k:
-            raise SystemExit(f"curation: set_tags entry {pair!r} has an empty key")
-        tags[k] = v
-    return tags
-
-
 def load_curation(path, required=False):
     """-> ({('r', 1420555): {'tags': {...}, 'label': 'Nordstrand'}},
         {('n', 85929111): {'km2': 50.0, 'tags': {...}, 'label': '...'}},
@@ -299,57 +281,24 @@ def load_curation(path, required=False):
             raise SystemExit(f"curation file not found: {path}")
         print(f"curation  : {path} (absent -- nothing curated)")
         return by_id, synthetic, points
-    with open(path, encoding="utf-8", newline="") as fh:
-        reader = csv.DictReader(fh)
-        if "osm" not in (reader.fieldnames or []):
-            raise SystemExit(f"{path}: needs an `osm` column (node/ID, way/ID, "
-                             f"relation/ID; several separated by `;`; or local/slug)")
-        for n, row in enumerate(reader, start=2):
-            where = f"{path}:{n}"
-            refs = placelist.parse_osm(row.get("osm"), where)
-            pos = placelist.parse_point(row.get("lat"), row.get("lon"), where)
-            if not refs:
-                continue                      # blank spacer line
-            local = refs[0][0] == placelist.LOCAL_TYPE
-            if pos and not local:
-                raise SystemExit(f"{where}: lat/lon only go with a local reference "
-                                 f"(local/<slug>), not with {row['osm']!r}")
-            if local and not pos:
-                raise SystemExit(f"{where}: {row['osm']} needs `lat` and `lon`")
-            tags = parse_set_tags(row.get("set_tags"))
-            for col, tag in (("minzoom", MINZOOM_KEY), ("maxzoom", MAXZOOM_KEY)):
-                z = (row.get(col) or "").strip()
-                if z:
-                    if not z.lstrip("-").isdigit():
-                        raise SystemExit(f"{path}:{n}: {col} {z!r} is not an integer")
-                    tags[tag] = str(int(z))   # tag values must be strings
-            label = (row.get("name") or "").strip()
-            km2 = (row.get("polygon_km2") or "").strip()
-            if km2:
-                try:
-                    km2 = float(km2)
-                    assert km2 > 0
-                except (ValueError, AssertionError):
-                    raise SystemExit(f"{path}:{n}: polygon_km2 {km2!r} is not a positive number")
-                if len(refs) != 1 or refs[0][0] not in ("n", placelist.LOCAL_TYPE):
-                    raise SystemExit(f"{where}: polygon_km2 needs exactly one node "
-                                     f"(or local reference) in `osm`")
-            else:
-                km2 = None
-            if local:
-                if refs[0] in points:
-                    raise SystemExit(f"{where}: second row for {row['osm']}")
-                points[refs[0]] = {"lon": pos[0], "lat": pos[1], "km2": km2,
-                                   "tags": tags, "label": label, "where": where}
-                continue
-            if km2 is not None:
-                if refs[0] in synthetic:
-                    raise SystemExit(f"{where}: second polygon_km2 row for {refs[0][1]}")
-                synthetic[refs[0]] = {"km2": km2, "tags": tags, "label": label}
-                continue
-            if not tags:
-                continue                      # a row with nothing to apply yet
-            for key in refs:
+    entries, problems = placelist.curation_rows(path)
+    if problems:
+        n, what = problems[0]
+        raise SystemExit(f"{path}:{n}: {what}")
+    for e in entries:
+        tags = dict(e["tags"])
+        for col, tag in (("minzoom", MINZOOM_KEY), ("maxzoom", MAXZOOM_KEY)):
+            if e[col] is not None:
+                tags[tag] = str(e[col])       # tag values must be strings
+        key, label = e["refs"][0], e["label"]
+        if e["local"]:
+            points[key] = {"lon": e["pos"][0], "lat": e["pos"][1], "km2": e["km2"],
+                           "tags": tags, "label": label,
+                           "where": f"{path}:{e['line']}"}
+        elif e["km2"] is not None:
+            synthetic[key] = {"km2": e["km2"], "tags": tags, "label": label}
+        elif tags:                            # else nothing to apply yet
+            for key in e["refs"]:
                 by_id.setdefault(key, {"tags": {}, "label": label})
                 by_id[key]["tags"].update(tags)
     return by_id, synthetic, points
@@ -781,7 +730,7 @@ def run(inp, out, names_csv, dialects_csv, areas_geojson, dry_run=False,
             print("  (none -- no tagged object lies in a dialect area)")
     if inj.added_points:
         print(f"\nadded {len(inj.added_points)} node(s) for places that are not in OSM:")
-        for nid, key, label, lon, lat, tags in inj.added_points:
+        for nid, key, _label, lon, lat, tags in inj.added_points:
             print(f"  node/{nid}  {placelist.format_osm([key])} "
                   f"{placelist.describe(by_id[key][0])} at {lat:.5f}, {lon:.5f}: "
                   + ", ".join(f"{a}={b}" for a, b in sorted(tags.items())

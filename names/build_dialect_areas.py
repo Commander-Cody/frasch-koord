@@ -100,7 +100,7 @@ def read_areas(path, reg):
         raise SystemExit(f"dialect area list not found: {path}")
     known = set(dialects.tags(reg))
     by_ref, labels, rows = {}, {}, []
-    with open(path, encoding="utf-8", newline="") as fh:
+    with placelist.open_csv(path) as fh:
         reader = csv.DictReader(fh)
         for col in ("dialect", "osm"):
             if col not in (reader.fieldnames or []):
@@ -340,7 +340,7 @@ def main(argv=None):
         from shapely.geometry import mapping
         from shapely.ops import unary_union
     except ImportError:
-        raise SystemExit("shapely is needed (.venv/bin/pip install shapely)")
+        raise SystemExit("shapely is needed (run `uv sync` in the repo root)") from None
 
     reg = dialects.read(a.registry)
     by_ref, labels, rows = read_areas(a.areas, reg)

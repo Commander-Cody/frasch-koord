@@ -56,7 +56,7 @@ import unicodedata
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import placelist  # noqa: E402
-from placelist import any_name, format_osm, label, local_ref, parse_osm, primary, variants  # noqa: E402
+from placelist import any_name, format_osm, local_ref, parse_osm, primary, variants  # noqa: E402
 
 CSV_PATH = placelist.DEFAULT_PATH
 CAND_PATH = os.path.join(HERE, "work", "candidates.jsonl")
@@ -168,7 +168,6 @@ def kind_ok(kind, tags, cls):
     bnd = tags.get("boundary")
     lvl = tags.get("admin_level")
     lu = tags.get("landuse")
-    name_l = (tags.get("name") or "").lower()
 
     if kind == "settlement":
         if place in SETTLEMENT_PLACES:
@@ -220,6 +219,13 @@ def kind_ok(kind, tags, cls):
     return True                                   # kind == other
 
 
+def is_waterway_relation(rec):
+    """A `type=waterway` relation: the whole river, grouping its ways.  It
+    carries no `waterway` tag of its own, so `kind_ok` does not take it for
+    water."""
+    return rec["t"] == "r" and rec["tags"].get("type") == "waterway"
+
+
 def canonical(kind, cands):
     """Narrow a candidate set to the object(s) that really *are* the feature.
 
@@ -230,8 +236,7 @@ def canonical(kind, cands):
     """
     if kind == "water":
         strong = [c for c in cands
-                  if (c["t"] == "r" and c["tags"].get("type") == "waterway")
-                  or c["tags"].get("place") == "sea"]
+                  if is_waterway_relation(c) or c["tags"].get("place") == "sea"]
         if strong:
             return strong
         strong = [c for c in cands
@@ -292,6 +297,12 @@ def type_bonus(kind, rec):
 
 
 # ------------------------------------------------------------------ index ----
+def osm_key(rec):
+    """A candidate record's (type, id), as `placelist.parse_osm` spells a
+    reference: `("w", 28330569)`."""
+    return rec["t"], rec["id"]
+
+
 class Index:
     def __init__(self, path):
         self.recs = []
@@ -302,7 +313,7 @@ class Index:
                 rec = json.loads(line)
                 i = len(self.recs)
                 self.recs.append(rec)
-                self.by_key[(rec["t"], rec["id"])] = rec
+                self.by_key[osm_key(rec)] = rec
                 for k, rank in NAME_FIELD_RANK.items():
                     v = rec["tags"].get(k)
                     if not v:
@@ -654,7 +665,10 @@ def _suspicious(kind, winner):
     return minor and (winner["nf_d"] or 1e9) > 50
 
 
-def match_row(row, index: Index, hints: HintResolver):
+def match_row(row, index: Index, hints: HintResolver, claimed=None):
+    """`claimed`: {(type, id): line} of the objects other rows hold that
+    are not the matcher's to give away (see `claimed_objects`)."""
+    claimed = claimed or {}
     kind = row["kind"]
     out = dict(row)
     out.update(osm_type="", osm_id="", match_name="", match_tags="",
@@ -673,7 +687,7 @@ def match_row(row, index: Index, hints: HintResolver):
     best_rank, recs = {}, {}
     for q in queries:
         for rec, rank in index.lookup(q):
-            key = (rec["t"], rec["id"])
+            key = osm_key(rec)
             recs[key] = rec
             if rank < best_rank.get(key, 99):
                 best_rank[key] = rank
@@ -682,8 +696,12 @@ def match_row(row, index: Index, hints: HintResolver):
         rec = dict(rec)
         rec["rank"] = best_rank[key]
         cands.append(rec)
+    taken = [c for c in cands if osm_key(c) in claimed]
+    cands = [c for c in cands if osm_key(c) not in claimed]
     if not cands:
         out["status"] = "not_found"
+        if taken:
+            out["note"] = _addnote(row, taken_note(taken, claimed))
         return out
 
     plaus_all = [c for c in cands if kind_ok(kind, c["tags"], c["cls"])]
@@ -722,6 +740,19 @@ def match_row(row, index: Index, hints: HintResolver):
                                         f"'{row['hint']}' matched no cluster")
         else:
             out["note"] = _addnote(row, f"{len(clusters)} plausible candidates")
+        return out
+
+    held = [c for c in taken
+            if (kind_ok(kind, c["tags"], c["cls"])
+                or (kind == "water" and is_waterway_relation(c)))
+            and len(cluster(winner["members"] + [c])) == 1]
+    if held:
+        # another row holds part of this very feature (a piece of the same
+        # river, or the relation that is the whole river): the rest is not
+        # free for a second name
+        out["status"] = "not_found"
+        out["candidates"] = fmt_cands(plaus_all)
+        out["note"] = _addnote(row, taken_note(held, claimed))
         return out
 
     best = max(winner["members"],
@@ -786,15 +817,32 @@ def owned_by_matcher(row):
     return not row["osm"] and not row["wikidata"]
 
 
+def taken_note(recs, claimed):
+    """`way/1 is taken by line 7; ...` for the candidates other rows hold."""
+    return "; ".join(f"{format_osm([osm_key(c)])} is taken by line "
+                     f"{claimed[osm_key(c)]}" for c in recs)
+
+
+def claimed_objects(rows):
+    """{(type, id): line} of the OSM objects that rows the matcher does not
+    own hold (checked or hand-filled).  It never gives them to another row:
+    only one name per object can reach the map."""
+    out = {}
+    for r in rows:
+        if owned_by_matcher(r):
+            continue
+        for key in placelist.claimed_refs(r):
+            out.setdefault(key, r["_line"])
+    return out
+
+
 def find_duplicates(rows):
     """Two rows pointing at one OSM object -- usually the list has a place
     twice (two spellings, or two rows from different sheet sections).  Only one of the names can end
     up on the map."""
     by_obj = collections.defaultdict(list)
     for r in rows:
-        if r["status"] == "skip" or not r["osm"]:
-            continue
-        for key in parse_osm(r["osm"]):
+        for key in placelist.claimed_refs(r):
             by_obj[key].append(r)
     return {k: g for k, g in by_obj.items() if len(g) > 1}
 
@@ -966,6 +1014,7 @@ def run(args):
     hints = HintResolver(index)
 
     todo = [r for r in rows if owned_by_matcher(r) and any_name(r)]
+    claimed = claimed_objects(rows)
     country_rows = [r for r in todo if r["kind"] == "country"]
     qids, wd_failed = wikidata_countries([primary(r["de"]) for r in country_rows],
                                          cache_path=args.wikidata_cache,
@@ -995,7 +1044,7 @@ def run(args):
                 o.update(wikidata="", status="not_found",
                          note="no Wikidata country item found")
         else:
-            o = match_row(r, index, hints)
+            o = match_row(r, index, hints, claimed)
         results[r["_line"]] = o
         if o["status"] == "matched":
             r["osm"] = format_osm(parse_osm(

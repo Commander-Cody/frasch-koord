@@ -1,7 +1,20 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 
-import { namesUrl, useNames } from './names';
+import {
+  cardEntry,
+  namesUrl,
+  osmRefFromFeatureId,
+  osmUrl,
+  resolveName,
+  useNames,
+  type NameEntry,
+} from './names';
+
+/** A minimal, otherwise-empty entry, for tests that only care about a few fields. */
+function entry(fields: Partial<NameEntry> = {}): NameEntry {
+  return { id: '', names: {}, name_de: '', lon: 0, lat: 0, kind: '', ...fields };
+}
 
 function stubFetch(body: string, init: ResponseInit) {
   const fetch = vi.fn(async () => new Response(body, init));
@@ -69,5 +82,188 @@ describe('namesUrl', () => {
     const { result } = renderHook(() => useNames());
     await waitFor(() => expect(result.current.status).toBe('ready'));
     expect(fetch).toHaveBeenCalledWith(`${window.location.origin}/frasch-koord/data/names.json`);
+  });
+});
+
+describe('resolveName', () => {
+  it("prefers the dialect's own name over frasch:local", () => {
+    const e = entry({ names: { 'frr-x-mooring': 'Naibel' }, local: 'Naibel Local' });
+    expect(resolveName(e, 'frr-x-mooring')).toEqual({ name: 'Naibel', source: 'frr-x-mooring' });
+  });
+
+  it('falls back to frasch:local when the dialect has no name of its own', () => {
+    const e = entry({ local: 'Wik' });
+    expect(resolveName(e, 'frr-x-mooring')).toEqual({ name: 'Wik', source: 'local' });
+  });
+
+  it("falls back to another dialect's name, reporting that dialect as the source", () => {
+    const e = entry({ names: { 'frr-x-fering': 'Feering Name' } });
+    expect(resolveName(e, 'frr-x-mooring')).toEqual({ name: 'Feering Name', source: 'frr-x-fering' });
+  });
+
+  it('reports name:frr as source "frr"', () => {
+    const e = entry({ name_frr: 'Rüms' });
+    expect(resolveName(e, 'frr-x-mooring')).toEqual({ name: 'Rüms', source: 'frr' });
+  });
+
+  it('reports name:nds as source "nds"', () => {
+    const e = entry({ name_nds: 'Niböl' });
+    expect(resolveName(e, 'frr-x-mooring')).toEqual({ name: 'Niböl', source: 'nds' });
+  });
+
+  it('reports the German name (and the name:latin/name tail) as source "de"', () => {
+    const e = entry({ name_de: 'Niebüll' });
+    expect(resolveName(e, 'frr-x-mooring')).toEqual({ name: 'Niebüll', source: 'de' });
+  });
+
+  it('falls back to Danish only as a last resort, after German has had its turn', () => {
+    const e = entry({ name_da: 'Ålborg' });
+    expect(resolveName(e, 'frr-x-mooring')).toEqual({ name: 'Ålborg', source: 'da' });
+  });
+
+  it('resolves to an empty name when the entry has nothing at all', () => {
+    expect(resolveName(entry(), 'frr-x-mooring')).toEqual({ name: '', source: 'de' });
+  });
+
+  it('the local view never shows name:frr or name:de, only frasch:local then Low Saxon then German', () => {
+    // name_frr is deliberately ignored by the local view (see labelChain.ts);
+    // Low Saxon still wins over the German name that comes in via name_de.
+    const e = entry({ name_frr: 'Rüms', name_nds: 'Sölerloch', name_de: 'Sylt' });
+    expect(resolveName(e, 'frr-x-local')).toEqual({ name: 'Sölerloch', source: 'nds' });
+  });
+});
+
+describe('cardEntry', () => {
+  it('is exactly the name-list entry when there is no clicked tile', () => {
+    const e = entry({ name_de: 'Niebüll' });
+    expect(cardEntry({ entry: e })).toBe(e);
+  });
+
+  it('is built from the tile alone when the place has no name-list entry', () => {
+    const props = { 'name:de': 'Niebüll', 'frasch:ref': 'node/1' };
+    const result = cardEntry({ props });
+    expect(result.id).toBe('node/1');
+    expect(result.name_de).toBe('Niebüll');
+  });
+
+  it('lets the entry win field by field over the tile', () => {
+    const e = entry({
+      names: { 'frr-x-mooring': 'EntryMooring' },
+      local: 'EntryLocal',
+      dialect: 'entry-dialect',
+      variety: 'EntryVariety',
+      name_de: 'EntryDE',
+      name_da: 'EntryDA',
+      kind: 'entry-kind',
+    });
+    const props = {
+      'name:frr-x-mooring': 'TileMooring',
+      'frasch:local': 'TileLocal',
+      'frasch:dialect': 'tile-dialect',
+      'frasch:variety': 'TileVariety',
+      'name:de': 'TileDE',
+      'name:da': 'TileDA',
+      'frasch:kind': 'tile-kind',
+    };
+    const result = cardEntry({ entry: e, props });
+    expect(result.names['frr-x-mooring']).toBe('EntryMooring');
+    expect(result.local).toBe('EntryLocal');
+    expect(result.dialect).toBe('entry-dialect');
+    expect(result.variety).toBe('EntryVariety');
+    expect(result.name_de).toBe('EntryDE');
+    expect(result.name_da).toBe('EntryDA');
+    expect(result.kind).toBe('entry-kind');
+  });
+
+  it('fills gaps the entry leaves empty from the tile', () => {
+    const e = entry(); // every optional field absent, name_de/kind empty strings
+    const props = {
+      'frasch:local': 'TileLocal',
+      'frasch:dialect': 'tile-dialect',
+      'frasch:variety': 'TileVariety',
+      'name:de': 'TileDE',
+      'name:da': 'TileDA',
+      'frasch:kind': 'tile-kind',
+    };
+    const result = cardEntry({ entry: e, props });
+    expect(result.local).toBe('TileLocal');
+    expect(result.dialect).toBe('tile-dialect');
+    expect(result.variety).toBe('TileVariety');
+    expect(result.name_de).toBe('TileDE');
+    expect(result.name_da).toBe('TileDA');
+    expect(result.kind).toBe('tile-kind');
+  });
+
+  it('takes name_nds from the tile even when the entry has one, since the tile is what the clicked label showed', () => {
+    const e = entry({ name_nds: 'EntryNDS' });
+    const props = { 'name:nds': 'TileNDS' };
+    expect(cardEntry({ entry: e, props }).name_nds).toBe('TileNDS');
+  });
+
+  it('falls back to the entry\'s name_nds when the tile has none', () => {
+    const e = entry({ name_nds: 'EntryNDS' });
+    const props = { 'name:de': 'TileDE' }; // no name:nds on this tile
+    expect(cardEntry({ entry: e, props }).name_nds).toBe('EntryNDS');
+  });
+});
+
+describe('osmRefFromFeatureId', () => {
+  // The three examples verified against the archive in the doc comment.
+  it('decodes a node id (Niebüll)', () => {
+    expect(osmRefFromFeatureId(2400427661)).toBe('node/240042766');
+  });
+
+  it('decodes a relation id (Föhr)', () => {
+    expect(osmRefFromFeatureId(33525413)).toBe('relation/3352541');
+  });
+
+  it('decodes a way id (Gröde)', () => {
+    expect(osmRefFromFeatureId(10871603522)).toBe('way/1087160352');
+  });
+
+  it('accepts the id as a numeric string too', () => {
+    expect(osmRefFromFeatureId('2400427661')).toBe('node/240042766');
+  });
+
+  it('returns null for a type digit outside 1-3', () => {
+    expect(osmRefFromFeatureId(100)).toBeNull(); // n % 10 === 0
+  });
+
+  it('returns null for zero, negative, non-integer, or missing ids', () => {
+    expect(osmRefFromFeatureId(0)).toBeNull();
+    expect(osmRefFromFeatureId(-21)).toBeNull();
+    expect(osmRefFromFeatureId(1.5)).toBeNull();
+    expect(osmRefFromFeatureId(undefined)).toBeNull();
+    expect(osmRefFromFeatureId('not-a-number')).toBeNull();
+  });
+});
+
+describe('osmUrl', () => {
+  it('links a node', () => {
+    expect(osmUrl('node/240042766')).toBe('https://www.openstreetmap.org/node/240042766');
+  });
+
+  it('links a way', () => {
+    expect(osmUrl('way/1087160352')).toBe('https://www.openstreetmap.org/way/1087160352');
+  });
+
+  it('links a relation', () => {
+    expect(osmUrl('relation/3352541')).toBe('https://www.openstreetmap.org/relation/3352541');
+  });
+
+  it('strips a "#<csv line>" suffix from a second row on the same object', () => {
+    expect(osmUrl('node/240042766#5')).toBe('https://www.openstreetmap.org/node/240042766');
+  });
+
+  it('returns null for a synthetic local/ place', () => {
+    expect(osmUrl('local/some-slug')).toBeNull();
+  });
+
+  it('returns null for a bare Wikidata QID', () => {
+    expect(osmUrl('Q123')).toBeNull();
+  });
+
+  it('returns null when there is no reference at all', () => {
+    expect(osmUrl(undefined)).toBeNull();
   });
 });

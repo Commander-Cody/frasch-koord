@@ -559,7 +559,7 @@ def read_curation(path):
         return None, CURATION_COLUMNS
     with open(path, "rb") as fh:
         data = fh.read()
-    fields = next(csv.reader(io.StringIO(data.decode("utf-8"), newline="")), None)
+    fields = next(csv.reader(io.StringIO(placelist.decode(data), newline="")), None)
     fields = fields or CURATION_COLUMNS
     missing = [c for c in CURATION_COLUMNS if c not in fields]
     if missing:

@@ -43,11 +43,23 @@ DIALECTS_PATH = os.path.join(HERE, "dialects.csv")
 CURATION_PATH = os.path.join(HERE, "curation.csv")
 
 
+def open_csv(path: str):
+    """Open one of the hand-edited CSV files for reading.  A spreadsheet's
+    "CSV UTF-8" starts it with a byte order mark, which would otherwise end up
+    in the first column's name."""
+    return open(path, encoding="utf-8-sig", newline="")
+
+
+def decode(data: bytes) -> str:
+    """`open_csv` for a file already read as bytes."""
+    return data.decode("utf-8-sig")
+
+
 def _registry_columns(path: str = DIALECTS_PATH) -> list[str]:
     """The dialect columns in registry order (`mooring`, `wieding`, ...)."""
     if not os.path.exists(path):
         raise SystemExit(f"dialect registry not found: {path}")
-    with open(path, encoding="utf-8", newline="") as fh:
+    with open_csv(path) as fh:
         cols = [(r.get("column") or "").strip() for r in csv.DictReader(fh)]
     cols = [c for c in cols if c]
     if not cols:
@@ -77,7 +89,7 @@ _SLUG = r"[a-z0-9]+(?:-[a-z0-9]+)*"
 _REMARK = re.compile(r"\(([^()]*)\)")
 
 
-def _split(cell: str | None) -> list[str]:
+def split_variants(cell: str | None) -> list[str]:
     """Split a name cell on `;` -- but not inside brackets, because a remark
     may itself list several dialects: `Huađer; Huuger (Sölring; Wisinge)` is
     two variants, not three."""
@@ -102,7 +114,7 @@ def parts(cell: str | None) -> list[tuple[str, str]]:
     The remark comes back without its brackets; several brackets on one
     variant are joined with `; `.  Variants without a name are dropped."""
     out = []
-    for part in _split(cell):
+    for part in split_variants(cell):
         remarks = [m.group(1).strip() for m in _REMARK.finditer(part)]
         name = _REMARK.sub("", part).strip().rstrip("?").strip()
         if name:
@@ -146,6 +158,16 @@ def any_name(row: dict) -> str:
     return ""
 
 
+class Invalid(SystemExit):
+    """A cell that breaks the rules of its file.  A script that does not
+    catch it stops with `where: reason`; names/check.py, which collects every
+    problem instead, takes the bare `reason`."""
+
+    def __init__(self, where: str, reason: str):
+        super().__init__(f"{where}: {reason}" if where else reason)
+        self.reason = reason
+
+
 def parse_osm(cell: str | None, where: str = "") -> list[tuple[str, int | str]]:
     """`"way/12; way/13"` -> `[("w", 12), ("w", 13)]`;
     `"local/westerheide-amrum"` -> `[("l", "westerheide-amrum")]`.
@@ -159,16 +181,16 @@ def parse_osm(cell: str | None, where: str = "") -> list[tuple[str, int | str]]:
             continue
         m = re.fullmatch(rf"(node|way|relation)/(\d+)|(local)/({_SLUG})", ref)
         if not m:
-            raise SystemExit(f"{where}: bad reference {ref!r} (expected node/ID, "
-                             f"way/ID, relation/ID or local/slug with a slug of "
-                             f"lowercase letters, digits and hyphens)")
+            raise Invalid(where, f"bad reference {ref!r} (expected node/ID, "
+                                 f"way/ID, relation/ID or local/slug with a slug "
+                                 f"of lowercase letters, digits and hyphens)")
         if m.group(3):
             out.append((LOCAL_TYPE, m.group(4)))
         else:
             out.append((OSM_TYPES[m.group(1)], int(m.group(2))))
     if len(out) > 1 and any(t == LOCAL_TYPE for t, _ in out):
-        raise SystemExit(f"{where}: a local reference stands alone, it cannot be "
-                         f"combined with other references: {cell!r}")
+        raise Invalid(where, f"a local reference stands alone, it cannot be "
+                             f"combined with other references: {cell!r}")
     return out
 
 
@@ -188,6 +210,15 @@ def local_ref(cell: str | None) -> str | None:
     if refs and refs[0][0] == LOCAL_TYPE:
         return refs[0][1]
     return None
+
+
+def claimed_refs(row: dict) -> list:
+    """The objects a row puts on the map: the references in its `osm` cell,
+    none for a `skip` row, which never reaches the map.  Only one row per
+    object can: the injector labels an object once."""
+    if row["status"] == "skip":
+        return []
+    return parse_osm(row.get("osm"))
 
 
 def entry_id(row: dict) -> str:
@@ -215,48 +246,189 @@ def parse_point(lat: str | None, lon: str | None, where: str = ""):
     if not lat and not lon:
         return None
     if not (lat and lon):
-        raise SystemExit(f"{where}: `lat` and `lon` go together "
-                         f"(got lat={lat or '-'}, lon={lon or '-'})")
+        raise Invalid(where, f"`lat` and `lon` go together "
+                             f"(got lat={lat or '-'}, lon={lon or '-'})")
     try:
         flat, flon = float(lat), float(lon)
     except ValueError:
-        raise SystemExit(f"{where}: lat/lon {lat!r}/{lon!r} are not numbers "
-                         f"(decimal degrees, e.g. 54.65097 / 8.34019)")
+        raise Invalid(where, f"lat/lon {lat!r}/{lon!r} are not numbers "
+                             f"(decimal degrees, e.g. 54.65097 / 8.34019)") from None
     if not (-90 <= flat <= 90 and -180 <= flon <= 180):
-        raise SystemExit(f"{where}: lat/lon {flat}/{flon} out of range")
+        raise Invalid(where, f"lat/lon {flat}/{flon} out of range")
     return flon, flat
+
+
+def parse_set_tags(spec: str | None, where: str = "") -> dict[str, str]:
+    """curation.csv's `set_tags`: `place=island;frasch:kind=island` ->
+    `{"place": "island", "frasch:kind": "island"}`."""
+    tags = {}
+    for pair in (spec or "").split(";"):
+        pair = pair.strip()
+        if not pair:
+            continue
+        if "=" not in pair:
+            raise Invalid(where, f"set_tags entry {pair!r} is not key=value")
+        k, v = pair.split("=", 1)
+        k, v = k.strip(), v.strip()
+        if not k:
+            raise Invalid(where, f"set_tags entry {pair!r} has an empty key")
+        tags[k] = v
+    return tags
+
+
+def curation_rows(path: str = CURATION_PATH):
+    """-> (entries, problems): the rows of names/curation.csv that follow its
+    rules, and `(line, reason)` for every one that does not.  The one reading
+    of the file's rules, shared by `local_points`, tiles/inject_names.py
+    (which stop at the first problem) and names/check.py (which lists them).
+
+    An entry: `line`, `refs` (parsed `osm`), `local` (the slug of a local
+    reference, else None), `pos` ((lon, lat) or None),
+    `tags` (`set_tags`), `minzoom` / `maxzoom` (int or None), `km2` (float or
+    None) and `label` (the `name` cell).  Rows without a reference are blank
+    spacer lines and left out."""
+    entries, problems = [], []
+    polygons, positioned = set(), set()
+    with open_csv(path) as fh:
+        reader = csv.reader(fh)
+        header = next(reader, [])
+        what = csv_header_problem(header, ["osm"])
+        if what:
+            return entries, [(1, what)]
+        for cells in reader:
+            n = reader.line_num
+            if not cells:
+                continue                          # a blank line
+            what = cell_count_problem(cells, header)
+            if what:
+                problems.append((n, what))        # its columns cannot be trusted
+                continue
+            row = {k: v.strip() for k, v in zip(header, cells, strict=True)}
+            try:
+                refs = parse_osm(row.get("osm"))
+                pos = parse_point(row.get("lat"), row.get("lon"))
+            except Invalid as exc:
+                problems.append((n, exc.reason))
+                continue
+            if not refs:
+                continue
+            found = []
+            local = refs[0][1] if refs[0][0] == LOCAL_TYPE else None
+            if pos and not local:
+                found.append(f"lat/lon only go with a local reference "
+                             f"(local/<slug>), not with {row['osm']!r}")
+            if local and not pos:
+                found.append(f"local/{local} needs `lat` and `lon`")
+            if local and local in positioned:
+                found.append(f"second row for local/{local}")
+            try:
+                tags = parse_set_tags(row.get("set_tags"))
+            except Invalid as exc:
+                found.append(exc.reason)
+            zooms = {}
+            for col in ("minzoom", "maxzoom"):
+                z = row.get(col, "")
+                if z and not z.lstrip("-").isdigit():
+                    found.append(f"{col} {z!r} is not an integer")
+                zooms[col] = int(z) if z.lstrip("-").isdigit() else None
+            km2 = row.get("polygon_km2", "")
+            if km2:
+                try:
+                    km2 = float(km2)
+                    if not km2 > 0:
+                        raise ValueError
+                except ValueError:
+                    found.append(f"polygon_km2 {row['polygon_km2']!r} is not a "
+                                 f"positive number")
+                if len(refs) != 1 or refs[0][0] not in ("n", LOCAL_TYPE):
+                    found.append("polygon_km2 needs exactly one node (or local "
+                                 "reference) in `osm`")
+                elif not local and refs[0] in polygons:
+                    found.append(f"second polygon_km2 row for {format_osm(refs)}")
+                polygons.add(refs[0])
+            else:
+                km2 = None
+            if local:
+                positioned.add(local)
+            if found:
+                problems += [(n, what) for what in found]
+                continue
+            entries.append({"line": n, "refs": refs, "local": local, "pos": pos,
+                            "tags": tags,
+                            **zooms, "km2": km2, "label": row.get("name", "")})
+    return entries, problems
 
 
 def local_points(path: str = CURATION_PATH) -> dict[str, tuple[float, float]]:
     """`{slug: (lon, lat)}` for every local reference in names/curation.csv --
     the positions of the places OSM does not have.  Just the coordinates: the
-    full curation logic (set_tags, zooms, polygons) lives in
-    tiles/inject_names.py, which validates the same rows more strictly."""
-    out = {}
+    rest of the curation (set_tags, zooms, polygons) is tiles/inject_names.py's
+    business."""
     if not os.path.exists(path):
-        return out
-    with open(path, encoding="utf-8", newline="") as fh:
-        reader = csv.DictReader(fh)
-        fields = reader.fieldnames or []
-        if "osm" not in fields:
-            raise SystemExit(f"{path}: needs an `osm` column")
-        for n, row in enumerate(reader, start=2):
-            where = f"{path}:{n}"
-            refs = parse_osm(row.get("osm"), where)
-            pos = parse_point(row.get("lat"), row.get("lon"), where)
-            if not refs:
-                continue
-            if refs[0][0] != LOCAL_TYPE:
-                if pos:
-                    raise SystemExit(f"{where}: lat/lon only go with a local "
-                                     f"reference (local/<slug>), not with {row['osm']!r}")
-                continue
-            slug = refs[0][1]
-            if pos is None:
-                raise SystemExit(f"{where}: local/{slug} needs `lat` and `lon`")
-            if slug in out:
-                raise SystemExit(f"{where}: second row for local/{slug}")
-            out[slug] = pos
+        return {}
+    entries, problems = curation_rows(path)
+    if problems:
+        n, what = problems[0]
+        raise SystemExit(f"{path}:{n}: {what}")
+    return {e["local"]: e["pos"] for e in entries if e["local"]}
+
+
+SEMICOLON_SEPARATED = ("the cells are separated by `;`, not `,` (a German-locale "
+                       "spreadsheet export?) -- save it as comma-separated CSV")
+
+
+def csv_header_problem(fields, required) -> str | None:
+    """What makes a CSV header unreadable -- a `;`-separated export, a column
+    named twice, a missing one -- or None."""
+    if len(fields) == 1 and ";" in fields[0]:
+        return SEMICOLON_SEPARATED
+    twice = sorted({c for c in fields if fields.count(c) > 1})
+    if twice:
+        return f"column(s) named twice: {', '.join(twice)}"
+    missing = [c for c in required if c not in fields]
+    if missing:
+        return f"missing column(s) {', '.join(missing)}"
+    return None
+
+
+def cell_count_problem(cells, header) -> str | None:
+    """A row whose cells do not line up with the header's columns: a comma
+    too many or too few, and every cell after it is in the wrong column."""
+    if len(cells) != len(header):
+        return (f"{len(cells)} cells, the header has {len(header)} "
+                f"(a comma too many or too few?)")
+    return None
+
+
+def header_problem(fields) -> str | None:
+    """What is wrong with the header of the name list, or None."""
+    if "lat" in fields or "lon" in fields:
+        return ("`lat`/`lon` moved to names/curation.csv (2026-09-18): reference "
+                "the place as local/<slug> in `osm` and delete the two columns")
+    what = csv_header_problem(fields, COLUMNS)
+    if what and what.startswith("missing"):
+        what += " (dialect columns come from names/dialects.csv)"
+    return what
+
+
+def row_problems(row: dict) -> list[str]:
+    """What is wrong with one row of the name list (its cells stripped), in
+    the rules `read` enforces.  names/check.py adds the stricter ones."""
+    out = []
+    if row["kind"] not in KINDS:
+        out.append(f"unknown kind {row['kind']!r}")
+    if row["status"] not in STATUSES:
+        out.append(f"unknown status {row['status']!r} (auto / ok / skip / empty)")
+    try:
+        local = local_ref(row["osm"])
+    except Invalid as exc:
+        out.append(exc.reason)
+        local = None
+    if row["wikidata"] and not re.fullmatch(r"Q\d+", row["wikidata"]):
+        out.append(f"bad wikidata id {row['wikidata']!r}")
+    if row["wikidata"] and local:
+        out.append("a local reference is for a place OSM does not have -- it "
+                   "cannot have a wikidata id")
     return out
 
 
@@ -268,35 +440,23 @@ def read(path: str = DEFAULT_PATH):
     # remembered so that `write` can tell whether someone else (match.py,
     # curate.py apply, a spreadsheet) wrote the file in the meantime
     _read_digests[os.path.abspath(path)] = digest(data)
-    with io.StringIO(data.decode("utf-8"), newline="") as fh:
+    with io.StringIO(decode(data), newline="") as fh:
         reader = csv.DictReader(fh)
         fields = list(reader.fieldnames or [])
-        if "lat" in fields or "lon" in fields:
-            raise SystemExit(f"{path}: `lat`/`lon` moved to names/curation.csv "
-                             f"(2026-09-18): reference the place as local/<slug> "
-                             f"in `osm` and delete the two columns.")
-        missing = [c for c in COLUMNS if c not in fields]
-        if missing:
-            raise SystemExit(f"{path}: missing column(s) {missing} "
-                             f"(dialect columns come from names/dialects.csv)")
+        what = header_problem(fields)
+        if what:
+            raise SystemExit(f"{path}: {what}")
         rows = []
-        for n, row in enumerate(reader, start=2):
+        for row in reader:
+            n = reader.line_num                  # blank lines count too
             if None in row:                      # more cells than columns
                 raise SystemExit(f"{path}:{n}: row has more cells than the header "
                                  f"(a stray comma?): {row[None]}")
             row = {k: (v or "").strip() for k, v in row.items()}
             row["_line"] = n
-            if row["kind"] not in KINDS:
-                raise SystemExit(f"{path}:{n}: unknown kind {row['kind']!r}")
-            if row["status"] not in STATUSES:
-                raise SystemExit(f"{path}:{n}: unknown status {row['status']!r} "
-                                 f"(auto / ok / skip / empty)")
-            parse_osm(row["osm"], f"{path}:{n}")
-            if row["wikidata"] and not re.fullmatch(r"Q\d+", row["wikidata"]):
-                raise SystemExit(f"{path}:{n}: bad wikidata id {row['wikidata']!r}")
-            if row["wikidata"] and local_ref(row["osm"]):
-                raise SystemExit(f"{path}:{n}: a local reference is for a place "
-                                 f"OSM does not have -- it cannot have a wikidata id")
+            problems = row_problems(row)
+            if problems:
+                raise SystemExit(f"{path}:{n}: {problems[0]}")
             rows.append(row)
     return rows, fields
 

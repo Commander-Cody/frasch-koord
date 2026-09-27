@@ -35,7 +35,7 @@ Planetiler runs with `--extra_name_tags=frasch:kind,frasch:minzoom,frasch:maxzoo
 
 Anything that has to change how OMT *classifies* a feature (which class, which rank, which minzoom Planetiler picks) must instead be a real OSM tag, written by `curation.csv`'s `set_tags` before Planetiler runs — see `names/README.md`.
 
-Requirements: JDK 21 (user-local install under `~/.local/opt/jdk-21*`), the repo's Python venv (`.venv`, see `names/README.md`). Memory: `XMX=3g` is enough for Schleswig-Holstein; Germany needs ~8g and a raised WSL memory limit; the planet does not fit on the dev machine (build it on a rented VM with ≥64 GB RAM, then upload the PMTiles).
+Requirements: JDK 21 (user-local install under `~/.local/opt/jdk-21*`), the repo's Python venv (`.venv`, created by `uv sync`, see the root `README.md`). Memory: `XMX=3g` is enough for Schleswig-Holstein; Germany needs ~8g and a raised WSL memory limit; the planet does not fit on the dev machine (build it on a rented VM with ≥64 GB RAM, then upload the PMTiles).
 
 Planet plan ("the map must never be blank"): one full planet build (~100 GB PMTiles) as the single source; the Frisian name list simply covers only part of it and labels fall back to `name:de` / `name` elsewhere.
 

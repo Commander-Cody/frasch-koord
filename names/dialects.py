@@ -56,40 +56,46 @@ LOCAL_COLUMN = "local"
 _TAG = re.compile(r"frr-x-[a-z0-9]{1,8}(-[a-z0-9]{1,8})*$")
 
 
+def row_problem(row: dict, seen_tags=(), seen_cols=()) -> str | None:
+    """What is wrong with one registry row (`seen_*`: the tags and columns of
+    the rows above it), or None.  Shared with names/check.py."""
+    if not _TAG.fullmatch(row["tag"]):
+        # BCP 47 allows at most 8 characters per private-use subtag
+        return (f"bad tag {row['tag']!r} -- expected frr-x-<subtag>, subtags "
+                f"[a-z0-9] and at most 8 characters each")
+    if not re.fullmatch(r"[a-z][a-z0-9_]*", row["column"]):
+        return f"bad column name {row['column']!r}"
+    if row["column"] == LOCAL_COLUMN:
+        return f"{row['column']!r} is a reserved column of places.csv, not a dialect"
+    if row["tag"] in seen_tags or row["column"] in seen_cols:
+        return f"duplicate tag/column {row['tag']}/{row['column']}"
+    if row["status"] not in STATUSES:
+        return f"status {row['status']!r} (living / extinct)"
+    if row["view"] not in VIEWS:
+        return f"view {row['view']!r} (yes / no)"
+    if not row["label"]:
+        return "no label"
+    return None
+
+
 def read(path: str = DEFAULT_PATH) -> list[dict]:
     """-> the registry rows in file order, validated."""
     if not os.path.exists(path):
         raise SystemExit(f"dialect registry not found: {path}")
     reg, seen_tags, seen_cols = [], set(), set()
-    with open(path, encoding="utf-8", newline="") as fh:
+    with placelist.open_csv(path) as fh:
         reader = csv.DictReader(fh)
-        missing = [c for c in FIELDS if c not in (reader.fieldnames or [])]
-        if missing:
-            raise SystemExit(f"{path}: missing column(s) {missing}")
-        for n, row in enumerate(reader, start=2):
+        what = placelist.csv_header_problem(reader.fieldnames or [], FIELDS)
+        if what:
+            raise SystemExit(f"{path}: {what}")
+        for row in reader:
+            n = reader.line_num
             row = {k: (v or "").strip() for k, v in row.items() if k}
             if not row["tag"]:
                 continue                       # blank spacer line
-            if not _TAG.fullmatch(row["tag"]):
-                # BCP 47 allows at most 8 characters per private-use subtag
-                raise SystemExit(f"{path}:{n}: bad tag {row['tag']!r} -- expected "
-                                 f"frr-x-<subtag>, subtags [a-z0-9] and at most "
-                                 f"8 characters each")
-            if not re.fullmatch(r"[a-z][a-z0-9_]*", row["column"]):
-                raise SystemExit(f"{path}:{n}: bad column name {row['column']!r}")
-            if row["column"] == LOCAL_COLUMN:
-                raise SystemExit(f"{path}:{n}: {row['column']!r} is a reserved "
-                                 f"column of places.csv, not a dialect")
-            if row["tag"] in seen_tags or row["column"] in seen_cols:
-                raise SystemExit(f"{path}:{n}: duplicate tag/column "
-                                 f"{row['tag']}/{row['column']}")
-            if row["status"] not in STATUSES:
-                raise SystemExit(f"{path}:{n}: status {row['status']!r} "
-                                 f"(living / extinct)")
-            if row["view"] not in VIEWS:
-                raise SystemExit(f"{path}:{n}: view {row['view']!r} (yes / no)")
-            if not row["label"]:
-                raise SystemExit(f"{path}:{n}: no label")
+            what = row_problem(row, seen_tags, seen_cols)
+            if what:
+                raise SystemExit(f"{path}:{n}: {what}")
             seen_tags.add(row["tag"])
             seen_cols.add(row["column"])
             reg.append(row)
@@ -181,7 +187,7 @@ class AreaIndex:
             from shapely.geometry import shape
         except ImportError:                      # pragma: no cover
             raise SystemExit("shapely is needed for the dialect areas "
-                             "(.venv/bin/pip install shapely)")
+                             "(run `uv sync` in the repo root)") from None
         with open(path, encoding="utf-8") as fh:
             fc = json.load(fh)
         polygons = []
