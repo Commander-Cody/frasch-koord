@@ -219,6 +219,13 @@ def kind_ok(kind, tags, cls):
     return True                                   # kind == other
 
 
+def is_waterway_relation(rec):
+    """A `type=waterway` relation: the whole river, grouping its ways.  It
+    carries no `waterway` tag of its own, so `kind_ok` does not take it for
+    water."""
+    return rec["t"] == "r" and rec["tags"].get("type") == "waterway"
+
+
 def canonical(kind, cands):
     """Narrow a candidate set to the object(s) that really *are* the feature.
 
@@ -229,8 +236,7 @@ def canonical(kind, cands):
     """
     if kind == "water":
         strong = [c for c in cands
-                  if (c["t"] == "r" and c["tags"].get("type") == "waterway")
-                  or c["tags"].get("place") == "sea"]
+                  if is_waterway_relation(c) or c["tags"].get("place") == "sea"]
         if strong:
             return strong
         strong = [c for c in cands
@@ -736,11 +742,14 @@ def match_row(row, index: Index, hints: HintResolver, claimed=None):
             out["note"] = _addnote(row, f"{len(clusters)} plausible candidates")
         return out
 
-    held = [c for c in taken if kind_ok(kind, c["tags"], c["cls"])
+    held = [c for c in taken
+            if (kind_ok(kind, c["tags"], c["cls"])
+                or (kind == "water" and is_waterway_relation(c)))
             and len(cluster(winner["members"] + [c])) == 1]
     if held:
         # another row holds part of this very feature (a piece of the same
-        # river): the rest is not free for a second name
+        # river, or the relation that is the whole river): the rest is not
+        # free for a second name
         out["status"] = "not_found"
         out["candidates"] = fmt_cands(plaus_all)
         out["note"] = _addnote(row, taken_note(held, claimed))

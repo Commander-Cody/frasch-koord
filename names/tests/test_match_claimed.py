@@ -58,3 +58,22 @@ def test_the_rest_of_a_river_a_human_gave_in_part_to_another_row_is_not_matched(
     assert (row["osm"], row["status"]) == ("", "")
     matches = (world / "work" / "matches.csv").read_text(encoding="utf-8")
     assert "way/44051131 is taken by line 2" in matches
+
+
+def test_a_river_whose_relation_a_human_gave_to_another_row_is_not_matched(world):
+    # The Schmale is two ways and a type=waterway relation grouping them.
+    # A checked row holding just the relation names the whole river; the
+    # relation has no waterway tag of its own, which must not hide that.
+    schmale = [
+        cand("w", 145819821, 8.782303, 54.86851, name="Schmale", waterway="river"),
+        cand("w", 836479122, 8.768417, 54.891347, name="Schmale", waterway="river"),
+        cand("r", 18140519, 8.779962, 54.847824, name="Schmale", type="waterway",
+             wikidata="Q130468878"),
+    ]
+    checked = {"kind": "water", "mooring": "e Smeele", "de": "Schmale",
+               "osm": "relation/18140519", "status": "ok"}
+    second = {"kind": "water", "mooring": "e Smeerle", "de": "Schmale"}
+    _, row = run_match(world, [checked, second], schmale)
+    assert (row["osm"], row["status"]) == ("", "")
+    matches = (world / "work" / "matches.csv").read_text(encoding="utf-8")
+    assert "relation/18140519 is taken by line 2" in matches
