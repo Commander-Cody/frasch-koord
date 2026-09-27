@@ -13,8 +13,8 @@ checked the only way it can be where it is checked:
                                   byte -- neither needs an extract
   names/dialect_areas*.geojson    their `built_from` stamp must name the
                                   current dialect_areas.csv and dialects.csv
-  names/osm_objects.json          every row on the map must have its object
-                                  in it (the regenerated index stops if not)
+  names/osm_objects.json          every OSM reference of a row on the map must
+                                  be in it -- the injector's rule
 
 With `--extracts`, the extract-derived files are regenerated as well, each
 from the extracts its stamp names (found among the given ones by file name),
@@ -60,6 +60,22 @@ def regenerated_problems(a, tmp) -> list[str]:
     registry = os.path.join(tmp, "dialects.json")
     dialects.main(["--registry", a.dialects, "--export", registry])
     problems += differs(a.registry_json, registry, "just dialects")
+    return problems
+
+
+def unlocated_problems(a) -> list[str]:
+    """Every OSM reference of a row on the map that the objects file lacks --
+    the tile build stops on each of them, not only on a row's first one, the
+    only one the search index needs."""
+    rows, _ = placelist.read(a.names)
+    objects = locate.read_objects(a.objects).by_ref
+    problems = []
+    for row in filter(placelist.on_map, rows):
+        missing = [ref for ref in placelist.parse_osm(row["osm"])
+                   if ref[0] != placelist.LOCAL_TYPE and ref not in objects]
+        if missing:
+            problems.append(f"{row['id']}: {placelist.format_osm(missing)} not in "
+                            f"{a.objects} -- locate it with `just objects`")
     return problems
 
 
@@ -141,7 +157,8 @@ def main(argv=None):
                          "areas from these extracts and compare them")
     a = ap.parse_args(argv)
     with tempfile.TemporaryDirectory() as tmp:
-        problems = regenerated_problems(a, tmp) + stamp_problems(a)
+        problems = (unlocated_problems(a) + regenerated_problems(a, tmp)
+                    + stamp_problems(a))
         if a.extracts:
             problems += extract_problems(a, tmp)
     for p in problems:

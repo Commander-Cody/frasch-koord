@@ -139,3 +139,12 @@ def test_an_extract_a_stamp_names_must_be_given(extract, capsys):
     argv, _ = extract
     assert check_built.main(argv[:-1] + ["other.osm.pbf"]) == 1
     assert "in.osm.pbf" in capsys.readouterr().out
+
+
+def test_a_rows_second_object_never_located_fails(repo, world, capsys):
+    # the search entry lies at the first object, but the tile build needs both
+    (world / "places.csv").write_text(
+        places_text([NAIBEL | {"osm": "node/240042766; node/99"}]), encoding="utf-8")
+    assert check_built.main(repo) == 1
+    out = capsys.readouterr().out
+    assert "naibel" in out and "node/99" in out and "just objects" in out

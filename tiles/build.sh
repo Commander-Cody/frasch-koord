@@ -26,6 +26,8 @@ set -euo pipefail
 cd "$(dirname "$0")"
 # shellcheck source=tiles/fetch.sh
 source ./fetch.sh
+# shellcheck source=tiles/java.sh
+source ./java.sh
 
 # Planetiler pinned to the version the current tiles were built with, and
 # verified by sha256 -- see fetch.sh for why a plain download is not enough.
@@ -43,33 +45,11 @@ OBJECTS="${OBJECTS:-../names/osm_objects.json}"
 CURATION="${CURATION:-../names/curation.csv}"
 
 # -- up-front checks, so a missing Java/Python fails fast with a clear message ---
-find_java_home() {
-  if [ -n "${JAVA_HOME:-}" ]; then
-    printf '%s\n' "$JAVA_HOME"
-    return 0
-  fi
-  # An unmatched glob is left as the literal pattern (nullglob is off), which
-  # simply fails the -d test below -- unlike `ls ... | head`, it cannot trip
-  # `set -e -o pipefail` on a missing directory.
-  local candidates=(~/.local/opt/jdk-21*)
-  if [ -d "${candidates[0]}" ]; then
-    printf '%s\n' "${candidates[0]}"
-    return 0
-  fi
-  if command -v java >/dev/null 2>&1; then
-    dirname "$(dirname "$(command -v java)")"
-    return 0
-  fi
-  echo "build.sh: no Java found (set JAVA_HOME, install a JDK under ~/.local/opt/jdk-21*, or put java on PATH)" >&2
-  return 1
-}
-
 JAVA_HOME=$(find_java_home)
 JAVA_BIN="$JAVA_HOME/bin/java"
 [ -x "$JAVA_BIN" ] || { echo "build.sh: $JAVA_BIN is not executable (bad JAVA_HOME?)" >&2; exit 1; }
 JAVA_VERSION_LINE=$("$JAVA_BIN" -version 2>&1 | head -1)
-JAVA_MAJOR=$(printf '%s' "$JAVA_VERSION_LINE" | sed -E 's/.*"([0-9]+)\..*/\1/')
-if [ -z "$JAVA_MAJOR" ] || [ "$JAVA_MAJOR" -lt 21 ]; then
+if ! JAVA_MAJOR=$(java_major "$JAVA_VERSION_LINE") || [ "$JAVA_MAJOR" -lt 21 ]; then
   echo "build.sh: Java 21+ required, found: $JAVA_VERSION_LINE" >&2
   exit 1
 fi
