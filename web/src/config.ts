@@ -54,7 +54,7 @@ export interface DialectEntry {
 
 /**
  * The dialect registry, in registry order. Generated from names/dialects.csv
- * by names/export_search_index.py — do not edit generated/dialects.json by hand.
+ * by `names/dialects.py --export` (`just dialects`) — do not edit generated/dialects.json by hand.
  */
 export const DIALECTS: DialectEntry[] = registry;
 

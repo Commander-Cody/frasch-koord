@@ -35,15 +35,19 @@ describe('useNames', () => {
   const quiet = () => vi.spyOn(console, 'error').mockImplementation(() => {});
 
   it('loads the list', async () => {
-    stubFetch(JSON.stringify([{ id: 'naibel', names: {}, name_de: 'Niebüll', lon: 8, lat: 54, kind: 'settlement' }]), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    stubFetch(
+      JSON.stringify({
+        built_from: { 'places.csv': 'aaa' },
+        places: [{ id: 'naibel', names: {}, name_de: 'Niebüll', lon: 8, lat: 54, kind: 'settlement' }],
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    );
     const { result } = renderHook(() => useNames());
     expect(result.current.status).toBe('loading');
     await waitFor(() => expect(result.current.status).toBe('ready'));
     expect(result.current.entries).toHaveLength(1);
     expect(result.current.find('naibel')?.name_de).toBe('Niebüll');
+    expect(result.current.builtFrom).toEqual({ 'places.csv': 'aaa' });
   });
 
   it('ends in error on a 404', async () => {
@@ -64,7 +68,7 @@ describe('useNames', () => {
     await waitFor(() => expect(result.current.status).toBe('error'));
   });
 
-  it('ends in error on JSON that is not a list', async () => {
+  it('ends in error on JSON without a list of places', async () => {
     quiet();
     stubFetch('{"entries": []}', { status: 200, headers: { 'Content-Type': 'application/json' } });
     const { result } = renderHook(() => useNames());
@@ -80,7 +84,7 @@ describe('namesUrl', () => {
   it('respects a non-root base', async () => {
     vi.stubEnv('BASE_URL', '/frasch-koord/');
     expect(namesUrl()).toBe(`${window.location.origin}/frasch-koord/data/names.json`);
-    const fetch = stubFetch('[]', { status: 200 });
+    const fetch = stubFetch('{"built_from": {}, "places": []}', { status: 200 });
     const { result } = renderHook(() => useNames());
     await waitFor(() => expect(result.current.status).toBe('ready'));
     expect(fetch).toHaveBeenCalledWith(`${window.location.origin}/frasch-koord/data/names.json`);
