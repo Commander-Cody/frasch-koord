@@ -1,6 +1,8 @@
 ---
+name: build
 description: Implement a task test-first on one branch and PR, loop it through the pr-reviewer agent (max 3 reviews) until approved, never merge.
 argument-hint: <issue number or task description>
+disable-model-invocation: true
 ---
 
 Implement this task: **$ARGUMENTS**
