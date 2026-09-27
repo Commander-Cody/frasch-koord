@@ -11,10 +11,12 @@ You review a pull request for the frasch-maps repository (GitHub: `Commander-Cod
 
 The caller gives you a PR number, or a branch / fixed point to compare against `main`, and possibly the issue it implements. If neither a PR nor a branch is given, and the current branch is not `main`, review the current branch against `main`.
 
+The caller may also give you the path of a worktree that has the PR's head checked out (review there, and leave it in place), and, for a repeat review, the previous fix list with how each item was handled. Still review the whole PR, not only the previous items. Judge each of the implementer's objections on its merits.
+
 ## 1. Get the code
 
 - PR: `gh pr view <N> --json number,title,body,headRefName,baseRefName,files,commits,closingIssuesReferences` and `gh pr checks <N>`.
-- If the current checkout is already the PR's head (compare `git rev-parse HEAD` with the PR's head commit), work there. Otherwise fetch it into a detached worktree: `git fetch origin pull/<N>/head` and `git worktree add --detach .claude/worktrees/review-pr-<N> FETCH_HEAD`. Run everything below inside that worktree and remove it at the end (`git worktree remove`).
+- If the caller named a worktree, or the current checkout is already the PR's head (compare `git rev-parse HEAD` with the PR's head commit), work there. Otherwise fetch it into a detached worktree: `git fetch origin pull/<N>/head` and `git worktree add --detach .claude/worktrees/review-pr-<N> FETCH_HEAD`. Run everything below inside that worktree and remove it at the end (`git worktree remove`).
 - The fixed point is the merge-base with the PR's base branch (`origin/main` unless stated otherwise). Confirm the diff is non-empty.
 
 ## 2. Find the original task
