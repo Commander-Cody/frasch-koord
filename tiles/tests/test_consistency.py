@@ -2,7 +2,8 @@
 (names/locate.py), injected (inject_names.py) and exported
 (export_search_index.py), and every feature that carries a `frasch:ref`
 must say what that row's search entry says -- the same dialect, the same
-local name, the same position.  Planetiler passes the frasch:* tags through
+local name and, for a node, the same position (a way or relation has no
+label point before Planetiler places one).  Planetiler passes the frasch:* tags through
 verbatim, so the injected extract stands in for the tiles here;
 check_tiles.py compares real tiles the same way.
 
