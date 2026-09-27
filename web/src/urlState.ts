@@ -1,7 +1,7 @@
 // What a link carries besides the viewport: the selected label option and the
 // place whose card is open, e.g.
 //
-//   /?view=frr-x-local&place=node/240042766#12/54.79/8.83
+//   /?view=frr-x-local&place=naibel#12/54.79/8.83
 //
 // The viewport is MapLibre's own `#zoom/lat/lon` hash (see Map.tsx). MapLibre
 // rewrites the whole hash on every move, so nothing else can live there; these
@@ -15,7 +15,11 @@ const PLACE_PARAM = 'place';
 export interface UrlState {
   /** Label option tag (a dialect, or LOCAL_TAG). */
   view?: string;
-  /** Name-list id of the place whose card is open, e.g. "node/240042766" or "local/<slug>". */
+  /**
+   * Name-list row id of the place whose card is open, e.g. "naibel". Links
+   * from before the row ids name an OSM reference ("node/240042766"), which
+   * names.ts `entryLookup` still resolves.
+   */
   place?: string;
 }
 
@@ -41,8 +45,8 @@ export function writeUrlState(state: UrlState): void {
     if (value) params.set(key, value);
     else params.delete(key);
   }
-  // Ids are `node/123`; a slash is fine in a query and reads much better
-  // than %2F in a link people paste into chats.
+  // Old ids are `node/123`; a slash is fine in a query and reads much
+  // better than %2F in a link people paste into chats.
   const query = params.toString().replace(/%2F/gi, '/');
   const { pathname, hash } = window.location;
   const url = `${pathname}${query ? `?${query}` : ''}${hash}`;

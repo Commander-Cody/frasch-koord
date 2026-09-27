@@ -3,9 +3,11 @@ import { renderHook, waitFor } from '@testing-library/react';
 
 import {
   cardEntry,
+  entryLookup,
   namesUrl,
   osmRefFromFeatureId,
   osmUrl,
+  placeOsmRef,
   resolveName,
   useNames,
   type NameEntry,
@@ -33,7 +35,7 @@ describe('useNames', () => {
   const quiet = () => vi.spyOn(console, 'error').mockImplementation(() => {});
 
   it('loads the list', async () => {
-    stubFetch(JSON.stringify([{ id: 'node/1', names: {}, name_de: 'Niebüll', lon: 8, lat: 54, kind: 'settlement' }]), {
+    stubFetch(JSON.stringify([{ id: 'naibel', names: {}, name_de: 'Niebüll', lon: 8, lat: 54, kind: 'settlement' }]), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
@@ -41,7 +43,7 @@ describe('useNames', () => {
     expect(result.current.status).toBe('loading');
     await waitFor(() => expect(result.current.status).toBe('ready'));
     expect(result.current.entries).toHaveLength(1);
-    expect(result.current.byRef.get('node/1')?.name_de).toBe('Niebüll');
+    expect(result.current.find('naibel')?.name_de).toBe('Niebüll');
   });
 
   it('ends in error on a 404', async () => {
@@ -251,8 +253,8 @@ describe('osmUrl', () => {
     expect(osmUrl('relation/3352541')).toBe('https://www.openstreetmap.org/relation/3352541');
   });
 
-  it('strips a "#<csv line>" suffix from a second row on the same object', () => {
-    expect(osmUrl('node/240042766#5')).toBe('https://www.openstreetmap.org/node/240042766');
+  it('links the first of several references', () => {
+    expect(osmUrl('way/1347936331; node/1332249790')).toBe('https://www.openstreetmap.org/way/1347936331');
   });
 
   it('returns null for a synthetic local/ place', () => {
@@ -265,5 +267,48 @@ describe('osmUrl', () => {
 
   it('returns null when there is no reference at all', () => {
     expect(osmUrl(undefined)).toBeNull();
+  });
+});
+
+describe('entryLookup', () => {
+  // Two rows on one dyke (two spellings), a row claiming two objects, a country.
+  const lungedik = entry({ id: 'lungedik', osm: 'way/28330569', name_de: 'Langerdeich' });
+  const lungdiik = entry({ id: 'lungdiik', osm: 'way/28330569', name_de: 'Langerdeich' });
+  const nordwarw = entry({ id: 'nordwarw', osm: 'way/1347936331; node/1332249790' });
+  const danemark = entry({ id: 'danemark', wikidata: 'Q35' });
+  const find = entryLookup([lungedik, lungdiik, nordwarw, danemark]);
+
+  it('finds an entry by its row id', () => {
+    expect(find('lungdiik')).toBe(lungdiik);
+  });
+
+  it('still opens an old ?place=node/… link: the first row on that object', () => {
+    expect(find('way/28330569')).toBe(lungedik);
+    expect(find('node/1332249790')).toBe(nordwarw);
+  });
+
+  it('still opens an old ?place=<ref>#<line> link, at the first row on that object', () => {
+    expect(find('way/28330569#679')).toBe(lungedik);
+  });
+
+  it('still opens an old ?place=<QID> link of a country', () => {
+    expect(find('Q35')).toBe(danemark);
+  });
+
+  it('finds nothing for an unknown reference', () => {
+    expect(find('node/1')).toBeUndefined();
+    expect(find('nobody')).toBeUndefined();
+  });
+});
+
+describe('placeOsmRef', () => {
+  it("is the name-list entry's OSM reference", () => {
+    expect(placeOsmRef({ entry: entry({ id: 'naibel', osm: 'node/240042766' }), featureId: 33525413 })).toBe(
+      'node/240042766',
+    );
+  });
+
+  it("is the clicked feature's object when the name list does not have the place", () => {
+    expect(placeOsmRef({ props: { name: 'Bredstedt' }, featureId: 2400427661 })).toBe('node/240042766');
   });
 });

@@ -31,6 +31,7 @@ const MAX_BODY = 64 * 1024;
  * tool poking the endpoint — is dropped rather than carried through.
  */
 const PATCH_ENTRY_KEYS = [
+  'id',
   'line',
   'kind',
   'name',
@@ -271,8 +272,10 @@ export function createCurateMiddleware(paths: CuratePaths): Connect.NextHandleFu
             sendJson(res, 400, { error: 'body must be a JSON object' });
             return;
           }
-          if (!Number.isInteger(entry.line)) {
-            sendJson(res, 400, { error: 'line must be an integer' });
+          // The row's id is how `apply` finds the row; the line is only
+          // there for its messages.
+          if (typeof entry.id !== 'string' || !entry.id) {
+            sendJson(res, 400, { error: 'id must be the row id, a non-empty string' });
             return;
           }
           if (typeof entry.action !== 'string' || !ACTIONS.has(entry.action)) {

@@ -108,7 +108,7 @@ describe('createCurateMiddleware', () => {
       .map((line) => JSON.parse(line) as Record<string, unknown>);
   }
 
-  const validEntry = { line: 3, kind: 'settlement', name: 'Alkersum', de: 'Alkersum', action: 'skip' };
+  const validEntry = { id: 'alkersem', line: 3, kind: 'settlement', name: 'Alkersem', de: 'Alkersum', action: 'skip' };
   const jsonHeaders = { 'content-type': 'application/json' };
 
   it('rejects a non-JSON Content-Type with 415, and appends nothing', async () => {
@@ -153,14 +153,24 @@ describe('createCurateMiddleware', () => {
     const stored = JSON.parse(res.body) as { ok: boolean; entry: Record<string, unknown> };
     expect(stored.ok).toBe(true);
     expect(Object.keys(stored.entry).sort()).toEqual(
-      ['action', 'at', 'de', 'kind', 'line', 'name', 'osm'].sort(),
+      ['action', 'at', 'de', 'id', 'kind', 'line', 'name', 'osm'].sort(),
     );
     expect(stored.entry.evil).toBeUndefined();
     expect(typeof stored.entry.at).toBe('string');
 
     const onDisk = await readPatchEntries();
     expect(onDisk).toHaveLength(1);
-    expect(Object.keys(onDisk[0]).sort()).toEqual(['action', 'at', 'de', 'kind', 'line', 'name', 'osm'].sort());
+    expect(Object.keys(onDisk[0]).sort()).toEqual(['action', 'at', 'de', 'id', 'kind', 'line', 'name', 'osm'].sort());
+  });
+
+  it.each([
+    ['without an id', { ...validEntry, id: undefined }],
+    ['with an empty id', { ...validEntry, id: '' }],
+    ['with a line number for an id', { ...validEntry, id: 3 }],
+  ])('rejects an entry %s with 400: curate.py apply finds the row by it', async (_, entry) => {
+    const res = await post(jsonHeaders, JSON.stringify(entry));
+    expect(res.status).toBe(400);
+    expect(await readPatchEntries()).toEqual([]);
   });
 
   it('rejects an oversized body with 413 and destroys the connection', async () => {

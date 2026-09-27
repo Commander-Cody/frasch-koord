@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { DIALECTS, dialect, dialectLabelKey } from '../config';
 import type { DialectEntry } from '../config';
 import type { PlaceSelection } from '../names';
-import { cardEntry, osmUrl, placeRef, resolveName, wikidataUrl } from '../names';
+import { cardEntry, osmUrl, placeOsmRef, resolveName, wikidataUrl } from '../names';
 import './PlaceCard.css';
 
 export interface PlaceCardProps {
@@ -110,8 +110,7 @@ export default function PlaceCard({ selection, labels, onClose, ref: cardRef }: 
     return out;
   }, [entry, shownAs, headline, localLabel, dialectLabel, t]);
 
-  const ref = placeRef(selection);
-  const osm = osmUrl(ref ?? undefined);
+  const osm = osmUrl(placeOsmRef(selection) ?? undefined);
   const wikidata = wikidataUrl(entry.wikidata);
   // The "report a wrong or missing name" link belongs here; it is issue #8.
 

@@ -18,6 +18,7 @@ import { LngLatBounds, Marker } from 'maplibre-gl';
 import type { MapMouseEvent, Map as MapLibreMap } from 'maplibre-gl';
 
 import type { MapViewHandle } from '../components/Map';
+import { decidedRows, type PatchEntry } from './curatePatch';
 import './CuratePanel.css';
 
 /* ------------------------------------------------------------------ types */
@@ -42,7 +43,9 @@ export interface CurateCandidate {
 
 /** One row of `names/work/curate.json`. */
 export interface CurateRow {
-  /** Physical line in places.csv (header = 1); the row's identity together with kind/name/de. */
+  /** The places.csv row's `id`: what the decisions are keyed on. */
+  id: string;
+  /** Its line in places.csv at export time (header = 1); shown, never used to find the row. */
   line: number;
   kind: string;
   result: 'ambiguous' | 'not_found';
@@ -68,23 +71,6 @@ export interface CurateWorklist {
   bbox: [number, number, number, number];
   kind_order: string[];
   rows: CurateRow[];
-}
-
-/** One line of `names/work/curate-patch.jsonl`. */
-export interface PatchEntry {
-  line: number;
-  kind: string;
-  name: string;
-  de: string;
-  action: 'osm' | 'local' | 'skip' | 'clear';
-  osm?: string;
-  wikidata?: string;
-  slug?: string;
-  lat?: number;
-  lon?: number;
-  polygon_km2?: number;
-  note?: string;
-  at?: string;
 }
 
 /** A Nominatim or Overpass hit, normalised to what the pin/pick code needs. */
@@ -292,7 +278,7 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
   const [worklist, setWorklist] = useState<CurateWorklist | null>(null);
   const [entries, setEntries] = useState<PatchEntry[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [selectedLine, setSelectedLine] = useState<number | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   // Filters
   const [filterText, setFilterText] = useState('');
@@ -351,30 +337,16 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
     };
   }, []);
 
-  /* ---------------------------------------------------- deep link (?line=) */
+  /* ----------------------------------------------------- deep link (?row=) */
 
-  // `?curate&line=40` opens that row: a session note ("I stopped at 40"),
-  // a link from a report, or a scripted screenshot. The current row is
-  // written back so reloading keeps the place.
-  const initialLine = useRef<number | null>(
-    (() => {
-      const raw = new URLSearchParams(window.location.search).get('line');
-      return raw && /^\d+$/.test(raw) ? Number(raw) : null;
-    })(),
-  );
+  // `?curate&row=schorkewarw-2` opens that row: a session note ("I stopped
+  // there"), a link from a report, or a scripted screenshot. The current row
+  // is written back so reloading keeps the place.
+  const initialId = useRef<string | null>(new URLSearchParams(window.location.search).get('row'));
 
   /* ------------------------------------------------------------ derived */
 
-  /** Last entry per row; an `clear` entry withdraws the row's decision. */
-  const doneByLine = useMemo(() => {
-    const last = new Map<number, PatchEntry>();
-    for (const entry of entries) last.set(entry.line, entry);
-    const done = new Map<number, PatchEntry>();
-    for (const [line, entry] of last) {
-      if (entry.action !== 'clear') done.set(line, entry);
-    }
-    return done;
-  }, [entries]);
+  const doneById = useMemo(() => decidedRows(entries), [entries]);
 
   // Memoised so every derivation below (and the lint's dependency analysis)
   // sees one stable array rather than a fresh `[]` on each render.
@@ -395,24 +367,24 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
     return rows.filter((row) => {
       if (filterKind && row.kind !== filterKind) return false;
       if (filterResult !== 'all' && row.result !== filterResult) return false;
-      if (hideDone && doneByLine.has(row.line)) return false;
+      if (hideDone && doneById.has(row.id)) return false;
       if (!needle) return true;
       const haystack = [row.name, ...Object.values(row.names ?? {}), row.de, row.da, row.hint]
         .join(' ')
         .toLowerCase();
       return haystack.includes(needle);
     });
-  }, [rows, filterKind, filterResult, hideDone, filterText, doneByLine]);
+  }, [rows, filterKind, filterResult, hideDone, filterText, doneById]);
 
   const selected = useMemo(
-    () => rows.find((row) => row.line === selectedLine) ?? null,
-    [rows, selectedLine],
+    () => rows.find((row) => row.id === selectedId) ?? null,
+    [rows, selectedId],
   );
-  const selectedDone = selected ? (doneByLine.get(selected.line) ?? null) : null;
+  const selectedDone = selected ? (doneById.get(selected.id) ?? null) : null;
 
   const doneCount = useMemo(
-    () => rows.filter((row) => doneByLine.has(row.line)).length,
-    [rows, doneByLine],
+    () => rows.filter((row) => doneById.has(row.id)).length,
+    [rows, doneById],
   );
 
   /* ----------------------------------------------------------- map pins */
@@ -591,17 +563,17 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
    * effect on `selected` keeps it a single render and one obvious place.
    */
   const goTo = useCallback(
-    (line: number) => {
-      setSelectedLine(line);
+    (id: string) => {
+      setSelectedId(id);
       const params = new URLSearchParams(window.location.search);
-      params.set('line', String(line));
+      params.set('row', id);
       // Keep MapLibre's `#zoom/lat/lon` hash: it is part of the resume state.
       window.history.replaceState(
         window.history.state,
         '',
         `${window.location.pathname}?${params}${window.location.hash}`,
       );
-      const row = rows.find((candidate) => candidate.line === line) ?? null;
+      const row = rows.find((candidate) => candidate.id === id) ?? null;
       const de = row ? primary(row.de) : '';
       setLookupQuery(row ? de || primary(row.da) || row.name : '');
       setSlug(row ? slugify(de || row.name) : '');
@@ -622,20 +594,20 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
 
   // Once the worklist is there, honour the deep link (only once).
   useEffect(() => {
-    const line = initialLine.current;
-    if (line === null || rows.length === 0) return;
-    initialLine.current = null;
-    if (rows.some((row) => row.line === line)) goTo(line);
+    const id = initialId.current;
+    if (id === null || rows.length === 0) return;
+    initialId.current = null;
+    if (rows.some((row) => row.id === id)) goTo(id);
   }, [rows, goTo]);
 
   const move = useCallback(
     (delta: number) => {
       if (visible.length === 0) return;
-      const at = visible.findIndex((row) => row.line === selectedLine);
+      const at = visible.findIndex((row) => row.id === selectedId);
       const next = at < 0 ? 0 : Math.min(visible.length - 1, Math.max(0, at + delta));
-      goTo(visible[next].line);
+      goTo(visible[next].id);
     },
-    [visible, selectedLine, goTo],
+    [visible, selectedId, goTo],
   );
 
   // Global so the keys work wherever the eye is, but never while typing.
@@ -661,22 +633,23 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
   // Keep the selected row in view when it moved by keyboard.
   useEffect(() => {
     listRef.current?.querySelector('.is-selected')?.scrollIntoView({ block: 'nearest' });
-  }, [selectedLine]);
+  }, [selectedId]);
 
   /* ------------------------------------------------------------- saving */
 
   const advance = useCallback(
-    (fromLine: number) => {
-      const at = visible.findIndex((row) => row.line === fromLine);
-      const next = visible.slice(at + 1).find((row) => !doneByLine.has(row.line));
-      if (next) goTo(next.line);
+    (fromId: string) => {
+      const at = visible.findIndex((row) => row.id === fromId);
+      const next = visible.slice(at + 1).find((row) => !doneById.has(row.id));
+      if (next) goTo(next.id);
     },
-    [visible, doneByLine, goTo],
+    [visible, doneById, goTo],
   );
 
   const send = useCallback(
-    async (row: CurateRow, patch: Omit<PatchEntry, 'line' | 'kind' | 'name' | 'de'>) => {
+    async (row: CurateRow, patch: Omit<PatchEntry, 'id' | 'line' | 'kind' | 'name' | 'de'>) => {
       const entry: PatchEntry = {
+        id: row.id,
         line: row.line,
         kind: row.kind,
         name: row.name,
@@ -696,7 +669,7 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
         if (!res.ok || !body?.ok) throw new Error(body?.error ?? `HTTP ${res.status}`);
         // Mirror the appended line locally so the list turns "done" at once.
         setEntries((prev) => [...prev, body.entry ?? entry]);
-        if (entry.action !== 'clear') advance(row.line);
+        if (entry.action !== 'clear') advance(row.id);
       } catch (err: unknown) {
         setPostError(err instanceof Error ? err.message : String(err));
       }
@@ -884,19 +857,19 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
       <ul className="curate-list" ref={listRef}>
         {visible.length === 0 && <li className="curate-empty">nothing matches the filter</li>}
         {visible.map((row) => {
-          const done = doneByLine.get(row.line);
+          const done = doneById.get(row.id);
           return (
             <li
-              key={row.line}
+              key={row.id}
               className={[
                 'curate-item',
-                row.line === selectedLine ? 'is-selected' : '',
+                row.id === selectedId ? 'is-selected' : '',
                 done ? 'is-done' : '',
               ]
                 .filter(Boolean)
                 .join(' ')}
             >
-              <button type="button" onClick={() => goTo(row.line)}>
+              <button type="button" onClick={() => goTo(row.id)}>
                 <span className="curate-item-head">
                   <span className="curate-item-name">{row.name}</span>
                   <span className="curate-item-de">{primary(row.de) || primary(row.da)}</span>
@@ -920,7 +893,9 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
         <section className="curate-detail">
           <h2 className="curate-detail-title">
             {selected.name}
-            <span className="curate-detail-line">places.csv line {selected.line}</span>
+            <span className="curate-detail-line">
+              {selected.id} · places.csv line {selected.line}
+            </span>
           </h2>
           <dl className="curate-facts">
             {Object.entries(selected.names ?? {}).map(([column, value]) => (
