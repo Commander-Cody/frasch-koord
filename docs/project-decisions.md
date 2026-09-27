@@ -360,6 +360,54 @@ the 2026-09-19 note above that rows are identified by kind + names with the
 line as a fast path, and the 2026-09-18 note that a local reference is the
 search-index id.
 
+## Decided 2026-09-27: one pipeline for positions, provenance and drift checks (issue #24)
+
+**Positions are worked out once.** `names/locate.py` finds every OSM object of
+the name list in the extracts (SH + DK) and writes the committed
+`names/osm_objects.json`: a point inside the object's polygon (else its label
+member or first vertex), the outline point as a second try for the dialect,
+the `admin_level` of an administrative boundary and OSM's `name:nds`. The
+injector and the search export both read it and both call
+`locate.dialect_at`, so a label and its search entry cannot disagree. The
+search index no longer reads `work/matches.csv` at all.
+- Every object gets the dialect where it lies (owner's choice: per object,
+  not per row); a search entry takes the first object of its row's `osm`
+  cell. An administrative area above municipality level (Kreis, Amt) gets
+  none.
+- A row on the map whose object the file does not know stops both the
+  export and the injector, instead of silently dropping out of search.
+
+**Orchestration: `just`** (owner's choice over a Makefile — `make` is not on
+the dev machine), installed as a dev dependency (`rust-just`) so `uv run just`
+works everywhere. Recipes: `extracts`, `candidates`, `match`, `objects`,
+`areas`, `index`, `dialects`, `tiles`, `check`, `check-full`, `check-tiles`.
+
+**Provenance.** `names.json` became `{"built_from", "places"}`; the tiles
+carry the same `built_from` (git blob hashes of `places.csv`,
+`dialects.csv`, `curation.csv`, `dialect_areas.geojson`, `osm_objects.json`
+plus the objects' extracts) in the PMTiles `description`. The frontend warns
+in the console when they differ. The dialect areas record the hashes of
+`dialect_areas.csv` and `dialects.csv` and their extract.
+
+**Drift check.** `just check` runs in CI: it regenerates `names.json` and
+`dialects.json` and diffs them, and checks the stamps of the extract-derived
+files (CI has no extract; `-latest` changes daily anyway). `just check-full`
+rebuilds those from local extracts too; `just check-tiles` compares a built
+archive with `names.json`, label by label.
+
+**Hardening.** `candidates.jsonl` names its extracts and is written
+atomically, and `match.py` warns when the extract set changes;
+`match.py --dry-run` writes nothing tracked; `build_dialect_areas.py` stops on
+a missing area (`--allow-missing`); `build.sh` pins Planetiler 0.10.2 by
+sha256, verifies Geofabrik downloads by their `.md5`, builds to temp files.
+
+**Why**: the two chains used to locate places separately, days apart, and
+disagreed on Sylt, Amrum, Oland, Stiardebel and more; nine rows were missing
+from search; the committed `names.json` had been built from an uncommitted
+`places.csv`; and a fresh clone could not rebuild it. This supersedes the
+2026-09-16 note that positions come from the injector's own pre-passes and
+the 2026-09-17 note on how the search index looks positions up.
+
 ## Remaining open questions
 1. Code license (MIT proposed).
 2. Hosting provider (R2 + Pages proposed, nothing set up yet).

@@ -14,15 +14,20 @@ names/curation.csv       per-OSM-object map tuning (hand-edited, in git)
         |  match.py          fills empty `osm` cells, marks them status=auto
         |  <- work/candidates.jsonl <- build_candidates.py <- tiles/data/*.osm.pbf
         |
+        |  locate.py               ->  names/osm_objects.json (in git)
         |  build_dialect_areas.py  ->  names/dialect_areas.geojson (in git)
         v
 names/REPORT.md          generated worklist: what is still unmatched
 names/work/matches.csv   generated details of the last match run (git-ignored)
         |
-        |  export_search_index.py  ->  web/public/data/names.json
-        |                          ->  web/src/generated/dialects.json
+        |  export_search_index.py  ->  web/public/data/names.json (in git)
+        |  dialects.py --export    ->  web/src/generated/dialects.json (in git)
         |  tiles/inject_names.py   ->  tags in the OSM extract  ->  tiles
 ```
+
+Every step is a recipe of the root `justfile` (`uv run just --list`):
+`extracts`, `candidates`, `match`, `objects`, `areas`, `index`, `dialects`,
+`tiles`, and the checks `check` (CI), `check-full` and `check-tiles`.
 
 `names/bootstrap/sheet-export.csv` is the export of the original Google Sheet
 the list was imported from (September 2026). The sheet is history; do not
@@ -117,7 +122,7 @@ belongs to a dialect.
 | column | meaning |
 |---|---|
 | `dialect` | a `tag` from `dialects.csv` |
-| `osm` | `relation/123` (a municipality) or `way/123` (an island polygon where the municipality is the wrong unit); several separated by `;`, as in `places.csv`. An object belongs to one row only: the review overlay's `?areas&area=relation/123` links name a row by it |
+| `osm` | `relation/123` (a municipality) or `way/123` (an island polygon where the municipality is the wrong unit) — never `node/` (a node cannot be a polygon) or `local/` (not an OSM object); several separated by `;`, as in `places.csv`. An object belongs to one row only: the review overlay's `?areas&area=relation/123` links name a row by it |
 | `name` | free-text label so a human can read the row |
 | `note` | why this object |
 
@@ -149,6 +154,13 @@ a Schleswig-Holstein extract covers every Frisian area there is. The report
 lists every area with its polygon count and size, and every referenced object
 that is not in the extract.
 
+**A reference that produced no geometry at all stops the run** (exit 1) before
+either output file is touched — a dialect area silently missing an object is
+worse than a build that fails, since nothing downstream would ever notice the
+gap. `--allow-missing` builds anyway. This is separate from an unclosed or
+partial ring: that object still produced *some* geometry, so it stays a
+warning in the report either way.
+
 The same run also writes `names/dialect_areas_parts.geojson` (`--parts-out`):
 one Feature per *municipality* rather than per dialect, carrying the row's
 `name` and research `note`, plus every Kreis Nordfriesland municipality that no
@@ -158,6 +170,13 @@ web app (`?areas`, see `web/README.md`) and is simplified finer, to 0.0001°
 between two municipalities that actually touch become visible. Committed, for
 the same reason as the dissolved file. `--no-unassigned` skips the extra
 relation scan.
+
+Both files are written atomically (`placelist.atomic_write`) and only once
+every reference has resolved and every polygon is assembled, so a crashed or
+interrupted run never leaves a truncated file. Each one's `properties` records
+a `built_from`: the git blob hash of `dialect_areas.csv` and `dialects.csv`,
+plus the file name and replication timestamp of every extract read — the same
+provenance scheme as the rest of the pipeline (`names/provenance.py`).
 
 **No Python consumer may read the parts file.** Its unit is the municipality,
 not the dialect, so handing it to `dialects.AreaIndex` would silently change
@@ -221,6 +240,25 @@ $PY names/match.py            # --offline skips the Wikidata API (countries)
 git diff names/places.csv     # review what it filled in
 ```
 
+`build_candidates.py` writes `work/candidates.jsonl` in one step (an
+interrupted run leaves the previous file), and its first line names the
+extracts it was read from, with their replication timestamps. It needs
+extracts sorted by id, as Geofabrik's are, and stops on one that is not
+(`osmium sort` fixes it).
+
+Build the candidates from **every** extract: a row the matcher filled from an
+object only one extract has — the Danish places (Fanø, Hoyer, Ripen, Röm, …)
+are only in `denmark-latest` — loses its match when that extract is left out.
+So `match.py` records the extracts it used in `work/match-extracts.json` and
+warns when a later run gets candidates from another set of extract files
+(a newer download of the same extract is fine). It also warns about a
+`candidates.jsonl` from before the header: rebuild it.
+
+`match.py --dry-run` shows what a run would do and writes only the
+git-ignored `work/matches.csv` — neither `places.csv` nor `REPORT.md`.
+`REPORT.md` carries no date, so a real run on unchanged inputs leaves it
+unchanged too.
+
 `match.py` only ever rewrites the `osm`, `wikidata` and `status` cells of rows
 it owns: rows whose `osm` and `wikidata` are both empty, and rows it filled
 earlier (`status=auto`). A row you filled in, marked `ok` or `skip`, or a
@@ -270,13 +308,51 @@ back to it. Re-run `match.py` afterwards and export again.
 **Build**:
 
 ```bash
-# only when dialect_areas.csv changed (result is committed)
-$PY names/build_dialect_areas.py tiles/data/schleswig-holstein-latest.osm.pbf
-
-$PY names/export_search_index.py   # -> web/public/data/names.json (needs a match.py run)
-                                   # -> web/src/generated/dialects.json
-tiles/build.sh schleswig-holstein  # injects places.csv + areas + curation.csv, runs Planetiler
+uv run just extracts   # download + verify the SH and DK extracts (REFRESH=1: again)
+uv run just objects    # after a row got a new `osm` reference (result is committed)
+uv run just areas      # only when dialect_areas.csv changed (result is committed)
+uv run just index      # -> web/public/data/names.json + web/src/generated/dialects.json
+uv run just tiles      # injects places.csv + objects + areas + curation.csv, runs Planetiler
+uv run just check      # the committed outputs match their inputs (CI runs this)
 ```
+
+### Where the objects are
+
+The map labels and the search index must agree on where a place is, and so
+on which dialect is spoken there. `locate.py` works that out once, from the
+extracts, into the committed `osm_objects.json`: for every OSM reference of a
+row on the map its point (a node's location; a point *inside* the polygon of
+a way or relation that closes into one; else the relation's `label` /
+`admin_centre` member, else its first vertex the extract holds), the outline
+point as a second try for the dialect lookup, the `admin_level` of an
+administrative boundary, and OSM's `name:nds`. It is stamped with the
+extracts it was read from. The injector and `export_search_index.py` both read
+it, and both ask `locate.dialect_at` which dialect an object lies in — so a
+label and its search entry cannot disagree. An administrative area above
+municipality level (Kreis Nordfriesland, an Amt) gets no dialect: it spans
+several. A search entry lies where the first object of its row's `osm` cell
+lies.
+
+Give a row a new `osm` reference and both stop until `just objects` has
+located it: a row on the map without a position would otherwise be missing
+from search (or get no dialect on the map). `locate.py` lists the references
+no extract holds.
+
+### What the outputs were built from
+
+`names.json` and the tiles carry the same `built_from` stamp
+(`provenance.py`): the git blob hashes (`git hash-object`, of the content, so
+it also names an uncommitted state) of `places.csv`, `dialects.csv`,
+`curation.csv`, `dialect_areas.geojson` and `osm_objects.json`, plus the
+extracts the objects were located in. The frontend warns in the console when
+the two differ. `dialect_areas*.geojson` record the hashes of
+`dialect_areas.csv` and `dialects.csv` and their extract.
+
+`just check` (`check_built.py`, run in CI) proves the committed outputs match
+the committed inputs: it rebuilds `names.json` and `dialects.json` into a
+temporary directory and compares them byte for byte, and checks the stamps
+of the dialect areas — those, and `osm_objects.json`, need an extract to
+rebuild. `just check-full` rebuilds them from the local extracts as well.
 
 Dry-run the injection alone:
 
@@ -370,9 +446,7 @@ OpenMapTiles takes hamlets and villages from *points* only, so any other
 instead.
 
 `export_search_index.py` takes the position of a local-reference row from
-`curation.csv` (`--curation`, default `names/curation.csv`) and uses the
-local reference itself, e.g. `local/westerheide-amrum`, as the entry's stable
-`id`.
+`curation.csv` (`--curation`, default `names/curation.csv`).
 
 `match.py` leaves a row with a local reference alone (`own point` in
 `REPORT.md`).
@@ -485,14 +559,18 @@ references: coordinates and tag fixes belong in `curation.csv` and the build.
 | `dialect_areas.csv` | which OSM object belongs to which dialect — edit this |
 | `curation.csv` | per-object map tuning, and the position for places OSM does not have — edit this |
 | `placelist.py` | reads/writes/validates `places.csv`; shared by the scripts below |
-| `dialects.py` | the registry, the dialect name logic and the area lookup; shared by injector, exporter and matcher |
+| `dialects.py` | the registry, the dialect name logic and the area lookup; shared by injector, exporter and matcher. `--export` writes `web/src/generated/dialects.json` |
+| `locate.py` | OSM extract(s) → `osm_objects.json`: where each object of the name list is; `dialect_at`, the one dialect lookup of injector and exporter |
+| `osm_objects.json` | generated, **committed**: the located objects (see "Where the objects are") |
+| `provenance.py` | the `built_from` stamps; prints the tiles' |
+| `check_built.py` | `just check`: the committed outputs match their inputs |
 | `build_candidates.py` | OSM extract(s) → `work/candidates.jsonl` |
-| `match.py` | fills `osm`/`wikidata` in `places.csv`; writes `work/matches.csv` and `REPORT.md` |
+| `match.py` | fills `osm`/`wikidata` in `places.csv`; writes `work/matches.csv` and `REPORT.md` (`--dry-run`: only `work/matches.csv`) |
 | `build_dialect_areas.py` | `dialect_areas.csv` + OSM extract → `dialect_areas.geojson` + `dialect_areas_parts.geojson` |
 | `dialect_areas.geojson` | generated, **committed**: one polygon set per dialect — the lookup file |
 | `dialect_areas_parts.geojson` | generated, **committed**: one polygon per municipality with its `note`, plus the unassigned ones; for the `?areas` review view only, never read by Python |
 | `curate.py` | the review worklist as pins on the map: `export` → `work/curate.json`, `apply` writes the browser's decisions back into `places.csv` / `curation.csv` |
-| `export_search_index.py` | `places.csv` + `work/matches.csv` → `web/public/data/names.json` (every dialect name, the local form, OSM's Low Saxon name, German, Danish, the QID; keyed by the row `id`, the same string the tiles carry as `frasch:ref`) and `web/src/generated/dialects.json` |
+| `export_search_index.py` | `places.csv` + `osm_objects.json` + `dialect_areas.geojson` → `web/public/data/names.json` (every dialect name, the local form, OSM's Low Saxon name, German, Danish, the QID; keyed by the row `id`, the same string the tiles carry as `frasch:ref`; stamped with `built_from`) |
 | `REPORT.md` | generated worklist |
-| `work/` | git-ignored caches (candidates, matches, Wikidata lookups) and the curation view's `curate.json` / `curate-patch.jsonl` |
+| `work/` | git-ignored caches (candidates, matches, Wikidata lookups, the extracts the last match used) and the curation view's `curate.json` / `curate-patch.jsonl` |
 | `bootstrap/` | the original sheet export (`sheet-export.csv`) |
