@@ -367,3 +367,13 @@ def test_fix_run_twice_changes_nothing(world):
     once = places.read_bytes()
     fix(places)
     assert places.read_bytes() == once
+
+
+def test_a_hand_set_frasch_ref_must_name_a_row(names):
+    # the place card finds the row a label belongs to by it (#23)
+    row = "node/85929111,Nordstrand,,,frasch:ref={},12,,,\n"
+    assert names(places_text([{**TOFTUM, "id": "toftem"}]),
+                 CURATION_HEADER + row.format("toftem")) == []
+    problems = names(places_text([TOFTUM]), CURATION_HEADER + row.format("relation/1420555"))
+    assert [(p.path.endswith("curation.csv"), p.line) for p in problems] == [(True, 2)]
+    assert "frasch:ref=relation/1420555 names no row" in problems[0].message

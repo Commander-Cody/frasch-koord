@@ -23,6 +23,9 @@ import dialects
 import placelist
 
 
+# the tile attribute a curation row may set to point a label at a row
+REF_TAG = "frasch:ref"
+
 # the name columns: `;`-separated variants with `(…)` remarks, the
 # conventions names/README.md sets for every name cell
 VARIANT_COLUMNS = placelist.NAME_COLUMNS + ["de", "da"]
@@ -86,12 +89,29 @@ def _rows(path):
     return header, rows
 
 
-def check_curation(path) -> tuple[list[Problem], set[str]]:
+def row_ids(path) -> set[str]:
+    """The `id` cells of the name list, whatever else is wrong with it."""
+    header, rows = _rows(path)
+    if "id" not in header:
+        return set()
+    column = header.index("id")
+    return {cells[column].strip() for _, cells in rows if len(cells) > column}
+
+
+def check_curation(path, ids) -> tuple[list[Problem], set[str]]:
     """-> (the problems in names/curation.csv, the slugs of the local
     references it positions).  The rules are those the tile build enforces
-    (`placelist.curation_rows`)."""
+    (`placelist.curation_rows`), plus: a `frasch:ref` set by hand must be the
+    id of a row of the name list (`ids`) -- it is how the place card finds
+    the row a label belongs to."""
     entries, problems = placelist.curation_rows(path)
+    for e in entries:
+        ref = e["tags"].get(REF_TAG)
+        if ref is not None and ref not in ids:
+            problems.append((e["line"], f"{REF_TAG}={ref} names no row of the "
+                                        f"name list (it takes a row's `id`)"))
     positioned = {e["local"] for e in entries if e["local"]}
+    problems.sort(key=lambda p: p[0])
     return [Problem(path, n, what) for n, what in problems], positioned
 
 
@@ -167,7 +187,7 @@ def check(places=placelist.DEFAULT_PATH,
     """Every problem in the name list `places`, the map curation `curation`
     and the dialect registry `registry`, file by file, in file order."""
     places, curation, registry = map(os.fspath, (places, curation, registry))
-    curation_problems, positioned = check_curation(curation)
+    curation_problems, positioned = check_curation(curation, row_ids(places))
     return (check_places(places, curation, positioned)
             + curation_problems + check_dialects(registry))
 
