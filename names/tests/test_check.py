@@ -377,3 +377,15 @@ def test_a_hand_set_frasch_ref_must_name_a_row(names):
     problems = names(places_text([TOFTUM]), CURATION_HEADER + row.format("relation/1420555"))
     assert [(p.path.endswith("curation.csv"), p.line) for p in problems] == [(True, 2)]
     assert "frasch:ref=relation/1420555 names no row" in problems[0].message
+
+
+def test_a_dialect_area_reference_on_two_rows_is_reported(world):
+    places = world / "places.csv"
+    places.write_text(places_text([TOFTUM]), encoding="utf-8")
+    areas = world / "dialect_areas.csv"
+    areas.write_text("dialect,osm,name,note\n"
+                     "frr-x-solring,relation/1147134,Sylt,\n"
+                     "frr-x-fering,relation/1147134,Sylt,\n", encoding="utf-8")
+    problems = check.check(places, world / "curation.csv", areas=areas)
+    assert [(os.path.basename(p.path), p.line, p.message) for p in problems] == [
+        ("dialect_areas.csv", 3, "relation/1147134 is already on line 2")]

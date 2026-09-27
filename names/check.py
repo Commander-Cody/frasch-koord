@@ -136,6 +136,13 @@ def check_dialects(path) -> list[Problem]:
     return problems
 
 
+def check_dialect_areas(path, registry) -> list[Problem]:
+    """The problems in the dialect area list, names/dialect_areas.csv, by the
+    rules the area build enforces (`dialects.area_rows`)."""
+    _rows, problems = dialects.area_rows(path, dialects.read(registry))
+    return [Problem(path, n, what) for n, what in problems]
+
+
 def check_places(path, curation, positioned) -> list[Problem]:
     """The problems in the name list; `positioned` are the local references
     `curation` has a position for."""
@@ -183,13 +190,19 @@ def check_places(path, curation, positioned) -> list[Problem]:
 
 def check(places=placelist.DEFAULT_PATH,
           curation=placelist.CURATION_PATH,
-          registry=placelist.DIALECTS_PATH) -> list[Problem]:
-    """Every problem in the name list `places`, the map curation `curation`
-    and the dialect registry `registry`, file by file, in file order."""
-    places, curation, registry = map(os.fspath, (places, curation, registry))
+          registry=placelist.DIALECTS_PATH,
+          areas=dialects.AREA_LIST_PATH) -> list[Problem]:
+    """Every problem in the name list `places`, the map curation `curation`,
+    the dialect registry `registry` and the dialect area list `areas`, file
+    by file, in file order.  The area list is checked only against a sound
+    registry."""
+    places, curation, registry, areas = map(os.fspath,
+                                            (places, curation, registry, areas))
     curation_problems, positioned = check_curation(curation, row_ids(places))
+    registry_problems = check_dialects(registry)
+    area_problems = [] if registry_problems else check_dialect_areas(areas, registry)
     return (check_places(places, curation, positioned)
-            + curation_problems + check_dialects(registry))
+            + curation_problems + registry_problems + area_problems)
 
 
 def markdown(problems) -> str:
@@ -212,6 +225,7 @@ def main(argv=None) -> int:
     ap.add_argument("--names", default=placelist.DEFAULT_PATH)
     ap.add_argument("--curation", default=placelist.CURATION_PATH)
     ap.add_argument("--dialects", default=placelist.DIALECTS_PATH)
+    ap.add_argument("--areas", default=dialects.AREA_LIST_PATH)
     ap.add_argument("--fix", action="store_true",
                     help="first give every row of the name list without an "
                          "`id` one (placelist.fill_ids)")
@@ -223,7 +237,7 @@ def main(argv=None) -> int:
         with placelist.lock(a.names):
             given = placelist.fill_ids(a.names)
         print(f"gave {given} row(s) an id", file=sys.stderr)
-    problems = check(a.names, a.curation, a.dialects)
+    problems = check(a.names, a.curation, a.dialects, a.areas)
     for p in problems:
         print(p)
     if a.summary:

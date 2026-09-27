@@ -5,7 +5,10 @@ it.  Node ids stand in for the nodes; a ring is closed when it ends on the
 node it started with."""
 from __future__ import annotations
 
+import pytest
+
 import build_dialect_areas as bda
+import dialects
 
 
 def same_ring(a, b):
@@ -69,3 +72,16 @@ def test_the_input_ways_are_not_modified():
     ways = [[1, 2, 3], [3, 4, 1]]
     bda.assemble_rings(ways)
     assert ways == [[1, 2, 3], [3, 4, 1]]
+
+
+# ------------------------------------------------------------- read_areas ---
+def test_an_osm_reference_on_two_rows_is_refused(tmp_path):
+    # the review overlay's `?areas&area=` links name a row by its reference (#23)
+    areas = tmp_path / "dialect_areas.csv"
+    areas.write_text("dialect,osm,name,note\n"
+                     "frr-x-solring,relation/1147134,Sylt,\n"
+                     "frr-x-solring,relation/1147133,Kampen,\n"
+                     "frr-x-solring,relation/1147134,Sylt again,\n", encoding="utf-8")
+    with pytest.raises(SystemExit, match=r"dialect_areas.csv:4: relation/1147134 "
+                                         r"is already on line 2"):
+        bda.read_areas(str(areas), dialects.read())

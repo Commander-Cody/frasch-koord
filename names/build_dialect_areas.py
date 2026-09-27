@@ -66,7 +66,7 @@ sys.path.insert(0, HERE)
 import dialects  # noqa: E402
 import placelist  # noqa: E402
 
-DEFAULT_AREAS = os.path.join(HERE, "dialect_areas.csv")
+DEFAULT_AREAS = dialects.AREA_LIST_PATH
 DEFAULT_OUT = dialects.DEFAULT_AREAS
 SIMPLIFY_DEG = 0.0005            # ~50 m
 # Neighbouring municipalities are simplified independently, so a shared
@@ -91,48 +91,25 @@ DEFAULT_UNASSIGNED_AGS = "01054"
 def read_areas(path, reg):
     """-> ({(type, id): dialect_tag}, {(type, id): label}, [row]) in file order.
 
-    The third value is one dict per non-blank row -- {"line", "dialect",
-    "name", "note", "osm", "refs"} -- for the per-municipality parts output.
-    The two indexes stay keyed by OSM reference because that is what the
-    dissolve loop and the "not in the extract" report need.
+    The rows are those of `dialects.area_rows` -- {"line", "dialect", "name",
+    "note", "osm", "refs"} -- for the per-municipality parts output.  The two
+    indexes stay keyed by OSM reference because that is what the dissolve
+    loop and the "not in the extract" report need.
     """
     if not os.path.exists(path):
         raise SystemExit(f"dialect area list not found: {path}")
-    known = set(dialects.tags(reg))
-    by_ref, labels, rows = {}, {}, []
+    rows, problems = dialects.area_rows(path, reg)
+    if problems:
+        n, what = problems[0]
+        raise SystemExit(f"{path}:{n}: {what}")
     with placelist.open_csv(path) as fh:
-        reader = csv.DictReader(fh)
-        for col in ("dialect", "osm"):
-            if col not in (reader.fieldnames or []):
-                raise SystemExit(f"{path}: missing column {col!r}")
-        for col in ("name", "note"):
-            # Only the review overlay needs these; an older CSV still builds.
-            if col not in (reader.fieldnames or []):
-                print(f"{path}: no {col!r} column -- parts output leaves it empty")
-        for n, row in enumerate(reader, start=2):
-            tag = (row.get("dialect") or "").strip()
-            if not tag and not (row.get("osm") or "").strip():
-                continue                                  # blank spacer line
-            if tag not in known:
-                raise SystemExit(f"{path}:{n}: unknown dialect {tag!r} "
-                                 f"(not in names/dialects.csv)")
-            refs = placelist.parse_osm(row.get("osm"), f"{path}:{n}")
-            if not refs:
-                raise SystemExit(f"{path}:{n}: no OSM reference")
-            for ref in refs:
-                if ref in by_ref and by_ref[ref] != tag:
-                    raise SystemExit(f"{path}:{n}: {placelist.format_osm([ref])} "
-                                     f"is already {by_ref[ref]}")
-                by_ref[ref] = tag
-                labels[ref] = (row.get("name") or "").strip()
-            rows.append({
-                "line": n,
-                "dialect": tag,
-                "name": (row.get("name") or "").strip(),
-                "note": (row.get("note") or "").strip(),
-                "osm": placelist.format_osm(refs),
-                "refs": refs,
-            })
+        fields = csv.DictReader(fh).fieldnames or []
+    for col in ("name", "note"):
+        # Only the review overlay needs these; an older CSV still builds.
+        if col not in fields:
+            print(f"{path}: no {col!r} column -- parts output leaves it empty")
+    by_ref = {ref: row["dialect"] for row in rows for ref in row["refs"]}
+    labels = {ref: row["name"] for row in rows for ref in row["refs"]}
     return by_ref, labels, rows
 
 
