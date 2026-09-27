@@ -7,8 +7,8 @@ invisible in the data: a place is joined to a dialect area by point-in-polygon
 at build time, never by name, so a bad assignment only ever shows up as a wrong
 label on the map.
 
-Rows are listed by **name**. The line number is the fast path for
-`?areas&area=<line>` and shifts whenever a row is added or removed.
+Rows are listed by **name**. `?areas&area=relation/<id>` opens a row by its
+OSM reference, which stays put when rows are added or removed.
 
 ## How to check a row
 

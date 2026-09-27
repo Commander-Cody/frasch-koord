@@ -17,10 +17,9 @@ that is not `skip` tags the object(s) in its `osm` column with
     frasch:dialect   the dialect spoken where the object lies
     frasch:local     what the people of the place themselves call it
     frasch:variety   the name of that local variety, e.g. `Foortuftinge`
-    frasch:ref       the row's reference (`node/240042766`, `local/huelltoft`
-                     or, for a row with no `osm`, its QID) -- the id of the
-                     row's entry in the search index, so that the frontend can
-                     go from a clicked label back to the name-list row
+    frasch:ref       the row's `id` (`naibel`, `schorkewarw-2`) -- the id of
+                     the row's entry in the search index, so that the frontend
+                     can go from a clicked label back to the name-list row
 
 Rows with a `wikidata` QID additionally tag every object whose `wikidata` tag
 equals that QID; for the countries, which have no `osm`, that is the only key.
@@ -112,7 +111,7 @@ MAXZOOM_KEY = "frasch:maxzoom"
 DIALECT_KEY = "frasch:dialect"
 LOCAL_KEY = "frasch:local"
 VARIETY_KEY = "frasch:variety"
-REF_KEY = "frasch:ref"
+REF_KEY = placelist.REF_KEY
 
 # The default `place=` of the node added for a local reference, by the row's
 # kind.  Only kinds whose OSM equivalent is unambiguous are listed; any other
@@ -214,11 +213,7 @@ def name_tags(rows, area_tag, reg):
         if variety:
             tags[VARIETY_KEY] = variety
             break
-    for row in rows:
-        ref = placelist.entry_id(row)
-        if ref:
-            tags[REF_KEY] = ref
-            break
+    tags[REF_KEY] = rows[0]["id"]
     return tags
 
 

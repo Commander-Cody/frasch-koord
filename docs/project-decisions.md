@@ -293,7 +293,8 @@ one colour per dialect, and a near-opaque outline **in the same hue** so
 municipality boundaries stay visible *inside* one dialect's block — which is
 the point, since what is being checked is a per-municipality assignment.
 Clicking a polygon or a list row shows the name, the dialect and the `note`
-verbatim; `?areas&area=<line>` reopens a row. `web/vite-plugins/areas.ts`
+verbatim; `?areas&area=<line>` reopens a row (since 2026-09-27
+`?areas&area=relation/<id>`, see below). `web/vite-plugins/areas.ts`
 serves the file in dev only, so the research prose ("best guess only", "no
 direct source found") about unconfirmed assignments does not ship to the public
 site.
@@ -330,6 +331,34 @@ was left untouched pending a decision. The CSV's own notes cite Westre as a
 "confirmed Karrharde village" and Schwabstedt and Mildstedt as the
 Kirchspielslandgemeinden justifying six Südergoesharde rows, which suggests
 rows went missing rather than being retired. Priority 0 of the checklist.
+
+## Decided 2026-09-27: every `places.csv` row has a stable id (issue #23)
+
+`places.csv` gained an `id` column (last): a slug of the row's Frisian name
+(German, then Danish, when it has none), `-2`, `-3` on repeats, e.g. `naibel`,
+`schorkewarw-2`. `names/check.py --fix` gives a new row one (its first run was
+the migration); `placelist.read` refuses a row without a unique one. An id is
+never changed afterwards, even when the name is.
+
+Everything that used to name a row by its line or by kind + Frisian name +
+German name now uses the id: `work/matches.csv` and `REPORT.md` (which also
+show the line), the curation worklist, patch and `apply`, the curation view's
+done state and `?curate&row=`, the search index's entry `id` and the tiles'
+`frasch:ref`. A `?place=` link therefore survives edits to the list and OSM id
+changes; old `?place=node/…` links, old `ref#line` links and tiles built
+before the switch still resolve through the entry's `osm` field (web
+`entryLookup`). `dialect_areas.csv` rows are keyed by their OSM reference,
+which may now appear on one row only (`?areas&area=relation/…`). Line numbers
+remain only in messages meant for a human.
+
+**Why**: inserting a row renumbered every row below it — `?place=` links to a
+second row on an object (`way/28330569#678`) broke, curation decisions were
+refused after hand edits (11 of ~100 on 2026-09-20), four *Schörkewärw* /
+Kirchwarft rows could not be told apart at all, and a withdrawn decision sent
+with another line number still applied (review finding M2). This supersedes
+the 2026-09-19 note above that rows are identified by kind + names with the
+line as a fast path, and the 2026-09-18 note that a local reference is the
+search-index id.
 
 ## Remaining open questions
 1. Code license (MIT proposed).

@@ -310,3 +310,92 @@ def test_a_blank_line_is_no_problem_and_keeps_the_line_numbers(names):
     problems = names("\n".join([head, first, "", second]) + "\n")
     assert lines(problems) == [4]
     assert "town" in problems[0].message
+
+
+# ------------------------------------------------------------------ ids ---
+def test_a_row_without_an_id_is_reported(names):
+    problems = names(places_text([TOFTUM, {**NIEBUELL, "id": ""}]))
+    assert lines(problems) == [3]
+    assert "check.py --fix" in problems[0].message
+
+
+def test_an_id_used_twice_is_reported_on_the_second_row(names):
+    problems = names(places_text([{**TOFTUM, "id": "toftem"}, {**NIEBUELL, "id": "toftem"}]))
+    assert [(p.line, p.message) for p in problems] == [
+        (3, "id toftem is already used on line 2")]
+
+
+def fix(places):
+    return check.main(["--fix", "--names", str(places),
+                       "--curation", str(places.parent / "curation.csv")])
+
+
+def test_fix_gives_each_new_row_an_id_from_its_frisian_name(world):
+    places = world / "places.csv"
+    places.write_text(places_text([
+        {**NIEBUELL, "id": ""},
+        {"kind": "warft", "mooring": "Schörkewärw", "de": "Kirchwarft", "id": ""},
+        {"kind": "warft", "mooring": "Schörkewärw", "de": "Kirchwarft", "id": ""},
+        {"kind": "country", "de": "Dänemark", "wikidata": "Q35", "id": ""},
+        {**TOFTUM, "id": "toftem"},
+        {"kind": "settlement", "mooring": "Toftem", "de": "Toftum", "osm": "node/7",
+         "id": ""},
+    ]), encoding="utf-8")
+    assert fix(places) == 0
+    rows, _ = check.placelist.read(str(places))
+    assert [r["id"] for r in rows] == ["naibel", "schorkewarw", "schorkewarw-2",
+                                       "danemark", "toftem", "toftem-2"]
+
+
+def test_fix_adds_the_id_column_to_a_list_that_has_none(world):
+    places = world / "places.csv"
+    # `id` is the last column: cut it off every line, the header's included
+    without = "".join(line.rsplit(",", 1)[0] + "\n"
+                      for line in places_text([TOFTUM, NIEBUELL]).splitlines())
+    places.write_text(without, encoding="utf-8")
+    assert fix(places) == 0
+    rows, fields = check.placelist.read(str(places))
+    assert fields[-1] == "id"
+    assert [r["id"] for r in rows] == ["toftem", "naibel"]
+
+
+def test_fix_run_twice_changes_nothing(world):
+    places = world / "places.csv"
+    places.write_text(places_text([{**TOFTUM, "id": ""}, {**NIEBUELL, "id": ""}]),
+                      encoding="utf-8")
+    fix(places)
+    once = places.read_bytes()
+    fix(places)
+    assert places.read_bytes() == once
+
+
+def test_a_hand_set_frasch_ref_must_name_a_row(names):
+    # the place card finds the row a label belongs to by it (#23)
+    row = "node/85929111,Nordstrand,,,frasch:ref={},12,,,\n"
+    assert names(places_text([{**TOFTUM, "id": "toftem"}]),
+                 CURATION_HEADER + row.format("toftem")) == []
+    problems = names(places_text([TOFTUM]), CURATION_HEADER + row.format("relation/1420555"))
+    assert [(p.path.endswith("curation.csv"), p.line) for p in problems] == [(True, 2)]
+    assert "frasch:ref=relation/1420555 names no row" in problems[0].message
+
+
+def test_a_dialect_area_reference_on_two_rows_is_reported(world):
+    places = world / "places.csv"
+    places.write_text(places_text([TOFTUM]), encoding="utf-8")
+    areas = world / "dialect_areas.csv"
+    areas.write_text("dialect,osm,name,note\n"
+                     "frr-x-solring,relation/1147134,Sylt,\n"
+                     "frr-x-fering,relation/1147134,Sylt,\n", encoding="utf-8")
+    problems = check.check(places, world / "curation.csv", areas=areas)
+    assert [(os.path.basename(p.path), p.line, p.message) for p in problems] == [
+        ("dialect_areas.csv", 3, "relation/1147134 is already on line 2")]
+
+
+def test_fix_on_a_damaged_list_still_reports_every_problem(world, capsys):
+    places = world / "places.csv"
+    text = places_text([{**TOFTUM, "id": ""}, {**NIEBUELL, "kind": "town"}, TOFTUM])
+    places.write_text(text.replace("Toftem,,", "Toftem,", 1), encoding="utf-8")
+    assert fix(places) == 1
+    out = capsys.readouterr()
+    assert "no id given" in out.err
+    assert [line.split(": ")[0].rsplit(":", 1)[1] for line in out.out.splitlines()] == ["2", "3"]

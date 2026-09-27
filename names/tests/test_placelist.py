@@ -133,31 +133,6 @@ def test_format_osm_normalises_the_separator():
         "way/1347936331; node/1332249790"
 
 
-# --------------------------------------------------------------- entry_id ---
-def test_entry_id_is_the_first_osm_reference():
-    # a place split over several objects is one place: all share one id
-    assert placelist.entry_id({"osm": "way/1347936331;node/1332249790"}) == "way/1347936331"
-
-
-def test_entry_id_of_a_local_reference():
-    assert placelist.entry_id({"osm": "local/westerheide-amrum"}) == "local/westerheide-amrum"
-
-
-def test_entry_id_prefers_the_osm_reference_over_the_qid():
-    assert placelist.entry_id({"osm": "relation/1420555", "wikidata": "Q15058181"}) == \
-        "relation/1420555"
-
-
-def test_entry_id_falls_back_to_the_qid():
-    # the countries have no `osm`
-    assert placelist.entry_id({"osm": "", "wikidata": "Q35"}) == "Q35"
-
-
-def test_entry_id_is_empty_without_either():
-    assert placelist.entry_id({"osm": "", "wikidata": ""}) == ""
-    assert placelist.entry_id({}) == ""
-
-
 # ------------------------------------------------------------- parse_point ---
 def test_parse_point_returns_lon_then_lat():
     # arguments are (lat, lon) like the curation columns, the result is
@@ -244,3 +219,17 @@ def test_set_tags_entry_without_equals_is_refused():
 def test_set_tags_entry_with_empty_key_is_refused():
     with pytest.raises(SystemExit, match="empty key"):
         placelist.parse_set_tags("=island")
+
+
+# ------------------------------------------------------------------- slug ---
+@pytest.mark.parametrize("name, slug", [
+    ("Schörkewärw", "schorkewarw"),
+    ("Hamborjer Håli", "hamborjer-hali"),
+    ("Straße", "strasse"),
+    ("Æ Løkke", "ae-lokke"),
+    ("Rudbøl", "rudbol"),
+    ("Huađer", "huader"),
+    ("Friedrich-Wilhelm-Lübke-Kuuch", "friedrich-wilhelm-lubke-kuuch"),
+])
+def test_slug_folds_a_name_to_lowercase_ascii(name, slug):
+    assert placelist.slug(name) == slug

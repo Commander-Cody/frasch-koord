@@ -57,7 +57,7 @@ function App() {
   // Run (and cleared) as soon as the card for the new selection is laid out.
   const pendingMove = useRef<((inset: number) => void) | null>(null);
   // One fetch of the name list for both the search index and the card.
-  const { status: namesStatus, entries, byRef } = useNames();
+  const { status: namesStatus, entries, find } = useNames();
 
   // Map labels and UI chrome move together: each option names the UI language
   // it comes with (the local view has no dialect of its own and borrows one,
@@ -74,7 +74,7 @@ function App() {
       mapRef.current?.flyTo([entry.lon, entry.lat], zoom, { title: name }, inset);
     // A search result carries only the index's stored fields — no Danish
     // name, no Wikidata id — so the card gets the full name-list entry.
-    setSelection({ entry: byRef.get(entry.id) ?? entry });
+    setSelection({ entry: find(entry.id) ?? entry });
   };
 
   const closeCard = useCallback(() => {
@@ -85,8 +85,9 @@ function App() {
   /**
    * A click on a place label. `frasch:ref` is the id of the feature's row in
    * the name list (tiles/inject_names.py writes it, names/export_search_index.py
-   * uses it as the entry id); a feature without one, or one the list does not
-   * have, still gets a card — from the tile's own attributes.
+   * uses it as the entry id; tiles built before the row ids carry the row's
+   * OSM reference, which `find` knows too); a feature without one, or one the
+   * list does not have, still gets a card — from the tile's own attributes.
    */
   const handleFeature = useCallback(
     (feature: MapGeoJSONFeature | null, at: LngLat) => {
@@ -100,7 +101,7 @@ function App() {
       const props = feature.properties as TileProps;
       const ref = props['frasch:ref'];
       setSelection({
-        entry: typeof ref === 'string' ? byRef.get(ref) : undefined,
+        entry: typeof ref === 'string' ? find(ref) : undefined,
         props,
         featureId: feature.id,
       });
@@ -108,7 +109,7 @@ function App() {
       // marker from before would only sit somewhere else.
       mapRef.current?.clearMarker();
     },
-    [byRef, closeCard],
+    [find, closeCard],
   );
 
   // Open the card of a linked place once the name list is there. Only
@@ -116,9 +117,9 @@ function App() {
   // (a plain German village) has nothing to look it up by before its tile is
   // on screen. Without a viewport in the link, fly there as a search would.
   useEffect(() => {
-    if (!linkedPlace || byRef.size === 0) return;
+    if (!linkedPlace || namesStatus !== 'ready') return;
     setLinkedPlace(undefined);
-    const entry = byRef.get(linkedPlace);
+    const entry = find(linkedPlace);
     if (!entry) return;
     const name = displayName(entry, labels);
     if (LINKED_VIEWPORT) {
@@ -132,7 +133,7 @@ function App() {
     }
     // Runs once per link; `labels` only names the marker.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [byRef, linkedPlace]);
+  }, [find, linkedPlace, namesStatus]);
 
   // The card of a new selection is in the DOM now, so its height is known.
   // Before paint, so the map starts moving in the same frame the sheet shows.

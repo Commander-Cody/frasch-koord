@@ -36,6 +36,7 @@ import io
 import os
 import re
 import tempfile
+import unicodedata
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_PATH = os.path.join(HERE, "places.csv")
@@ -73,11 +74,16 @@ DIALECT_COLUMNS = _registry_columns()
 EXTRA_NAME_COLUMNS = ["local"]
 NAME_COLUMNS = [DIALECT_COLUMNS[0]] + EXTRA_NAME_COLUMNS + DIALECT_COLUMNS[1:]
 COLUMNS = (["kind"] + NAME_COLUMNS
-           + ["de", "hint", "da", "osm", "wikidata", "status", "note"])
+           + ["de", "hint", "da", "osm", "wikidata", "status", "note", "id"])
 
 KINDS = {"settlement", "koog", "harde", "island", "hallig", "sand", "warft",
          "landscape", "water", "road", "country", "helgoland", "not_a_place"}
 STATUSES = {"", "auto", "ok", "skip"}
+
+# The tile attribute naming the row a label comes from: its `id`.  The
+# injector writes it; a curation.csv row may set it by hand (names/check.py
+# makes sure it names a row).
+REF_KEY = "frasch:ref"
 
 OSM_TYPES = {"node": "n", "way": "w", "relation": "r"}
 # `local/<slug>`: not an OSM object but a place of our own, positioned in
@@ -219,23 +225,6 @@ def claimed_refs(row: dict) -> list:
     if row["status"] == "skip":
         return []
     return parse_osm(row.get("osm"))
-
-
-def entry_id(row: dict) -> str:
-    """The row's identity as the rest of the project spells it: its FIRST OSM
-    reference (`node/240042766`, `local/huelltoft`), or -- for a row that has
-    none, i.e. the countries -- its Wikidata QID.  `""` when it has neither.
-
-    The injector writes it into the tiles as `frasch:ref` and the exporter
-    uses it as the id of a search-index entry, which is how a click on a map
-    label finds the row it came from; the two must therefore derive the same
-    string, and that is why it lives here.  A row claiming several objects
-    gives all of them the same ref -- they are one place.
-    """
-    refs = parse_osm(row.get("osm"))
-    if refs:
-        return format_osm(refs[:1])
-    return (row.get("wikidata") or "").strip()
 
 
 def parse_point(lat: str | None, lon: str | None, where: str = ""):
@@ -406,7 +395,9 @@ def header_problem(fields) -> str | None:
         return ("`lat`/`lon` moved to names/curation.csv (2026-09-18): reference "
                 "the place as local/<slug> in `osm` and delete the two columns")
     what = csv_header_problem(fields, COLUMNS)
-    if what and what.startswith("missing"):
+    if what and "id" not in fields:
+        what += " (names/check.py --fix adds `id`)"
+    elif what and what.startswith("missing"):
         what += " (dialect columns come from names/dialects.csv)"
     return what
 
@@ -432,9 +423,89 @@ def row_problems(row: dict) -> list[str]:
     return out
 
 
+def id_problem(row: dict, seen: dict[str, int]) -> str | None:
+    """What is wrong with a row's `id` -- missing, malformed, or used by an
+    earlier row (`seen`: id -> line) -- or None."""
+    ident = row["id"]
+    if not ident:
+        return "no id (run names/check.py --fix to give new rows one)"
+    if not re.fullmatch(_SLUG, ident):
+        return (f"bad id {ident!r} (lowercase letters, digits and hyphens; "
+                f"run names/check.py --fix for a new row)")
+    if ident in seen:
+        return f"id {ident} is already used on line {seen[ident]}"
+    return None
+
+
+# the letters NFKD does not take apart into a base letter and a diacritic
+_ASCII_FOLD = str.maketrans({"ß": "ss", "æ": "ae", "Æ": "ae", "ø": "o", "Ø": "o",
+                             "đ": "d", "Đ": "d"})
+
+
+def slug(text: str) -> str:
+    """`"Schörkewärw"` -> `"schorkewarw"`, `"e Strönj"` -> `"e-stronj"`:
+    lowercase ASCII letters and digits, the rest folded or turned into
+    hyphens."""
+    text = unicodedata.normalize("NFKD", text.translate(_ASCII_FOLD))
+    text = text.encode("ascii", "ignore").decode().lower()
+    return re.sub(r"[^a-z0-9]+", "-", text).strip("-")
+
+
+def new_id(row: dict, taken: set[str]) -> str:
+    """An id for a row that has none: the slug of its Frisian name (German,
+    then Danish, when it has none), with `-2`, `-3`, ... when that is taken."""
+    base = (slug(any_name(row)) or slug(primary(row.get("de")))
+            or slug(primary(row.get("da"))) or "row")
+    ident, n = base, 1
+    while ident in taken:
+        n += 1
+        ident = f"{base}-{n}"
+    return ident
+
+
+def fill_ids(path: str = DEFAULT_PATH) -> int:
+    """Give every row of the name list without an `id` one (`new_id`), and
+    the file the `id` column when it has none -- the one step that both
+    introduced the ids and keeps new rows keyed.  An id, once written, never
+    changes.  Writes nothing when every row has one.  -> the number of ids
+    given.
+
+    It reads the file as raw CSV, because `read` refuses a row without an id;
+    a row whose cells do not line up with the header stops it, since there is
+    no telling which cell would be the id."""
+    with open(path, "rb") as fh:
+        data = fh.read()
+    reader = csv.reader(io.StringIO(decode(data), newline=""))
+    header = next(reader, [])
+    fields = header if "id" in header else header + ["id"]
+    what = header_problem(fields)
+    if what:
+        raise SystemExit(f"{path}: {what}")
+    rows = []
+    for cells in reader:
+        if not cells:
+            continue
+        what = cell_count_problem(cells, header)
+        if what:
+            raise SystemExit(f"{path}:{reader.line_num}: {what}")
+        rows.append(dict(zip(header, cells, strict=True)))
+    taken = {r["id"].strip() for r in rows if r.get("id", "").strip()}
+    given = 0
+    for r in rows:
+        if not r.get("id", "").strip():
+            r["id"] = new_id(r, taken)
+            taken.add(r["id"])
+            given += 1
+    if given or fields is not header:
+        _read_digests[os.path.abspath(path)] = digest(data)
+        write(rows, path, fields)
+    return given
+
+
 def read(path: str = DEFAULT_PATH):
-    """-> (rows, fieldnames).  Every row gets `_line`, its physical line number
-    in the file (header = 1), which is how REPORT.md refers to rows."""
+    """-> (rows, fieldnames).  A row is identified by its `id`; it also gets
+    `_line`, its physical line number in the file (header = 1), for the
+    messages that point an editor at it."""
     with open(path, "rb") as fh:
         data = fh.read()
     # remembered so that `write` can tell whether someone else (match.py,
@@ -446,7 +517,7 @@ def read(path: str = DEFAULT_PATH):
         what = header_problem(fields)
         if what:
             raise SystemExit(f"{path}: {what}")
-        rows = []
+        rows, seen = [], {}
         for row in reader:
             n = reader.line_num                  # blank lines count too
             if None in row:                      # more cells than columns
@@ -454,9 +525,11 @@ def read(path: str = DEFAULT_PATH):
                                  f"(a stray comma?): {row[None]}")
             row = {k: (v or "").strip() for k, v in row.items()}
             row["_line"] = n
-            problems = row_problems(row)
+            problems = row_problems(row) + [id_problem(row, seen)]
+            problems = [p for p in problems if p]
             if problems:
                 raise SystemExit(f"{path}:{n}: {problems[0]}")
+            seen[row["id"]] = n
             rows.append(row)
     return rows, fields
 

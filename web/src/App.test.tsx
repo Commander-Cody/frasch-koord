@@ -27,11 +27,11 @@ afterEach(() => {
 it('keeps the map when the place card crashes', async () => {
   // React and ErrorBoundary both log the crash.
   vi.spyOn(console, 'error').mockImplementation(() => {});
-  const entry = { id: 'node/1', names: {}, name_de: 'Niebüll', lon: 8.83, lat: 54.79, kind: 'settlement' };
+  const entry = { id: 'naibel', names: {}, name_de: 'Niebüll', lon: 8.83, lat: 54.79, kind: 'settlement' };
   vi.stubGlobal('fetch', async () => new Response(JSON.stringify([entry]), { status: 200 }));
   // A link to the place opens its card as soon as the name list is there.
   // App reads the link at module load, so set it before importing App.
-  window.history.replaceState(null, '', '/?place=node/1');
+  window.history.replaceState(null, '', '/?place=naibel');
   const { default: App } = await import('./App');
 
   render(<App />);

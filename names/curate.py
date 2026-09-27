@@ -170,21 +170,21 @@ def stream_records(path, keys, hint_norms):
 # ----------------------------------------------------------------- export ---
 def cmd_export(args):
     rows, _fields = placelist.read(args.names)
-    by_line = {r["_line"]: r for r in rows}
+    by_id = {r["id"]: r for r in rows}
     if not os.path.exists(args.matches):
         raise SystemExit(f"{args.matches} not found -- run names/match.py first")
 
     work, stale, unowned = [], 0, 0
     with open(args.matches, encoding="utf-8", newline="") as fh:
-        for m in csv.DictReader(fh):
+        reader = csv.DictReader(fh)
+        if "id" not in (reader.fieldnames or []):
+            raise SystemExit(f"{args.matches} has no `id` column (written before "
+                             f"places.csv had ids) -- re-run names/match.py")
+        for m in reader:
             if m["result"] not in RESULTS:
                 continue
-            row = by_line.get(int(m["line"]))
-            # matches.csv is keyed by physical line; a row added or deleted in
-            # places.csv since the last match.py run shifts every line below it
-            if (row is None or row["kind"] != m["kind"]
-                    or placelist.any_name(row) != m["name"]
-                    or placelist.primary(row["de"]) != m["de"]):
+            row = by_id.get(m["id"])
+            if row is None:             # deleted from places.csv since the run
                 stale += 1
                 continue
             if not match.owned_by_matcher(row):
@@ -231,6 +231,7 @@ def cmd_export(args):
         if hint_pt:
             n_hint += 1
         out.append({
+            "id": row["id"],
             "line": row["_line"],
             "kind": row["kind"],
             "result": m["result"],
@@ -260,20 +261,23 @@ def cmd_export(args):
         print(f"note: {unowned} row(s) have been decided by hand since "
               f"{os.path.relpath(args.matches, HERE)} was written -- not exported")
     if stale:
-        print(f"note: {stale} row(s) no longer match their line in "
-              f"{os.path.relpath(args.matches, HERE)} (stale, re-run match.py)")
+        print(f"note: {stale} row(s) of {os.path.relpath(args.matches, HERE)} "
+              f"are no longer in places.csv (stale, re-run match.py)")
     return 0
 
 
 # ------------------------------------------------------------------ apply ---
 def patch_key(entry):
-    """What makes two patch entries decisions about the same row."""
-    return (entry.get("line"), entry.get("kind"), entry.get("name"), entry.get("de"))
+    """What makes two patch entries decisions about the same row: its id.
+    The `line`, `name` and `de` an entry also carries are only there for the
+    messages -- they change when the list is edited, the id does not."""
+    return entry.get("id")
 
 
 def read_patch(path):
     """-> the last entry per row, in line order.  The browser appends, never
-    rewrites, so a row decided twice simply has two lines; `clear` withdraws."""
+    rewrites, so a row decided twice simply has two lines; `clear` withdraws,
+    whatever line either was sent with."""
     last = {}
     with open(path, encoding="utf-8") as fh:
         for n, line in enumerate(fh, start=1):
@@ -286,27 +290,11 @@ def read_patch(path):
                 print(f"{path}:{n}: not JSON ({exc}) -- ignored", file=sys.stderr)
                 continue
             e["_patch_line"] = n
-            last[patch_key(e)] = e
+            # an entry without an id (a patch from before the row ids) is a
+            # decision of its own: apply refuses it and keeps it, never lets
+            # a later one swallow it
+            last[patch_key(e) or ("no id", n)] = e
     return sorted(last.values(), key=lambda e: (e.get("line") or 0, e["_patch_line"]))
-
-
-def find_row(entry, rows, by_line):
-    """The places.csv row an entry means, or None.
-
-    The `line` is the fast path; it moves as soon as a row is added above, so
-    the row's identity (kind + Frisian name + German name) decides.  The
-    worklist carries the raw `de` cell, the report and matches.csv its primary
-    variant -- either identifies the row."""
-    def same(r):
-        return (r["kind"] == entry.get("kind")
-                and placelist.any_name(r) == entry.get("name")
-                and entry.get("de") in (r["de"], placelist.primary(r["de"])))
-
-    row = by_line.get(entry.get("line"))
-    if row is not None and same(row):
-        return row
-    hits = [r for r in rows if same(r)]
-    return hits[0] if len(hits) == 1 else None
 
 
 def curation_name(row):
@@ -331,7 +319,7 @@ def _apply(args):
     # touched: the name list, and curation.csv (read once, kept as bytes, so
     # the rows appended to it land after exactly what was checked).
     rows, fields = placelist.read(args.names)
-    by_line = {r["_line"]: r for r in rows}
+    by_id = {r["id"]: r for r in rows}
     used_slugs = set(placelist.local_points(args.curation))
     cur_data, cur_fields = read_curation(args.curation)
     cur_digest = placelist.digest(cur_data) if cur_data is not None else placelist.MISSING
@@ -375,10 +363,14 @@ def _apply(args):
             if action not in ACTIONS:
                 refuse(e, f"unknown action {action!r}")
                 continue
-            row = find_row(e, rows, by_line)
+            if not patch_key(e):
+                refuse(e, "no `id` (a patch from before the row ids -- "
+                          "re-run names/curate.py export and decide it again)")
+                continue
+            row = by_id.get(patch_key(e))
             if row is None:
-                refuse(e, f"no row at line {e.get('line')} with this kind/name/de "
-                          f"(re-run names/curate.py export)")
+                refuse(e, f"no row with id {patch_key(e)!r} in {args.names} "
+                          f"(deleted since the export?)")
                 continue
             where = f"{args.names}:{row['_line']}"
             if not match.owned_by_matcher(row):
@@ -517,7 +509,7 @@ def append_back(path, entries):
                 e = json.loads(line)
             except ValueError:
                 continue
-            if isinstance(e, dict):
+            if isinstance(e, dict) and patch_key(e):
                 newer.add(patch_key(e))
     lines = [json.dumps({k: v for k, v in e.items() if k != "_patch_line"},
                         ensure_ascii=False) + "\n"

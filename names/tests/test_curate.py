@@ -1,15 +1,13 @@
-"""curate.py helpers: reading back match.py's `candidates` cell, finding the
-row a browser decision means, and reading the decision patch.  (`apply`
+"""curate.py helpers: reading back match.py's `candidates` cell and reading
+the decision patch.  (`apply`
 itself is covered in test_curate_apply.py.)"""
 from __future__ import annotations
 
 import json
 
-import pytest
 
 import curate
 import match
-import placelist
 
 
 def rec(t, id, lon, lat, **tags):
@@ -71,60 +69,6 @@ def test_empty_candidates_cell_is_no_candidate():
     assert curate.parse_candidates(None) == []
 
 
-# ---------------------------------------------------------------- find_row ---
-def place(line, **cells):
-    r = {c: "" for c in placelist.COLUMNS}
-    r.update(cells, _line=line)
-    return r
-
-
-MORSUM = place(2, kind="settlement", mooring="Mursem", de="Morsum", hint="Nordstrand")
-HUNNEBUELL = place(3, kind="settlement", mooring="Hoonebel", de="Hunnebüll; Hundebüll")
-BEENSHALI = place(4, kind="hallig", mooring="Beenshåli", de="Beenshallig; Behnshallig")
-
-
-def lookup(entry, rows):
-    return curate.find_row(entry, rows, {r["_line"]: r for r in rows})
-
-
-def test_find_row_by_line():
-    rows = [MORSUM, HUNNEBUELL]
-    entry = {"line": 3, "kind": "settlement", "name": "Hoonebel", "de": "Hunnebüll"}
-    assert lookup(entry, rows) is HUNNEBUELL
-
-
-def test_find_row_after_the_row_moved():
-    # a row was added above since the export: line 3 is someone else now
-    moved = place(4, **{k: v for k, v in HUNNEBUELL.items() if k != "_line"})
-    rows = [MORSUM, BEENSHALI | {"_line": 3}, moved]
-    entry = {"line": 3, "kind": "settlement", "name": "Hoonebel", "de": "Hunnebüll"}
-    assert lookup(entry, rows) is moved
-
-
-@pytest.mark.parametrize("de", ["Hunnebüll; Hundebüll", "Hunnebüll"])
-def test_find_row_accepts_the_raw_de_cell_or_its_primary(de):
-    entry = {"line": 3, "kind": "settlement", "name": "Hoonebel", "de": de}
-    assert lookup(entry, [MORSUM, HUNNEBUELL]) is HUNNEBUELL
-
-
-def test_find_row_refuses_a_second_variant_as_de():
-    entry = {"line": 3, "kind": "settlement", "name": "Hoonebel", "de": "Hundebüll"}
-    assert lookup(entry, [MORSUM, HUNNEBUELL]) is None
-
-
-def test_find_row_refuses_a_row_whose_identity_changed():
-    entry = {"line": 2, "kind": "settlement", "name": "Mursem", "de": "Morsum"}
-    renamed = MORSUM | {"mooring": "Muasem"}
-    assert lookup(entry, [renamed, HUNNEBUELL]) is None
-
-
-def test_find_row_refuses_two_rows_of_the_same_identity():
-    # the entry's line fits neither, and two rows would do: no guessing
-    twin = MORSUM | {"_line": 5}
-    entry = {"line": 9, "kind": "settlement", "name": "Mursem", "de": "Morsum"}
-    assert lookup(entry, [MORSUM, HUNNEBUELL, twin]) is None
-
-
 # -------------------------------------------------------------- read_patch ---
 def write_patch(path, *lines):
     path.write_text("".join(
@@ -132,8 +76,12 @@ def write_patch(path, *lines):
         for x in lines), encoding="utf-8")
 
 
+IDS = {"Mursem": "mursem", "Hoonebel": "hoonebel"}
+
+
 def entry(line, name, de, **kw):
-    return {"line": line, "kind": "settlement", "name": name, "de": de, **kw}
+    return {"id": IDS[name], "line": line, "kind": "settlement", "name": name,
+            "de": de, **kw}
 
 
 def test_last_decision_per_row_wins(tmp_path):
@@ -152,11 +100,19 @@ def test_patch_entries_come_back_in_line_order(tmp_path):
 
 
 def test_same_line_but_another_row_is_a_separate_decision(tmp_path):
-    # the line alone does not identify a row: it moves when rows are added
+    # the line does not identify a row: it moves when rows are added
     p = tmp_path / "curate-patch.jsonl"
     write_patch(p, entry(2, "Mursem", "Morsum", action="skip"),
                 entry(2, "Hoonebel", "Hunnebüll", action="skip"))
     assert len(curate.read_patch(p)) == 2
+
+
+def test_same_row_at_another_line_is_the_same_decision(tmp_path):
+    p = tmp_path / "curate-patch.jsonl"
+    write_patch(p, entry(2, "Mursem", "Morsum", action="osm", osm="node/1"),
+                entry(3, "Mursem", "Morsum", action="clear"))
+    (e,) = curate.read_patch(p)
+    assert e["action"] == "clear"
 
 
 def test_broken_and_blank_lines_are_ignored(tmp_path, capsys):

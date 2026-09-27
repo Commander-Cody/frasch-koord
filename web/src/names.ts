@@ -13,8 +13,10 @@ import { labelChain } from './labelChain';
  * absent rather than an empty string.
  */
 export interface NameEntry {
-  /** Stable identifier, e.g. "node/240044177" (or "<osm id>#<csv line>" for a second row on the same object), or "local/<slug>" for a place OSM does not have. */
+  /** The name-list row's `id`, e.g. "naibel" — stable across edits to the list and OSM alike; the tiles carry it as `frasch:ref`. */
   id: string;
+  /** The row's OSM references, e.g. "node/240042766" or "way/1; node/2", or "local/<slug>" for a place OSM does not have. */
+  osm?: string;
   /** Dialect names by registry tag, e.g. { "frr-x-mooring": "Naibel" }. */
   names: Record<string, string>;
   /** Name used by the people of the place itself (tile attribute `frasch:local`). */
@@ -123,12 +125,36 @@ export interface NamesData {
    */
   status: 'loading' | 'ready' | 'error';
   entries: NameEntry[];
-  /** Entries by `id` — the same string the tiles carry as `frasch:ref`. */
-  byRef: Map<string, NameEntry>;
+  /** The entry a `?place=` link or a tile's `frasch:ref` names, see `entryLookup`. */
+  find: EntryLookup;
 }
 
-const LOADING: NamesData = { status: 'loading', entries: [], byRef: new Map() };
-const FAILED: NamesData = { status: 'error', entries: [], byRef: new Map() };
+/** Finds the entry a reference names, see `entryLookup`. */
+export type EntryLookup = (ref: string) => NameEntry | undefined;
+
+/**
+ * Looks entries up by the row id — what the tiles carry as `frasch:ref` and a
+ * `?place=` link names — and, for what was shared or built before the row
+ * ids, by the reference that used to be the id: any of the row's OSM
+ * references (or the QID of a row without one), and `<ref>#<csv line>` for a
+ * second row on the same object. An object two rows claim opens the first
+ * one. Ids are lowercase slugs without a `/`, so they never clash with a
+ * reference or a QID.
+ */
+export function entryLookup(entries: NameEntry[]): EntryLookup {
+  const byRef = new Map(entries.map((e) => [e.id, e]));
+  for (const e of entries) {
+    const refs = (e.osm ?? '').split(';').map((ref) => ref.trim());
+    for (const ref of [...refs, e.wikidata]) {
+      if (ref && !byRef.has(ref)) byRef.set(ref, e);
+    }
+  }
+  return (ref) => byRef.get(ref) ?? byRef.get(ref.split('#')[0]);
+}
+
+const nothing: EntryLookup = () => undefined;
+const LOADING: NamesData = { status: 'loading', entries: [], find: nothing };
+const FAILED: NamesData = { status: 'error', entries: [], find: nothing };
 
 /** Where the name list is served, under the site's base path. */
 export function namesUrl(): string {
@@ -154,7 +180,7 @@ export function useNames(): NamesData {
         if (!Array.isArray(entries)) throw new Error('not a list of entries');
         if (cancelled) return;
         const list = entries as NameEntry[];
-        setData({ status: 'ready', entries: list, byRef: new Map(list.map((e) => [e.id, e])) });
+        setData({ status: 'ready', entries: list, find: entryLookup(list) });
       })
       .catch((err: unknown) => {
         console.error('Failed to load names.json', err);
@@ -236,14 +262,12 @@ export function cardEntry(selection: PlaceSelection): NameEntry {
 const OSM_TYPES = new Set(['node', 'way', 'relation']);
 
 /**
- * The OSM object of a reference (`node/240042766`), or null for one that is
- * not an OSM object: our own `local/<slug>` places, and the QID a row without
- * an `osm` column is keyed by.
+ * The OSM object of a reference (`node/240042766`; the first of several), or
+ * null for one that is not an OSM object: our own `local/<slug>` places.
  */
 export function osmUrl(ref: string | undefined): string | null {
   if (!ref) return null;
-  // A second row on the same object is exported as "<ref>#<csv line>".
-  const [type, rest] = ref.split('#')[0].split('/');
+  const [type, rest] = ref.split(';')[0].trim().split('/');
   if (!OSM_TYPES.has(type) || !/^\d+$/.test(rest ?? '')) return null;
   return `https://www.openstreetmap.org/${type}/${rest}`;
 }
@@ -270,11 +294,7 @@ export function osmRefFromFeatureId(id: string | number | undefined): string | n
   return type ? `${type}/${(n - (n % 10)) / 10}` : null;
 }
 
-/** The reference of what the card is showing, for the links at its foot. */
-export function placeRef(selection: PlaceSelection): string | null {
-  return (
-    selection.entry?.id ??
-    str(selection.props, 'frasch:ref') ??
-    osmRefFromFeatureId(selection.featureId)
-  );
+/** The OSM reference of what the card is showing, for the link at its foot. */
+export function placeOsmRef(selection: PlaceSelection): string | null {
+  return selection.entry?.osm ?? osmRefFromFeatureId(selection.featureId);
 }

@@ -56,7 +56,7 @@ def place(line=2, **cells):
     return r
 
 
-BRODERSWARFT = place(kind="warft", mooring="Brouderswärw",
+BRODERSWARFT = place(id="brouderswarw", kind="warft", mooring="Brouderswärw",
                      local="Brouersweerw (Foortuftinge)", de="Broderswarft",
                      osm="node/1594721085")
 
@@ -68,7 +68,7 @@ def test_name_tags_of_a_row_with_a_local_variety(reg):
         "frasch:dialect": "frr-x-mooring",
         "frasch:local": "Brouersweerw",
         "frasch:variety": "Foortuftinge",
-        "frasch:ref": "node/1594721085",
+        "frasch:ref": "brouderswarw",
     }
 
 
@@ -78,31 +78,35 @@ def test_name_tags_fill_the_areas_dialect_from_local(reg):
 
 
 def test_name_tags_outside_any_area_have_no_dialect(reg):
-    hanswarft = place(kind="warft", mooring="Hanswärw", hallig="Hansweerf",
+    hanswarft = place(id="hanswarw", kind="warft", mooring="Hanswärw", hallig="Hansweerf",
                       de="Hanswarft", osm="node/3410324993")
     assert inject_names.name_tags([hanswarft], None, reg) == {
         "name:frr-x-mooring": "Hanswärw",
         "name:frr-x-hallig": "Hansweerf",
         "frasch:kind": "warft",
-        "frasch:ref": "node/3410324993",
+        "frasch:ref": "hanswarw",
     }
 
 
 def test_name_tags_first_row_wins_per_tag(reg):
     # two rows claim one object: the first in file order keeps its names,
     # the second only fills what the first leaves empty
-    first = place(2, kind="settlement", mooring="Hulm", de="Holm", osm="node/240102263")
-    second = place(9, kind="koog", mooring="Hulm Gutskuuch", wieding="Hoolm",
+    first = place(2, id="hulm", kind="settlement", mooring="Hulm", de="Holm",
+                  osm="node/240102263")
+    second = place(9, id="hulm-gutskuuch", kind="koog", mooring="Hulm Gutskuuch", wieding="Hoolm",
                    de="Holm", osm="node/240102263")
     tags = inject_names.name_tags([first, second], None, reg)
     assert tags["name:frr-x-mooring"] == "Hulm"
     assert tags["name:frr-x-wieding"] == "Hoolm"
     assert tags["frasch:kind"] == "settlement"
+    assert tags["frasch:ref"] == "hulm"
 
 
-def test_name_tags_of_a_country_refer_to_its_qid(reg):
-    denmark = place(kind="country", mooring="Däänemark", de="Dänemark", wikidata="Q35")
-    assert inject_names.name_tags([denmark], None, reg)["frasch:ref"] == "Q35"
+def test_name_tags_refer_to_the_rows_id(reg):
+    # not to the object: the search index names the place by the row (#23)
+    denmark = place(id="daanemark", kind="country", mooring="Däänemark",
+                    de="Dänemark", wikidata="Q35")
+    assert inject_names.name_tags([denmark], None, reg)["frasch:ref"] == "daanemark"
 
 
 # ------------------------------------------------------------- load_curation ---
@@ -226,13 +230,13 @@ MAX_NODE = 9100000004
 MAX_WAY = NORDWARFT
 
 PLACES = [
-    dict(kind="settlement", mooring="Hulm", de="Holm", osm=f"node/{HOLM}",
+    dict(id="hulm", kind="settlement", mooring="Hulm", de="Holm", osm=f"node/{HOLM}",
          wikidata="Q559369", status="ok"),
-    dict(kind="warft", mooring="Nordwärw", nordgoes="Noordweerw", de="Nordwarft",
+    dict(id="nordwarw", kind="warft", mooring="Nordwärw", nordgoes="Noordweerw", de="Nordwarft",
          hint="Ockholm", osm=f"way/{NORDWARFT}", status="ok"),
-    dict(kind="hallig", mooring="Hamborjer Håli", de="Hamburger Hallig",
+    dict(id="hamborjer-hali", kind="hallig", mooring="Hamborjer Håli", de="Hamburger Hallig",
          osm=f"relation/{HAMBURGER_HALLIG}", status="ok"),
-    dict(kind="settlement", oomrang="Waasterhias", de="Westerheide",
+    dict(id="waasterhias", kind="settlement", oomrang="Waasterhias", de="Westerheide",
          osm="local/westerheide-amrum", status="ok"),
 ]
 
@@ -368,7 +372,7 @@ def test_matched_node_gets_its_names_and_keeps_its_tags(injected):
     # outside every dialect area: no frasch:dialect, no frasch:local
     assert tags == {"place": "village", "name": "Holm", "wikidata": "Q559369",
                     "name:frr-x-mooring": "Hulm", "frasch:kind": "settlement",
-                    "frasch:ref": f"node/{HOLM}"}
+                    "frasch:ref": "hulm"}
 
 
 def test_matched_way_gets_the_dialect_of_its_area(injected):
@@ -378,7 +382,7 @@ def test_matched_way_gets_the_dialect_of_its_area(injected):
                     "name:frr-x-mooring": "Nordwärw",
                     "name:frr-x-nordgoes": "Noordweerw",
                     "frasch:kind": "warft", "frasch:dialect": "frr-x-nordgoes",
-                    "frasch:local": "Noordweerw", "frasch:ref": f"way/{NORDWARFT}"}
+                    "frasch:local": "Noordweerw", "frasch:ref": "nordwarw"}
 
 
 def test_matched_relation_gets_the_smallest_area_and_its_curation(injected):
@@ -388,7 +392,7 @@ def test_matched_relation_gets_the_smallest_area_and_its_curation(injected):
                     "admin_level": "10", "name": "Hamburger Hallig",
                     "name:frr-x-mooring": "Hamborjer Håli", "frasch:kind": "hallig",
                     "frasch:dialect": "frr-x-hallig",
-                    "frasch:ref": f"relation/{HAMBURGER_HALLIG}",
+                    "frasch:ref": "hamborjer-hali",
                     "place": "island", "frasch:minzoom": "12"}
 
 
@@ -424,7 +428,7 @@ def test_local_reference_becomes_the_first_new_node(injected):
     assert tags == {"place": "hamlet", "name": "Westerheide",
                     "name:frr-x-oomrang": "Waasterhias", "frasch:kind": "settlement",
                     "frasch:dialect": "frr-x-oomrang", "frasch:local": "Waasterhias",
-                    "frasch:ref": "local/westerheide-amrum"}
+                    "frasch:ref": "waasterhias"}
 
 
 def test_synthetic_square_is_one_new_closed_way(injected):

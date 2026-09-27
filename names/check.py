@@ -2,6 +2,7 @@
 """Check the hand-edited name files for damage -- all of it, with line numbers.
 
     .venv/bin/python names/check.py            # exit 1 if anything is wrong
+    .venv/bin/python names/check.py --fix      # first give new rows an id
 
 `placelist.read` stops at the first problem it cannot live with and
 silently accepts some it can (a row with a comma too few is padded, and its
@@ -85,12 +86,29 @@ def _rows(path):
     return header, rows
 
 
-def check_curation(path) -> tuple[list[Problem], set[str]]:
+def row_ids(path) -> set[str]:
+    """The `id` cells of the name list, whatever else is wrong with it."""
+    header, rows = _rows(path)
+    if "id" not in header:
+        return set()
+    column = header.index("id")
+    return {cells[column].strip() for _, cells in rows if len(cells) > column}
+
+
+def check_curation(path, ids) -> tuple[list[Problem], set[str]]:
     """-> (the problems in names/curation.csv, the slugs of the local
     references it positions).  The rules are those the tile build enforces
-    (`placelist.curation_rows`)."""
+    (`placelist.curation_rows`), plus: a `frasch:ref` set by hand must be the
+    id of a row of the name list (`ids`) -- it is how the place card finds
+    the row a label belongs to."""
     entries, problems = placelist.curation_rows(path)
+    for e in entries:
+        ref = e["tags"].get(placelist.REF_KEY)
+        if ref is not None and ref not in ids:
+            problems.append((e["line"], f"{placelist.REF_KEY}={ref} names no row of the "
+                                        f"name list (it takes a row's `id`)"))
     positioned = {e["local"] for e in entries if e["local"]}
+    problems.sort(key=lambda p: p[0])
     return [Problem(path, n, what) for n, what in problems], positioned
 
 
@@ -115,6 +133,13 @@ def check_dialects(path) -> list[Problem]:
     return problems
 
 
+def check_dialect_areas(path, registry) -> list[Problem]:
+    """The problems in the dialect area list, names/dialect_areas.csv, by the
+    rules the area build enforces (`dialects.area_rows`)."""
+    _rows, problems = dialects.area_rows(path, dialects.read(registry))
+    return [Problem(path, n, what) for n, what in problems]
+
+
 def check_places(path, curation, positioned) -> list[Problem]:
     """The problems in the name list; `positioned` are the local references
     `curation` has a position for."""
@@ -123,6 +148,7 @@ def check_places(path, curation, positioned) -> list[Problem]:
         return [Problem(path, 1, what)]   # without its columns no row can be read
     problems = []
     claimed = {}              # `way/1` or `Q1` -> line of the first row
+    ids = {}                  # id -> line of the first row
     for n, cells in rows:
         def problem(message, n=n):
             problems.append(Problem(path, n, message))
@@ -133,6 +159,9 @@ def check_places(path, curation, positioned) -> list[Problem]:
         row = {k: v.strip() for k, v in zip(header, cells, strict=True)}
         for what in placelist.row_problems(row):
             problem(what)
+        if (what := placelist.id_problem(row, ids)):
+            problem(what)
+        ids.setdefault(row["id"], n)
         for column in VARIANT_COLUMNS:
             if row[column] and (what := cell_problem(row[column])):
                 problem(f"{column}: {what}: {row[column]!r}")
@@ -158,13 +187,19 @@ def check_places(path, curation, positioned) -> list[Problem]:
 
 def check(places=placelist.DEFAULT_PATH,
           curation=placelist.CURATION_PATH,
-          registry=placelist.DIALECTS_PATH) -> list[Problem]:
-    """Every problem in the name list `places`, the map curation `curation`
-    and the dialect registry `registry`, file by file, in file order."""
-    places, curation, registry = map(os.fspath, (places, curation, registry))
-    curation_problems, positioned = check_curation(curation)
+          registry=placelist.DIALECTS_PATH,
+          areas=dialects.AREA_LIST_PATH) -> list[Problem]:
+    """Every problem in the name list `places`, the map curation `curation`,
+    the dialect registry `registry` and the dialect area list `areas`, file
+    by file, in file order.  The area list is checked only against a sound
+    registry."""
+    places, curation, registry, areas = map(os.fspath,
+                                            (places, curation, registry, areas))
+    curation_problems, positioned = check_curation(curation, row_ids(places))
+    registry_problems = check_dialects(registry)
+    area_problems = [] if registry_problems else check_dialect_areas(areas, registry)
     return (check_places(places, curation, positioned)
-            + curation_problems + check_dialects(registry))
+            + curation_problems + registry_problems + area_problems)
 
 
 def markdown(problems) -> str:
@@ -187,11 +222,23 @@ def main(argv=None) -> int:
     ap.add_argument("--names", default=placelist.DEFAULT_PATH)
     ap.add_argument("--curation", default=placelist.CURATION_PATH)
     ap.add_argument("--dialects", default=placelist.DIALECTS_PATH)
+    ap.add_argument("--areas", default=dialects.AREA_LIST_PATH)
+    ap.add_argument("--fix", action="store_true",
+                    help="first give every row of the name list without an "
+                         "`id` one (placelist.fill_ids)")
     ap.add_argument("--summary", metavar="FILE",
                     help="also append the result as Markdown to FILE "
                          "(CI passes $GITHUB_STEP_SUMMARY)")
     a = ap.parse_args(argv)
-    problems = check(a.names, a.curation, a.dialects)
+    if a.fix:
+        try:
+            with placelist.lock(a.names):
+                print(f"gave {placelist.fill_ids(a.names)} row(s) an id",
+                      file=sys.stderr)
+        except SystemExit as exc:
+            # the report below lists this problem and every other one
+            print(f"no id given: {exc}", file=sys.stderr)
+    problems = check(a.names, a.curation, a.dialects, a.areas)
     for p in problems:
         print(p)
     if a.summary:

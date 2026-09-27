@@ -1,4 +1,5 @@
-"""`curate.py apply` loses no decision and writes nothing half (#21, M1)."""
+"""`curate.py apply` loses no decision and writes nothing half (#21, M1),
+and finds each decision's row by its id however the list changed (#23)."""
 from __future__ import annotations
 
 import json
@@ -7,20 +8,22 @@ import types
 import pytest
 
 import curate
-from conftest import CURATION_HEADER, places_text
+import match
+import placelist
+from conftest import CURATION_HEADER, places_text, write_candidates
 
 ROWS = [
-    {"kind": "settlement", "mooring": "Taarep", "de": "Dorf"},           # line 2
-    {"kind": "settlement", "mooring": "Uurd", "de": "Ort"},              # line 3
-    {"kind": "settlement", "mooring": "Hüs", "de": "Haus",               # line 4
+    {"id": "taarep", "kind": "settlement", "mooring": "Taarep", "de": "Dorf"},  # line 2
+    {"id": "uurd", "kind": "settlement", "mooring": "Uurd", "de": "Ort"},       # line 3
+    {"id": "hus", "kind": "settlement", "mooring": "Hüs", "de": "Haus",         # line 4
      "osm": "node/9", "status": "ok"},
 ]
 
 
 def entry(line, **kw):
     row = ROWS[line - 2]
-    return {"line": line, "kind": row["kind"], "name": row["mooring"],
-            "de": row["de"], **kw}
+    return {"id": row["id"], "line": line, "kind": row["kind"],
+            "name": row["mooring"], "de": row["de"], **kw}
 
 
 def append(path, *entries):
@@ -190,3 +193,66 @@ def test_dry_run_and_keep_leave_the_patch_in_place(w):
     w.apply("--keep")
     assert "node/1" in w.places.read_text(encoding="utf-8")
     assert w.patch.exists() and archived(w) == []
+
+
+# ------------------------------------------------------------ row ids (#23) ---
+def rows_by_id(w):
+    return {r["id"]: r for r in placelist.read(str(w.places))[0]}
+
+
+def test_a_withdrawn_decision_stays_withdrawn_whatever_line_it_was_sent_with(w):
+    # M2: the browser sent `osm` from line 11 and `clear` from line 12 (a row
+    # had been added above in between) -- one row, so the clear wins
+    append(w.patch, entry(2, action="osm", osm="node/1") | {"line": 11},
+           entry(2, action="clear") | {"line": 12})
+    assert w.apply() == 0
+    assert (rows_by_id(w)["taarep"]["osm"], rows_by_id(w)["taarep"]["status"]) == ("", "")
+
+
+def kirchwarft(ident, hint):
+    return {"id": ident, "kind": "warft", "mooring": "Schörkewärw",
+            "de": "Kirchwarft", "hint": hint}
+
+
+SESSION = [{"id": "toftem", "kind": "settlement", "mooring": "Toftem", "de": "Toftum"},
+           kirchwarft("schorkewarw", "Hooge"), kirchwarft("schorkewarw-2", "Ockholm"),
+           kirchwarft("schorkewarw-3", "Langeneß"), kirchwarft("schorkewarw-4", "Oland")]
+
+
+def test_a_curation_session_survives_hand_edits_to_the_list(w):
+    # the worklist: every row is `not_found` (no candidates at all)
+    w.places.write_text(places_text(SESSION), encoding="utf-8")
+    cands = write_candidates(w.work / "candidates.jsonl")
+    assert match.main(["--names", str(w.places), "--candidates", str(cands),
+                       "--matches", str(w.work / "matches.csv"),
+                       "--report", str(w.work / "REPORT.md"), "--offline",
+                       "--wikidata-cache", str(w.work / "wd.json")]) == 0
+    worklist = w.work / "curate.json"
+    assert curate.main(["export", "--names", str(w.places),
+                        "--matches", str(w.work / "matches.csv"),
+                        "--candidates", str(cands), "--out", str(worklist)]) == 0
+    # the browser decides every row of it, one object each
+    exported = json.loads(worklist.read_text(encoding="utf-8"))["rows"]
+    decided = {row["id"]: f"node/{n}" for n, row in enumerate(exported, start=1)}
+    append(w.patch, *({"id": row["id"], "line": row["line"], "kind": row["kind"],
+                       "name": row["name"], "de": row["de"], "action": "osm",
+                       "osm": decided[row["id"]]} for row in exported))
+    # meanwhile, by hand: a row on top, and a German name corrected
+    edited = [{"id": "naibel", "kind": "settlement", "mooring": "Naibel", "de": "Niebüll"},
+              SESSION[0] | {"de": "Toftum (Nordfriesland)"}, *SESSION[1:]]
+    w.places.write_text(places_text(edited), encoding="utf-8")
+
+    assert w.apply() == 0
+    rows = rows_by_id(w)
+    assert sorted(decided) == sorted(r["id"] for r in SESSION)
+    assert {i: rows[i]["osm"] for i in decided} == decided
+    assert rows["naibel"]["osm"] == ""
+
+
+def test_every_decision_without_an_id_is_refused_and_kept(w):
+    # a patch written before the row ids: nothing to find the row by, and
+    # none of the decisions may vanish into the archive
+    old = [{k: v for k, v in entry(n, action="skip").items() if k != "id"} for n in (2, 3)]
+    append(w.patch, *old)
+    assert w.apply() == 1
+    assert lines(w.patch) == old

@@ -15,12 +15,13 @@ The Low Saxon name (`name_nds`) comes from there too: the name list has no Low
 Saxon column, but the map labels with OSM's `name:nds` before German, and the
 card and search results have to agree with it.
 A row for a place OSM does not have (`osm` = `local/<slug>`) takes its position
-from the curation row with the same reference (names/curation.csv), and that
-reference is the entry's id.
+from the curation row with the same reference (names/curation.csv).
 
-An entry's `id` is `placelist.entry_id` -- the same string the injector writes
-into the tiles as `frasch:ref`, which is how a click on a map label finds the
-entry it belongs to (web/src/names.ts).
+An entry's `id` is its row's `id` -- the same string the injector writes into
+the tiles as `frasch:ref`, which is how a click on a map label finds the entry
+it belongs to (web/src/names.ts).  Its `osm` is the row's `osm` cell, for the
+card's link to OpenStreetMap and for the share links and tiles from before the
+row ids, which name a place by its first OSM reference (or its QID).
 
 Usage: names/export_search_index.py [--names names/places.csv]
                                     [--dialects names/dialects.csv]
@@ -45,7 +46,13 @@ import dialects  # noqa: E402
 REGISTRY_FIELDS = ["tag", "column", "label", "status", "view"]
 
 
-def main():
+def osm_key(cell):
+    """An `osm` cell in one spelling (`way/1; node/2`), so that a cell
+    match.py wrote as `way/1;node/2` still finds its row."""
+    return placelist.format_osm(placelist.parse_osm(cell))
+
+
+def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--names", default=placelist.DEFAULT_PATH)
@@ -57,7 +64,7 @@ def main():
     ap.add_argument("--out", default=os.path.join(ROOT, "web", "public", "data", "names.json"))
     ap.add_argument("--registry-out",
                     default=os.path.join(ROOT, "web", "src", "generated", "dialects.json"))
-    a = ap.parse_args()
+    a = ap.parse_args(argv)
     if not os.path.exists(a.matches):
         raise SystemExit(f"{a.matches} not found -- run names/match.py first")
     reg = dialects.read(a.dialects)
@@ -67,28 +74,24 @@ def main():
     else:
         print(f"note: {a.areas} absent -- no `dialect` in the index "
               f"(build it with names/build_dialect_areas.py)")
-    # matches.csv is keyed by physical line, which shifts as soon as a row is
-    # added to or deleted from places.csv.  Coordinates are therefore looked
-    # up by OSM reference first; the line is only trusted when the row it
-    # points at is still the same place (`de`).
-    by_osm, by_line, nds_by_osm = {}, {}, {}
+    # A position belongs to the OSM object, not to the row: looked up by
+    # reference, it stays right when a human changed the row's `osm` cell
+    # since match.py ran (the object is then simply not there yet).
+    by_osm, nds_by_osm = {}, {}
     with open(a.matches, encoding="utf-8", newline="") as fh:
         reader = csv.DictReader(fh)
         if "name_nds" not in (reader.fieldnames or []):
             print(f"note: {os.path.relpath(a.matches, ROOT)} has no name_nds column "
                   f"-- re-run names/match.py to export Low Saxon names")
         for m in reader:
-            if m["osm"] and m.get("name_nds"):
-                nds_by_osm[m["osm"]] = m["name_nds"]
-            pos = (m["lon"], m["lat"])
-            if not (pos[0] and pos[1]):
-                continue
-            if m["osm"]:
-                by_osm[m["osm"]] = pos
-            by_line[int(m["line"])] = (pos, m["de"])
+            osm = osm_key(m["osm"])
+            if osm and m.get("name_nds"):
+                nds_by_osm[osm] = m["name_nds"]
+            if osm and m["lon"] and m["lat"]:
+                by_osm[osm] = (m["lon"], m["lat"])
     local_points = placelist.local_points(a.curation)
     rows, _ = placelist.read(a.names)
-    out, skipped, unnamed, seen, stale = [], 0, 0, set(), 0
+    out, skipped, unnamed = [], 0, 0
     n_area = 0
     for r in rows:
         if r["status"] == "skip" or r["kind"] == "not_a_place":
@@ -105,33 +108,21 @@ def main():
                 raise SystemExit(f"{a.names}:{r['_line']}: local/{slug} has no row "
                                  f"with lat/lon in {a.curation}")
             lon, lat = local_points[slug]
-        elif r["osm"] in by_osm:
-            lon, lat = by_osm[r["osm"]]
-        else:
-            cached = by_line.get(r["_line"])
-            if cached and cached[1] == r["de"]:
-                lon, lat = cached[0]
-            elif cached:
-                stale += 1
+        elif osm_key(r["osm"]) in by_osm:
+            lon, lat = by_osm[osm_key(r["osm"])]
         if lon == "" or lat == "":
             skipped += 1
             continue
         area_tag = areas.lookup(float(lon), float(lat)) if areas else None
         if area_tag:
             n_area += 1
-        ident = placelist.entry_id(r)
-        # several rows may point at the same object (two spellings, two
-        # sheet sections); keep both searchable with a unique id
-        if ident in seen:
-            ident = f"{ident}#{r['_line']}"
-        seen.add(ident)
         names = {}
         for d in reg:
             name = dialects.dialect_name(r, d["tag"], area_tag, reg)
             if name:
                 names[d["tag"]] = name
         entry = {
-            "id": ident,
+            "id": r["id"],
             "names": names,
             "name_de": placelist.primary(r["de"]),
             "lon": round(float(lon), 5),
@@ -146,12 +137,14 @@ def main():
         variety = dialects.variety(r)
         if variety:
             entry["variety"] = variety
-        name_nds = nds_by_osm.get(r["osm"])
+        name_nds = nds_by_osm.get(osm_key(r["osm"]))
         if name_nds:
             entry["name_nds"] = name_nds
         name_da = placelist.primary(r["da"])
         if name_da:
             entry["name_da"] = name_da
+        if r["osm"]:
+            entry["osm"] = r["osm"]
         if r["wikidata"]:
             entry["wikidata"] = r["wikidata"]
         out.append(entry)
@@ -167,10 +160,6 @@ def main():
           f"{sum(1 for e in out if 'local' in e)} with a local name, "
           f"{sum(1 for e in out if 'name_nds' in e)} with a Low Saxon one; "
           f"skipped {skipped} without coordinates, {unnamed} without a Frisian name")
-    if stale:
-        print(f"note: {stale} row(s) have moved to another line since "
-              f"{os.path.relpath(a.matches, ROOT)} was written and lost their "
-              f"position -- re-run names/match.py")
     print(f"wrote {len(reg)} dialects to {a.registry_out}")
 
 

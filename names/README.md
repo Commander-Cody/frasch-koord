@@ -44,6 +44,7 @@ are gone from the tree; `git show b602a3f:names/bootstrap/` lists them.
 | `wikidata` | Wikidata item. The injector also tags every OSM object with this `wikidata` tag; for the countries, which have no `osm`, it is the only key. Empty for a `local/` row. |
 | `status` | `auto` — `match.py` filled `osm`/`wikidata` and will recompute them next run. `ok` — a human checked the row. `skip` — never put on the map. Empty — nothing decided yet (or, with `osm` filled by hand, simply yours). |
 | `note` | free text for you. `match.py` never writes here. The import put `uncertain` here for names the sheet marked with `?`. |
+| `id` | the row's own key, e.g. `naibel`, `schorkewarw-2`: lowercase ascii letters, digits, hyphens, unique. Everything else names the row by it — `work/matches.csv`, `REPORT.md`, the curation worklist and patch, the search index (`?place=` links) and the tiles (`frasch:ref`) — so adding, deleting or moving rows, or correcting a name, never changes another row's identity. **Leave it empty on a new row** and run `names/check.py --fix`, which fills it from the Frisian name (German, then Danish, when there is none; `-2`, `-3` on repeats). Never change an id once written: it would break the share links to that place. |
 
 The sheet's other columns (inhabitant adjectives, Low German, South Jutish,
 old names, sources) were deliberately not imported: the map does not use them.
@@ -59,12 +60,16 @@ Conventions that apply to every name cell:
   only repeats the column's own dialect is noise — the column says it already
 * no `?` inside names — say `uncertain` in `note`
 
-After editing, `.venv/bin/python names/check.py` reports every problem in
-`places.csv`, `curation.csv` and `dialects.csv` with its line: a comma too
-many or too few, unbalanced brackets, a `?`, variants not separated by `; `,
-a repeated variant, an unknown `kind` or `status`, a bad reference, one OSM
-object or Wikidata item on two rows, a `local/` reference without a position.
-CI runs it on every push.
+After editing, `.venv/bin/python names/check.py --fix` gives new rows their
+`id`, then reports every problem in `places.csv`, `curation.csv`,
+`dialects.csv` and `dialect_areas.csv` with its line: a comma too many or too
+few, unbalanced brackets, a `?`, variants not separated by `; `, a repeated
+variant, an unknown `kind` or `status`, a bad reference, one OSM object or
+Wikidata item on two rows, a `local/` reference without a position, a
+missing or repeated `id`, a hand-set `frasch:ref` in `curation.csv` that names
+no row, one OSM object on two `dialect_areas.csv` rows. Without `--fix` it
+only reports; CI runs it that way on every push. The other scripts refuse a
+`places.csv` with a row without an `id`.
 
 The rows are in the order of the original sheet (by section, then the owner's
 geographic order); new rows can go anywhere.
@@ -112,7 +117,7 @@ belongs to a dialect.
 | column | meaning |
 |---|---|
 | `dialect` | a `tag` from `dialects.csv` |
-| `osm` | `relation/123` (a municipality) or `way/123` (an island polygon where the municipality is the wrong unit); several separated by `;`, as in `places.csv` |
+| `osm` | `relation/123` (a municipality) or `way/123` (an island polygon where the municipality is the wrong unit); several separated by `;`, as in `places.csv`. An object belongs to one row only: the review overlay's `?areas&area=relation/123` links name a row by it |
 | `name` | free-text label so a human can read the row |
 | `note` | why this object |
 
@@ -250,11 +255,12 @@ $PY names/curate.py apply
 
 `export` writes every ambiguous and not-found row the matcher still owns, with
 its candidates' positions and its location hint, to `work/curate.json`; rows
-whose line has moved since the match run are dropped with a note (re-run
+deleted from `places.csv` since the match run are dropped with a note (re-run
 `match.py`). In the browser you pick a candidate, drop a point of your own, or
 `skip` the row; every decision is appended as one line to
 `work/curate-patch.jsonl`, so you can stop and resume. `apply` reads that file
-back — the last entry per row wins — and writes `osm`, `wikidata` and
+back — the last entry per row wins, rows are found by their `id`, so hand
+edits to `places.csv` during a session do no harm — and writes `osm`, `wikidata` and
 `status` (`ok`, or `skip`) into `places.csv`, plus one `curation.csv` row per
 place OSM does not have. It touches only the rows `match.py` owns and refuses
 the rest. It renames the patch file before reading it (`--keep` leaves it), so
@@ -486,7 +492,7 @@ references: coordinates and tag fixes belong in `curation.csv` and the build.
 | `dialect_areas.geojson` | generated, **committed**: one polygon set per dialect — the lookup file |
 | `dialect_areas_parts.geojson` | generated, **committed**: one polygon per municipality with its `note`, plus the unassigned ones; for the `?areas` review view only, never read by Python |
 | `curate.py` | the review worklist as pins on the map: `export` → `work/curate.json`, `apply` writes the browser's decisions back into `places.csv` / `curation.csv` |
-| `export_search_index.py` | `places.csv` + `work/matches.csv` → `web/public/data/names.json` (every dialect name, the local form, OSM's Low Saxon name, German, Danish, the QID; keyed by `placelist.entry_id`, the same string the tiles carry as `frasch:ref`) and `web/src/generated/dialects.json` |
+| `export_search_index.py` | `places.csv` + `work/matches.csv` → `web/public/data/names.json` (every dialect name, the local form, OSM's Low Saxon name, German, Danish, the QID; keyed by the row `id`, the same string the tiles carry as `frasch:ref`) and `web/src/generated/dialects.json` |
 | `REPORT.md` | generated worklist |
 | `work/` | git-ignored caches (candidates, matches, Wikidata lookups) and the curation view's `curate.json` / `curate-patch.jsonl` |
 | `bootstrap/` | the original sheet export (`sheet-export.csv`) |

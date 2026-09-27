@@ -46,6 +46,8 @@ import placelist  # noqa: E402
 
 DEFAULT_PATH = placelist.DIALECTS_PATH
 DEFAULT_AREAS = os.path.join(HERE, "dialect_areas.geojson")
+# what DEFAULT_AREAS is built from (names/build_dialect_areas.py)
+AREA_LIST_PATH = os.path.join(HERE, "dialect_areas.csv")
 
 FIELDS = ["tag", "column", "label", "status", "view", "note"]
 STATUSES = {"living", "extinct"}
@@ -102,6 +104,51 @@ def read(path: str = DEFAULT_PATH) -> list[dict]:
     if not reg:
         raise SystemExit(f"{path}: no dialects")
     return reg
+
+
+def area_rows(path: str, reg) -> tuple[list[dict], list[tuple[int, str]]]:
+    """-> (rows, problems) of the dialect area list (names/dialect_areas.csv):
+    one dict per row that follows its rules -- `line`, `dialect`, `name`,
+    `note`, `osm` (normalised) and `refs` (parsed) -- and `(line, reason)` for
+    every one that does not.  The one reading of the file's rules, shared by
+    names/build_dialect_areas.py (which stops at the first problem) and
+    names/check.py (which lists them).
+
+    An OSM reference belongs to one row only: the review overlay's
+    `?areas&area=` links name a row by it."""
+    known = set(tags(reg))
+    rows, problems, first_line = [], [], {}
+    with placelist.open_csv(path) as fh:
+        reader = csv.DictReader(fh)
+        missing = [c for c in ("dialect", "osm") if c not in (reader.fieldnames or [])]
+        if missing:
+            return [], [(1, f"missing column(s) {', '.join(missing)}")]
+        for n, row in enumerate(reader, start=2):
+            tag = (row.get("dialect") or "").strip()
+            if not tag and not (row.get("osm") or "").strip():
+                continue                                  # blank spacer line
+            if tag not in known:
+                problems.append((n, f"unknown dialect {tag!r} (not in names/dialects.csv)"))
+                continue
+            try:
+                refs = placelist.parse_osm(row.get("osm"))
+            except placelist.Invalid as exc:
+                problems.append((n, exc.reason))
+                continue
+            if not refs:
+                problems.append((n, "no OSM reference"))
+                continue
+            taken = [r for r in refs if r in first_line]
+            if taken:
+                problems.append((n, f"{placelist.format_osm(taken[:1])} is already "
+                                    f"on line {first_line[taken[0]]}"))
+                continue
+            first_line.update((r, n) for r in refs)
+            rows.append({"line": n, "dialect": tag,
+                         "name": (row.get("name") or "").strip(),
+                         "note": (row.get("note") or "").strip(),
+                         "osm": placelist.format_osm(refs), "refs": refs})
+    return rows, problems
 
 
 def tags(reg) -> list[str]:

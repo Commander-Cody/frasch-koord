@@ -53,8 +53,9 @@ export interface AreaProps {
   name: string;
   /** The research note of the CSV row, verbatim. */
   note?: string;
+  /** The CSV row's OSM references (`relation/1; relation/2`); one per row, so the first is the deep-link key. */
   osm: string;
-  /** Line in names/dialect_areas.csv; absent on unassigned features. */
+  /** Line in names/dialect_areas.csv, for display; absent on unassigned features. */
   line?: number;
   km2: number;
 }
@@ -105,7 +106,7 @@ function bboxOf(geometry: { coordinates: unknown }): Bounds | null {
 
 /* ------------------------------------------------------------------ misc */
 
-/** "relation/1420394; way/123" -> one openstreetmap.org link each. */
+/** "relation/1420394; way/123" -> ["relation/1420394", "way/123"]: one link each, and the deep-link keys. */
 function osmRefs(osm: string): string[] {
   return osm
     .split(';')
@@ -242,16 +243,12 @@ export default function AreaPanel({ mapRef }: AreaPanelProps) {
 
   /* --------------------------------------------------- deep link (?area=) */
 
-  // `?areas&area=35` opens the row on line 35 of dialect_areas.csv — a link
-  // from the checklist, or just resuming where the last session stopped.
-  // Unknown lines are ignored: line numbers shift when a row is added, the
-  // same caveat names/curate.py documents for `?curate&line=`.
-  const initialLine = useRef<number | null>(
-    (() => {
-      const raw = new URLSearchParams(window.location.search).get('area');
-      return raw && /^\d+$/.test(raw) ? Number(raw) : null;
-    })(),
-  );
+  // `?areas&area=relation/1147134` opens the municipality with that OSM
+  // reference — a link from the checklist, or just resuming where the last
+  // session stopped. A reference belongs to one dialect_areas.csv row only
+  // (names/check.py enforces it), and unlike a line number it stays put when
+  // rows are added. An unknown one is ignored.
+  const initialRef = useRef<string | null>(new URLSearchParams(window.location.search).get('area'));
 
   /* ----------------------------------------------------------- selection */
 
@@ -268,12 +265,11 @@ export default function AreaPanel({ mapRef }: AreaPanelProps) {
 
       const feature = fid === null ? null : (byFid.get(fid) ?? null);
 
-      // Only assigned rows get a shareable key; an unassigned municipality has
-      // no line in the CSV to point at.
       const params = new URLSearchParams(window.location.search);
-      const line = feature?.properties.line;
-      if (line === undefined) params.delete('area');
-      else params.set('area', String(line));
+      // The deep-link key: the first OSM reference of the feature's row.
+      const ref = feature ? osmRefs(feature.properties.osm)[0] : undefined;
+      if (ref) params.set('area', ref);
+      else params.delete('area');
       // Keep MapLibre's `#zoom/lat/lon` hash: it is part of the resume state.
       window.history.replaceState(
         window.history.state,
@@ -298,10 +294,10 @@ export default function AreaPanel({ mapRef }: AreaPanelProps) {
 
   // Honour the deep link once the geometry is there (only once).
   useEffect(() => {
-    const line = initialLine.current;
-    if (line === null || features.length === 0) return;
-    initialLine.current = null;
-    const hit = features.find((feature) => feature.properties.line === line);
+    const ref = initialRef.current;
+    if (ref === null || features.length === 0) return;
+    initialRef.current = null;
+    const hit = features.find((feature) => osmRefs(feature.properties.osm).includes(ref));
     if (hit) select(hit.properties.fid, { fly: true });
   }, [features, select]);
 

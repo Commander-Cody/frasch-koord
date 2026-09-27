@@ -20,11 +20,13 @@ import placelist  # noqa: E402
 
 def places_text(rows) -> str:
     """A places.csv with the real header; `rows` are dicts of the cells that
-    are not empty."""
+    are not empty.  A row without an `id` key gets `row-<n>` (n counting from
+    1); pass `id` explicitly -- even empty -- to control it."""
     buf = io.StringIO(newline="")
     w = csv.DictWriter(buf, fieldnames=placelist.COLUMNS, lineterminator="\n")
     w.writeheader()
-    for r in rows:
+    for n, r in enumerate(rows, start=1):
+        r = {"id": f"row-{n}", **r}
         w.writerow({k: r.get(k, "") for k in placelist.COLUMNS})
     return buf.getvalue()
 
