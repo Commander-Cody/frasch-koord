@@ -164,6 +164,14 @@ def any_name(row: dict) -> str:
     return ""
 
 
+def on_map(row: dict) -> bool:
+    """Whether a row puts names on the map: it has a Frisian name and is
+    neither `skip` nor `not_a_place`.  The injector labels these rows'
+    objects, and the search index lists them."""
+    return (row["status"] != "skip" and row["kind"] != "not_a_place"
+            and bool(any_name(row)))
+
+
 class Invalid(SystemExit):
     """A cell that breaks the rules of its file.  A script that does not
     catch it stops with `where: reason`; names/check.py, which collects every
@@ -584,21 +592,32 @@ class Conflict(SystemExit):
 
 
 def atomic_write(path: str, data: bytes | str, expect: str | None = None):
-    """Replace `path` with `data` in one step: write a temporary file next to
-    it, flush it to disk, then `os.replace` it over the original.  A crash at
-    any point leaves either the old or the new file, never half of one.
+    """Replace `path` with `data` in one step (see `replacing`).
 
     `expect` (a `fingerprint`) makes it refuse -- with `Conflict`, leaving the
     file alone -- when the file no longer is what the caller read."""
     if isinstance(data, str):
         data = data.encode("utf-8")
+    with replacing(path, expect) as fh:
+        fh.write(data)
+
+
+@contextlib.contextmanager
+def replacing(path: str, expect: str | None = None, text: bool = False):
+    """A file handle whose content replaces `path` in one step when the block
+    ends: it writes a temporary file next to it, flushes it to disk, then
+    `os.replace`s it over the original.  A crash at any point -- or an
+    exception in the block -- leaves either the old or the new file, never
+    half of one (a half-written JSON-lines file that ends at a line boundary
+    looks complete).  `text` opens it as UTF-8 text instead of bytes, for
+    files streamed line by line; `expect` as in `atomic_write`."""
     path = os.path.abspath(path)
     directory = os.path.dirname(path)
     fd, tmp = tempfile.mkstemp(dir=directory, prefix=f".{os.path.basename(path)}.",
                                suffix=".tmp")
     try:
-        with os.fdopen(fd, "wb") as fh:
-            fh.write(data)
+        with (os.fdopen(fd, "w", encoding="utf-8") if text else os.fdopen(fd, "wb")) as fh:
+            yield fh
             fh.flush()
             os.fsync(fh.fileno())
         try:
