@@ -234,9 +234,9 @@ OpenMapTiles schema plus our extras, injected by the `tiles/` build
 - `frasch:variety` (string, rare): the sub-dialect the local name belongs to,
   e.g. `Foortuftinge`. Shown by the place card; nothing in the style reads it.
 - `frasch:ref` (string, only on features from our name list): which row of
-  `names/places.csv` the names come from — `node/240042766`,
-  `relation/3352541`, `local/huelltoft`, or a QID for a row without an `osm`
-  column. It is the `id` of that row's entry in the search index, which is how
+  `names/places.csv` the names come from — its `id`, e.g. `naibel` (tiles
+  built before the row ids carry the row's first OSM reference or its QID
+  instead). It is the `id` of that row's entry in the search index, which is how
   a click on a label finds the rest of the place's names (see "Place info
   card"). Absent on everything the name list does not cover.
 - Names: `name:<tag>` for every dialect of the registry that has a name for
@@ -349,7 +349,8 @@ single Warft (which in any case doesn't render before `place-warft`'s
 
 ```jsonc
 {
-  "id": "string",                 // stable identifier, e.g. "node/240044177"
+  "id": "string",                 // the name-list row's id, e.g. "naibel"
+  "osm": "string",                // omitted: the row's OSM reference(s), e.g. "node/240042766"
   "names": { "frr-x-mooring": "Naibel" },  // by registry tag; only non-empty ones
   "local": "string",              // omitted when unknown: the place's own name
   "dialect": "frr-x-fering",      // omitted outside the Frisian dialect areas
@@ -364,9 +365,14 @@ single Warft (which in any case doesn't render before `place-warft`'s
 }
 ```
 
-`id` is `placelist.entry_id` — the row's first `osm` reference, else its QID —
-and the tiles carry the same string as `frasch:ref`. That is the whole link
-between a label on the map and its row in the name list.
+`id` is the row's `id` in `names/places.csv`, and the tiles carry the same
+string as `frasch:ref`. That is the whole link between a label on the map and
+its row in the name list. It never changes, so a `?place=` link survives
+edits to the list and OSM id changes alike. Links shared before the row ids
+(`?place=node/240042766`, or `?place=way/28330569#679` for a second row on one
+object) and tiles built before them name the row's OSM reference (or its QID)
+instead; `entryLookup` in `src/names.ts` resolves those too — an object two
+rows claim opens the first.
 
 Written by `names/export_search_index.py`; only non-empty values are
 exported, so an absent field really means "no such name".
@@ -389,13 +395,13 @@ Danish, and links to the OpenStreetMap object and to Wikidata.
 
 Where the data comes from (`src/names.ts`):
 
-- `App` loads `public/data/names.json` once (`useNames`) and keeps it as
-  `byRef`, entries by `id`.
+- `App` loads `public/data/names.json` once (`useNames`) and looks entries up
+  with `find` (`entryLookup`): by `id`, else by an old-style OSM reference.
 - `Map` hit-tests a 13 px box around the click against the label layers of the
   current style (`placeLayerIds` in `style/localize.ts` reads them off the
   style, so a new label class is clickable without touching the map) and hands
   the topmost feature up.
-- The feature's `frasch:ref` looks the row up in `byRef`. `cardEntry` then
+- The feature's `frasch:ref` looks the row up with `find`. `cardEntry` then
   merges the two: the name-list entry wins field by field, the tile fills what
   the list does not have — which is how Föhr shows a Danish name (OSM's
   `name:da`) although our own `da` column is empty there.
@@ -448,7 +454,7 @@ Every pick (an OSM reference, a local reference, or a skip) is appended to
 `clear` withdraws one — which `names/curate.py apply` folds back into
 `names/places.csv` and `names/curation.csv`. Nothing in `names/` is written by
 the browser directly. The selected row is mirrored into the URL
-(`?curate&line=481`, next to MapLibre's view hash), so a reload or a pasted
+(`?curate&row=schorkewarw-2`, the row's `id`, next to MapLibre's view hash), so a reload or a pasted
 link reopens the same row; ↑/↓ or `j`/`k` walk the list. A place that is
 several OSM objects is picked by ticking candidates and lookup results (or
 shift-clicking their pins) and "Pick N selected": one entry with
@@ -470,7 +476,8 @@ map instead of in a spreadsheet. Clicking a polygon or a list row shows the
 municipality, the dialect and the row's research `note` verbatim. The
 municipalities **no row claims** are drawn in grey: those places get no dialect
 at all, and the detail block hands you the `relation/<id>` to paste into a new
-CSV row. `?areas&area=<line>` reopens a row (line in `dialect_areas.csv`); ↑/↓
+CSV row. `?areas&area=relation/<id>` reopens a municipality (by its OSM reference,
+which belongs to one `dialect_areas.csv` row only); ↑/↓
 or `j`/`k` walk the list. English only on purpose, like the curation view.
 
 Build the geometry first —
