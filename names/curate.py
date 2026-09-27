@@ -57,6 +57,7 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+import build_candidates  # noqa: E402
 import placelist  # noqa: E402
 import match  # noqa: E402
 
@@ -150,20 +151,18 @@ def stream_records(path, keys, hint_norms):
     refers to (by id) and those a location hint could name (by normalised
     name) -- roughly a thousand of 180 000."""
     kept = []
-    with open(path, encoding="utf-8") as fh:
-        for line in fh:
-            rec = json.loads(line)
-            if (rec["t"], rec["id"]) in keys:
+    for rec in build_candidates.read_records(path):
+        if (rec["t"], rec["id"]) in keys:
+            kept.append(rec)
+            continue
+        if not hint_norms:
+            continue
+        for field in match.NAME_FIELDS:
+            v = rec["tags"].get(field)
+            if v and any(match.norm(p) in hint_norms
+                         for p, _pen in match.split_name_values(v)):
                 kept.append(rec)
-                continue
-            if not hint_norms:
-                continue
-            for field in match.NAME_FIELDS:
-                v = rec["tags"].get(field)
-                if v and any(match.norm(p) in hint_norms
-                             for p, _pen in match.split_name_values(v)):
-                    kept.append(rec)
-                    break
+                break
     return kept
 
 

@@ -282,5 +282,3 @@ Either the feature is not in OSM at all, or OSM spells it differently. `near mis
 | 827 | water | Uáá | Oste | Nebenfluss der Elbe |  |
 | 828 | water | Waiser | Weser |  |  |
 | 848 | helgoland | Bru | Helgoländer Felswatt |  |  |
-
-_match.py run 2026-09-24 01:00, 3s, 182,302 candidates_

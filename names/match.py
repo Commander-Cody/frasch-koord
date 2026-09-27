@@ -15,10 +15,15 @@ What gets written where
                           with a status other than `auto`) or marked `skip`
                           is never touched.  Review the result with `git diff`.
   names/work/matches.csv  per-row details of the run: what was matched, the
-                          decisive tags, lon/lat and the OSM object's Low Saxon
-                          name (both used by export_search_index.py),
-                          the candidate list of ambiguous rows.  Git-ignored.
-  names/REPORT.md         the hand-review worklist.
+                          decisive tags, lon/lat, the candidate list of
+                          ambiguous rows.  Git-ignored.
+  names/REPORT.md         the hand-review worklist.  Depends on the inputs
+                          alone (no date), so an unchanged run leaves it as is.
+  names/work/match-extracts.json
+                          the extracts the candidates came from (the header of
+                          candidates.jsonl) -- the next run warns when that set
+                          changed.  Git-ignored; lives next to the candidates.
+  With --dry-run only work/matches.csv is written.
 
 Ranking / decision
   1. keep only candidates whose tags are compatible with the row's `kind`
@@ -33,6 +38,14 @@ Ranking / decision
   names/work/wikidata-countries.json).  When a lookup fails -- or `--offline`
   without a cached answer -- the country row keeps its cells
   (`lookup_failed` in matches.csv) and the run exits with status 1.
+
+Changed extracts
+  A row the matcher filled from an object of one extract alone loses it when
+  the candidates are rebuilt without that extract -- the Danish places (Fanø,
+  Hoyer, Ripen, Röm, ...) exist only in the Denmark extract.  So every run
+  compares the extract files of candidates.jsonl with those of the last real
+  run, and warns on stderr when one was added or dropped.  A newer download of
+  the same extract (only its replication timestamp differs) is no warning.
 
 places.csv is written in one step (never half), and not at all if it changed
 on disk during the run; names/work/.lock keeps match.py and
@@ -55,6 +68,7 @@ import unicodedata
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+import build_candidates  # noqa: E402
 import placelist  # noqa: E402
 from placelist import any_name, format_osm, local_ref, parse_osm, primary, variants  # noqa: E402
 
@@ -63,10 +77,11 @@ CAND_PATH = os.path.join(HERE, "work", "candidates.jsonl")
 MATCH_PATH = os.path.join(HERE, "work", "matches.csv")
 REPORT_PATH = os.path.join(HERE, "REPORT.md")
 WD_CACHE = os.path.join(HERE, "work", "wikidata-countries.json")
+EXTRACTS_STATE = "match-extracts.json"      # next to the candidates file
 
 MATCH_COLUMNS = ["id", "line", "kind", "name", "de", "osm", "wikidata", "status",
                  "result", "match_name", "match_tags", "lon", "lat",
-                 "name_nds", "candidates", "note"]
+                 "candidates", "note"]
 
 NF_CENTRE = (8.9, 54.7)                      # lon, lat
 NF_BBOX = (7.8, 54.15, 9.55, 55.12)   # North Frisia incl. Helgoland
@@ -308,23 +323,21 @@ class Index:
         self.recs = []
         self.by_name = collections.defaultdict(dict)   # norm -> {rec_idx: rank}
         self.by_key = {}                               # (t, id) -> rec
-        with open(path, encoding="utf-8") as fh:
-            for line in fh:
-                rec = json.loads(line)
-                i = len(self.recs)
-                self.recs.append(rec)
-                self.by_key[osm_key(rec)] = rec
-                for k, rank in NAME_FIELD_RANK.items():
-                    v = rec["tags"].get(k)
-                    if not v:
+        for rec in build_candidates.read_records(path):
+            i = len(self.recs)
+            self.recs.append(rec)
+            self.by_key[osm_key(rec)] = rec
+            for k, rank in NAME_FIELD_RANK.items():
+                v = rec["tags"].get(k)
+                if not v:
+                    continue
+                for part, penalty in split_name_values(v):
+                    n = norm(part)
+                    if not n:
                         continue
-                    for part, penalty in split_name_values(v):
-                        n = norm(part)
-                        if not n:
-                            continue
-                        d = self.by_name[n]
-                        if rank + penalty < d.get(i, 99):
-                            d[i] = rank + penalty
+                    d = self.by_name[n]
+                    if rank + penalty < d.get(i, 99):
+                        d[i] = rank + penalty
 
     def lookup(self, name):
         """-> [(record, name-field rank)]"""
@@ -847,10 +860,65 @@ def find_duplicates(rows):
     return {k: g for k, g in by_obj.items() if len(g) > 1}
 
 
+# --------------------------------------------------------------- extracts ----
+def read_used_extracts(path):
+    """The extracts the last real run matched against, as the candidates
+    header lists them; None before the first such run."""
+    if not os.path.exists(path):
+        return None
+    with open(path, encoding="utf-8") as fh:
+        return json.load(fh)["extracts"]
+
+
+def record_used_extracts(path, extracts):
+    placelist.atomic_write(path, json.dumps({"extracts": extracts},
+                                            ensure_ascii=False, indent=1) + "\n")
+
+
+def extract_set_warning(previous, current):
+    """The warning for a changed set of extract files, or None.  Only the
+    file names count: a refreshed download of the same extract is expected."""
+    before = {e["file"] for e in previous}
+    now = {e["file"] for e in current}
+    if before == now:
+        return None
+    parts = []
+    if now - before:
+        parts.append("added: " + ", ".join(sorted(now - before)))
+    if before - now:
+        parts.append("dropped: " + ", ".join(sorted(before - now)) + " -- `auto` "
+                     "rows matched only in a dropped extract get cleared")
+    return ("warning: the candidates come from other extracts than the last "
+            "match.py run; " + "; ".join(parts)
+            + ". Rebuild them with build_candidates.py from every extract "
+              "unless that is intended.")
+
+
+def check_extracts(candidates_path, state_path):
+    """Print the extracts behind the candidates, warn about a changed set, and
+    return them (None for a file from before the header)."""
+    extracts = build_candidates.read_header(candidates_path)
+    if extracts is None:
+        print(f"warning: {candidates_path} names no extracts (written before "
+              f"it had a header) -- rebuild it with build_candidates.py",
+              file=sys.stderr)
+        return None
+    print("candidates from " + ", ".join(
+        f"{e['file']} ({e['replication_timestamp'] or 'no timestamp'})"
+        for e in extracts))
+    previous = read_used_extracts(state_path)
+    if previous is not None:
+        warning = extract_set_warning(previous, extracts)
+        if warning:
+            print(warning, file=sys.stderr)
+    return extracts
+
+
 # ----------------------------------------------------------------- report ----
-def write_report(rows, results, path=REPORT_PATH, timings=None):
+def write_report(rows, results, path=REPORT_PATH):
     """`results` maps a row's id to its match_row() output (only for the rows
-    the matcher owns)."""
+    the matcher owns).  The report depends on these alone -- no date, no run
+    time -- so a run on unchanged inputs leaves the tracked file as it was."""
     def state(r):
         if r["kind"] == "not_a_place":
             return "not a place"
@@ -939,19 +1007,13 @@ def write_report(rows, results, path=REPORT_PATH, timings=None):
         cands = f"`{res.get('candidates', '')[:200]}`" if res.get("candidates") else ""
         L.append(f"| {ref(r)} | {res.get('note', '')} | {cands} |")
     L.append("")
-    if timings:
-        L.append(f"_{timings}_\n")
     with open(path, "w", encoding="utf-8") as fh:
         fh.write("\n".join(L))
 
 
 def write_matches(rows, results, index, path=MATCH_PATH):
     """work/matches.csv: one line per places.csv row, with the match details
-    (and lon/lat also for rows a human filled in, looked up by id).
-
-    `name_nds` is the Low Saxon name of the row's (first) OSM object.  The name
-    list has no Low Saxon column, but the map falls back to `name:nds` before
-    German, so the search index needs it to name a place as its label does."""
+    (and lon/lat also for rows a human filled in, looked up by id)."""
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=MATCH_COLUMNS, lineterminator="\n")
@@ -963,8 +1025,7 @@ def write_matches(rows, results, index, path=MATCH_PATH):
             rec = {"id": r["id"], "line": r["_line"], "kind": r["kind"],
                    "name": any_name(r),
                    "de": primary(r["de"]), "osm": r["osm"],
-                   "wikidata": r["wikidata"], "status": r["status"],
-                   "name_nds": hit["tags"].get("name:nds", "") if hit else ""}
+                   "wikidata": r["wikidata"], "status": r["status"]}
             if res is not None:
                 rec.update(result=res["status"], match_name=res.get("match_name", ""),
                            match_tags=res.get("match_tags", ""), lon=res.get("lon", ""),
@@ -995,9 +1056,15 @@ def main(argv=None):
     ap.add_argument("--wikidata-cache", default=WD_CACHE,
                     help="country lookups already made (default: %(default)s)")
     ap.add_argument("--dry-run", action="store_true",
-                    help="write the report and work/matches.csv, but leave "
-                         "places.csv alone")
+                    help="write only work/matches.csv (git-ignored); leave "
+                         "places.csv and REPORT.md alone")
+    ap.add_argument("--extracts-state",
+                    help="the extracts the last run used (default: "
+                         f"{EXTRACTS_STATE} next to --candidates)")
     args = ap.parse_args(argv)
+    if args.extracts_state is None:
+        args.extracts_state = os.path.join(
+            os.path.dirname(os.path.abspath(args.candidates)), EXTRACTS_STATE)
 
     with placelist.lock(args.names):
         return run(args)
@@ -1008,6 +1075,7 @@ def run(args):
     rows, fields = placelist.read(args.names)
     print(f"loaded {len(rows)} rows from {args.names}")
 
+    extracts = check_extracts(args.candidates, args.extracts_state)
     index = Index(args.candidates)
     print(f"indexed {len(index.recs):,} candidates / "
           f"{len(index.by_name):,} distinct normalised names "
@@ -1062,11 +1130,10 @@ def run(args):
 
     if not args.dry_run:
         placelist.write(rows, args.names, fields)
+        write_report(rows, results, args.report)
+        if extracts is not None:
+            record_used_extracts(args.extracts_state, extracts)
     write_matches(rows, results, index, args.matches)
-    write_report(rows, results, args.report,
-                 timings=f"match.py run {time.strftime('%Y-%m-%d %H:%M')}, "
-                         f"{time.time()-t0:.0f}s, "
-                         f"{len(index.recs):,} candidates")
 
     cnt = collections.Counter(o["status"] for o in results.values())
     print(f"matcher owns {len(todo)} of {len(rows)} rows: "
@@ -1074,7 +1141,8 @@ def run(args):
     print(f"places.csv: {changed['filled']} rows filled, {changed['cleared']} cleared, "
           f"{changed['changed']} changed"
           + (" (dry run -- not written)" if args.dry_run else ""))
-    print("wrote", args.matches, "and", args.report)
+    print("wrote", args.matches, *(() if args.dry_run else ("and", args.report)))
+    print(f"done in {time.time()-t0:.0f}s")
     if unresolved:
         print(f"error: no Wikidata answer for {len(unresolved)} country row(s) "
               + ("(--offline and not in the cache)" if args.offline
