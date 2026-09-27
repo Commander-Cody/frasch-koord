@@ -45,18 +45,13 @@ the *local* one at this spot (`frasch:local`, the "local dialect" map view),
 and which dialect a place's own `local` column belongs to.  The smallest area
 containing the object wins.  Without the file the injector still runs -- it
 warns and writes `frasch:local` only for rows with an explicit `local` name.
-A node is asked at its own location; a way or relation that closes into a
-polygon first at an interior point of *that* polygon and only then at its
-outline -- an island's coastline runs outside the municipality boundaries the
-areas are cut from, so a coastline vertex answers "no dialect" for the very
-island the area was drawn around (see `locate_ways_and_relations`).  What does
-not close -- an open way, a relation whose members the extract does not hold --
-is asked, as before, at the relation's `label` / `admin_centre` member, else
-at its first vertex.  Those positions are collected in three id-filtered
-pre-passes over the file (matched relations -> their member ways -> those
-ways' nodes), never in a location cache for the whole extract -- the dev
-machine does not have the memory for one.  Objects matched only through their
-Wikidata QID get no area.
+Where an object lies comes from `names/osm_objects.json` (`names/locate.py`),
+and `locate.dialect_at` turns that into a dialect -- the same file and the same
+function the search index uses (names/export_search_index.py), so a map label
+and its search entry cannot disagree (#24).  An object of the name list the
+file does not know stops the build.  Objects matched only through their
+Wikidata QID are not in it: a node is asked at its own location, a way or
+relation gets no dialect.
 
 `names/curation.csv` (per-feature map tuning) -- for every listed object the
 `set_tags` (`k=v` pairs separated by `;`) are applied *verbatim*, after the
@@ -99,11 +94,12 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.normpath(os.path.join(HERE, "..", "names")))
 import placelist  # noqa: E402
 import dialects  # noqa: E402
-import build_dialect_areas  # noqa: E402  (ring assembly, see locate_ways_and_relations)
+import locate  # noqa: E402
 
 DEFAULT_NAMES = placelist.DEFAULT_PATH
 DEFAULT_DIALECTS = dialects.DEFAULT_PATH
 DEFAULT_AREAS = dialects.DEFAULT_AREAS
+DEFAULT_OBJECTS = locate.DEFAULT_OUT
 DEFAULT_CURATION = os.path.normpath(os.path.join(HERE, "..", "names", "curation.csv"))
 KIND_KEY = "frasch:kind"
 MINZOOM_KEY = "frasch:minzoom"
@@ -312,138 +308,40 @@ def square_around(lon, lat, km2):
             (lon + dlon, lat + dlat), (lon - dlon, lat + dlat)]
 
 
-# ------------------------------------------------------------ pre-passes ----
-def scan_relations(path, by_id):
-    """One id-filtered pass over the relations of the file.  It answers two
-    questions at once:
+# ------------------------------------------------------------- waterways ----
+def scan_waterways(path, by_id):
+    """Which member ways the matched `type=waterway` relations have, in one
+    id-filtered pass over the relations.  The OpenMapTiles waterway layer is
+    built from the member WAYS, so the label has to go on them (the main pass
+    applies it only to members carrying the relation's own name, so side arms
+    like "Alte Eider" keep theirs).
 
-    * which member ways a matched `type=waterway` relation has -- the
-      OpenMapTiles waterway layer is built from the member WAYS, so the label
-      has to go on them (the main pass applies it only to members carrying the
-      relation's own name, so side arms like "Alte Eider" keep theirs)
-    * what a matched relation is made of: its `label` / `admin_centre` member
-      node and its member ways by ring role -- enough to rebuild its polygon
-      and ask the dialect-area index which dialect is spoken inside it.
-
-    -> (members, rel_node, rel_rings) with
-       members    {('w', id): (relation key, the relation's OSM name)}
-       rel_node   {rel id: node id}
-       rel_rings  {rel id: {'outer': [way ids], 'inner': [way ids]}}, the
-                  shape names/build_dialect_areas.polygons_for expects"""
+    -> {('w', id): (relation key, the relation's OSM name)}"""
     wanted = {i for t, i in by_id if t == "r"}
-    members, rel_node, rel_rings = {}, {}, {}
+    members = {}
     if not wanted:
-        return members, rel_node, rel_rings
+        return members
     fp = osmium.FileProcessor(path, osmium.osm.RELATION) \
                .with_filter(osmium.filter.IdFilter(wanted))
     for r in fp:
-        waterway = r.tags.get("type") == "waterway" or "waterway" in r.tags
-        rings = rel_rings.setdefault(r.id, {"outer": [], "inner": []})
-        for m in r.members:
-            if m.type == "n" and m.role in ("label", "admin_centre"):
-                rel_node.setdefault(r.id, m.ref)
-            elif m.type == "w":
-                rings["inner" if m.role == "inner" else "outer"].append(m.ref)
-                if waterway:
-                    members.setdefault(("w", m.ref),
-                                       (("r", r.id), r.tags.get("name", "")))
-    return members, rel_node, rel_rings
-
-
-def scan_way_nodes(path, way_ids):
-    """-> {way id: [node ids]} for the given ways (id-filtered pass)."""
-    out = {}
-    if not way_ids:
-        return out
-    fp = osmium.FileProcessor(path, osmium.osm.WAY) \
-               .with_filter(osmium.filter.IdFilter(way_ids))
-    for w in fp:
-        if len(w.nodes):
-            out[w.id] = [n.ref for n in w.nodes]
-    return out
-
-
-def scan_node_locations(path, node_ids):
-    """-> {node id: (lon, lat)} (id-filtered pass)."""
-    out = {}
-    if not node_ids:
-        return out
-    fp = osmium.FileProcessor(path, osmium.osm.NODE) \
-               .with_filter(osmium.filter.IdFilter(node_ids))
-    for n in fp:
-        if n.location.valid():
-            out[n.id] = (n.location.lon, n.location.lat)
-    return out
-
-
-def locate_ways_and_relations(path, by_id, rel_node, rel_rings):
-    """-> ({('w'|'r', id): [(lon, lat), ...]}, n_from_polygon) for the matched
-    ways and relations: the points at which each is asked which dialect is
-    spoken there, best first (see `area_of`).  Nodes are not in here: the main
-    pass has their location anyway.
-
-    An island is not where its coastline starts.  The first vertex of a way
-    lies *on* the outline of the place, i.e. where the dialect area that was
-    cut from municipality boundaries has already ended (Amrum's coastline
-    begins 1.6 km south of the Amrum municipalities, on the Kniepsand), so
-    that point answered "no dialect at all" for exactly the places whose own
-    island the area was drawn around.  Whatever closes into a polygon is
-    therefore asked at an interior point of that polygon first -- a point of
-    the place itself, and still a single point, so the "smallest containing
-    area wins" rule of the index is untouched.
-
-    The outline point stays as a second try, because the two miss in opposite
-    directions: where an area covers only part of an island (the Langeneß
-    municipality holds only the south-west third of Oland) the interior point
-    falls outside it while a vertex still lands in it.  An object gets the
-    dialect of the first point that is in an area at all, so nothing that had
-    one can lose it.  What has no polygon -- an open way, a relation whose
-    members the extract does not hold -- is asked only at the old point: the
-    relation's `label` / `admin_centre` member, else the first vertex.
-
-    Ring assembly is names/build_dialect_areas.py's -- the same code that
-    builds the dialect areas themselves, so a place and the areas it is
-    compared against are read out of OSM the same way."""
-    way_ids = {i for t, i in by_id if t == "w"}
-    for rings in rel_rings.values():
-        way_ids |= set(rings["outer"]) | set(rings["inner"])
-    ways = scan_way_nodes(path, way_ids)
-    node_ids = {n for nodes in ways.values() for n in nodes} | set(rel_node.values())
-    locs = scan_node_locations(path, node_ids)
-    out, from_polygon, problems = {}, 0, []
-    for key in by_id:
-        t, i = key
-        if t not in ("w", "r"):
+        if not (r.tags.get("type") == "waterway" or "waterway" in r.tags):
             continue
-        points = []
-        for geom in build_dialect_areas.polygons_for(key, rel_rings, ways, locs, problems):
-            if geom.is_empty:
-                continue
-            try:
-                p = geom.representative_point()
-            except Exception:          # a ring OSM leaves in a state shapely
-                continue               # cannot make a point of; the outline does
-            points.append((p.x, p.y))
-            from_polygon += 1
-            break
-        # the old point: the relation's own label node, else the first vertex
-        # of the (first) way
-        nid = rel_node.get(i) if t == "r" else None
-        if nid is None:
-            first = ways.get(i) if t == "w" else next(
-                (ways[w] for w in rel_rings.get(i, {}).get("outer", []) if w in ways),
-                None)
-            nid = first[0] if first else None
-        if nid in locs:
-            points.append(locs[nid])
-        if points:
-            out[key] = points
-    return out, from_polygon
+        for m in r.members:
+            if m.type == "w":
+                members.setdefault(("w", m.ref), (("r", r.id), r.tags.get("name", "")))
+    return members
+
+
+def unlocated(by_id, objects):
+    """The OSM references of the name list that the objects file does not
+    know -- without a position they would get no dialect, and the search
+    index, which reads the same file, refuses them too."""
+    return sorted(k for k in by_id if k[0] != placelist.LOCAL_TYPE and k not in objects)
 
 
 # -------------------------------------------------------------- injector ----
 class Injector:
-    def __init__(self, writer, by_id, by_qid, reg, areas=None, coords=None,
+    def __init__(self, writer, by_id, by_qid, reg, areas=None, objects=None,
                  curation=None, dry_run=False, members=None, synthetic=None,
                  points=None):
         self.members = members or {}
@@ -467,7 +365,7 @@ class Injector:
         self.by_qid = by_qid
         self.reg = reg
         self.areas = areas
-        self.coords = coords or {}
+        self.objects = objects or {}
         self.curation = curation or {}
         self.dry_run = dry_run
         self.hits = collections.Counter()
@@ -481,19 +379,15 @@ class Injector:
         self.n_objects = 0
 
     def area_of(self, key, o):
-        """The dialect spoken where this object lies, or None.  A node is
-        asked at its own location, a way / relation at the points
-        `locate_ways_and_relations` found for it, best first."""
-        if self.areas is None:
-            return None
-        if key[0] == "n":
-            if not o.location.valid():
-                return None
-            return self.areas.lookup(o.location.lon, o.location.lat)
-        for lon, lat in self.coords.get(key, ()):
-            tag = self.areas.lookup(lon, lat)
-            if tag:
-                return tag
+        """The dialect spoken where this object lies, or None: from the
+        objects file (names/locate.py), which the search index reads too.
+        A node found only through its QID is asked at its own location; a
+        way or relation found that way gets none."""
+        if key in self.objects:
+            return locate.dialect_at(self.objects[key], self.areas)
+        if key[0] == "n" and o.location.valid():
+            return locate.dialect_at({"lon": o.location.lon, "lat": o.location.lat},
+                                     self.areas)
         return None
 
     def flush(self, t):
@@ -506,7 +400,7 @@ class Injector:
                 if rows is None:
                     continue        # no name-list row uses it (reported in run)
                 lon, lat = p["lon"], p["lat"]
-                area_tag = self.areas.lookup(lon, lat) if self.areas else None
+                area_tag = locate.dialect_at({"lon": lon, "lat": lat}, self.areas)
                 tags = point_tags(rows, area_tag, self.reg, p["tags"], p["where"])
                 self.seen_keys.add(key)
                 for k in tags:
@@ -617,7 +511,8 @@ class Injector:
 
 
 def run(inp, out, names_csv, dialects_csv, areas_geojson, dry_run=False,
-        curation_csv=None, curation_required=False, areas_required=False):
+        curation_csv=None, curation_required=False, areas_required=False,
+        objects_json=DEFAULT_OBJECTS):
     reg = dialects.read(dialects_csv)
     by_id, by_qid, used, conflicts = load_names(names_csv, reg)
     local_keys = sorted(k for k in by_id if k[0] == placelist.LOCAL_TYPE)
@@ -674,24 +569,27 @@ def run(inp, out, names_csv, dialects_csv, areas_geojson, dry_run=False,
               f"positioned in {curation_csv} but no row of {names_csv} uses it "
               f"-- nothing added")
 
-    t0 = time.time()
-    members, rel_node, rel_rings = scan_relations(inp, by_id)
-    coords, from_polygon = (locate_ways_and_relations(inp, by_id, rel_node, rel_rings)
-                            if areas else ({}, 0))
+    objects = {}
+    if areas:
+        objects = locate.read_objects(objects_json).by_ref
+        missing = unlocated(by_id, objects)
+        if missing:
+            lines = "\n".join(f"  {placelist.format_osm([k])}  "
+                              f"{placelist.describe(by_id[k][0])}" for k in missing)
+            raise SystemExit(f"{len(missing)} object(s) of {names_csv} are not in "
+                             f"{objects_json} -- run `just objects` "
+                             f"(names/locate.py) to locate them:\n{lines}")
+        print(f"objects   : {objects_json} -> {len(objects)} located object(s)")
+    members = scan_waterways(inp, by_id)
     if members:
         print(f"waterways : {len(members)} member ways of matched waterway relations")
-    if areas:
-        print(f"positions : {len(coords)} of "
-              f"{sum(1 for t, _ in by_id if t in ('w', 'r'))} ways/relations located "
-              f"({from_polygon} inside their own polygon, the rest at their label "
-              f"node / first vertex; {time.time()-t0:.0f}s in 3 id-filtered pre-passes)")
 
     writer = None
     if not dry_run:
         # copy the input header so the extract bounds survive (Planetiler uses
         # them; without bounds it renders low-zoom tiles for the whole world)
         writer = osmium.SimpleWriter(out, overwrite=True, header=osmium.io.Reader(inp).header())
-    inj = Injector(writer, by_id, by_qid, reg, areas, coords, curation, dry_run,
+    inj = Injector(writer, by_id, by_qid, reg, areas, objects, curation, dry_run,
                    members, synthetic, points)
 
     t0 = time.time()
@@ -782,6 +680,9 @@ def main(argv=None):
     ap.add_argument("--areas", default=DEFAULT_AREAS,
                     help="dialect areas as GeoJSON (names/build_dialect_areas.py); "
                          "skipped with a warning when absent")
+    ap.add_argument("--objects", default=DEFAULT_OBJECTS,
+                    help="where the name list's objects are (names/locate.py); "
+                         "needed with the dialect areas")
     ap.add_argument("--curation", default=DEFAULT_CURATION,
                     help="per-feature map tuning (set_tags / minzoom / maxzoom / polygon_km2); "
                          "default names/curation.csv, skipped when absent")
@@ -800,7 +701,8 @@ def main(argv=None):
                curation_required=a.curation != DEFAULT_CURATION,
                # an explicitly named area file must exist; the default one is
                # optional (the injector then warns and skips frasch:dialect)
-               areas_required=os.path.abspath(a.areas) != DEFAULT_AREAS)
+               areas_required=os.path.abspath(a.areas) != DEFAULT_AREAS,
+               objects_json=a.objects)
 
 
 if __name__ == "__main__":

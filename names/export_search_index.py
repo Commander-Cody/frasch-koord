@@ -1,21 +1,30 @@
 #!/usr/bin/env python3
 """Export the rows of names/places.csv that are on the map as the client-side
-search index used by web/ (web/public/data/names.json), and the dialect
-registry the frontend compiles in (web/src/generated/dialects.json).
+search index used by web/ (web/public/data/names.json).
 
 Every dialect name of a place is searchable, not only the one the map
 currently labels with: somebody who knows a Hallig as *Hansweerf* must find it
-while the map shows Mooring.  Which dialect is the *local* one at a place
-comes from names/dialect_areas.geojson, the same file the injector uses, so
-search results and tile labels agree.
+while the map shows Mooring.
 
-Coordinates come from names/work/matches.csv, which names/match.py writes --
-run match.py first (it also looks up the position of rows a human filled in).
-The Low Saxon name (`name_nds`) comes from there too: the name list has no Low
-Saxon column, but the map labels with OSM's `name:nds` before German, and the
-card and search results have to agree with it.
-A row for a place OSM does not have (`osm` = `local/<slug>`) takes its position
-from the curation row with the same reference (names/curation.csv).
+Where a place is, and so which dialect is the *local* one there, comes from
+names/osm_objects.json (names/locate.py) and names/dialect_areas.geojson --
+the same files, read through the same `locate.dialect_at`, as the injector
+uses for the tiles, so a search result and the map label agree.  An entry
+lies where the first object of its row's `osm` cell lies.  A row for a place
+OSM does not have (`osm` = `local/<slug>`) takes its position from the
+curation row with the same reference (names/curation.csv).  The Low Saxon
+name (`name_nds`) is the object's OSM `name:nds`: the name list has no Low
+Saxon column, but the map labels with it before German, and the card and
+search results have to agree with it.
+
+A row with an OSM reference the objects file does not know stops the export
+-- it is on the map, and would be missing from search.  Re-run
+`just objects` after giving a row a new reference.  Rows keyed by a Wikidata
+QID alone (the countries) have no position and are left out.
+
+The output records what it was built from (`built_from`, see
+names/provenance.py); the tiles carry the same stamp, and the frontend warns
+when the two differ.
 
 An entry's `id` is its row's `id` -- the same string the injector writes into
 the tiles as `frasch:ref`, which is how a click on a map label finds the entry
@@ -26,13 +35,11 @@ row ids, which name a place by its first OSM reference (or its QID).
 Usage: names/export_search_index.py [--names names/places.csv]
                                     [--dialects names/dialects.csv]
                                     [--areas names/dialect_areas.geojson]
-                                    [--matches names/work/matches.csv]
+                                    [--objects names/osm_objects.json]
                                     [--curation names/curation.csv]
                                     [--out web/public/data/names.json]
-                                    [--registry-out web/src/generated/dialects.json]
 """
 import argparse
-import csv
 import json
 import os
 import sys
@@ -42,14 +49,55 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
 import placelist  # noqa: E402
 import dialects  # noqa: E402
+import locate  # noqa: E402
+import provenance  # noqa: E402
 
-REGISTRY_FIELDS = ["tag", "column", "label", "status", "view"]
+DEFAULT_OUT = os.path.join(ROOT, "web", "public", "data", "names.json")
 
 
-def osm_key(cell):
-    """An `osm` cell in one spelling (`way/1; node/2`), so that a cell
-    match.py wrote as `way/1;node/2` still finds its row."""
-    return placelist.format_osm(placelist.parse_osm(cell))
+def entry_object(row, objects, local_points, where):
+    """Where a row's entry lies: the object of the first reference in its
+    `osm` cell, or the curation position of its local reference.  None for
+    a row keyed by its QID alone; a KeyError for a reference nobody located."""
+    slug = placelist.local_ref(row["osm"])
+    if slug:
+        if slug not in local_points:
+            raise SystemExit(f"{where}: local/{slug} has no row with lat/lon "
+                             f"in the curation file")
+        lon, lat = local_points[slug]
+        return {"lon": lon, "lat": lat}
+    refs = placelist.parse_osm(row["osm"], where)
+    if not refs:
+        return None
+    return objects.by_ref[refs[0]]
+
+
+def entry(row, obj, areas, reg) -> dict:
+    """The search-index entry of one row whose object is `obj`."""
+    area_tag = locate.dialect_at(obj, areas)
+    names = {}
+    for d in reg:
+        name = dialects.dialect_name(row, d["tag"], area_tag, reg)
+        if name:
+            names[d["tag"]] = name
+    out = {
+        "id": row["id"],
+        "names": names,
+        "name_de": placelist.primary(row["de"]),
+        "lon": round(float(obj["lon"]), 5),
+        "lat": round(float(obj["lat"]), 5),
+        "kind": row["kind"],
+    }
+    optional = {
+        "local": dialects.local_name(row, area_tag, reg),
+        "dialect": area_tag,
+        "variety": dialects.variety(row),
+        "name_nds": obj.get("name_nds"),
+        "name_da": placelist.primary(row["da"]),
+        "osm": row["osm"],
+        "wikidata": row["wikidata"],
+    }
+    return out | {k: v for k, v in optional.items() if v}
 
 
 def main(argv=None):
@@ -58,109 +106,48 @@ def main(argv=None):
     ap.add_argument("--names", default=placelist.DEFAULT_PATH)
     ap.add_argument("--dialects", default=dialects.DEFAULT_PATH)
     ap.add_argument("--areas", default=dialects.DEFAULT_AREAS)
-    ap.add_argument("--matches", default=os.path.join(HERE, "work", "matches.csv"))
+    ap.add_argument("--objects", default=locate.DEFAULT_OUT)
     ap.add_argument("--curation", default=placelist.CURATION_PATH,
                     help="positions of the local references (places OSM does not have)")
-    ap.add_argument("--out", default=os.path.join(ROOT, "web", "public", "data", "names.json"))
-    ap.add_argument("--registry-out",
-                    default=os.path.join(ROOT, "web", "src", "generated", "dialects.json"))
+    ap.add_argument("--out", default=DEFAULT_OUT)
     a = ap.parse_args(argv)
-    if not os.path.exists(a.matches):
-        raise SystemExit(f"{a.matches} not found -- run names/match.py first")
     reg = dialects.read(a.dialects)
-    areas = None
-    if os.path.exists(a.areas):
-        areas = dialects.AreaIndex.from_geojson(a.areas)
-    else:
-        print(f"note: {a.areas} absent -- no `dialect` in the index "
-              f"(build it with names/build_dialect_areas.py)")
-    # A position belongs to the OSM object, not to the row: looked up by
-    # reference, it stays right when a human changed the row's `osm` cell
-    # since match.py ran (the object is then simply not there yet).
-    by_osm, nds_by_osm = {}, {}
-    with open(a.matches, encoding="utf-8", newline="") as fh:
-        reader = csv.DictReader(fh)
-        if "name_nds" not in (reader.fieldnames or []):
-            print(f"note: {os.path.relpath(a.matches, ROOT)} has no name_nds column "
-                  f"-- re-run names/match.py to export Low Saxon names")
-        for m in reader:
-            osm = osm_key(m["osm"])
-            if osm and m.get("name_nds"):
-                nds_by_osm[osm] = m["name_nds"]
-            if osm and m["lon"] and m["lat"]:
-                by_osm[osm] = (m["lon"], m["lat"])
+    if not os.path.exists(a.areas):
+        raise SystemExit(f"{a.areas} not found -- build it with `just areas`")
+    areas = dialects.AreaIndex.from_geojson(a.areas)
+    objects = locate.read_objects(a.objects)
     local_points = placelist.local_points(a.curation)
     rows, _ = placelist.read(a.names)
-    out, skipped, unnamed = [], 0, 0
-    n_area = 0
-    for r in rows:
-        if r["status"] == "skip" or r["kind"] == "not_a_place":
-            continue
-        if not placelist.any_name(r):
-            unnamed += 1
-            continue
-        if not (r["osm"] or r["wikidata"]):
-            continue
-        lon, lat = "", ""
-        slug = placelist.local_ref(r["osm"])
-        if slug:
-            if slug not in local_points:
-                raise SystemExit(f"{a.names}:{r['_line']}: local/{slug} has no row "
-                                 f"with lat/lon in {a.curation}")
-            lon, lat = local_points[slug]
-        elif osm_key(r["osm"]) in by_osm:
-            lon, lat = by_osm[osm_key(r["osm"])]
-        if lon == "" or lat == "":
-            skipped += 1
-            continue
-        area_tag = areas.lookup(float(lon), float(lat)) if areas else None
-        if area_tag:
-            n_area += 1
-        names = {}
-        for d in reg:
-            name = dialects.dialect_name(r, d["tag"], area_tag, reg)
-            if name:
-                names[d["tag"]] = name
-        entry = {
-            "id": r["id"],
-            "names": names,
-            "name_de": placelist.primary(r["de"]),
-            "lon": round(float(lon), 5),
-            "lat": round(float(lat), 5),
-            "kind": r["kind"],
-        }
-        local = dialects.local_name(r, area_tag, reg)
-        if local:
-            entry["local"] = local
-        if area_tag:
-            entry["dialect"] = area_tag
-        variety = dialects.variety(r)
-        if variety:
-            entry["variety"] = variety
-        name_nds = nds_by_osm.get(osm_key(r["osm"]))
-        if name_nds:
-            entry["name_nds"] = name_nds
-        name_da = placelist.primary(r["da"])
-        if name_da:
-            entry["name_da"] = name_da
-        if r["osm"]:
-            entry["osm"] = r["osm"]
-        if r["wikidata"]:
-            entry["wikidata"] = r["wikidata"]
-        out.append(entry)
 
-    for path, data in ((a.out, out),
-                       (a.registry_out, [{k: d[k] for k in REGISTRY_FIELDS} for d in reg])):
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w", encoding="utf-8") as fh:
-            json.dump(data, fh, ensure_ascii=False, separators=(",", ":"))
-            fh.write("\n")
+    out, unlocated, qid_only = [], [], 0
+    for r in rows:
+        if not placelist.on_map(r):
+            continue
+        where = f"{a.names}:{r['_line']}"
+        try:
+            obj = entry_object(r, objects, local_points, where)
+        except KeyError as missing:
+            unlocated.append(f"  {r['id']} (line {r['_line']}): "
+                             f"{placelist.format_osm([missing.args[0]])}")
+            continue
+        if obj is None:
+            qid_only += int(bool(r["wikidata"]))
+            continue
+        out.append(entry(r, obj, areas, reg))
+    if unlocated:
+        raise SystemExit(f"{len(unlocated)} row(s) on the map have an object that "
+                         f"{a.objects} does not know -- run `just objects` "
+                         f"(names/locate.py) to locate them:\n" + "\n".join(unlocated))
+
+    stamp = provenance.stamp(a.names, a.dialects, a.curation, a.areas, a.objects)
+    os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
+    placelist.atomic_write(a.out, json.dumps({"built_from": stamp, "places": out},
+                                             ensure_ascii=False, separators=(",", ":")) + "\n")
     print(f"wrote {len(out)} entries to {a.out} ({os.path.getsize(a.out)/1e3:.0f} kB); "
-          f"{n_area} in a dialect area, "
+          f"{sum(1 for e in out if 'dialect' in e)} in a dialect area, "
           f"{sum(1 for e in out if 'local' in e)} with a local name, "
           f"{sum(1 for e in out if 'name_nds' in e)} with a Low Saxon one; "
-          f"skipped {skipped} without coordinates, {unnamed} without a Frisian name")
-    print(f"wrote {len(reg)} dialects to {a.registry_out}")
+          f"left out {qid_only} keyed by Wikidata alone (no position)")
 
 
 if __name__ == "__main__":
