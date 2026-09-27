@@ -4,9 +4,12 @@
     inject_names.py <in.osm.pbf> <out.osm.pbf>
                     [--names ../names/places.csv] [--dialects ../names/dialects.csv]
                     [--areas ../names/dialect_areas.geojson]
+                    [--objects ../names/osm_objects.json]
                     [--curation ../names/curation.csv] [--dry-run]
 
-Three independent inputs are merged into the extract:
+Three inputs are merged into the extract -- the name list, the dialect areas
+(read together with names/osm_objects.json, which says where each object
+lies) and the curation:
 
 `names/places.csv` (the name list) -- one row per place, one column per
 dialect (the columns come from `names/dialects.csv`, the registry).  Every row
