@@ -62,6 +62,14 @@ def compare(entries: dict, features: list) -> list[str]:
     return problems
 
 
+def checked_entries(entries: dict, features: list) -> set[str]:
+    """The ids of the entries `compare` holds to a feature: those whose own
+    object is among the features, not merely another object of the row."""
+    return {f["props"]["frasch:ref"] for f in features
+            if f["props"].get("frasch:ref") in entries
+            and _is_entry_object(entries[f["props"]["frasch:ref"]], f)}
+
+
 def _is_point_object(feature) -> bool:
     """Whether a point feature is where the object is: a node, or a node the
     injector added (no OSM id).  A way or relation labelled as a point sits
@@ -147,9 +155,9 @@ def main(argv=None):
         entries = {e["id"]: e for e in json.load(fh)["places"]}
     features = archive_features(a.archive, entries, a.zoom)
     problems = compare(entries, features)
-    compared = {f["props"]["frasch:ref"] for f in features if f["props"]["frasch:ref"] in entries}
     print(f"{len(features)} labelled features in the z{a.zoom} tiles of "
-          f"{len(entries)} entries; {len(compared)} entries compared")
+          f"{len(entries)} entries; {len(checked_entries(entries, features))} "
+          f"entries compared on their own object")
     for p in problems:
         print(f"  ! {p}")
     if problems:

@@ -10,7 +10,10 @@
 #
 # `objects`, `areas`, `index` and `dialects` write committed files; `check`
 # (CI) proves they match their inputs.  just has no file timestamps: a
-# recipe runs when you ask for it, not when its inputs changed.
+# recipe runs when you ask for it, not when its inputs changed.  What a recipe
+# needs first is a dependency instead -- `candidates`, `objects`, `areas` and
+# `check-full` first run `extracts` (which downloads only what is missing),
+# `index` first runs `dialects`; `tiles` downloads its own region's extract.
 
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
@@ -38,7 +41,7 @@ extracts:
     done
 
 # scan the extracts for every object that could be a place (names/work/candidates.jsonl)
-candidates:
+candidates: extracts
     {{py}} names/build_candidates.py {{extracts}}
 
 # fill the empty osm cells of places.csv (pass --dry-run to only look)
@@ -46,11 +49,11 @@ match *args:
     {{py}} names/match.py {{args}}
 
 # locate the name list's objects in the extracts (names/osm_objects.json)
-objects:
+objects: extracts
     {{py}} names/locate.py {{extracts}}
 
 # build the dialect areas from dialect_areas.csv (names/dialect_areas*.geojson)
-areas:
+areas: extracts
     {{py}} names/build_dialect_areas.py tiles/data/schleswig-holstein-latest.osm.pbf
 
 # export the dialect registry for the frontend (web/src/generated/dialects.json)
@@ -70,7 +73,7 @@ check:
     {{py}} names/check_built.py
 
 # like check, and also rebuild objects and areas from the local extracts and compare
-check-full:
+check-full: extracts
     {{py}} names/check_built.py --extracts {{extracts}}
 
 # compare a built tile archive with names.json, label by label

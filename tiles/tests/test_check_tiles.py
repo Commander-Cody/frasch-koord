@@ -53,3 +53,12 @@ def test_a_polygons_label_point_is_planetilers_own():
     label = {"osm": "way/1472528448", "props": {"frasch:ref": "pelweerm"},
              "lon": 8.64149, "lat": 54.52356}
     assert check_tiles.compare({"pelweerm": pellworm}, [label]) == []
+
+
+def test_only_entries_whose_own_object_is_labelled_count_as_checked():
+    # Stiardebel's second object is labelled, its own is not; Pellworm's is
+    pellworm = {"id": "pelweerm", "osm": "way/1472528448", "lon": 8.64, "lat": 54.52}
+    features = [feature("way/2"),
+                {"osm": "way/1472528448", "props": {"frasch:ref": "pelweerm"}}]
+    entries = {"stiardebel": STIARDEBEL, "pelweerm": pellworm}
+    assert check_tiles.checked_entries(entries, features) == {"pelweerm"}

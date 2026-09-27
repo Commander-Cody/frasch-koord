@@ -425,11 +425,9 @@ def main(argv=None):
             raise SystemExit(f"{report}\n\nrun with --allow-missing to build "
                               f"anyway; nothing was written")
 
-    built_from = {
-        "dialect_areas.csv": provenance.blob_hash(a.areas),
-        "dialects.csv": provenance.blob_hash(a.registry),
-        "extracts": [provenance.extract_stamp(p) for p in a.pbf],
-    }
+    built_from = provenance.built_from(
+        {"dialect_areas.csv": a.areas, "dialects.csv": a.registry},
+        [provenance.extract_stamp(p) for p in a.pbf])
 
     # Both files are computed in full before either is written, so a problem
     # building --parts-out cannot leave --out written on its own.

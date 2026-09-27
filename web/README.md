@@ -379,8 +379,10 @@ rows claim opens the first.
 
 Written by `names/export_search_index.py` (`uv run just index`); only
 non-empty values are exported, so an absent field really means "no such
-name". An entry lies where the map label of its row's first OSM object lies,
-and has that label's `dialect` and `local` name: both come from
+name". An entry lies where the first OSM object of its row lies (a node's
+location, a point inside a polygon; Planetiler places a polygon's map label
+itself, so that may sit elsewhere), and has that object's `dialect` and
+`local` name, the same as its map label: both come from
 `names/osm_objects.json` and `names/dialect_areas.geojson` through the same
 code (see `names/README.md`, "Where the objects are").
 

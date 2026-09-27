@@ -36,8 +36,8 @@ export interface NameEntry {
   name_frr?: string;
   /**
    * Low Saxon name — OSM's `name:nds`, never our name list (it has no Low
-   * Saxon column). names/export_search_index.py takes it from the matched OSM
-   * object, a tile feature carries it itself. The label chain falls back to it
+   * Saxon column). names/export_search_index.py takes it from the object's
+   * entry in names/osm_objects.json, a tile feature carries it itself. The label chain falls back to it
    * before German, so the card needs it for the same reason as `name_frr`.
    */
   name_nds?: string;
