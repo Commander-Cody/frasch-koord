@@ -389,3 +389,13 @@ def test_a_dialect_area_reference_on_two_rows_is_reported(world):
     problems = check.check(places, world / "curation.csv", areas=areas)
     assert [(os.path.basename(p.path), p.line, p.message) for p in problems] == [
         ("dialect_areas.csv", 3, "relation/1147134 is already on line 2")]
+
+
+def test_fix_on_a_damaged_list_still_reports_every_problem(world, capsys):
+    places = world / "places.csv"
+    text = places_text([{**TOFTUM, "id": ""}, {**NIEBUELL, "kind": "town"}, TOFTUM])
+    places.write_text(text.replace("Toftem,,", "Toftem,", 1), encoding="utf-8")
+    assert fix(places) == 1
+    out = capsys.readouterr()
+    assert "no id given" in out.err
+    assert [line.split(": ")[0].rsplit(":", 1)[1] for line in out.out.splitlines()] == ["2", "3"]

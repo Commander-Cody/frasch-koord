@@ -247,3 +247,12 @@ def test_a_curation_session_survives_hand_edits_to_the_list(w):
     assert sorted(decided) == sorted(r["id"] for r in SESSION)
     assert {i: rows[i]["osm"] for i in decided} == decided
     assert rows["naibel"]["osm"] == ""
+
+
+def test_every_decision_without_an_id_is_refused_and_kept(w):
+    # a patch written before the row ids: nothing to find the row by, and
+    # none of the decisions may vanish into the archive
+    old = [{k: v for k, v in entry(n, action="skip").items() if k != "id"} for n in (2, 3)]
+    append(w.patch, *old)
+    assert w.apply() == 1
+    assert lines(w.patch) == old

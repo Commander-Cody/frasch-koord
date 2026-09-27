@@ -18,7 +18,12 @@ LUNGEDIK = {"id": "lungedik", "kind": "warft", "mooring": "Lungedik",
             "de": "Langerdeich", "osm": "way/28330569", "status": "ok"}
 # the same dyke under a second name: two rows, one object
 LUNGDIIK = LUNGEDIK | {"id": "lungdiik", "mooring": "Lungdiik"}
-POSITIONS = {"node/240042766": (8.83, 54.79), "way/28330569": (8.86, 54.47)}
+NORDWARW = {"id": "nordwarw", "kind": "warft", "mooring": "Nordwärw", "de": "Nordwarft",
+            "osm": "way/1347936331; node/1332249790", "status": "ok"}
+# as match.py wrote them: an `osm` cell with several references may be spelled
+# without the space the name list's convention has
+POSITIONS = {"node/240042766": (8.83, 54.79), "way/28330569": (8.86, 54.47),
+             "way/1347936331;node/1332249790": (8.84, 54.67)}
 
 
 @pytest.fixture
@@ -46,6 +51,11 @@ def test_an_entry_is_named_by_its_rows_id_and_keeps_its_osm_reference(export):
     entries = export([NAIBEL])
     assert entries["naibel"]["osm"] == "node/240042766"
     assert (entries["naibel"]["lon"], entries["naibel"]["lat"]) == (8.83, 54.79)
+
+
+def test_a_position_is_found_however_the_references_are_spaced(export):
+    entries = export([NORDWARW])
+    assert (entries["nordwarw"]["lon"], entries["nordwarw"]["lat"]) == (8.84, 54.67)
 
 
 def test_two_rows_on_one_object_are_two_entries_by_id(export):

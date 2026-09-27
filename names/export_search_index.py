@@ -15,8 +15,7 @@ The Low Saxon name (`name_nds`) comes from there too: the name list has no Low
 Saxon column, but the map labels with OSM's `name:nds` before German, and the
 card and search results have to agree with it.
 A row for a place OSM does not have (`osm` = `local/<slug>`) takes its position
-from the curation row with the same reference (names/curation.csv), and that
-reference is the entry's id.
+from the curation row with the same reference (names/curation.csv).
 
 An entry's `id` is its row's `id` -- the same string the injector writes into
 the tiles as `frasch:ref`, which is how a click on a map label finds the entry
@@ -45,6 +44,12 @@ import placelist  # noqa: E402
 import dialects  # noqa: E402
 
 REGISTRY_FIELDS = ["tag", "column", "label", "status", "view"]
+
+
+def osm_key(cell):
+    """An `osm` cell in one spelling (`way/1; node/2`), so that a cell
+    match.py wrote as `way/1;node/2` still finds its row."""
+    return placelist.format_osm(placelist.parse_osm(cell))
 
 
 def main(argv=None):
@@ -79,10 +84,11 @@ def main(argv=None):
             print(f"note: {os.path.relpath(a.matches, ROOT)} has no name_nds column "
                   f"-- re-run names/match.py to export Low Saxon names")
         for m in reader:
-            if m["osm"] and m.get("name_nds"):
-                nds_by_osm[m["osm"]] = m["name_nds"]
-            if m["osm"] and m["lon"] and m["lat"]:
-                by_osm[m["osm"]] = (m["lon"], m["lat"])
+            osm = osm_key(m["osm"])
+            if osm and m.get("name_nds"):
+                nds_by_osm[osm] = m["name_nds"]
+            if osm and m["lon"] and m["lat"]:
+                by_osm[osm] = (m["lon"], m["lat"])
     local_points = placelist.local_points(a.curation)
     rows, _ = placelist.read(a.names)
     out, skipped, unnamed = [], 0, 0
@@ -102,8 +108,8 @@ def main(argv=None):
                 raise SystemExit(f"{a.names}:{r['_line']}: local/{slug} has no row "
                                  f"with lat/lon in {a.curation}")
             lon, lat = local_points[slug]
-        elif r["osm"] in by_osm:
-            lon, lat = by_osm[r["osm"]]
+        elif osm_key(r["osm"]) in by_osm:
+            lon, lat = by_osm[osm_key(r["osm"])]
         if lon == "" or lat == "":
             skipped += 1
             continue
@@ -131,7 +137,7 @@ def main(argv=None):
         variety = dialects.variety(r)
         if variety:
             entry["variety"] = variety
-        name_nds = nds_by_osm.get(r["osm"])
+        name_nds = nds_by_osm.get(osm_key(r["osm"]))
         if name_nds:
             entry["name_nds"] = name_nds
         name_da = placelist.primary(r["da"])

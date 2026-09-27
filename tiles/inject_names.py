@@ -111,7 +111,7 @@ MAXZOOM_KEY = "frasch:maxzoom"
 DIALECT_KEY = "frasch:dialect"
 LOCAL_KEY = "frasch:local"
 VARIETY_KEY = "frasch:variety"
-REF_KEY = "frasch:ref"
+REF_KEY = placelist.REF_KEY
 
 # The default `place=` of the node added for a local reference, by the row's
 # kind.  Only kinds whose OSM equivalent is unambiguous are listed; any other

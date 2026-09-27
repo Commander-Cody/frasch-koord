@@ -290,7 +290,10 @@ def read_patch(path):
                 print(f"{path}:{n}: not JSON ({exc}) -- ignored", file=sys.stderr)
                 continue
             e["_patch_line"] = n
-            last[patch_key(e)] = e
+            # an entry without an id (a patch from before the row ids) is a
+            # decision of its own: apply refuses it and keeps it, never lets
+            # a later one swallow it
+            last[patch_key(e) or ("no id", n)] = e
     return sorted(last.values(), key=lambda e: (e.get("line") or 0, e["_patch_line"]))
 
 
@@ -359,6 +362,10 @@ def _apply(args):
                 continue                     # withdrawn in the browser
             if action not in ACTIONS:
                 refuse(e, f"unknown action {action!r}")
+                continue
+            if not patch_key(e):
+                refuse(e, "no `id` (a patch from before the row ids -- "
+                          "re-run names/curate.py export and decide it again)")
                 continue
             row = by_id.get(patch_key(e))
             if row is None:
@@ -502,7 +509,7 @@ def append_back(path, entries):
                 e = json.loads(line)
             except ValueError:
                 continue
-            if isinstance(e, dict):
+            if isinstance(e, dict) and patch_key(e):
                 newer.add(patch_key(e))
     lines = [json.dumps({k: v for k, v in e.items() if k != "_patch_line"},
                         ensure_ascii=False) + "\n"

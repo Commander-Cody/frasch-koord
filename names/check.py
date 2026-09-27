@@ -23,9 +23,6 @@ import dialects
 import placelist
 
 
-# the tile attribute a curation row may set to point a label at a row
-REF_TAG = "frasch:ref"
-
 # the name columns: `;`-separated variants with `(…)` remarks, the
 # conventions names/README.md sets for every name cell
 VARIANT_COLUMNS = placelist.NAME_COLUMNS + ["de", "da"]
@@ -106,9 +103,9 @@ def check_curation(path, ids) -> tuple[list[Problem], set[str]]:
     the row a label belongs to."""
     entries, problems = placelist.curation_rows(path)
     for e in entries:
-        ref = e["tags"].get(REF_TAG)
+        ref = e["tags"].get(placelist.REF_KEY)
         if ref is not None and ref not in ids:
-            problems.append((e["line"], f"{REF_TAG}={ref} names no row of the "
+            problems.append((e["line"], f"{placelist.REF_KEY}={ref} names no row of the "
                                         f"name list (it takes a row's `id`)"))
     positioned = {e["local"] for e in entries if e["local"]}
     problems.sort(key=lambda p: p[0])
@@ -234,9 +231,13 @@ def main(argv=None) -> int:
                          "(CI passes $GITHUB_STEP_SUMMARY)")
     a = ap.parse_args(argv)
     if a.fix:
-        with placelist.lock(a.names):
-            given = placelist.fill_ids(a.names)
-        print(f"gave {given} row(s) an id", file=sys.stderr)
+        try:
+            with placelist.lock(a.names):
+                print(f"gave {placelist.fill_ids(a.names)} row(s) an id",
+                      file=sys.stderr)
+        except SystemExit as exc:
+            # the report below lists this problem and every other one
+            print(f"no id given: {exc}", file=sys.stderr)
     problems = check(a.names, a.curation, a.dialects, a.areas)
     for p in problems:
         print(p)

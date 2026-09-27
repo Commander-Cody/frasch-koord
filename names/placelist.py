@@ -80,6 +80,11 @@ KINDS = {"settlement", "koog", "harde", "island", "hallig", "sand", "warft",
          "landscape", "water", "road", "country", "helgoland", "not_a_place"}
 STATUSES = {"", "auto", "ok", "skip"}
 
+# The tile attribute naming the row a label comes from: its `id`.  The
+# injector writes it; a curation.csv row may set it by hand (names/check.py
+# makes sure it names a row).
+REF_KEY = "frasch:ref"
+
 OSM_TYPES = {"node": "n", "way": "w", "relation": "r"}
 # `local/<slug>`: not an OSM object but a place of our own, positioned in
 # names/curation.csv.  Keyed like the others, with the slug as its id.

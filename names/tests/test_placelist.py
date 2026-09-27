@@ -219,3 +219,17 @@ def test_set_tags_entry_without_equals_is_refused():
 def test_set_tags_entry_with_empty_key_is_refused():
     with pytest.raises(SystemExit, match="empty key"):
         placelist.parse_set_tags("=island")
+
+
+# ------------------------------------------------------------------- slug ---
+@pytest.mark.parametrize("name, slug", [
+    ("Schörkewärw", "schorkewarw"),
+    ("Hamborjer Håli", "hamborjer-hali"),
+    ("Straße", "strasse"),
+    ("Æ Løkke", "ae-lokke"),
+    ("Rudbøl", "rudbol"),
+    ("Huađer", "huader"),
+    ("Friedrich-Wilhelm-Lübke-Kuuch", "friedrich-wilhelm-lubke-kuuch"),
+])
+def test_slug_folds_a_name_to_lowercase_ascii(name, slug):
+    assert placelist.slug(name) == slug
