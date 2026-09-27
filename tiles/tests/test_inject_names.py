@@ -226,13 +226,13 @@ MAX_NODE = 9100000004
 MAX_WAY = NORDWARFT
 
 PLACES = [
-    dict(kind="settlement", mooring="Hulm", de="Holm", osm=f"node/{HOLM}",
+    dict(id="hulm", kind="settlement", mooring="Hulm", de="Holm", osm=f"node/{HOLM}",
          wikidata="Q559369", status="ok"),
-    dict(kind="warft", mooring="Nordwärw", nordgoes="Noordweerw", de="Nordwarft",
+    dict(id="nordwarw", kind="warft", mooring="Nordwärw", nordgoes="Noordweerw", de="Nordwarft",
          hint="Ockholm", osm=f"way/{NORDWARFT}", status="ok"),
-    dict(kind="hallig", mooring="Hamborjer Håli", de="Hamburger Hallig",
+    dict(id="hamborjer-hali", kind="hallig", mooring="Hamborjer Håli", de="Hamburger Hallig",
          osm=f"relation/{HAMBURGER_HALLIG}", status="ok"),
-    dict(kind="settlement", oomrang="Waasterhias", de="Westerheide",
+    dict(id="waasterhias", kind="settlement", oomrang="Waasterhias", de="Westerheide",
          osm="local/westerheide-amrum", status="ok"),
 ]
 

@@ -2,6 +2,7 @@
 """Check the hand-edited name files for damage -- all of it, with line numbers.
 
     .venv/bin/python names/check.py            # exit 1 if anything is wrong
+    .venv/bin/python names/check.py --fix      # first give new rows an id
 
 `placelist.read` stops at the first problem it cannot live with and
 silently accepts some it can (a row with a comma too few is padded, and its
@@ -123,6 +124,7 @@ def check_places(path, curation, positioned) -> list[Problem]:
         return [Problem(path, 1, what)]   # without its columns no row can be read
     problems = []
     claimed = {}              # `way/1` or `Q1` -> line of the first row
+    ids = {}                  # id -> line of the first row
     for n, cells in rows:
         def problem(message, n=n):
             problems.append(Problem(path, n, message))
@@ -133,6 +135,9 @@ def check_places(path, curation, positioned) -> list[Problem]:
         row = {k: v.strip() for k, v in zip(header, cells, strict=True)}
         for what in placelist.row_problems(row):
             problem(what)
+        if (what := placelist.id_problem(row, ids)):
+            problem(what)
+        ids.setdefault(row["id"], n)
         for column in VARIANT_COLUMNS:
             if row[column] and (what := cell_problem(row[column])):
                 problem(f"{column}: {what}: {row[column]!r}")
@@ -187,10 +192,17 @@ def main(argv=None) -> int:
     ap.add_argument("--names", default=placelist.DEFAULT_PATH)
     ap.add_argument("--curation", default=placelist.CURATION_PATH)
     ap.add_argument("--dialects", default=placelist.DIALECTS_PATH)
+    ap.add_argument("--fix", action="store_true",
+                    help="first give every row of the name list without an "
+                         "`id` one (placelist.fill_ids)")
     ap.add_argument("--summary", metavar="FILE",
                     help="also append the result as Markdown to FILE "
                          "(CI passes $GITHUB_STEP_SUMMARY)")
     a = ap.parse_args(argv)
+    if a.fix:
+        with placelist.lock(a.names):
+            given = placelist.fill_ids(a.names)
+        print(f"gave {given} row(s) an id", file=sys.stderr)
     problems = check(a.names, a.curation, a.dialects)
     for p in problems:
         print(p)

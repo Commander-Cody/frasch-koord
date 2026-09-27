@@ -310,3 +310,60 @@ def test_a_blank_line_is_no_problem_and_keeps_the_line_numbers(names):
     problems = names("\n".join([head, first, "", second]) + "\n")
     assert lines(problems) == [4]
     assert "town" in problems[0].message
+
+
+# ------------------------------------------------------------------ ids ---
+def test_a_row_without_an_id_is_reported(names):
+    problems = names(places_text([TOFTUM, {**NIEBUELL, "id": ""}]))
+    assert lines(problems) == [3]
+    assert "check.py --fix" in problems[0].message
+
+
+def test_an_id_used_twice_is_reported_on_the_second_row(names):
+    problems = names(places_text([{**TOFTUM, "id": "toftem"}, {**NIEBUELL, "id": "toftem"}]))
+    assert [(p.line, p.message) for p in problems] == [
+        (3, "id toftem is already used on line 2")]
+
+
+def fix(places):
+    return check.main(["--fix", "--names", str(places),
+                       "--curation", str(places.parent / "curation.csv")])
+
+
+def test_fix_gives_each_new_row_an_id_from_its_frisian_name(world):
+    places = world / "places.csv"
+    places.write_text(places_text([
+        {**NIEBUELL, "id": ""},
+        {"kind": "warft", "mooring": "Schörkewärw", "de": "Kirchwarft", "id": ""},
+        {"kind": "warft", "mooring": "Schörkewärw", "de": "Kirchwarft", "id": ""},
+        {"kind": "country", "de": "Dänemark", "wikidata": "Q35", "id": ""},
+        {**TOFTUM, "id": "toftem"},
+        {"kind": "settlement", "mooring": "Toftem", "de": "Toftum", "osm": "node/7",
+         "id": ""},
+    ]), encoding="utf-8")
+    assert fix(places) == 0
+    rows, _ = check.placelist.read(str(places))
+    assert [r["id"] for r in rows] == ["naibel", "schorkewarw", "schorkewarw-2",
+                                       "danemark", "toftem", "toftem-2"]
+
+
+def test_fix_adds_the_id_column_to_a_list_that_has_none(world):
+    places = world / "places.csv"
+    # `id` is the last column: cut it off every line, the header's included
+    without = "".join(line.rsplit(",", 1)[0] + "\n"
+                      for line in places_text([TOFTUM, NIEBUELL]).splitlines())
+    places.write_text(without, encoding="utf-8")
+    assert fix(places) == 0
+    rows, fields = check.placelist.read(str(places))
+    assert fields[-1] == "id"
+    assert [r["id"] for r in rows] == ["toftem", "naibel"]
+
+
+def test_fix_run_twice_changes_nothing(world):
+    places = world / "places.csv"
+    places.write_text(places_text([{**TOFTUM, "id": ""}, {**NIEBUELL, "id": ""}]),
+                      encoding="utf-8")
+    fix(places)
+    once = places.read_bytes()
+    fix(places)
+    assert places.read_bytes() == once
