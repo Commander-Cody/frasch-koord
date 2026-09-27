@@ -75,4 +75,4 @@ check-full:
 
 # compare a built tile archive with names.json, label by label
 check-tiles region=region:
-    {{py}} tiles/check_tiles.py tiles/data/{{region}}.pmtiles
+    {{py}} tiles/check_tiles.py tiles/data/{{file_name(region)}}.pmtiles

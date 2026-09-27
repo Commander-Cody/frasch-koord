@@ -136,9 +136,7 @@ def load_names(path, reg):
     used = 0
     rows, _ = placelist.read(path)
     for row in rows:
-        if row["status"] == "skip" or row["kind"] == "not_a_place":
-            continue
-        if not placelist.any_name(row):
+        if not placelist.on_map(row):
             continue
         refs = placelist.parse_osm(row["osm"], f"{path}:{row['_line']}")
         if refs:

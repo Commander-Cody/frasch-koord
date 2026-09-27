@@ -4,7 +4,7 @@
     names/check_built.py                         # `just check`, run in CI
     names/check_built.py --extracts <pbf> ...    # `just check-full`
 
-Four generated files are committed, because the site and the tile build need
+Five generated files are committed, because the site and the tile build need
 them and they take an OSM extract (or the whole pipeline) to make.  Each is
 checked the only way it can be where it is checked:
 
