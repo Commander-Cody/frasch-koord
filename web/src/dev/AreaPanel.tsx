@@ -60,16 +60,6 @@ export interface AreaProps {
   km2: number;
 }
 
-/** `"relation/1; relation/2"` -> `["relation/1", "relation/2"]`. */
-function refsOf(osm: string): string[] {
-  return osm.split(';').map((ref) => ref.trim());
-}
-
-/** A feature's deep-link key: the first OSM reference of its row. */
-function firstRef(osm: string): string {
-  return refsOf(osm)[0];
-}
-
 interface AreaFeature {
   type: 'Feature';
   properties: AreaProps;
@@ -116,7 +106,7 @@ function bboxOf(geometry: { coordinates: unknown }): Bounds | null {
 
 /* ------------------------------------------------------------------ misc */
 
-/** "relation/1420394; way/123" -> one openstreetmap.org link each. */
+/** "relation/1420394; way/123" -> ["relation/1420394", "way/123"]: one link each, and the deep-link keys. */
 function osmRefs(osm: string): string[] {
   return osm
     .split(';')
@@ -276,7 +266,9 @@ export default function AreaPanel({ mapRef }: AreaPanelProps) {
       const feature = fid === null ? null : (byFid.get(fid) ?? null);
 
       const params = new URLSearchParams(window.location.search);
-      if (feature) params.set('area', firstRef(feature.properties.osm));
+      // The deep-link key: the first OSM reference of the feature's row.
+      const ref = feature ? osmRefs(feature.properties.osm)[0] : undefined;
+      if (ref) params.set('area', ref);
       else params.delete('area');
       // Keep MapLibre's `#zoom/lat/lon` hash: it is part of the resume state.
       window.history.replaceState(
@@ -305,7 +297,7 @@ export default function AreaPanel({ mapRef }: AreaPanelProps) {
     const ref = initialRef.current;
     if (ref === null || features.length === 0) return;
     initialRef.current = null;
-    const hit = features.find((feature) => refsOf(feature.properties.osm).includes(ref));
+    const hit = features.find((feature) => osmRefs(feature.properties.osm).includes(ref));
     if (hit) select(hit.properties.fid, { fly: true });
   }, [features, select]);
 
