@@ -18,7 +18,8 @@ import { LngLatBounds, Marker } from 'maplibre-gl';
 import type { MapMouseEvent, Map as MapLibreMap } from 'maplibre-gl';
 
 import type { MapViewHandle } from '../components/Map';
-import { decidedRows, type PatchEntry } from './curatePatch';
+import { primary } from '../names';
+import { decidedRows, isValidSlug, type PatchEntry } from './curatePatch';
 import './CuratePanel.css';
 
 /* ------------------------------------------------------------------ types */
@@ -130,11 +131,6 @@ const HINT_LINE = 'curate-hint-circle-line';
 
 /* ---------------------------------------------------------------- helpers */
 
-/** The `de`/`da` cells may hold several variants separated by ';'. */
-function primary(cell: string): string {
-  return (cell || '').split(';')[0].trim();
-}
-
 /** Non-ASCII letters this project actually meets, spelled out as the slug wants them. */
 const SLUG_CHARS: Record<string, string> = {
   ä: 'ae',
@@ -146,17 +142,13 @@ const SLUG_CHARS: Record<string, string> = {
   æ: 'ae',
 };
 
-/** places.csv/curation.csv slug shape: `[a-z0-9]+(-[a-z0-9]+)*`. */
+/** A slug for `text`, in the shape `isValidSlug` checks. */
 function slugify(text: string): string {
   let out = '';
   for (const ch of (text || '').toLowerCase()) out += SLUG_CHARS[ch] ?? ch;
   // Anything else accented (é, ô, …) loses its mark rather than a whole letter.
   out = out.normalize('NFD').replace(/[̀-ͯ]/g, '');
   return out.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-}
-
-function isValidSlug(slug: string): boolean {
-  return /^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug);
 }
 
 /** Escapes a user's query for the Overpass `~"…"` regex. */

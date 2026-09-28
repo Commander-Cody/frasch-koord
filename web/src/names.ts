@@ -116,6 +116,47 @@ export function displayName(entry: NameEntry, labels: string): string {
   return resolveName(entry, labels).name;
 }
 
+// ------------------------------------------------------ name-list cells ----
+
+/** A bracketed remark on a variant, e.g. `(wisinge)`. */
+const REMARK = /\([^()]*\)/g;
+
+/**
+ * Splits a cell on `;`, but not inside brackets: a remark may itself list
+ * several dialects, and `Huađer; Huuger (Sölring; Wisinge)` is two variants,
+ * not three.
+ */
+function splitVariants(cell: string): string[] {
+  const out: string[] = [];
+  let variant = '';
+  let depth = 0;
+  for (const ch of cell) {
+    if (ch === '(') depth += 1;
+    else if (ch === ')') depth = Math.max(0, depth - 1);
+    if (ch === ';' && depth === 0) {
+      out.push(variant);
+      variant = '';
+    } else {
+      variant += ch;
+    }
+  }
+  out.push(variant);
+  return out;
+}
+
+/**
+ * The name of a names/places.csv cell that may hold several variants, as
+ * frasch/placelist.py `primary` reads it: the first variant that has a name
+ * once its remarks and a trailing `?` are stripped, or '' when none has.
+ */
+export function primary(cell: string | undefined): string {
+  for (const variant of splitVariants(cell ?? '')) {
+    const name = variant.replace(REMARK, '').trim().replace(/\?+$/, '').trim();
+    if (name) return name;
+  }
+  return '';
+}
+
 // ------------------------------------------------------------- loading ----
 
 export interface NamesData {

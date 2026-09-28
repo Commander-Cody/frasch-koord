@@ -14,37 +14,26 @@ import { resolve } from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Connect, Plugin } from 'vite';
 
+import patchSchema from '../../names/curate-patch.schema.json' with { type: 'json' };
+
 /** Everything this plugin answers lives under here; anything else falls through. */
 const BASE = '/__curate/';
 
-/** Mirrors the patch contract: any other action would only confuse `apply`. */
-const ACTIONS = new Set(['osm', 'local', 'skip', 'clear']);
+/** The patch contract's actions: any other would only confuse `apply`. */
+const ACTIONS = new Set<string>(patchSchema.properties.action.enum);
 
 /** A patch entry is a handful of short strings; anything bigger is a mistake. */
 const MAX_BODY = 64 * 1024;
 
 /**
- * Fields `names/curate.py apply` actually reads (plus the server-set `at`
- * added below). A POST body is attacker-controlled input parsed as JSON and
- * spread into an append-only file that `apply` later trusts as human-checked,
- * so anything not on this list — a stray `__proto__`, a key from some other
- * tool poking the endpoint — is dropped rather than carried through.
+ * The fields of the patch contract (names/curate-patch.schema.json), minus the
+ * `at` this server sets itself. A POST body is attacker-controlled input
+ * parsed as JSON and spread into an append-only file that `apply` later
+ * trusts as human-checked, so anything not on this list — a stray
+ * `__proto__`, a key from some other tool poking the endpoint — is dropped
+ * rather than carried through.
  */
-const PATCH_ENTRY_KEYS = [
-  'id',
-  'line',
-  'kind',
-  'name',
-  'de',
-  'action',
-  'osm',
-  'wikidata',
-  'slug',
-  'lat',
-  'lon',
-  'polygon_km2',
-  'note',
-] as const;
+const PATCH_ENTRY_KEYS = Object.keys(patchSchema.properties).filter((key) => key !== 'at');
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   const text = JSON.stringify(body);

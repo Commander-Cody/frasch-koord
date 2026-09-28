@@ -1,5 +1,9 @@
 // The browser's side of the curation patch (names/work/curate-patch.jsonl):
-// what one decision looks like, and which rows are decided.
+// what one decision looks like, and which rows are decided. The contract
+// itself is names/curate-patch.schema.json; curatePatch.test.ts pins
+// PatchEntry to it.
+
+import patchSchema from '../../../names/curate-patch.schema.json';
 
 /** One line of `names/work/curate-patch.jsonl`. */
 export interface PatchEntry {
@@ -32,4 +36,11 @@ export function decidedRows(entries: PatchEntry[]): Map<string, PatchEntry> {
     if (entry.action === 'clear') last.delete(id);
   }
   return last;
+}
+
+const SLUG = new RegExp(patchSchema.$defs.slug.pattern);
+
+/** Whether `slug` has the shape of a row id and of a `local/<slug>` reference. */
+export function isValidSlug(slug: string): boolean {
+  return SLUG.test(slug);
 }

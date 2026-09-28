@@ -8,6 +8,7 @@ import {
   osmRefFromFeatureId,
   osmUrl,
   placeOsmRef,
+  primary,
   resolveName,
   useNames,
   type NameEntry,
@@ -314,5 +315,33 @@ describe('placeOsmRef', () => {
 
   it("is the clicked feature's object when the name list does not have the place", () => {
     expect(placeOsmRef({ props: { name: 'Bredstedt' }, featureId: 2400427661 })).toBe('node/240042766');
+  });
+});
+
+// frasch/placelist.py reads a cell the same way (most examples are its
+// docstrings'): the two must agree on which variant of a cell is its name.
+describe('primary', () => {
+  it('is the first variant of a cell', () => {
+    expect(primary('Rübel; Rübbel (wisinge)')).toBe('Rübel');
+  });
+
+  it('splits only outside brackets, and strips the remark', () => {
+    expect(primary('Huađer; Huuger (Sölring; Wisinge)')).toBe('Huađer');
+  });
+
+  it('strips every remark of the variant', () => {
+    expect(primary('Brouersweerw (Foortuftinge) (Nickelsen 1982)')).toBe('Brouersweerw');
+  });
+
+  it('skips a variant that is only a remark', () => {
+    expect(primary('(remark only); Name')).toBe('Name');
+  });
+
+  it("drops a doubtful name's trailing question mark", () => {
+    expect(primary('Hoorst? (Moor)')).toBe('Hoorst');
+  });
+
+  it('is empty for an empty cell', () => {
+    expect(primary('')).toBe('');
   });
 });
