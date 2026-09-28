@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-import placelist
+from frasch import placelist
 from conftest import TOFTUM, places_text
 
 

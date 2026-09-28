@@ -19,11 +19,11 @@ import json
 import osmium
 import pytest
 
-import check_tiles
-import dialects
-import export_search_index
-import inject_names
-import locate
+from frasch import check_tiles
+from frasch import dialects
+from frasch import export_search_index
+from frasch import inject_names
+from frasch import locate
 from conftest import places_text
 from osm_fixture import ring, write_extract
 

@@ -38,10 +38,11 @@ import re
 import tempfile
 import unicodedata
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_PATH = os.path.join(HERE, "places.csv")
-DIALECTS_PATH = os.path.join(HERE, "dialects.csv")
-CURATION_PATH = os.path.join(HERE, "curation.csv")
+from frasch import paths
+
+DEFAULT_PATH = paths.PLACES
+DIALECTS_PATH = paths.DIALECTS
+CURATION_PATH = paths.CURATION
 
 
 def open_csv(path: str):

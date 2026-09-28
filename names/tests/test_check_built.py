@@ -8,12 +8,12 @@ import shutil
 
 import pytest
 
-import build_dialect_areas
-import check_built
-import dialects
-import export_search_index
-import locate
-import provenance
+from frasch import build_dialect_areas
+from frasch import check_built
+from frasch import dialects
+from frasch import export_search_index
+from frasch import locate
+from frasch import provenance
 from conftest import places_text
 from osm_fixture import ring, write_extract
 

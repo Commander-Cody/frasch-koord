@@ -6,7 +6,7 @@ import json
 import pytest
 import requests
 
-import match
+from frasch import match
 from conftest import places_text
 
 COUNTRIES = [

@@ -5,8 +5,8 @@ from __future__ import annotations
 import osmium
 import pytest
 
-import build_candidates
-from build_candidates import WayCentroids
+from frasch import build_candidates
+from frasch.build_candidates import WayCentroids
 from conftest import cand, write_candidates
 from osm_fixture import write_extract
 

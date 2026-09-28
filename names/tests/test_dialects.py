@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 from shapely.geometry import box
 
-import dialects
-import placelist
+from frasch import dialects
+from frasch import placelist
 
 
 @pytest.fixture(scope="module")

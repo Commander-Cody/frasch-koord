@@ -176,7 +176,7 @@ wheels = [
 [[package]]
 name = "frasch-maps"
 version = "0.0.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "osmium" },
     { name = "requests" },

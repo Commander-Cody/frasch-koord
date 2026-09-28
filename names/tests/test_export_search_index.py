@@ -9,8 +9,8 @@ import subprocess
 
 import pytest
 
-import export_search_index
-import locate
+from frasch import export_search_index
+from frasch import locate
 from conftest import places_text
 
 NAIBEL = {"id": "naibel", "kind": "settlement", "mooring": "Naibel", "de": "Niebüll",

@@ -10,7 +10,7 @@ import shutil
 
 import pytest
 
-import placelist
+from frasch import placelist
 
 
 # ------------------------------------------------------------- name cells ---

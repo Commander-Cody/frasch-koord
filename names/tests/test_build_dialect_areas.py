@@ -9,9 +9,9 @@ import json
 
 import pytest
 
-import build_dialect_areas as bda
-import dialects
-import provenance
+from frasch import build_dialect_areas as bda
+from frasch import dialects
+from frasch import provenance
 from osm_fixture import ring, write_extract
 
 

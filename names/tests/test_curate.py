@@ -6,8 +6,8 @@ from __future__ import annotations
 import json
 
 
-import curate
-import match
+from frasch import curate
+from frasch import match
 
 
 def rec(t, id, lon, lat, **tags):

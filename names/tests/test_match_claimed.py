@@ -3,8 +3,8 @@ another row (#26, M4).  That is how two names came to claim way/28330569
 and three other objects, of which only one can reach the map."""
 from __future__ import annotations
 
-import placelist
-import match
+from frasch import placelist
+from frasch import match
 from conftest import cand, places_text, write_candidates
 
 LANGERDEICH = cand("w", 28330569, 8.865771, 54.471785, man_made="dyke",

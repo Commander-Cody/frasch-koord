@@ -6,16 +6,9 @@ from __future__ import annotations
 import csv
 import io
 import json
-import os
-import sys
-
 import pytest
 
-NAMES = os.path.normpath(os.path.join(os.path.dirname(__file__), ".."))
-if NAMES not in sys.path:
-    sys.path.insert(0, NAMES)
-
-import placelist  # noqa: E402
+from frasch import placelist
 
 
 def places_text(rows) -> str:

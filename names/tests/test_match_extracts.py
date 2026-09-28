@@ -5,9 +5,9 @@ from __future__ import annotations
 
 import json
 
-import curate
-import match
-import placelist
+from frasch import curate
+from frasch import match
+from frasch import placelist
 from conftest import cand, places_text, write_candidates
 
 SH = {"file": "schleswig-holstein-latest.osm.pbf",

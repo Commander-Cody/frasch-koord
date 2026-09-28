@@ -16,10 +16,10 @@ import math
 import osmium
 import pytest
 
-import dialects
-import inject_names
-import locate
-import placelist
+from frasch import dialects
+from frasch import inject_names
+from frasch import locate
+from frasch import placelist
 
 
 # ------------------------------------------------------------- square_around ---

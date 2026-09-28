@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import pytest
 
-import match
-import placelist
+from frasch import match
+from frasch import placelist
 from conftest import cand, write_candidates
 
 

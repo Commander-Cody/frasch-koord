@@ -6,7 +6,7 @@ import os
 
 import pytest
 
-import check
+from frasch import check
 from conftest import CURATION_HEADER, TOFTUM, places_text
 
 NIEBUELL = {"kind": "settlement", "mooring": "Naibel", "de": "Niebüll",

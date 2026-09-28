@@ -6,7 +6,7 @@ import os
 
 import pytest
 
-import placelist
+from frasch import placelist
 from conftest import places_text
 
 ROWS = [

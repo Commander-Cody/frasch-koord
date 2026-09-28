@@ -7,9 +7,9 @@ import types
 
 import pytest
 
-import curate
-import match
-import placelist
+from frasch import curate
+from frasch import match
+from frasch import placelist
 from conftest import CURATION_HEADER, places_text, write_candidates
 
 ROWS = [
