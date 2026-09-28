@@ -43,7 +43,7 @@ import argparse
 import json
 import os
 
-from frasch import cli, dialects, files, locate, paths, placelist, provenance, registry
+from frasch import cli, curationlist, dialects, files, locate, paths, placelist, provenance, registry
 from frasch.errors import PipelineError, ValidationError
 
 DEFAULT_OUT = paths.SEARCH_INDEX
@@ -101,7 +101,7 @@ def build(names, dialects_csv, curation, areas_path, objects_path) -> dict:
         raise PipelineError(f"{areas_path} not found -- build it with `just areas`")
     areas = dialects.AreaIndex.from_geojson(areas_path)
     objects = locate.read_objects(objects_path)
-    local_points = placelist.local_points(curation)
+    local_points = curationlist.local_points(curation)
     rows, _ = placelist.read(names, reg)
 
     places, unlocated = [], []

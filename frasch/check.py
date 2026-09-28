@@ -19,7 +19,7 @@ import re
 import sys
 from dataclasses import dataclass
 
-from frasch import cli, dialects, errors, files, paths, placelist, registry
+from frasch import cli, curationlist, dialects, errors, files, paths, placelist, registry
 from frasch.registry import Registry
 
 
@@ -93,10 +93,10 @@ def row_ids(path) -> set[str]:
 def check_curation(path, ids) -> tuple[list[Problem], set[str]]:
     """-> (the problems in names/curation.csv, the slugs of the local
     references it positions).  The rules are those the tile build enforces
-    (`placelist.curation_rows`), plus: a `frasch:ref` set by hand must be the
+    (`curationlist.rows`), plus: a `frasch:ref` set by hand must be the
     id of a row of the name list (`ids`) -- it is how the place card finds
     the row a label belongs to."""
-    entries, problems = placelist.curation_rows(path)
+    entries, problems = curationlist.rows(path)
     for e in entries:
         ref = e["tags"].get(placelist.REF_KEY)
         if ref is not None and ref not in ids:
@@ -174,7 +174,7 @@ def variant_columns(reg) -> list[str]:
 
 
 def check(places=placelist.DEFAULT_PATH,
-          curation=placelist.CURATION_PATH,
+          curation=paths.CURATION,
           dialects_csv=paths.DIALECTS,
           areas=dialects.AREA_LIST_PATH) -> list[Problem]:
     """Every problem in the name list `places`, the map curation `curation`,
@@ -210,7 +210,7 @@ def markdown(problems) -> str:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--names", default=placelist.DEFAULT_PATH)
-    ap.add_argument("--curation", default=placelist.CURATION_PATH)
+    ap.add_argument("--curation", default=paths.CURATION)
     ap.add_argument("--dialects", default=paths.DIALECTS)
     ap.add_argument("--areas", default=dialects.AREA_LIST_PATH)
     ap.add_argument("--fix", action="store_true",

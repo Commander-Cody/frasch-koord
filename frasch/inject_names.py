@@ -33,7 +33,7 @@ a row of `names/curation.csv` that carries its position (`lat` / `lon`) and,
 like any curation row, may carry `set_tags` / `minzoom` / `maxzoom` /
 `polygon_km2`.  Without `polygon_km2` the injector adds a *new node* at that
 position, tagged like any other object plus the `place=` value its `kind`
-maps to (POINT_TAGS, overridable by `set_tags`) and a `name` -- OpenMapTiles
+maps to (curationlist.POINT_TAGS, overridable by `set_tags`) and a `name` -- OpenMapTiles
 drops a nameless place node.  With `polygon_km2` no labelled node is written;
 only the synthetic square (see curation below) is, which is how an area-like
 place (a Koog) gets a label from the zoom OpenMapTiles gives polygons of that
@@ -92,7 +92,7 @@ import time
 
 import osmium
 
-from frasch import cli, dialects, locate, paths, placelist, registry
+from frasch import cli, curationlist, dialects, locate, paths, placelist, registry
 from frasch.errors import PipelineError, ValidationError
 
 DEFAULT_NAMES = placelist.DEFAULT_PATH
@@ -101,26 +101,12 @@ DEFAULT_AREAS = dialects.DEFAULT_AREAS
 DEFAULT_OBJECTS = locate.DEFAULT_OUT
 DEFAULT_CURATION = paths.CURATION
 KIND_KEY = "frasch:kind"
-MINZOOM_KEY = "frasch:minzoom"
-MAXZOOM_KEY = "frasch:maxzoom"
+MINZOOM_KEY = curationlist.MINZOOM_KEY
+MAXZOOM_KEY = curationlist.MAXZOOM_KEY
 DIALECT_KEY = "frasch:dialect"
 LOCAL_KEY = "frasch:local"
 VARIETY_KEY = "frasch:variety"
 REF_KEY = placelist.REF_KEY
-
-# The default `place=` of the node added for a local reference, by the row's
-# kind.  Only kinds whose OSM equivalent is unambiguous are listed; any other
-# kind needs `place=...` in the curation row's `set_tags` (and a look at
-# whether OpenMapTiles keeps that tag: it has no `place=locality` at all, and
-# `isolated_dwelling` nodes only from z14 while `hamlet` nodes come at z11 --
-# which is why a Warft is a hamlet here, as OSM's own Hallig Warften are).
-POINT_TAGS = {
-    "settlement": {"place": "hamlet"},
-    "warft": {"place": "hamlet"},
-    "island": {"place": "island"},
-    "hallig": {"place": "island"},
-}
-
 
 # ------------------------------------------------------------ name list ----
 def load_names(path, reg):
@@ -216,7 +202,7 @@ def point_tags(rows, area_tag, reg, curation_tags, where=""):
     `name:<tag>` like everywhere else; without it OpenMapTiles would drop the
     node), the name tags, and last the curation row's own tags, which win."""
     row = rows[0]
-    tags = dict(POINT_TAGS.get(row["kind"], {}))
+    tags = dict(curationlist.POINT_TAGS.get(row["kind"], {}))
     name = (placelist.primary(row["de"]) or placelist.primary(row["da"])
             or placelist.any_name(row, reg))
     if name:
@@ -226,7 +212,7 @@ def point_tags(rows, area_tag, reg, curation_tags, where=""):
     if "place" not in tags:
         raise ValidationError(f"{where}: kind {row['kind']!r} (places.csv line "
                          f"{row['_line']}) has no default place= (POINT_TAGS in "
-                         f"tiles/inject_names.py) -- give the curation row "
+                         f"frasch/curationlist.py) -- give the curation row "
                          f"`place=...` in set_tags")
     return tags
 
@@ -249,47 +235,15 @@ def check_local(by_id, points, reg):
 
 
 # -------------------------------------------------------------- curation ----
-def load_curation(path, required=False):
-    """-> ({('r', 1420555): {'tags': {...}, 'label': 'Nordstrand'}},
-        {('n', 85929111): {'km2': 50.0, 'tags': {...}, 'label': '...'}},
-        {('l', 'westerheide-amrum'): {'lon': 8.34, 'lat': 54.65, 'km2': None,
-                                      'tags': {...}, 'label': '...'}})
-
-    `set_tags` are applied verbatim, `minzoom` / `maxzoom` become
-    `frasch:minzoom` / `frasch:maxzoom`.  Every object in the file may be
-    curated, whether the name list knows it or not.  Rows with `polygon_km2`
-    go into the second dict: they describe a synthetic polygon to add around
-    that node (see the module docstring) and leave the node itself alone.
-    Rows with a local reference go into the third: they position a place OSM
-    does not have (`lat` / `lon`, required there and forbidden elsewhere) and
-    describe the node -- or, with `polygon_km2`, the square -- to add for it."""
-    by_id, synthetic, points = {}, {}, {}
+def load_curation(path, required=False) -> curationlist.Curation:
+    """The curation (curationlist.read), or none when the file is absent --
+    unless it was named explicitly (`required`)."""
     if not os.path.exists(path):
         if required:
             raise PipelineError(f"curation file not found: {path}")
         print(f"curation  : {path} (absent -- nothing curated)")
-        return by_id, synthetic, points
-    entries, problems = placelist.curation_rows(path)
-    if problems:
-        n, what = problems[0]
-        raise ValidationError([f"{path}:{n}: {what}" for n, what in problems])
-    for e in entries:
-        tags = dict(e["tags"])
-        for col, tag in (("minzoom", MINZOOM_KEY), ("maxzoom", MAXZOOM_KEY)):
-            if e[col] is not None:
-                tags[tag] = str(e[col])       # tag values must be strings
-        key, label = e["refs"][0], e["label"]
-        if e["local"]:
-            points[key] = {"lon": e["pos"][0], "lat": e["pos"][1], "km2": e["km2"],
-                           "tags": tags, "label": label,
-                           "where": f"{path}:{e['line']}"}
-        elif e["km2"] is not None:
-            synthetic[key] = {"km2": e["km2"], "tags": tags, "label": label}
-        elif tags:                            # else nothing to apply yet
-            for key in e["refs"]:
-                by_id.setdefault(key, {"tags": {}, "label": label})
-                by_id[key]["tags"].update(tags)
-    return by_id, synthetic, points
+        return curationlist.Curation({}, {}, {})
+    return curationlist.read(path)
 
 
 def square_around(lon, lat, km2):

@@ -1,4 +1,4 @@
-"""inject_names.py: reading the curation file, the tags an object gets, and a
+"""inject_names.py: an absent curation file, the tags an object gets, and a
 whole `run()` over a tiny extract written here with pyosmium.
 
 The extract mirrors real places (ids and positions from the
@@ -17,10 +17,11 @@ import osmium
 import pytest
 
 from frasch import paths, registry
-from frasch.errors import PipelineError, ValidationError
+from frasch.errors import PipelineError
 from frasch import inject_names
 from frasch import locate
 from frasch import placelist
+from conftest import curation_file
 
 
 # ------------------------------------------------------------- square_around ---
@@ -112,72 +113,7 @@ def test_name_tags_refer_to_the_rows_id(reg):
 
 
 # ------------------------------------------------------------- load_curation ---
-CURATION_HEADER = ["osm", "name", "lat", "lon", "set_tags", "minzoom", "maxzoom",
-                   "polygon_km2", "note"]
-
-
-def curation_file(tmp_path, *rows):
-    path = tmp_path / "curation.csv"
-    buf = io.StringIO(newline="")
-    w = csv.DictWriter(buf, fieldnames=CURATION_HEADER, lineterminator="\n")
-    w.writeheader()
-    for r in rows:
-        w.writerow({k: r.get(k, "") for k in CURATION_HEADER})
-    path.write_text(buf.getvalue(), encoding="utf-8")
-    return str(path)
-
-
-def test_curation_row_tags_an_osm_object(tmp_path):
-    path = curation_file(tmp_path, {"osm": "way/177387348", "name": "Habel",
-                                    "set_tags": "place=island"})
-    by_id, synthetic, points = inject_names.load_curation(path)
-    assert by_id == {("w", 177387348): {"tags": {"place": "island"}, "label": "Habel"}}
-    assert synthetic == {} and points == {}
-
-
-def test_curation_zooms_become_string_tags(tmp_path):
-    path = curation_file(tmp_path, {"osm": "node/355956234", "name": "Tammensiel",
-                                    "minzoom": "10", "maxzoom": "12"})
-    by_id, _, _ = inject_names.load_curation(path)
-    assert by_id[("n", 355956234)]["tags"] == {"frasch:minzoom": "10",
-                                               "frasch:maxzoom": "12"}
-
-
-def test_curation_row_with_several_objects_tags_each(tmp_path):
-    path = curation_file(tmp_path, {"osm": "way/44051131; way/44051132",
-                                    "name": "Arlau",
-                                    "set_tags": "name:frr-x-mooring=Arlou"})
-    by_id, _, _ = inject_names.load_curation(path)
-    assert set(by_id) == {("w", 44051131), ("w", 44051132)}
-    assert by_id[("w", 44051132)]["tags"] == {"name:frr-x-mooring": "Arlou"}
-
-
-def test_curation_row_with_nothing_to_apply_is_skipped(tmp_path):
-    path = curation_file(tmp_path, {"osm": "node/1", "name": "just a note",
-                                    "note": "look at this later"})
-    assert inject_names.load_curation(path) == ({}, {}, {})
-
-
-def test_polygon_km2_row_describes_a_square_not_a_tag_change(tmp_path):
-    path = curation_file(tmp_path, {"osm": "node/85929111", "name": "Nordstrand",
-                                    "set_tags": "place=island", "maxzoom": "11",
-                                    "polygon_km2": "50"})
-    by_id, synthetic, _ = inject_names.load_curation(path)
-    assert by_id == {}
-    assert synthetic == {("n", 85929111): {
-        "km2": 50.0, "tags": {"place": "island", "frasch:maxzoom": "11"},
-        "label": "Nordstrand"}}
-
-
-def test_local_reference_row_positions_a_place(tmp_path):
-    path = curation_file(tmp_path, {"osm": "local/westerheide-amrum",
-                                    "name": "Westerheide (Amrum)",
-                                    "lat": "54.65097", "lon": "8.34019"})
-    _, _, points = inject_names.load_curation(path)
-    p = points[("l", "westerheide-amrum")]
-    assert (p["lon"], p["lat"], p["km2"], p["tags"]) == (8.34019, 54.65097, None, {})
-
-
+# (the file's rules are frasch.curationlist's, see names/tests/test_curationlist.py)
 def test_missing_curation_file_is_nothing_curated(tmp_path):
     assert inject_names.load_curation(str(tmp_path / "absent.csv")) == ({}, {}, {})
 
@@ -185,32 +121,6 @@ def test_missing_curation_file_is_nothing_curated(tmp_path):
 def test_missing_curation_file_named_explicitly_stops(tmp_path):
     with pytest.raises(PipelineError, match="not found"):
         inject_names.load_curation(str(tmp_path / "absent.csv"), required=True)
-
-
-@pytest.mark.parametrize("bad,message", [
-    ({"osm": "node/85929111", "lat": "54.48", "lon": "8.86"}, "only go with a local"),
-    ({"osm": "local/westerheide-amrum"}, "needs `lat` and `lon`"),
-    ({"osm": "node/355956234", "minzoom": "ten"}, "not an integer"),
-    ({"osm": "node/85929111", "polygon_km2": "0"}, "not a positive number"),
-    ({"osm": "node/85929111", "polygon_km2": "fifty"}, "not a positive number"),
-    ({"osm": "way/177387348", "polygon_km2": "5"}, "exactly one node"),
-    ({"osm": "node/1; node/2", "polygon_km2": "5"}, "exactly one node"),
-])
-def test_bad_curation_row_stops_the_build(tmp_path, bad, message):
-    with pytest.raises(ValidationError, match=message):
-        inject_names.load_curation(curation_file(tmp_path, bad))
-
-
-def test_second_row_for_one_local_reference_stops_the_build(tmp_path):
-    row = {"osm": "local/huelltoft", "lat": "54.881287", "lon": "8.771304"}
-    with pytest.raises(ValidationError, match="second row"):
-        inject_names.load_curation(curation_file(tmp_path, row, row))
-
-
-def test_second_polygon_for_one_node_stops_the_build(tmp_path):
-    row = {"osm": "node/85929111", "polygon_km2": "50"}
-    with pytest.raises(ValidationError, match="second polygon_km2"):
-        inject_names.load_curation(curation_file(tmp_path, row, row))
 
 
 # ------------------------------------------------------------ a whole run() ---

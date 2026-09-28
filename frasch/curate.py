@@ -48,14 +48,13 @@ from __future__ import annotations
 import argparse
 import collections
 import csv
-import io
 import json
 import os
 import re
 import sys
 import time
 
-from frasch import build_candidates, cli, errors, files, match, paths, placelist
+from frasch import build_candidates, cli, curationlist, errors, files, match, paths, placelist
 from frasch.errors import PipelineError, ValidationError
 
 CAND_PATH = paths.CANDIDATES
@@ -77,16 +76,6 @@ SH_SRC = "schleswig-holstein"
 RESULTS = ("ambiguous", "not_found")
 ACTIONS = ("osm", "local", "skip", "clear")
 SLUG = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
-
-# The kinds tiles/inject_names.py has a default `place=` for (its POINT_TAGS).
-# Kept as a copy rather than imported: that module pulls in osmium, and this
-# one only needs to warn that a curation row of any other kind has to carry
-# `place=` in `set_tags` before a build.
-POINT_KINDS = {"settlement", "warft", "island", "hallig"}
-
-CURATION_COLUMNS = ["osm", "name", "lat", "lon", "set_tags", "minzoom",
-                    "maxzoom", "polygon_km2", "note"]
-
 
 # ------------------------------------------------------------- candidates ---
 def parse_candidates(cell: str) -> list[dict]:
@@ -316,8 +305,8 @@ def _apply(args):
     # the rows appended to it land after exactly what was checked).
     rows, fields = placelist.read(args.names)
     by_id = {r["id"]: r for r in rows}
-    used_slugs = set(placelist.local_points(args.curation))
-    cur_data, cur_fields = read_curation(args.curation)
+    used_slugs = set(curationlist.local_points(args.curation))
+    cur_data, cur_fields = curationlist.read_bytes(args.curation)
     cur_digest = files.digest(cur_data) if cur_data is not None else files.MISSING
     for r in rows:
         slug = placelist.local_ref(r["osm"])
@@ -408,7 +397,7 @@ def _apply(args):
                     refuse(e, f"local/{slug} is already taken")
                     continue
                 try:
-                    pos = placelist.parse_point(str(e.get("lat", "")),
+                    pos = curationlist.parse_point(str(e.get("lat", "")),
                                                 str(e.get("lon", "")),
                                                 f"patch line {e['_patch_line']}")
                 except errors.Invalid as exc:
@@ -432,7 +421,7 @@ def _apply(args):
                 row["wikidata"] = ""
                 row["status"] = "ok"
                 used_slugs.add(slug)
-                cur = {c: "" for c in CURATION_COLUMNS}
+                cur = {c: "" for c in curationlist.COLUMNS}
                 cur.update(osm=row["osm"], name=curation_name(row),
                            lat=fmt_deg(lat), lon=fmt_deg(lon),
                            note=(e.get("note") or "").strip())
@@ -444,9 +433,9 @@ def _apply(args):
                 print(f"  {where} {placelist.describe(row)}: osm = {row['osm']}, "
                       f"status = ok; {args.curation} += {cur['lat']}/{cur['lon']}"
                       + (f", polygon_km2 = {cur['polygon_km2']}" if km2 is not None else ""))
-                if km2 is None and row["kind"] not in POINT_KINDS:
+                if km2 is None and row["kind"] not in curationlist.POINT_TAGS:
                     print(f"    warning: kind={row['kind']} has no default `place=` "
-                          f"in tiles/inject_names.py -- put one into the curation "
+                          f"(curationlist.POINT_TAGS) -- put one into the curation "
                           f"row's `set_tags` before the next build")
             applied += 1
 
@@ -462,7 +451,7 @@ def _apply(args):
             # come out again, so a `local/<slug>` row never lands without its
             # position and a failed apply leaves both files as they were
             if new_curation:
-                cur_text = curation_text(cur_data, cur_fields, new_curation)
+                cur_text = curationlist.appended(cur_data, cur_fields, new_curation)
                 files.atomic_write(args.curation, cur_text, expect=cur_digest)
                 cur_written = files.digest(cur_text)
             placelist.write(rows, args.names, fields)
@@ -539,38 +528,6 @@ def restore_patch(snapshot, path):
         os.unlink(newer)
 
 
-def read_curation(path):
-    """-> (the file's bytes or None when it does not exist, its columns).  The
-    columns are the file's own (it is hand-edited, so it may have gained one);
-    the ones apply writes must be among them."""
-    if not os.path.exists(path):
-        return None, CURATION_COLUMNS
-    with open(path, "rb") as fh:
-        data = fh.read()
-    fields = next(csv.reader(io.StringIO(files.decode(data), newline="")), None)
-    fields = fields or CURATION_COLUMNS
-    missing = [c for c in CURATION_COLUMNS if c not in fields]
-    if missing:
-        raise ValidationError(f"{path}: missing column(s) {missing}")
-    return data, fields
-
-
-def curation_text(data, fields, new_rows):
-    """The whole new curation.csv: the old bytes untouched, the rows for the
-    places OSM does not have appended in the file's column order."""
-    buf = io.StringIO(newline="")
-    w = csv.DictWriter(buf, fieldnames=fields, lineterminator="\n",
-                       extrasaction="ignore")
-    if data is None:
-        w.writeheader()
-        data = b""
-    elif data and not data.endswith(b"\n"):
-        data += b"\n"
-    for r in new_rows:
-        w.writerow({k: r.get(k, "") for k in fields})
-    return data + buf.getvalue().encode("utf-8")
-
-
 def unwrite_curation(path, old, written, refs):
     """Undo apply's curation.csv write after the places.csv write failed: put
     back `old` (its bytes before; None = there was no file), unless someone
@@ -610,7 +567,7 @@ def main(argv=None):
 
     ap_ = sub.add_parser("apply", help="write the browser's decisions back")
     ap_.add_argument("--names", default=placelist.DEFAULT_PATH)
-    ap_.add_argument("--curation", default=placelist.CURATION_PATH)
+    ap_.add_argument("--curation", default=paths.CURATION)
     ap_.add_argument("--patch", default=PATCH_PATH)
     ap_.add_argument("--dry-run", action="store_true",
                      help="print what would change and write nothing")

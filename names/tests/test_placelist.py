@@ -134,48 +134,6 @@ def test_format_osm_normalises_the_separator():
         "way/1347936331; node/1332249790"
 
 
-# ------------------------------------------------------------- parse_point ---
-def test_parse_point_returns_lon_then_lat():
-    # arguments are (lat, lon) like the curation columns, the result is
-    # (lon, lat) like GeoJSON and shapely
-    assert placelist.parse_point("54.65097", "8.34019") == (8.34019, 54.65097)
-
-
-def test_parse_point_ignores_surrounding_blanks():
-    assert placelist.parse_point(" 54.881287 ", "8.771304 ") == (8.771304, 54.881287)
-
-
-def test_parse_point_of_two_empty_cells_is_no_point():
-    assert placelist.parse_point("", "") is None
-    assert placelist.parse_point(None, None) is None
-
-
-@pytest.mark.parametrize("lat,lon", [("54.65097", ""), ("", "8.34019")])
-def test_parse_point_needs_both_cells(lat, lon):
-    with pytest.raises(ValidationError, match="go together"):
-        placelist.parse_point(lat, lon, "curation.csv:15")
-
-
-@pytest.mark.parametrize("lat,lon", [
-    ("54,65097", "8,34019"),          # a German spreadsheet's decimal comma
-    ("54°39'N", "8°20'E"),
-])
-def test_parse_point_needs_decimal_degrees(lat, lon):
-    with pytest.raises(ValidationError, match="not numbers"):
-        placelist.parse_point(lat, lon)
-
-
-@pytest.mark.parametrize("lat,lon", [("91", "8.3"), ("-90.5", "8.3"), ("54.6", "181"),
-                                     ("54.6", "-180.01")])
-def test_parse_point_refuses_coordinates_off_the_globe(lat, lon):
-    with pytest.raises(ValidationError, match="out of range"):
-        placelist.parse_point(lat, lon)
-
-
-def test_parse_point_accepts_the_edges_of_the_globe():
-    assert placelist.parse_point("-90", "180") == (180.0, -90.0)
-
-
 # --------------------------------------------------- the real name list ---
 def test_real_name_list_round_trips_byte_identical(tmp_path):
     """Reading and writing back the real places.csv changes nothing -- the
@@ -187,39 +145,6 @@ def test_real_name_list_round_trips_byte_identical(tmp_path):
     rows, fields = placelist.read(str(copy))
     placelist.write(rows, str(copy), fields)
     assert copy.read_bytes() == before
-
-
-# ------------------------------------------------------------ parse_set_tags ---
-def test_set_tags_are_k_equals_v_pairs():
-    assert placelist.parse_set_tags("place=island;frasch:kind=island") == {
-        "place": "island", "frasch:kind": "island"}
-
-
-def test_set_tags_ignore_blanks_and_empty_pairs():
-    assert placelist.parse_set_tags(" place = island ;; ") == {"place": "island"}
-
-
-def test_set_tags_value_may_contain_an_equals_sign():
-    assert placelist.parse_set_tags("note=a=b") == {"note": "a=b"}
-
-
-def test_set_tags_value_may_be_empty():
-    assert placelist.parse_set_tags("name:de=") == {"name:de": ""}
-
-
-def test_empty_set_tags_are_no_tags():
-    assert placelist.parse_set_tags("") == {}
-    assert placelist.parse_set_tags(None) == {}
-
-
-def test_set_tags_entry_without_equals_is_refused():
-    with pytest.raises(ValidationError, match="not key=value"):
-        placelist.parse_set_tags("place=island;islet")
-
-
-def test_set_tags_entry_with_empty_key_is_refused():
-    with pytest.raises(ValidationError, match="empty key"):
-        placelist.parse_set_tags("=island")
 
 
 # ------------------------------------------------------------------- slug ---

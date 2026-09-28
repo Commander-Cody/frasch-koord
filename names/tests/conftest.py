@@ -51,6 +51,20 @@ def write_candidates(path, *recs):
 CURATION_HEADER = "osm,name,lat,lon,set_tags,minzoom,maxzoom,polygon_km2,note\n"
 
 
+def curation_file(directory, *rows):
+    """Write a curation.csv of `rows` (dicts of the cells that are not empty)
+    into `directory` and return its path."""
+    columns = CURATION_HEADER.strip().split(",")
+    buf = io.StringIO(newline="")
+    w = csv.DictWriter(buf, fieldnames=columns, lineterminator="\n")
+    w.writeheader()
+    for r in rows:
+        w.writerow({k: r.get(k, "") for k in columns})
+    path = directory / "curation.csv"
+    path.write_text(buf.getvalue(), encoding="utf-8")
+    return str(path)
+
+
 @pytest.fixture
 def world(tmp_path):
     """`tmp_path` laid out like names/: places.csv, curation.csv, work/."""
