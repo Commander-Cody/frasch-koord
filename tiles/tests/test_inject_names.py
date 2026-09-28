@@ -22,6 +22,7 @@ from frasch import inject_names
 from frasch import locate
 from frasch import placelist
 from conftest import curation_file
+from osm_fixture import write_extract as write_osm
 
 
 # ------------------------------------------------------------- square_around ---
@@ -419,3 +420,19 @@ def test_synthetic_square_carries_the_nodes_names_and_its_own_tags(injected):
     assert tags == {"name": "Nordstrand", "name:frr-x-mooring": "e Strönj",
                     "frasch:ref": "relation/1420555", "place": "island",
                     "frasch:kind": "island", "frasch:maxzoom": "11"}
+
+
+# ------------------------------------------------------------- waterways ---
+def test_the_member_ways_of_a_matched_waterway_relation_are_found(tmp_path):
+    # the Arlau: the row names the river relation, the labels go on its ways
+    nodes = {i: ((8.9 + i / 100, 54.6), {}) for i in range(1, 5)}
+    path = write_osm(tmp_path / "river.osm.pbf", nodes=nodes,
+                     ways={10: ([1, 2], {"waterway": "river"}),
+                           11: ([2, 3], {"waterway": "river"}),
+                           12: ([3, 4], {"highway": "track"})},
+                     relations={20: ([("w", 10, "main_stream"), ("w", 11, "side_stream")],
+                                     {"type": "waterway", "name": "Arlau"}),
+                                21: ([("w", 12, "")], {"type": "route"})})
+    by_id = {("r", 20): [{}], ("r", 21): [{}]}
+    assert inject_names.scan_waterways(str(path), by_id) == {
+        ("w", 10): (("r", 20), "Arlau"), ("w", 11): (("r", 20), "Arlau")}

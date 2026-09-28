@@ -92,7 +92,16 @@ import time
 
 import osmium
 
-from frasch import cli, curationlist, dialects, locate, paths, placelist, registry
+from frasch import (
+    cli,
+    curationlist,
+    dialects,
+    locate,
+    osmscan,
+    paths,
+    placelist,
+    registry,
+)
 from frasch.errors import PipelineError, ValidationError
 
 DEFAULT_NAMES = placelist.DEFAULT_PATH
@@ -268,18 +277,13 @@ def scan_waterways(path, by_id):
     like "Alte Eider" keep theirs).
 
     -> {('w', id): (relation key, the relation's OSM name)}"""
-    wanted = {i for t, i in by_id if t == "r"}
     members = {}
-    if not wanted:
-        return members
-    fp = osmium.FileProcessor(path, osmium.osm.RELATION) \
-               .with_filter(osmium.filter.IdFilter(wanted))
-    for r in fp:
-        if not (r.tags.get("type") == "waterway" or "waterway" in r.tags):
+    for rel_id, rel in osmscan.relations(path, {i for t, i in by_id if t == "r"}).items():
+        tags = rel["tags"]
+        if not (tags.get("type") == "waterway" or "waterway" in tags):
             continue
-        for m in r.members:
-            if m.type == "w":
-                members.setdefault(("w", m.ref), (("r", r.id), r.tags.get("name", "")))
+        for way_id in rel["rings"]["outer"] + rel["rings"]["inner"]:
+            members.setdefault(("w", way_id), (("r", rel_id), tags.get("name", "")))
     return members
 
 
