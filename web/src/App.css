@@ -195,7 +195,7 @@
 /* Phone width. The search panel becomes a one-row bar across the top —
    search field, dialect chip, share button — with the results as a list
    overlaying the map below it; the place card becomes a bottom sheet (see
-   PlaceCard.css). Must match PHONE_MEDIA in App.tsx. */
+   PlaceCard.css). Must match PHONE_MEDIA in hooks/usePlaceSelection.ts. */
 @media (max-width: 600px) {
   .app {
     --bar-inset: 8px;
@@ -268,8 +268,8 @@
     top: calc(var(--bar-inset) + var(--bar-height));
   }
 
-  /* The attribution rides on top of the open sheet; App.tsx keeps
-     --sheet-height at the sheet's height while there is one. */
+  /* The attribution rides on top of the open sheet; hooks/useSheetHeight.ts
+     keeps --sheet-height at the sheet's height while there is one. */
   .app .maplibregl-ctrl-bottom-right,
   .app .maplibregl-ctrl-bottom-left {
     bottom: var(--sheet-height, 0px);

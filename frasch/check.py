@@ -4,10 +4,11 @@
     .venv/bin/python names/check.py            # exit 1 if anything is wrong
     .venv/bin/python names/check.py --fix      # first give new rows an id
 
-`placelist.read` stops at the first problem it cannot live with and
-silently accepts some it can (a row with a comma too few is padded, and its
-names shift one column to the left).  This reads the files as raw CSV
-instead and lists every problem it finds, so that one run shows everything a
+`placelist.read` refuses the problems it cannot live with, but silently
+accepts some it can (a row with a comma too few is padded, and its names
+shift one column to the left), and knows nothing of the other files.  This
+reads all of them as raw CSV instead and lists every problem it finds, with
+the stricter rules of the name cells, so that one run shows everything a
 spreadsheet export or a hand edit broke.
 """
 from __future__ import annotations
