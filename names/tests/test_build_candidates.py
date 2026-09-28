@@ -6,6 +6,7 @@ import osmium
 import pytest
 
 from frasch import build_candidates
+from frasch import candidates
 from frasch.build_candidates import WayCentroids
 from conftest import cand, write_candidates
 from osm_fixture import write_extract
@@ -51,7 +52,7 @@ def build(tmp_path, *pbfs):
 
 def test_header_names_every_extract_with_its_timestamp(tmp_path):
     out = build(tmp_path, *extracts(tmp_path))
-    assert build_candidates.read_header(out) == [
+    assert candidates.read_header(out) == [
         {"file": "schleswig-holstein-latest.osm.pbf",
          "replication_timestamp": "2026-09-20T20:21:02Z"},
         {"file": "denmark-latest.osm.pbf",
@@ -62,7 +63,7 @@ def test_header_names_every_extract_with_its_timestamp(tmp_path):
 def test_records_follow_the_header(tmp_path):
     out = build(tmp_path, *extracts(tmp_path))
     got = [(r["src"], r["t"], r["id"], r["tags"]["name"])
-           for r in build_candidates.read_records(out)]
+           for r in candidates.read_records(out)]
     assert got == [("schleswig-holstein", "n", 1, "Toftum"),
                    ("denmark", "n", 2, "Højer")]
 
@@ -70,8 +71,8 @@ def test_records_follow_the_header(tmp_path):
 def test_a_file_from_before_the_header_has_none_and_all_records(tmp_path):
     legacy = write_candidates(tmp_path / "candidates.jsonl",
                               cand("n", 1, 8.83, 54.71, name="Toftum", place="village"))
-    assert build_candidates.read_header(legacy) is None
-    assert [r["id"] for r in build_candidates.read_records(legacy)] == [1]
+    assert candidates.read_header(legacy) is None
+    assert [r["id"] for r in candidates.read_records(legacy)] == [1]
 
 
 def write_unsorted_extract(path):

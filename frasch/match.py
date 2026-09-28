@@ -60,18 +60,20 @@ import collections
 import csv
 import json
 import os
-import re
 import sys
 import time
-import unicodedata
 
-from frasch import build_candidates, cli, files, paths, placelist
+from frasch import candidates, cli, files, paths, placelist
+from frasch.candidates import ISLAND_PLACES, decisive_tags, osm_key
 from frasch.errors import PipelineError
 from frasch.geo import NF_CENTRE, haversine, in_north_frisia
+from frasch.hints import HintResolver
+from frasch.nameindex import NameIndex, norm
 from frasch.placelist import (
     any_name,
     format_osm,
     local_ref,
+    owned_by_matcher,
     parse_osm,
     primary,
     variants,
@@ -90,83 +92,11 @@ MATCH_COLUMNS = ["id", "line", "kind", "name", "de", "osm", "wikidata", "status"
 
 CLUSTER_KM = 3.0        # objects this close describe the same feature
 SEPARATION_KM = 30.0    # a winner must be this far from every rival
-HINT_KM = 8.0           # a village-sized hint
-HINT_KM_ISLAND = 10.0   # a Hallig / small island
-HINT_KM_LARGE = 25.0    # Sylt, Foehr, Eiderstedt, a Harde ...
-
-# name tag -> how trustworthy an exact hit on it is (lower = better).  A hit on
-# the OSM `name` itself beats a hit on `name:de`, which beats alt/old names:
-# otherwise the Danish village Holme (name:de=Holm) outranks the North Frisian
-# village Holm (name=Holm).
-NAME_FIELD_RANK = {
-    "name": 0, "name:de": 1, "official_name": 2, "name:da": 2,
-    "short_name": 2,        # Stadt Wyk auf Föhr: short_name=Wyk
-    "alt_name": 4, "old_name": 4,
-}
-NAME_FIELDS = tuple(NAME_FIELD_RANK)
-
-# ----------------------------------------------------------- normalisation ---
-_UML = {"ä": "ae", "ö": "oe", "ü": "ue", "Ä": "ae", "Ö": "oe", "Ü": "ue",
-        "ß": "ss", "å": "aa", "Å": "aa", "ø": "oe", "Ø": "oe", "æ": "ae",
-        "Æ": "ae", "é": "e", "è": "e", "á": "a", "à": "a"}
-
-
-def norm(s: str) -> str:
-    if not s:
-        return ""
-    s = s.strip().lower()
-    out = []
-    for ch in s:
-        out.append(_UML.get(ch, ch))
-    s = "".join(out)
-    s = unicodedata.normalize("NFKD", s)
-    s = "".join(c for c in s if not unicodedata.combining(c))
-    s = re.sub(r"[\-–—_/\.'`’]+", " ", s)
-    s = re.sub(r"[^\w ]+", "", s)
-    s = re.sub(r"\s+", " ", s).strip()
-    return s
-
-
-_PAREN_SUFFIX = re.compile(r"^(.+?)\s*\([^()]*\)\s*$")
-# generic type words OSM puts in front of the actual name
-_TYPE_PREFIX = re.compile(
-    r"^(?:Kreis|Amt|Stadt|Gemeinde|Hallig|Insel|Landkreis|Flecken)\s+(.+)$")
-# the island OSM appends to a place name: `Wyk auf Föhr`, `List auf Sylt`,
-# `Norddorf auf Amrum` -- the list writes plain `Wyk`
-_AUF_SUFFIX = re.compile(r"^(.+?)\s+auf\s+\S.*$")
-
-
-def split_name_values(v: str):
-    """Variants of one OSM name value, as (value, extra rank penalty).
-
-    * multilingual slash lists: `North Sea / Nordsee / Noordzee`
-    * OSM's own disambiguators: `Kampen (Sylt)`, `Lister Tief (Sylt Nord)`,
-      `Wyk auf Föhr` -- indexed with a penalty so a plain exact hit always
-      wins.
-    """
-    vals = [(v, 0)]
-    if " / " in v:
-        vals += [(p.strip(), 0) for p in v.split(" / ")]
-    if ";" in v:
-        vals += [(p.strip(), 0) for p in v.split(";")]
-    for x, _ in list(vals):
-        m = _PAREN_SUFFIX.match(x)
-        if m:
-            vals.append((m.group(1).strip(), 2))
-        m = _TYPE_PREFIX.match(x)
-        if m:
-            vals.append((m.group(1).strip(), 2))
-        m = _AUF_SUFFIX.match(x)
-        if m:
-            vals.append((m.group(1).strip(), 2))
-    return [(x, pen) for x, pen in vals if x]
-
 
 # -------------------------------------------------------- kind / tag rules ---
 SETTLEMENT_PLACES = {"city", "town", "village", "hamlet", "isolated_dwelling",
                      "locality", "suburb", "neighbourhood", "borough",
                      "quarter", "farm", "municipality"}
-ISLAND_PLACES = {"island", "islet", "archipelago"}
 
 
 def kind_ok(kind, tags, cls):
@@ -301,111 +231,6 @@ def type_bonus(kind, rec):
     if kind == "road":
         return 20 if t == "w" else 4
     return 10 if t == "n" else 6
-
-
-# ------------------------------------------------------------------ index ----
-def osm_key(rec):
-    """A candidate record's (type, id), as `placelist.parse_osm` spells a
-    reference: `("w", 28330569)`."""
-    return rec["t"], rec["id"]
-
-
-class Index:
-    def __init__(self, path):
-        self.recs = []
-        self.by_name = collections.defaultdict(dict)   # norm -> {rec_idx: rank}
-        self.by_key = {}                               # (t, id) -> rec
-        for rec in build_candidates.read_records(path):
-            i = len(self.recs)
-            self.recs.append(rec)
-            self.by_key[osm_key(rec)] = rec
-            for k, rank in NAME_FIELD_RANK.items():
-                v = rec["tags"].get(k)
-                if not v:
-                    continue
-                for part, penalty in split_name_values(v):
-                    n = norm(part)
-                    if not n:
-                        continue
-                    d = self.by_name[n]
-                    if rank + penalty < d.get(i, 99):
-                        d[i] = rank + penalty
-
-    def lookup(self, name):
-        """-> [(record, name-field rank)]"""
-        n = norm(name)
-        if not n:
-            return []
-        return [(self.recs[i], r) for i, r in self.by_name.get(n, {}).items()]
-
-
-# ------------------------------------------------------------------ hints ----
-# Fallback centroids for hints that OSM does not carry as an object
-# (the historic Harden) or that are spelled differently in the sheet.
-HINT_FALLBACK = {
-    "karrharde": (9.02, 54.80, 15.0),
-    "boekingharde": (8.85, 54.77, 15.0),
-    "wiedingharde": (8.72, 54.88, 12.0),
-    "beltringharde": (8.93, 54.58, 12.0),
-    "boekingharde osterdeich": (8.85, 54.77, 15.0),
-    "nordmarsch": (8.56, 54.63, 6.0),
-    "butweel": (8.60, 54.63, 6.0),
-    "luett moor": (8.83, 54.55, 6.0),
-    "uthlande": (8.60, 54.65, 40.0),
-    "dreiharde eck": (8.87, 54.80, 10.0),
-    "st peter": (8.640, 54.306, 10.0),
-    "sankt peter": (8.640, 54.306, 10.0),
-}
-# big enough that "X lies on Y" only narrows things down to ~25 km
-LARGE_HINTS = {"sylt", "foehr", "amrum", "eiderstedt", "pellworm", "nordstrand",
-               "nordfriesland", "dithmarschen", "angeln"}
-
-
-class HintResolver:
-    def __init__(self, index: Index):
-        self.index = index
-        self.cache = {}
-
-    def resolve(self, hint: str):
-        """-> (lon, lat, radius_km) or None"""
-        key = norm(hint)
-        if not key:
-            return None
-        if key in self.cache:
-            return self.cache[key]
-        res = None
-        if key in HINT_FALLBACK:
-            res = HINT_FALLBACK[key]
-        else:
-            best, bestscore = None, -1e9
-            for rec, _rank in self.index.lookup(hint):
-                tags = rec["tags"]
-                if not (tags.get("place") or tags.get("natural")
-                        or tags.get("boundary") == "administrative"):
-                    continue
-                if rec["lon"] is None:
-                    continue
-                d = haversine(rec["lon"], rec["lat"], *NF_CENTRE) or 999
-                sc = -d
-                if tags.get("place") in ISLAND_PLACES or tags.get("natural") == "peninsula":
-                    sc += 40
-                if tags.get("place") in ("village", "town", "city", "hamlet"):
-                    sc += 30
-                if sc > bestscore:
-                    best, bestscore = rec, sc
-            if best is not None:
-                if key in LARGE_HINTS:
-                    radius = HINT_KM_LARGE
-                elif (best["tags"].get("place") in ISLAND_PLACES
-                      or best["tags"].get("natural") in ("island", "islet",
-                                                         "peninsula")
-                      or best["tags"].get("place") == "region"):
-                    radius = HINT_KM_ISLAND
-                else:
-                    radius = HINT_KM
-                res = (best["lon"], best["lat"], radius)
-        self.cache[key] = res
-        return res
 
 
 # --------------------------------------------------------------- wikidata ----
@@ -620,13 +445,6 @@ def fmt_cands(cands):
     return ";".join(fmt_cand(c) for c in sorted(cands, key=key))
 
 
-def decisive_tags(rec):
-    tags = rec["tags"]
-    keys = ("place", "natural", "water", "waterway", "boundary", "admin_level",
-            "landuse", "man_made", "historic", "highway", "type")
-    return ";".join(f"{k}={tags[k]}" for k in keys if k in tags)
-
-
 def _decide(kind, plaus, hint_pt):
     """-> (winner cluster or None, reason, clusters)"""
     clusters = cluster(plaus)
@@ -668,7 +486,7 @@ def _suspicious(kind, winner):
     return minor and (winner["nf_d"] or 1e9) > 50
 
 
-def match_row(row, index: Index, hints: HintResolver, claimed=None):
+def match_row(row, index: NameIndex, hints: HintResolver, claimed=None):
     """`claimed`: {(type, id): line} of the objects other rows hold that
     are not the matcher's to give away (see `claimed_objects`)."""
     claimed = claimed or {}
@@ -809,17 +627,6 @@ def _addnote(row, txt):
     return txt
 
 
-def owned_by_matcher(row):
-    """May match.py (re)write this row's osm / wikidata / status?"""
-    if local_ref(row["osm"]):
-        return False              # a local reference: OSM has no object for it
-    if row["kind"] == "not_a_place" or row["status"] == "skip":
-        return False
-    if row["status"] == "auto":
-        return True
-    return not row["osm"] and not row["wikidata"]
-
-
 def taken_note(recs, claimed):
     """`way/1 is taken by line 7; ...` for the candidates other rows hold."""
     return "; ".join(f"{format_osm([osm_key(c)])} is taken by line "
@@ -887,7 +694,7 @@ def extract_set_warning(previous, current):
 def check_extracts(candidates_path, state_path):
     """Print the extracts behind the candidates, warn about a changed set, and
     return them (None for a file from before the header)."""
-    extracts = build_candidates.read_header(candidates_path)
+    extracts = candidates.read_header(candidates_path)
     if extracts is None:
         print(f"warning: {candidates_path} names no extracts (written before "
               f"it had a header) -- rebuild it with build_candidates.py",
@@ -1067,7 +874,7 @@ def run(args):
     print(f"loaded {len(rows)} rows from {args.names}")
 
     extracts = check_extracts(args.candidates, args.extracts_state)
-    index = Index(args.candidates)
+    index = NameIndex(candidates.read_records(args.candidates))
     print(f"indexed {len(index.recs):,} candidates / "
           f"{len(index.by_name):,} distinct normalised names "
           f"({time.time()-t0:.0f}s)")

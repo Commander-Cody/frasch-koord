@@ -54,7 +54,8 @@ import re
 import sys
 import time
 
-from frasch import build_candidates, cli, curationlist, geo, errors, files, match, paths, placelist
+from frasch import candidates, cli, curationlist, errors, files, geo, nameindex, paths, placelist
+from frasch.hints import HINT_FALLBACK, HintResolver
 from frasch.errors import PipelineError, ValidationError
 
 CAND_PATH = paths.CANDIDATES
@@ -106,47 +107,21 @@ def parse_candidates(cell: str) -> list[dict]:
     return out
 
 
-class _Index:
-    """The handful of candidate records the worklist needs, in the shape
-    `match.HintResolver` expects (`lookup` is all it calls).  Building it from
-    a filtered set of records instead of the whole file is the point: the real
-    `match.Index` keeps every name of every candidate in memory."""
-
-    def __init__(self, recs):
-        self.recs = list(recs)
-        self.by_name = collections.defaultdict(dict)
-        self.by_key = {}
-        for i, rec in enumerate(self.recs):
-            self.by_key[(rec["t"], rec["id"])] = rec
-            for k, rank in match.NAME_FIELD_RANK.items():
-                v = rec["tags"].get(k)
-                if not v:
-                    continue
-                for part, penalty in match.split_name_values(v):
-                    n = match.norm(part)
-                    if n and rank + penalty < self.by_name[n].get(i, 99):
-                        self.by_name[n][i] = rank + penalty
-
-    def lookup(self, name):
-        n = match.norm(name)
-        return [(self.recs[i], r) for i, r in self.by_name.get(n, {}).items()] if n else []
-
-
 def stream_records(path, keys, hint_norms):
     """One pass over work/candidates.jsonl, keeping the records the worklist
     refers to (by id) and those a location hint could name (by normalised
     name) -- roughly a thousand of 180 000."""
     kept = []
-    for rec in build_candidates.read_records(path):
+    for rec in candidates.read_records(path):
         if (rec["t"], rec["id"]) in keys:
             kept.append(rec)
             continue
         if not hint_norms:
             continue
-        for field in match.NAME_FIELDS:
+        for field in nameindex.NAME_FIELDS:
             v = rec["tags"].get(field)
-            if v and any(match.norm(p) in hint_norms
-                         for p, _pen in match.split_name_values(v)):
+            if v and any(nameindex.norm(p) in hint_norms
+                         for p, _pen in nameindex.split_name_values(v)):
                 kept.append(rec)
                 break
     return kept
@@ -172,7 +147,7 @@ def cmd_export(args):
             if row is None:             # deleted from places.csv since the run
                 stale += 1
                 continue
-            if not match.owned_by_matcher(row):
+            if not placelist.owned_by_matcher(row):
                 unowned += 1            # decided by hand since the last run
                 continue
             work.append((row, m))
@@ -181,16 +156,16 @@ def cmd_export(args):
     for row, m in work:
         for c in parse_candidates(m["candidates"]):
             keys.add(c["key"])
-        key = match.norm(row["hint"].split(";")[0].strip())
-        if key and key not in match.HINT_FALLBACK:
+        key = nameindex.norm(row["hint"].split(";")[0].strip())
+        if key and key not in HINT_FALLBACK:
             hint_norms.add(key)
 
     t0 = time.time()
-    index = _Index(stream_records(args.candidates, keys, hint_norms))
+    index = nameindex.NameIndex(stream_records(args.candidates, keys, hint_norms))
     print(f"read {args.candidates}: kept {len(index.recs):,} records "
           f"({len(keys):,} candidates, {len(hint_norms)} hint names, "
           f"{time.time()-t0:.0f}s)")
-    hints = match.HintResolver(index)
+    hints = HintResolver(index)
     srcs = collections.defaultdict(set)
     for rec in index.recs:
         srcs[(rec["t"], rec["id"])].add(rec.get("src"))
@@ -203,7 +178,7 @@ def cmd_export(args):
             rec = index.by_key.get(key)
             if rec is not None:
                 c.update(lon=rec["lon"], lat=rec["lat"],
-                         tags=match.decisive_tags(rec),
+                         tags=candidates.decisive_tags(rec),
                          in_sh=SH_SRC in srcs[key])
                 if rec["tags"].get("wikidata"):
                     c["wikidata"] = rec["tags"]["wikidata"]
@@ -358,7 +333,7 @@ def _apply(args):
                           f"(deleted since the export?)")
                 continue
             where = f"{args.names}:{row['_line']}"
-            if not match.owned_by_matcher(row):
+            if not placelist.owned_by_matcher(row):
                 refuse(e, f"{where} is not the matcher's to fill "
                           f"(status={row['status'] or 'empty'}, osm={row['osm'] or '-'})")
                 continue

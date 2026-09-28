@@ -155,6 +155,20 @@ def on_map(row: dict, reg: Registry | None = None) -> bool:
             and bool(any_name(row, reg)))
 
 
+def owned_by_matcher(row: dict) -> bool:
+    """May match.py (and `curate.py apply`) (re)write this row's osm /
+    wikidata / status?  Not a row a human decided -- `ok`/`skip`, a
+    hand-filled reference, a local reference, `not_a_place` -- only one it
+    filled itself (`auto`) or one with nothing in it yet."""
+    if local_ref(row["osm"]):
+        return False              # a local reference: OSM has no object for it
+    if row["kind"] == "not_a_place" or row["status"] == "skip":
+        return False
+    if row["status"] == "auto":
+        return True
+    return not row["osm"] and not row["wikidata"]
+
+
 def parse_osm(cell: str | None, where: str = "") -> list[tuple[str, int | str]]:
     """`"way/12; way/13"` -> `[("w", 12), ("w", 13)]`;
     `"local/westerheide-amrum"` -> `[("l", "westerheide-amrum")]`.

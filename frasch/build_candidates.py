@@ -4,10 +4,10 @@ be a place / water / landscape / Warft / Koog / road / country.
 
 Output: names/work/candidates.jsonl  (one JSON object per line)
   first line  {"header": {"extracts": [{"file", "replication_timestamp"}, ...]}}
-              -- the extracts it was built from (read_header); match.py warns
+              -- the extracts it was built from (frasch.candidates); match.py warns
               when that set changes between two of its runs
   then        {"src","t","id","lon","lat","cls","tags":{...}}  per candidate
-              (read_records)
+              (frasch.candidates)
 
 Tag filter (object must carry a name-ish tag AND one of):
   place=*, natural=<water-ish/island-ish>, water=*, waterway=*, landuse=*,
@@ -44,8 +44,7 @@ import time
 
 import osmium
 
-from frasch import cli, files, geo, paths
-from frasch.provenance import extract_stamp
+from frasch import candidates, cli, files, geo, paths
 
 DEFAULT_OUT = paths.CANDIDATES
 
@@ -250,33 +249,6 @@ def process(pbf: str, src: str, out, counts, idx="flex_mem"):
           file=sys.stderr)
 
 
-# -------------------------------------------------------- candidates.jsonl ---
-def header(pbfs) -> dict:
-    """The first line of candidates.jsonl: the extracts, in the order read."""
-    return {"header": {"extracts": [extract_stamp(p) for p in pbfs]}}
-
-
-def read_header(path) -> list[dict] | None:
-    """The extracts a candidates.jsonl was built from, as `extract_stamp`
-    gives them; None for a file written before it had a header."""
-    with open(path, encoding="utf-8") as fh:
-        first = fh.readline()
-    if not first.strip():
-        return None
-    line = json.loads(first)
-    return line["header"]["extracts"] if "header" in line else None
-
-
-def read_records(path):
-    """The candidate records of a candidates.jsonl, one at a time (the file
-    is tens of megabytes), without its header."""
-    with open(path, encoding="utf-8") as fh:
-        for line in fh:
-            rec = json.loads(line)
-            if "header" not in rec:
-                yield rec
-
-
 @cli.command
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__,
@@ -291,7 +263,7 @@ def main(argv=None):
     counts = collections.Counter()
     t0 = time.time()
     with files.replacing(args.out, text=True) as fh:
-        fh.write(json.dumps(header(args.pbf), ensure_ascii=False) + "\n")
+        fh.write(json.dumps(candidates.header(args.pbf), ensure_ascii=False) + "\n")
         for p in args.pbf:
             src = os.path.basename(p).split("-latest")[0].split(".")[0]
             print(f"scanning {p} ...", file=sys.stderr)
