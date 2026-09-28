@@ -603,5 +603,6 @@ default `names/dialects.csv` is read on first use.
 | `geo` | the North Frisia box, its centre, haversine |
 | `osmscan`, `osmgeom` | the id-filtered passes over an extract; ring assembly and polygons |
 | `candidates`, `nameindex`, `hints` | the candidates file, the name index of the matcher and the curation export, location hints |
+| `searchindex` | builds the search index (`export_search_index` writes it, `check_built` compares it) |
 | `provenance` | the `built_from` stamps |
 | the rest | one module per command, as in the table above |

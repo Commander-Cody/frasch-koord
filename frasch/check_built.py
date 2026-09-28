@@ -35,12 +35,12 @@ from frasch import (
     build_dialect_areas,
     cli,
     dialects,
-    export_search_index,
     locate,
     paths,
     placelist,
     provenance,
     registry,
+    searchindex,
 )
 from frasch.errors import PipelineError
 
@@ -53,7 +53,7 @@ def regenerated_problems(a, tmp) -> list[str]:
     problems = []
     index = os.path.join(tmp, "names.json")
     try:
-        export_search_index.write(export_search_index.build(
+        searchindex.write(searchindex.build(
             a.names, a.dialects, a.curation, a.areas, a.objects), index)
     except PipelineError as stop:
         problems.append(f"the search index cannot be rebuilt: {stop}")
@@ -153,7 +153,7 @@ def main(argv=None):
     ap.add_argument("--areas", default=dialects.DEFAULT_AREAS)
     ap.add_argument("--parts", default=DEFAULT_PARTS)
     ap.add_argument("--objects", default=locate.DEFAULT_OUT)
-    ap.add_argument("--index", default=export_search_index.DEFAULT_OUT)
+    ap.add_argument("--index", default=paths.SEARCH_INDEX)
     ap.add_argument("--registry-json", default=DEFAULT_REGISTRY_JSON)
     ap.add_argument("--extracts", nargs="+", default=[], metavar="PBF",
                     help="also rebuild names/osm_objects.json and the dialect "

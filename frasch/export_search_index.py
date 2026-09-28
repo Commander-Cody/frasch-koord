@@ -1,36 +1,6 @@
-#!/usr/bin/env python3
 """Export the rows of names/places.csv that are on the map as the client-side
-search index used by web/ (web/public/data/names.json).
-
-Every dialect name of a place is searchable, not only the one the map
-currently labels with: somebody who knows a Hallig as *Hansweerf* must find it
-while the map shows Mooring.
-
-Where a place is, and so which dialect is the *local* one there, comes from
-names/osm_objects.json (names/locate.py) and names/dialect_areas.geojson --
-the same files, read through the same `locate.dialect_at`, as the injector
-uses for the tiles, so a search result and the map label agree.  An entry
-lies where the first object of its row's `osm` cell lies.  A row for a place
-OSM does not have (`osm` = `local/<slug>`) takes its position from the
-curation row with the same reference (names/curation.csv).  The Low Saxon
-name (`name_nds`) is the object's OSM `name:nds`: the name list has no Low
-Saxon column, but the map labels with it before German, and the card and
-search results have to agree with it.
-
-A row with an OSM reference the objects file does not know stops the export
--- it is on the map, and would be missing from search.  Re-run
-`just objects` after giving a row a new reference.  Rows keyed by a Wikidata
-QID alone (the countries) have no position and are left out.
-
-The output records what it was built from (`built_from`, see
-names/provenance.py); the tiles carry the same stamp, and the frontend warns
-when the two differ.
-
-An entry's `id` is its row's `id` -- the same string the injector writes into
-the tiles as `frasch:ref`, which is how a click on a map label finds the entry
-it belongs to (web/src/names.ts).  Its `osm` is the row's `osm` cell, for the
-card's link to OpenStreetMap and for the share links and tiles from before the
-row ids, which name a place by its first OSM reference (or its QID).
+search index used by web/ (web/public/data/names.json) -- what goes into it,
+and why, is frasch/searchindex.py's docstring.
 
 Usage: names/export_search_index.py [--names names/places.csv]
                                     [--dialects names/dialects.csv]
@@ -40,104 +10,9 @@ Usage: names/export_search_index.py [--names names/places.csv]
                                     [--out web/public/data/names.json]
 """
 import argparse
-import json
 import os
 
-from frasch import (
-    cli,
-    curationlist,
-    dialects,
-    files,
-    locate,
-    paths,
-    placelist,
-    provenance,
-    registry,
-)
-from frasch.errors import PipelineError, ValidationError
-
-DEFAULT_OUT = paths.SEARCH_INDEX
-
-
-def entry_object(row, objects, local_points, where):
-    """Where a row's entry lies: the object of the first reference in its
-    `osm` cell, or the curation position of its local reference.  None for
-    a row keyed by its QID alone; a KeyError for a reference nobody located."""
-    slug = placelist.local_ref(row["osm"])
-    if slug:
-        if slug not in local_points:
-            raise ValidationError(f"{where}: local/{slug} has no row with lat/lon "
-                             f"in the curation file")
-        lon, lat = local_points[slug]
-        return {"lon": lon, "lat": lat}
-    refs = placelist.parse_osm(row["osm"], where)
-    if not refs:
-        return None
-    return objects.by_ref[refs[0]]
-
-
-def entry(row, obj, areas, reg) -> dict:
-    """The search-index entry of one row whose object is `obj`."""
-    area_tag = locate.dialect_at(obj, areas)
-    names = {}
-    for d in reg:
-        name = dialects.dialect_name(row, d["tag"], area_tag, reg)
-        if name:
-            names[d["tag"]] = name
-    out = {
-        "id": row["id"],
-        "names": names,
-        "name_de": placelist.primary(row["de"]),
-        "lon": round(float(obj["lon"]), 5),
-        "lat": round(float(obj["lat"]), 5),
-        "kind": row["kind"],
-    }
-    optional = {
-        "local": dialects.local_name(row, area_tag, reg),
-        "dialect": area_tag,
-        "variety": dialects.variety(row),
-        "name_nds": obj.get("name_nds"),
-        "name_da": placelist.primary(row["da"]),
-        "osm": row["osm"],
-        "wikidata": row["wikidata"],
-    }
-    return out | {k: v for k, v in optional.items() if v}
-
-
-def build(names, dialects_csv, curation, areas_path, objects_path) -> dict:
-    """The search index, `{"built_from", "places"}`, from its input files."""
-    reg = registry.read(dialects_csv)
-    if not os.path.exists(areas_path):
-        raise PipelineError(f"{areas_path} not found -- build it with `just areas`")
-    areas = dialects.AreaIndex.from_geojson(areas_path)
-    objects = locate.read_objects(objects_path)
-    local_points = curationlist.local_points(curation)
-    rows, _ = placelist.read(names, reg)
-
-    places, unlocated = [], []
-    for r in rows:
-        if not placelist.on_map(r, reg):
-            continue
-        try:
-            obj = entry_object(r, objects, local_points, f"{names}:{r['_line']}")
-        except KeyError as missing:
-            unlocated.append(f"  {r['id']} (line {r['_line']}): "
-                             f"{placelist.format_osm([missing.args[0]])}")
-            continue
-        if obj is not None:
-            places.append(entry(r, obj, areas, reg))
-    if unlocated:
-        raise PipelineError(f"{len(unlocated)} row(s) on the map have an object that "
-                            f"{objects_path} does not know -- run `just objects` "
-                            f"(names/locate.py) to locate them:\n" + "\n".join(unlocated))
-    stamp = provenance.stamp(names, dialects_csv, curation, areas_path, objects_path)
-    return {"built_from": stamp, "places": places}
-
-
-def write(index: dict, out: str):
-    os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
-    files.atomic_write(out, json.dumps(index, ensure_ascii=False,
-                                       separators=(",", ":")) + "\n")
+from frasch import cli, paths, searchindex
 
 
 @cli.command
@@ -152,8 +27,8 @@ def main(argv=None):
                     help="positions of the local references (places OSM does not have)")
     ap.add_argument("--out", default=paths.SEARCH_INDEX)
     a = ap.parse_args(argv)
-    index = build(a.names, a.dialects, a.curation, a.areas, a.objects)
-    write(index, a.out)
+    index = searchindex.build(a.names, a.dialects, a.curation, a.areas, a.objects)
+    searchindex.write(index, a.out)
     places = index["places"]
     print(f"wrote {len(places)} entries to {a.out} "
           f"({os.path.getsize(a.out)/1e3:.0f} kB); "
