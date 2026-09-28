@@ -240,14 +240,26 @@ def cmd_export(args):
 def patch_key(entry):
     """What makes two patch entries decisions about the same row: its id.
     The `line`, `name` and `de` an entry also carries are only there for the
-    messages -- they change when the list is edited, the id does not."""
-    return entry.get("id")
+    messages -- they change when the list is edited, the id does not.  None
+    for an entry without a usable one."""
+    ident = entry.get("id")
+    return ident if isinstance(ident, str) and ident else None
+
+
+# what apply adds to an entry it read: its line in the patch, and for a line
+# that is no valid entry what is wrong with it and -- when it is no object at
+# all -- the line's value itself
+_PATCH_LINE, _PROBLEM, _RAW = "_patch_line", "_problem", "_raw"
 
 
 def read_patch(path):
     """-> the last entry per row, in line order.  The browser appends, never
     rewrites, so a row decided twice simply has two lines; `clear` withdraws,
-    whatever line either was sent with."""
+    whatever line either was sent with.
+
+    A line that breaks the patch schema -- and one without an id, a patch
+    from before the row ids -- is a decision of its own: apply refuses it
+    and keeps it, never lets a later one swallow it."""
     last = {}
     with open(path, encoding="utf-8") as fh:
         for n, line in enumerate(fh, start=1):
@@ -255,16 +267,39 @@ def read_patch(path):
             if not line:
                 continue
             try:
-                e = json.loads(line)
+                e = patch_entry(json.loads(line), n)
             except ValueError as exc:
                 print(f"{path}:{n}: not JSON ({exc}) -- ignored", file=sys.stderr)
                 continue
-            e["_patch_line"] = n
-            # an entry without an id (a patch from before the row ids) is a
-            # decision of its own: apply refuses it and keeps it, never lets
-            # a later one swallow it
-            last[patch_key(e) or ("no id", n)] = e
-    return sorted(last.values(), key=lambda e: (e.get("line") or 0, e["_patch_line"]))
+            key = None if _PROBLEM in e else patch_key(e)
+            last[key or ("line", n)] = e
+    return sorted(last.values(), key=_patch_order)
+
+
+def patch_entry(value, n) -> dict:
+    """One parsed line of the patch as apply handles it: the entry plus its
+    line; `_problem` says what makes it no valid entry."""
+    if not isinstance(value, dict):
+        return {_PATCH_LINE: n, _RAW: value,
+                _PROBLEM: "not a JSON object (curate-patch.schema.json)"}
+    e = dict(value, **{_PATCH_LINE: n})
+    if (why := schema_problem(value)):
+        e[_PROBLEM] = why
+    return e
+
+
+def _patch_order(entry):
+    """Places.csv order (the row's `line` when the worklist was exported),
+    then patch order."""
+    line = entry.get("line") if _PROBLEM not in entry else None
+    return (line or 0, entry[_PATCH_LINE])
+
+
+def stored(entry):
+    """An entry as the patch holds it: without what apply added."""
+    if _RAW in entry:
+        return entry[_RAW]
+    return {k: v for k, v in entry.items() if k not in (_PATCH_LINE, _PROBLEM)}
 
 
 @functools.cache
@@ -275,7 +310,6 @@ def patch_validator():
 
 def schema_problem(entry) -> str | None:
     """What breaks names/curate-patch.schema.json in one entry, or None."""
-    entry = {k: v for k, v in entry.items() if k != "_patch_line"}
     error = next(iter(sorted(patch_validator().iter_errors(entry), key=str)), None)
     if error is None:
         return None
@@ -286,11 +320,11 @@ def schema_problem(entry) -> str | None:
 def entry_problem(entry, row, names) -> str | None:
     """Why apply refuses an entry before looking at its decision, or None:
     the row it names must exist and be the matcher's to fill."""
-    if not patch_key(entry):
+    if "id" not in entry:
         return ("no `id` (a patch from before the row ids -- "
                 "re-run names/curate.py export and decide it again)")
-    if (why := schema_problem(entry)):
-        return why
+    if _PROBLEM in entry:
+        return entry[_PROBLEM]
     if row is None:
         return f"no row with id {patch_key(entry)!r} in {names} (deleted since the export?)"
     if not placelist.owned_by_matcher(row):
@@ -417,7 +451,7 @@ def _apply(args):
             nonlocal refused
             refused += 1
             kept_back.append(entry)
-            print(f"  refused patch line {entry['_patch_line']} "
+            print(f"  refused patch line {entry[_PATCH_LINE]} "
                   f"({entry.get('name')} / {entry.get('de')}): {why}")
 
         for e in entries:
@@ -496,8 +530,7 @@ def append_back(path, entries):
                 continue
             if isinstance(e, dict) and patch_key(e):
                 newer.add(patch_key(e))
-    lines = [json.dumps({k: v for k, v in e.items() if k != "_patch_line"},
-                        ensure_ascii=False) + "\n"
+    lines = [json.dumps(stored(e), ensure_ascii=False) + "\n"
              for e in entries if patch_key(e) not in newer]
     if lines:
         with open(path, "a", encoding="utf-8") as fh:

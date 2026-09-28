@@ -268,3 +268,18 @@ def test_an_entry_that_breaks_the_patch_schema_is_refused_and_kept(w, capsys):
     assert "42 is not of type 'string'" in capsys.readouterr().out
     assert w.places.read_bytes() == before
     assert lines(w.patch) == [broken]
+
+
+@pytest.mark.parametrize("broken", [
+    {"id": "uurd", "action": "skip", "line": "3"},     # a line number as text
+    {"id": ["uurd"], "action": "skip"},                # an id that is no string
+    [1, 2],                                            # not an object at all
+])
+def test_a_line_that_is_no_patch_entry_is_refused_and_kept_not_a_crash(w, broken):
+    # it reaches apply before any row is looked at: the read of the patch
+    # itself must not trip over it
+    good = entry(2, action="skip")
+    append(w.patch, good, broken)
+    assert w.apply() == 1
+    assert rows_by_id(w)["taarep"]["status"] == "skip"
+    assert lines(w.patch) == [broken]
