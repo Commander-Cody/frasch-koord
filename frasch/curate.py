@@ -257,9 +257,11 @@ def read_patch(path):
     rewrites, so a row decided twice simply has two lines; `clear` withdraws,
     whatever line either was sent with.
 
-    A line that breaks the patch schema -- and one without an id, a patch
-    from before the row ids -- is a decision of its own: apply refuses it
-    and keeps it, never lets a later one swallow it."""
+    A line that breaks the patch schema counts like any other: apply
+    refuses and keeps it, and as the newest line about its row it holds
+    back the row's earlier decision.  A line without a usable id (a patch
+    from before the row ids) is a decision of its own, never swallowed by a
+    later one."""
     last = {}
     with open(path, encoding="utf-8") as fh:
         for n, line in enumerate(fh, start=1):
@@ -271,8 +273,7 @@ def read_patch(path):
             except ValueError as exc:
                 print(f"{path}:{n}: not JSON ({exc}) -- ignored", file=sys.stderr)
                 continue
-            key = None if _PROBLEM in e else patch_key(e)
-            last[key or ("line", n)] = e
+            last[patch_key(e) or ("line", n)] = e
     return sorted(last.values(), key=_patch_order)
 
 
@@ -320,7 +321,7 @@ def schema_problem(entry) -> str | None:
 def entry_problem(entry, row, names) -> str | None:
     """Why apply refuses an entry before looking at its decision, or None:
     the row it names must exist and be the matcher's to fill."""
-    if "id" not in entry:
+    if _RAW not in entry and "id" not in entry:
         return ("no `id` (a patch from before the row ids -- "
                 "re-run names/curate.py export and decide it again)")
     if _PROBLEM in entry:
@@ -455,7 +456,7 @@ def _apply(args):
                   f"({entry.get('name')} / {entry.get('de')}): {why}")
 
         for e in entries:
-            if e.get("action") == "clear":
+            if e.get("action") == "clear" and _PROBLEM not in e:
                 continue                     # withdrawn in the browser
             row = by_id.get(patch_key(e))
             why = entry_problem(e, row, args.names)

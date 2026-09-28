@@ -283,3 +283,21 @@ def test_a_line_that_is_no_patch_entry_is_refused_and_kept_not_a_crash(w, broken
     assert w.apply() == 1
     assert rows_by_id(w)["taarep"]["status"] == "skip"
     assert lines(w.patch) == [broken]
+
+
+def test_a_broken_line_about_a_row_holds_back_its_earlier_decision(w, capsys):
+    # the newest line about a row is what counts, broken or not: a broken
+    # `clear` must not let the decision it meant to withdraw through
+    decided = entry(2, action="skip")
+    broken_clear = {"id": "taarep", "action": "clear", "line": "2"}
+    append(w.patch, decided, broken_clear)
+    assert w.apply() == 1
+    assert "line: '2' is not of type 'integer'" in capsys.readouterr().out
+    assert rows_by_id(w)["taarep"]["status"] == ""
+    assert lines(w.patch) == [broken_clear]
+
+
+def test_a_line_that_is_no_object_says_so(w, capsys):
+    append(w.patch, [1, 2])
+    assert w.apply() == 1
+    assert "not a JSON object" in capsys.readouterr().out
