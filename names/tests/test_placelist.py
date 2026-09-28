@@ -6,11 +6,13 @@ Malformed name cells (unbalanced brackets, `?`, `;` without a space) are
 deliberately not pinned down here: names/check.py owns them."""
 from __future__ import annotations
 
+import json
+import re
 import shutil
 
 import pytest
 
-from frasch import placelist
+from frasch import paths, placelist
 from frasch.errors import ValidationError
 
 
@@ -159,3 +161,29 @@ def test_real_name_list_round_trips_byte_identical(tmp_path):
 ])
 def test_slug_folds_a_name_to_lowercase_ascii(name, slug):
     assert placelist.slug(name) == slug
+
+
+# ------------------------------------------------ the patch schema agrees ---
+def _schema():
+    with open(paths.PATCH_SCHEMA, encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+SLUGS = ["taarep", "westerheide-amrum", "a1", "hus-2", "", "Taarep", "wester_heide",
+         "-westerheide", "westerheide-", "wester--heide", "wester heide", "hüs"]
+QIDS = ["Q35", "Q21003", "Q1", "q35", "Q", "35", "Q35;Q36", "Q3 5", "QQ35"]
+
+
+@pytest.mark.parametrize("text", SLUGS)
+def test_the_patch_schema_takes_the_slugs_the_name_list_takes(text):
+    # curate.py apply checks a slug by the schema and writes `local/<slug>`,
+    # which placelist.read checks by SLUG: the two must never disagree
+    schema = _schema()["$defs"]["slug"]["pattern"]
+    assert bool(re.search(schema, text)) == bool(placelist.SLUG.fullmatch(text))
+
+
+@pytest.mark.parametrize("text", QIDS)
+def test_the_patch_schema_takes_the_wikidata_ids_the_name_list_takes(text):
+    # the schema allows an empty cell, the name list leaves an empty one alone
+    schema = _schema()["properties"]["wikidata"]["pattern"]
+    assert bool(re.search(schema, text)) == bool(placelist.WIKIDATA_ID.fullmatch(text))
