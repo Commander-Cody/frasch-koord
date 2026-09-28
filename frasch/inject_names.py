@@ -88,17 +88,15 @@ from __future__ import annotations
 import argparse
 import collections
 import os
-import sys
 import time
 
 import osmium
 
-from frasch import placelist
-from frasch import dialects
-from frasch import locate, paths
+from frasch import cli, dialects, locate, paths, placelist, registry
+from frasch.errors import PipelineError, ValidationError
 
 DEFAULT_NAMES = placelist.DEFAULT_PATH
-DEFAULT_DIALECTS = dialects.DEFAULT_PATH
+DEFAULT_DIALECTS = paths.DIALECTS
 DEFAULT_AREAS = dialects.DEFAULT_AREAS
 DEFAULT_OBJECTS = locate.DEFAULT_OUT
 DEFAULT_CURATION = paths.CURATION
@@ -135,9 +133,9 @@ def load_names(path, reg):
     by_id, by_qid = {}, {}
     conflicts = []
     used = 0
-    rows, _ = placelist.read(path)
+    rows, _ = placelist.read(path, reg)
     for row in rows:
-        if not placelist.on_map(row):
+        if not placelist.on_map(row, reg):
             continue
         refs = placelist.parse_osm(row["osm"], f"{path}:{row['_line']}")
         if refs:
@@ -166,10 +164,10 @@ def _conflicts(key, rows, reg):
     out = []
     if len(rows) < 2:
         return out
-    for column in dialects.columns(reg) + [dialects.LOCAL_COLUMN]:
+    for column in reg.columns + [dialects.LOCAL_COLUMN]:
         kept, kept_line = "", 0
         for row in rows:
-            name = (dialects.dialect_name(row, dialects.tag_of_column(reg, column), None, reg)
+            name = (dialects.dialect_name(row, reg.tag_of_column(column), None, reg)
                     if column != dialects.LOCAL_COLUMN
                     else placelist.primary(row[column]))
             if not name:
@@ -220,13 +218,13 @@ def point_tags(rows, area_tag, reg, curation_tags, where=""):
     row = rows[0]
     tags = dict(POINT_TAGS.get(row["kind"], {}))
     name = (placelist.primary(row["de"]) or placelist.primary(row["da"])
-            or placelist.any_name(row))
+            or placelist.any_name(row, reg))
     if name:
         tags["name"] = name
     tags.update(name_tags(rows, area_tag, reg))
     tags.update(curation_tags)
     if "place" not in tags:
-        raise SystemExit(f"{where}: kind {row['kind']!r} (places.csv line "
+        raise ValidationError(f"{where}: kind {row['kind']!r} (places.csv line "
                          f"{row['_line']}) has no default place= (POINT_TAGS in "
                          f"tiles/inject_names.py) -- give the curation row "
                          f"`place=...` in set_tags")
@@ -244,7 +242,7 @@ def check_local(by_id, points, reg):
             continue
         tags = point_tags(rows, None, reg, p["tags"], p["where"])
         if p["km2"] is not None and tags["place"] != "island":
-            raise SystemExit(f"{p['where']}: polygon_km2 on {placelist.format_osm([key])} "
+            raise ValidationError(f"{p['where']}: polygon_km2 on {placelist.format_osm([key])} "
                              f"needs place=island (got place={tags['place']}; "
                              f"OpenMapTiles labels polygons only as islands) -- "
                              f"put `place=island` in set_tags, keep frasch:kind")
@@ -268,13 +266,13 @@ def load_curation(path, required=False):
     by_id, synthetic, points = {}, {}, {}
     if not os.path.exists(path):
         if required:
-            raise SystemExit(f"curation file not found: {path}")
+            raise PipelineError(f"curation file not found: {path}")
         print(f"curation  : {path} (absent -- nothing curated)")
         return by_id, synthetic, points
     entries, problems = placelist.curation_rows(path)
     if problems:
         n, what = problems[0]
-        raise SystemExit(f"{path}:{n}: {what}")
+        raise ValidationError([f"{path}:{n}: {what}" for n, what in problems])
     for e in entries:
         tags = dict(e["tags"])
         for col, tag in (("minzoom", MINZOOM_KEY), ("maxzoom", MAXZOOM_KEY)):
@@ -512,12 +510,12 @@ class Injector:
 def run(inp, out, names_csv, dialects_csv, areas_geojson, dry_run=False,
         curation_csv=None, curation_required=False, areas_required=False,
         objects_json=DEFAULT_OBJECTS):
-    reg = dialects.read(dialects_csv)
+    reg = registry.read(dialects_csv)
     by_id, by_qid, used, conflicts = load_names(names_csv, reg)
     local_keys = sorted(k for k in by_id if k[0] == placelist.LOCAL_TYPE)
     print(f"name list : {names_csv}")
     print(f"dialects  : {dialects_csv} -> {len(reg)} columns "
-          f"({', '.join(dialects.tags(reg))})")
+          f"({', '.join(reg.tags)})")
     print(f"usable    : {used} rows -> {len(by_id) - len(local_keys)} OSM ids + "
           f"{len(by_qid)} wikidata QIDs"
           + (f" + {len(local_keys)} local reference(s)" if local_keys else ""))
@@ -532,7 +530,7 @@ def run(inp, out, names_csv, dialects_csv, areas_geojson, dry_run=False,
         print(f"areas     : {areas_geojson} -> {len(areas)} polygon(s): "
               f"{areas.summary()}")
     elif areas_required:
-        raise SystemExit(f"dialect area file not found: {areas_geojson}")
+        raise PipelineError(f"dialect area file not found: {areas_geojson}")
     else:
         print(f"areas     : {areas_geojson or 'off'} (no {DIALECT_KEY}; "
               f"{LOCAL_KEY} only from the `local` column). "
@@ -556,9 +554,9 @@ def run(inp, out, names_csv, dialects_csv, areas_geojson, dry_run=False,
     unplaced = [k for k in local_keys if k not in points]
     if unplaced:
         lines = "\n".join(f"  {placelist.format_osm([k])}  "
-                          f"{placelist.describe(by_id[k][0])} "
+                          f"{placelist.describe(by_id[k][0], reg)} "
                           f"(places.csv line {by_id[k][0]['_line']})" for k in unplaced)
-        raise SystemExit(f"{len(unplaced)} local reference(s) in {names_csv} have no "
+        raise ValidationError(f"{len(unplaced)} local reference(s) in {names_csv} have no "
                          f"row with lat/lon in {curation_csv or 'the curation file '
                          '(which is switched off)'}:\n{lines}")
     check_local(by_id, points, reg)
@@ -574,8 +572,8 @@ def run(inp, out, names_csv, dialects_csv, areas_geojson, dry_run=False,
         missing = unlocated(by_id, objects)
         if missing:
             lines = "\n".join(f"  {placelist.format_osm([k])}  "
-                              f"{placelist.describe(by_id[k][0])}" for k in missing)
-            raise SystemExit(f"{len(missing)} object(s) of {names_csv} are not in "
+                              f"{placelist.describe(by_id[k][0], reg)}" for k in missing)
+            raise PipelineError(f"{len(missing)} object(s) of {names_csv} are not in "
                              f"{objects_json} -- run `just objects` "
                              f"(names/locate.py) to locate them:\n{lines}")
         print(f"objects   : {objects_json} -> {len(objects)} located object(s)")
@@ -624,19 +622,19 @@ def run(inp, out, names_csv, dialects_csv, areas_geojson, dry_run=False,
         print(f"\nadded {len(inj.added_points)} node(s) for places that are not in OSM:")
         for nid, key, _label, lon, lat, tags in inj.added_points:
             print(f"  node/{nid}  {placelist.format_osm([key])} "
-                  f"{placelist.describe(by_id[key][0])} at {lat:.5f}, {lon:.5f}: "
+                  f"{placelist.describe(by_id[key][0], reg)} at {lat:.5f}, {lon:.5f}: "
                   + ", ".join(f"{a}={b}" for a, b in sorted(tags.items())
                               if not a.startswith("name")))
     if missing:
         print(f"\n{len(missing)} rows reference ids that are not in {os.path.basename(inp)}:")
         for key in missing:
             print(f"  {placelist.format_osm([key])}  "
-                  f"{placelist.any_name(by_id[key][0])}")
+                  f"{placelist.any_name(by_id[key][0], reg)}")
     if by_qid:
         nf = [q for q in by_qid if not inj.qid_hits[q]]
         if nf:
             print(f"\n{len(nf)} wikidata QIDs not present in the file: "
-                  + ", ".join(f"{q} ({placelist.any_name(by_qid[q][0])})"
+                  + ", ".join(f"{q} ({placelist.any_name(by_qid[q][0], reg)})"
                               for q in sorted(nf)))
 
     if curation:
@@ -668,6 +666,7 @@ def run(inp, out, names_csv, dialects_csv, areas_geojson, dry_run=False,
     return 0
 
 
+@cli.command
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -693,7 +692,7 @@ def main(argv=None):
                     help="report what would be tagged, write nothing")
     a = ap.parse_args(argv)
     if not a.dry_run and os.path.abspath(a.infile) == os.path.abspath(a.outfile):
-        raise SystemExit("refusing to overwrite the input file")
+        ap.error("refusing to overwrite the input file")
     return run(a.infile, a.outfile, a.names, a.dialects,
                None if a.no_areas else a.areas, a.dry_run,
                curation_csv=None if a.no_curation else a.curation,
@@ -703,6 +702,3 @@ def main(argv=None):
                areas_required=os.path.abspath(a.areas) != DEFAULT_AREAS,
                objects_json=a.objects)
 
-
-if __name__ == "__main__":
-    sys.exit(main())

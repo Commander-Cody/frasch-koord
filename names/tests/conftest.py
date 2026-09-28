@@ -16,11 +16,11 @@ def places_text(rows) -> str:
     are not empty.  A row without an `id` key gets `row-<n>` (n counting from
     1); pass `id` explicitly -- even empty -- to control it."""
     buf = io.StringIO(newline="")
-    w = csv.DictWriter(buf, fieldnames=placelist.COLUMNS, lineterminator="\n")
+    w = csv.DictWriter(buf, fieldnames=placelist.columns(), lineterminator="\n")
     w.writeheader()
     for n, r in enumerate(rows, start=1):
         r = {"id": f"row-{n}", **r}
-        w.writerow({k: r.get(k, "") for k in placelist.COLUMNS})
+        w.writerow({k: r.get(k, "") for k in placelist.columns()})
     return buf.getvalue()
 
 

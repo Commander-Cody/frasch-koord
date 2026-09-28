@@ -55,9 +55,8 @@ import re
 import sys
 import time
 
-from frasch import build_candidates
-from frasch import paths, placelist
-from frasch import match
+from frasch import build_candidates, cli, errors, files, match, paths, placelist
+from frasch.errors import PipelineError, ValidationError
 
 CAND_PATH = paths.CANDIDATES
 MATCH_PATH = paths.MATCHES
@@ -169,13 +168,13 @@ def cmd_export(args):
     rows, _fields = placelist.read(args.names)
     by_id = {r["id"]: r for r in rows}
     if not os.path.exists(args.matches):
-        raise SystemExit(f"{args.matches} not found -- run names/match.py first")
+        raise PipelineError(f"{args.matches} not found -- run names/match.py first")
 
     work, stale, unowned = [], 0, 0
     with open(args.matches, encoding="utf-8", newline="") as fh:
         reader = csv.DictReader(fh)
         if "id" not in (reader.fieldnames or []):
-            raise SystemExit(f"{args.matches} has no `id` column (written before "
+            raise ValidationError(f"{args.matches} has no `id` column (written before "
                              f"places.csv had ids) -- re-run names/match.py")
         for m in reader:
             if m["result"] not in RESULTS:
@@ -233,7 +232,7 @@ def cmd_export(args):
             "kind": row["kind"],
             "result": m["result"],
             "name": placelist.any_name(row),
-            "names": {c: row[c] for c in placelist.NAME_COLUMNS if row[c]},
+            "names": {c: row[c] for c in placelist.name_columns() if row[c]},
             "de": row["de"], "da": row["da"], "hint": row["hint"],
             "note": row["note"], "why": m["note"],
             "hint_point": list(hint_pt) if hint_pt else None,
@@ -319,14 +318,14 @@ def _apply(args):
     by_id = {r["id"]: r for r in rows}
     used_slugs = set(placelist.local_points(args.curation))
     cur_data, cur_fields = read_curation(args.curation)
-    cur_digest = placelist.digest(cur_data) if cur_data is not None else placelist.MISSING
+    cur_digest = files.digest(cur_data) if cur_data is not None else files.MISSING
     for r in rows:
         slug = placelist.local_ref(r["osm"])
         if slug:
             used_slugs.add(slug)
 
     if not os.path.exists(args.patch):
-        raise SystemExit(f"{args.patch} not found -- decide some rows in the "
+        raise PipelineError(f"{args.patch} not found -- decide some rows in the "
                          f"browser first (web/, `?curate`)")
     snapshot = None
     if args.dry_run or args.keep:
@@ -381,7 +380,7 @@ def _apply(args):
             elif action == "osm":
                 try:
                     refs = placelist.parse_osm(e.get("osm"), where)
-                except SystemExit as exc:
+                except errors.Invalid as exc:
                     refuse(e, str(exc))
                     continue
                 if not refs:
@@ -412,7 +411,7 @@ def _apply(args):
                     pos = placelist.parse_point(str(e.get("lat", "")),
                                                 str(e.get("lon", "")),
                                                 f"patch line {e['_patch_line']}")
-                except SystemExit as exc:
+                except errors.Invalid as exc:
                     refuse(e, str(exc))
                     continue
                 if pos is None:
@@ -464,8 +463,8 @@ def _apply(args):
             # position and a failed apply leaves both files as they were
             if new_curation:
                 cur_text = curation_text(cur_data, cur_fields, new_curation)
-                placelist.atomic_write(args.curation, cur_text, expect=cur_digest)
-                cur_written = placelist.digest(cur_text)
+                files.atomic_write(args.curation, cur_text, expect=cur_digest)
+                cur_written = files.digest(cur_text)
             placelist.write(rows, args.names, fields)
     except BaseException:
         if cur_written:
@@ -548,11 +547,11 @@ def read_curation(path):
         return None, CURATION_COLUMNS
     with open(path, "rb") as fh:
         data = fh.read()
-    fields = next(csv.reader(io.StringIO(placelist.decode(data), newline="")), None)
+    fields = next(csv.reader(io.StringIO(files.decode(data), newline="")), None)
     fields = fields or CURATION_COLUMNS
     missing = [c for c in CURATION_COLUMNS if c not in fields]
     if missing:
-        raise SystemExit(f"{path}: missing column(s) {missing}")
+        raise ValidationError(f"{path}: missing column(s) {missing}")
     return data, fields
 
 
@@ -579,12 +578,12 @@ def unwrite_curation(path, old, written, refs):
     which rows to take out by hand."""
     try:
         if old is not None:
-            placelist.atomic_write(path, old, expect=written)
-        elif placelist.fingerprint(path) == written:
+            files.atomic_write(path, old, expect=written)
+        elif files.fingerprint(path) == written:
             os.unlink(path)
         else:
-            raise placelist.Conflict(f"{path} changed on disk meanwhile")
-    except (OSError, SystemExit) as exc:
+            raise errors.Conflict(f"{path} changed on disk meanwhile")
+    except (OSError, errors.PipelineError) as exc:
         print(f"error: could not take the new rows out of {path} again ({exc}) "
               f"-- delete the rows for {', '.join(refs)} by hand before the next "
               f"apply", file=sys.stderr)
@@ -593,6 +592,7 @@ def unwrite_curation(path, old, written, refs):
 
 
 # ------------------------------------------------------------------- main ---
+@cli.command
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     if not argv or (argv[0] not in ("export", "apply", "-h", "--help")):
@@ -621,6 +621,3 @@ def main(argv=None):
     args = ap.parse_args(argv)
     return args.func(args)
 
-
-if __name__ == "__main__":
-    sys.exit(main())

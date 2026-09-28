@@ -27,12 +27,10 @@ import argparse
 import hashlib
 import json
 import os
-import sys
 
 import osmium
 
-from frasch import paths
-
+from frasch import cli, paths
 
 
 def blob_hash(path) -> str:
@@ -72,6 +70,7 @@ def stamp(places, dialects, curation, areas, objects) -> dict:
                        "osm_objects.json": objects}, extracts)
 
 
+@cli.command
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -85,6 +84,3 @@ def main(argv=None):
                                           a.objects)}, separators=(",", ":")))
     return 0
 
-
-if __name__ == "__main__":
-    sys.exit(main())

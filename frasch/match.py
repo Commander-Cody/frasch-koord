@@ -66,9 +66,16 @@ import sys
 import time
 import unicodedata
 
-from frasch import build_candidates
-from frasch import paths, placelist
-from frasch.placelist import any_name, format_osm, local_ref, parse_osm, primary, variants
+from frasch import build_candidates, cli, files, paths, placelist
+from frasch.errors import PipelineError
+from frasch.placelist import (
+    any_name,
+    format_osm,
+    local_ref,
+    parse_osm,
+    primary,
+    variants,
+)
 
 CSV_PATH = placelist.DEFAULT_PATH
 CAND_PATH = paths.CANDIDATES
@@ -432,12 +439,12 @@ def read_wikidata_cache(cache_path=WD_CACHE):
         with open(cache_path, encoding="utf-8") as fh:
             cache = json.load(fh)
     except (OSError, ValueError) as exc:
-        raise SystemExit(f"{cache_path}: cannot read the Wikidata cache ({exc}) "
+        raise PipelineError(f"{cache_path}: cannot read the Wikidata cache ({exc}) "
                          f"-- delete the file to query Wikidata afresh") from None
     if not (isinstance(cache, dict)
             and all(isinstance(k, str) and isinstance(v, str)
                     for k, v in cache.items())):
-        raise SystemExit(f"{cache_path}: not a {{name: QID}} object -- delete "
+        raise PipelineError(f"{cache_path}: not a {{name: QID}} object -- delete "
                          f"the file to query Wikidata afresh")
     return cache
 
@@ -505,7 +512,7 @@ def wikidata_countries(names, cache_path=WD_CACHE, offline=False):
                 continue
             time.sleep(0.4)                          # be polite
         os.makedirs(os.path.dirname(cache_path), exist_ok=True)
-        placelist.atomic_write(cache_path, json.dumps(
+        files.atomic_write(cache_path, json.dumps(
             cache, ensure_ascii=False, indent=1, sort_keys=True))
     return cache, failed
 
@@ -869,7 +876,7 @@ def read_used_extracts(path):
 
 
 def record_used_extracts(path, extracts):
-    placelist.atomic_write(path, json.dumps({"extracts": extracts},
+    files.atomic_write(path, json.dumps({"extracts": extracts},
                                             ensure_ascii=False, indent=1) + "\n")
 
 
@@ -1042,6 +1049,7 @@ def write_matches(rows, results, index, path=MATCH_PATH):
             w.writerow(rec)
 
 
+@cli.command
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -1150,6 +1158,3 @@ def run(args):
         return 1
     return 0
 
-
-if __name__ == "__main__":
-    sys.exit(main())

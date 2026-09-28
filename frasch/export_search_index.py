@@ -43,10 +43,8 @@ import argparse
 import json
 import os
 
-from frasch import placelist
-from frasch import dialects
-from frasch import locate
-from frasch import paths, provenance
+from frasch import cli, dialects, files, locate, paths, placelist, provenance, registry
+from frasch.errors import PipelineError, ValidationError
 
 DEFAULT_OUT = paths.SEARCH_INDEX
 
@@ -58,7 +56,7 @@ def entry_object(row, objects, local_points, where):
     slug = placelist.local_ref(row["osm"])
     if slug:
         if slug not in local_points:
-            raise SystemExit(f"{where}: local/{slug} has no row with lat/lon "
+            raise ValidationError(f"{where}: local/{slug} has no row with lat/lon "
                              f"in the curation file")
         lon, lat = local_points[slug]
         return {"lon": lon, "lat": lat}
@@ -96,55 +94,61 @@ def entry(row, obj, areas, reg) -> dict:
     return out | {k: v for k, v in optional.items() if v}
 
 
-def main(argv=None):
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--names", default=placelist.DEFAULT_PATH)
-    ap.add_argument("--dialects", default=dialects.DEFAULT_PATH)
-    ap.add_argument("--areas", default=dialects.DEFAULT_AREAS)
-    ap.add_argument("--objects", default=locate.DEFAULT_OUT)
-    ap.add_argument("--curation", default=placelist.CURATION_PATH,
-                    help="positions of the local references (places OSM does not have)")
-    ap.add_argument("--out", default=DEFAULT_OUT)
-    a = ap.parse_args(argv)
-    reg = dialects.read(a.dialects)
-    if not os.path.exists(a.areas):
-        raise SystemExit(f"{a.areas} not found -- build it with `just areas`")
-    areas = dialects.AreaIndex.from_geojson(a.areas)
-    objects = locate.read_objects(a.objects)
-    local_points = placelist.local_points(a.curation)
-    rows, _ = placelist.read(a.names)
+def build(names, dialects_csv, curation, areas_path, objects_path) -> dict:
+    """The search index, `{"built_from", "places"}`, from its input files."""
+    reg = registry.read(dialects_csv)
+    if not os.path.exists(areas_path):
+        raise PipelineError(f"{areas_path} not found -- build it with `just areas`")
+    areas = dialects.AreaIndex.from_geojson(areas_path)
+    objects = locate.read_objects(objects_path)
+    local_points = placelist.local_points(curation)
+    rows, _ = placelist.read(names, reg)
 
-    out, unlocated, qid_only = [], [], 0
+    places, unlocated = [], []
     for r in rows:
-        if not placelist.on_map(r):
+        if not placelist.on_map(r, reg):
             continue
-        where = f"{a.names}:{r['_line']}"
         try:
-            obj = entry_object(r, objects, local_points, where)
+            obj = entry_object(r, objects, local_points, f"{names}:{r['_line']}")
         except KeyError as missing:
             unlocated.append(f"  {r['id']} (line {r['_line']}): "
                              f"{placelist.format_osm([missing.args[0]])}")
             continue
-        if obj is None:
-            qid_only += int(bool(r["wikidata"]))
-            continue
-        out.append(entry(r, obj, areas, reg))
+        if obj is not None:
+            places.append(entry(r, obj, areas, reg))
     if unlocated:
-        raise SystemExit(f"{len(unlocated)} row(s) on the map have an object that "
-                         f"{a.objects} does not know -- run `just objects` "
-                         f"(names/locate.py) to locate them:\n" + "\n".join(unlocated))
-
-    stamp = provenance.stamp(a.names, a.dialects, a.curation, a.areas, a.objects)
-    os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
-    placelist.atomic_write(a.out, json.dumps({"built_from": stamp, "places": out},
-                                             ensure_ascii=False, separators=(",", ":")) + "\n")
-    print(f"wrote {len(out)} entries to {a.out} ({os.path.getsize(a.out)/1e3:.0f} kB); "
-          f"{sum(1 for e in out if 'dialect' in e)} in a dialect area, "
-          f"{sum(1 for e in out if 'local' in e)} with a local name, "
-          f"{sum(1 for e in out if 'name_nds' in e)} with a Low Saxon one; "
-          f"left out {qid_only} keyed by Wikidata alone (no position)")
+        raise PipelineError(f"{len(unlocated)} row(s) on the map have an object that "
+                            f"{objects_path} does not know -- run `just objects` "
+                            f"(names/locate.py) to locate them:\n" + "\n".join(unlocated))
+    stamp = provenance.stamp(names, dialects_csv, curation, areas_path, objects_path)
+    return {"built_from": stamp, "places": places}
 
 
-if __name__ == "__main__":
-    main()
+def write(index: dict, out: str):
+    os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
+    files.atomic_write(out, json.dumps(index, ensure_ascii=False,
+                                       separators=(",", ":")) + "\n")
+
+
+@cli.command
+def main(argv=None):
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--names", default=paths.PLACES)
+    ap.add_argument("--dialects", default=paths.DIALECTS)
+    ap.add_argument("--areas", default=paths.DIALECT_AREAS)
+    ap.add_argument("--objects", default=paths.OBJECTS)
+    ap.add_argument("--curation", default=paths.CURATION,
+                    help="positions of the local references (places OSM does not have)")
+    ap.add_argument("--out", default=paths.SEARCH_INDEX)
+    a = ap.parse_args(argv)
+    index = build(a.names, a.dialects, a.curation, a.areas, a.objects)
+    write(index, a.out)
+    places = index["places"]
+    print(f"wrote {len(places)} entries to {a.out} "
+          f"({os.path.getsize(a.out)/1e3:.0f} kB); "
+          f"{sum(1 for e in places if 'dialect' in e)} in a dialect area, "
+          f"{sum(1 for e in places if 'local' in e)} with a local name, "
+          f"{sum(1 for e in places if 'name_nds' in e)} with a Low Saxon one; "
+          f"rows keyed by Wikidata alone (no position) are left out")
+    return 0

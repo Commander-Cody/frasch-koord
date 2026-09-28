@@ -31,6 +31,8 @@ import sys
 import mapbox_vector_tile
 from pmtiles.reader import MmapSource, Reader
 
+from frasch import cli
+
 DEFAULT_NAMES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "web",
                              "public", "data", "names.json")
 
@@ -144,6 +146,7 @@ def archive_features(path, entries, zoom) -> list:
     return out
 
 
+@cli.command
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -166,6 +169,3 @@ def main(argv=None):
         return 1
     return 0
 
-
-if __name__ == "__main__":
-    raise SystemExit(main())

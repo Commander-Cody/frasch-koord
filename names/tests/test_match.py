@@ -21,7 +21,7 @@ def make_index(tmp_path, *recs):
 
 def row(**cells):
     """A places.csv row as placelist.read returns it."""
-    r = {c: "" for c in placelist.COLUMNS}
+    r = {c: "" for c in placelist.columns()}
     r.update(cells, _line=2)
     return r
 

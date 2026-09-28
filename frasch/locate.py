@@ -36,14 +36,12 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import sys
 from typing import NamedTuple
 
 import osmium
 
-from frasch import placelist
-from frasch import paths, provenance
-from frasch import build_dialect_areas
+from frasch import build_dialect_areas, cli, files, paths, placelist, provenance
+from frasch.errors import PipelineError
 
 DEFAULT_OUT = paths.OBJECTS
 ROUND = 6
@@ -250,7 +248,7 @@ class Objects(NamedTuple):
 
 def read_objects(path: str = DEFAULT_OUT) -> Objects:
     if not os.path.exists(path):
-        raise SystemExit(f"{path} not found -- build it with `just objects` "
+        raise PipelineError(f"{path} not found -- build it with `just objects` "
                          f"(names/locate.py)")
     with open(path, encoding="utf-8") as fh:
         data = json.load(fh)
@@ -282,6 +280,7 @@ def _rounded(obj):
             for k, v in obj.items()}
 
 
+@cli.command
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -293,7 +292,7 @@ def main(argv=None):
     refs = mapped_refs(rows)
     objects = Objects(locate(a.pbf, refs),
                       {"extracts": [provenance.extract_stamp(p) for p in a.pbf]})
-    placelist.atomic_write(a.out, objects_json(objects))
+    files.atomic_write(a.out, objects_json(objects))
     print(f"wrote {a.out}: {len(objects.by_ref)} of {len(refs)} objects located")
     missing = sorted(refs - set(objects.by_ref), key=lambda ref: ("nwr".index(ref[0]), ref[1]))
     if missing:
@@ -302,6 +301,3 @@ def main(argv=None):
               + ", ".join(placelist.format_osm([ref]) for ref in missing))
     return 0
 
-
-if __name__ == "__main__":
-    sys.exit(main())

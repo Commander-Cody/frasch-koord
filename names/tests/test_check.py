@@ -20,7 +20,7 @@ def names(world):
     def run(places: str, curation: str = CURATION_HEADER, dialects: str | None = None):
         (world / "places.csv").write_text(places, encoding="utf-8")
         (world / "curation.csv").write_text(curation, encoding="utf-8")
-        registry = check.placelist.DIALECTS_PATH
+        registry = check.paths.DIALECTS
         if dialects is not None:
             registry = world / "dialects.csv"
             registry.write_text(dialects, encoding="utf-8")

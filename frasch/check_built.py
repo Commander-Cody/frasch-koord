@@ -29,15 +29,20 @@ import filecmp
 import io
 import json
 import os
-import sys
 import tempfile
 
-from frasch import build_dialect_areas
-from frasch import dialects
-from frasch import export_search_index
-from frasch import locate
-from frasch import placelist
-from frasch import paths, provenance
+from frasch import (
+    build_dialect_areas,
+    cli,
+    dialects,
+    export_search_index,
+    locate,
+    paths,
+    placelist,
+    provenance,
+    registry,
+)
+from frasch.errors import PipelineError
 
 DEFAULT_PARTS = paths.DIALECT_AREA_PARTS
 DEFAULT_REGISTRY_JSON = paths.REGISTRY_JSON
@@ -48,15 +53,15 @@ def regenerated_problems(a, tmp) -> list[str]:
     problems = []
     index = os.path.join(tmp, "names.json")
     try:
-        with contextlib.redirect_stdout(io.StringIO()):
-            export_search_index.main(inputs_argv(a) + ["--out", index])
-    except SystemExit as stop:
+        export_search_index.write(export_search_index.build(
+            a.names, a.dialects, a.curation, a.areas, a.objects), index)
+    except PipelineError as stop:
         problems.append(f"the search index cannot be rebuilt: {stop}")
     else:
         problems += differs(a.index, index, "just index")
-    registry = os.path.join(tmp, "dialects.json")
-    dialects.main(["--registry", a.dialects, "--export", registry])
-    problems += differs(a.registry_json, registry, "just dialects")
+    exported = os.path.join(tmp, "dialects.json")
+    dialects.export_json(registry.read(a.dialects), exported)
+    problems += differs(a.registry_json, exported, "just dialects")
     return problems
 
 
@@ -64,10 +69,11 @@ def unlocated_problems(a) -> list[str]:
     """Every OSM reference of a row on the map that the objects file lacks --
     the tile build stops on each of them, not only on a row's first one, the
     only one the search index needs."""
-    rows, _ = placelist.read(a.names)
+    reg = registry.read(a.dialects)
+    rows, _ = placelist.read(a.names, reg)
     objects = locate.read_objects(a.objects).by_ref
     problems = []
-    for row in filter(placelist.on_map, rows):
+    for row in (r for r in rows if placelist.on_map(r, reg)):
         missing = [ref for ref in placelist.parse_osm(row["osm"])
                    if ref[0] != placelist.LOCAL_TYPE and ref not in objects]
         if missing:
@@ -132,16 +138,12 @@ def differs(committed, regenerated, recipe) -> list[str]:
     return [f"{committed} is not what its inputs give -- rebuild it with `{recipe}`"]
 
 
-def inputs_argv(a) -> list[str]:
-    return ["--names", a.names, "--dialects", a.dialects, "--curation", a.curation,
-            "--areas", a.areas, "--objects", a.objects]
-
-
+@cli.command
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--names", default=placelist.DEFAULT_PATH)
-    ap.add_argument("--dialects", default=dialects.DEFAULT_PATH)
+    ap.add_argument("--dialects", default=paths.DIALECTS)
     ap.add_argument("--curation", default=placelist.CURATION_PATH)
     ap.add_argument("--area-list", default=dialects.AREA_LIST_PATH)
     ap.add_argument("--areas", default=dialects.DEFAULT_AREAS)
@@ -165,6 +167,3 @@ def main(argv=None):
     print("the committed build outputs match their inputs")
     return 0
 
-
-if __name__ == "__main__":
-    sys.exit(main())

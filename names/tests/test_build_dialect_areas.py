@@ -9,7 +9,8 @@ import json
 
 import pytest
 
-from frasch import build_dialect_areas as bda
+from frasch import build_dialect_areas as bda, paths, registry
+from frasch.errors import ValidationError
 from frasch import dialects
 from frasch import provenance
 from osm_fixture import ring, write_extract
@@ -86,9 +87,9 @@ def test_an_osm_reference_on_two_rows_is_refused(tmp_path):
                      "frr-x-solring,relation/1147134,Sylt,\n"
                      "frr-x-solring,relation/1147133,Kampen,\n"
                      "frr-x-solring,relation/1147134,Sylt again,\n", encoding="utf-8")
-    with pytest.raises(SystemExit, match=r"dialect_areas.csv:4: relation/1147134 "
+    with pytest.raises(ValidationError, match=r"dialect_areas.csv:4: relation/1147134 "
                                          r"is already on line 2"):
-        bda.read_areas(str(areas), dialects.read())
+        bda.read_areas(str(areas), registry.read())
 
 
 # ------------------------------------------------------------------ main ---
@@ -103,7 +104,7 @@ def _write_fixture(tmp_path, csv_rows, timestamp=None):
     return pbf, areas
 
 
-def test_main_exits_nonzero_on_a_missing_reference_and_writes_nothing(tmp_path):
+def test_main_exits_nonzero_on_a_missing_reference_and_writes_nothing(tmp_path, capsys):
     pbf, areas = _write_fixture(tmp_path, "frr-x-mooring,way/1,Existing,\n"
                                           "frr-x-mooring,way/999,Missing,\n")
     out = tmp_path / "areas.geojson"
@@ -111,11 +112,10 @@ def test_main_exits_nonzero_on_a_missing_reference_and_writes_nothing(tmp_path):
     out.write_bytes(b"stale-out")
     parts_out.write_bytes(b"stale-parts")
 
-    with pytest.raises(SystemExit) as exc:
-        bda.main([str(pbf), "--areas", str(areas), "--out", str(out),
-                 "--parts-out", str(parts_out), "--no-unassigned"])
+    assert bda.main([str(pbf), "--areas", str(areas), "--out", str(out),
+                     "--parts-out", str(parts_out), "--no-unassigned"]) == 1
 
-    message = str(exc.value)
+    message = capsys.readouterr().err
     assert "way/999" in message
     assert "Missing" in message
     assert "frr-x-mooring" in message
@@ -151,7 +151,7 @@ def test_output_is_stamped_with_its_inputs(tmp_path):
     assert rc == 0
     expected = {
         "dialect_areas.csv": provenance.blob_hash(areas),
-        "dialects.csv": provenance.blob_hash(dialects.DEFAULT_PATH),
+        "dialects.csv": provenance.blob_hash(paths.DIALECTS),
         "extracts": [{"file": "extract.osm.pbf",
                       "replication_timestamp": "2026-09-22T20:22:59Z"}],
     }

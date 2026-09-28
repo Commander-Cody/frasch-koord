@@ -8,7 +8,7 @@ import shutil
 
 import pytest
 
-from frasch import build_dialect_areas
+from frasch import build_dialect_areas, paths
 from frasch import check_built
 from frasch import dialects
 from frasch import export_search_index
@@ -26,7 +26,7 @@ AREA_LIST = "dialect,name,osm,note\nfrr-x-mooring,Niebüll,relation/1,\n"
 def repo(world):
     """A world whose outputs are all up to date; -> the check's argv."""
     (world / "places.csv").write_text(places_text([NAIBEL]), encoding="utf-8")
-    shutil.copy(dialects.DEFAULT_PATH, world / "dialects.csv")
+    shutil.copy(paths.DIALECTS, world / "dialects.csv")
     (world / "dialect_areas.csv").write_text(AREA_LIST, encoding="utf-8")
     stamp = {"dialect_areas.csv": provenance.blob_hash(world / "dialect_areas.csv"),
              "dialects.csv": provenance.blob_hash(world / "dialects.csv"), "extracts": []}
@@ -61,8 +61,9 @@ def test_an_index_built_from_another_name_list_fails(repo, world, capsys):
 
 
 def test_a_registry_edit_without_an_export_fails(repo, world, capsys):
-    with open(world / "dialects.csv", "a", encoding="utf-8") as fh:
-        fh.write("frr-x-test,test,Test,living,no,\n")
+    registry = world / "dialects.csv"
+    text = registry.read_text(encoding="utf-8")
+    registry.write_text(text.replace(",Mooring,", ",Mooring (edited),", 1), encoding="utf-8")
     assert check_built.main(repo) == 1
     assert "dialects.json" in capsys.readouterr().out
 

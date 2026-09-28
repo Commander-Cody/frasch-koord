@@ -11,6 +11,7 @@ import shutil
 import pytest
 
 from frasch import placelist
+from frasch.errors import ValidationError
 
 
 # ------------------------------------------------------------- name cells ---
@@ -92,22 +93,22 @@ def test_parse_osm_reads_a_local_reference():
     "local/-westerheide",
 ])
 def test_parse_osm_refuses_a_bad_reference(cell):
-    with pytest.raises(SystemExit, match="bad reference"):
+    with pytest.raises(ValidationError, match="bad reference"):
         placelist.parse_osm(cell, "places.csv:7")
 
 
 def test_parse_osm_error_says_where():
-    with pytest.raises(SystemExit, match="places.csv:7"):
+    with pytest.raises(ValidationError, match="places.csv:7"):
         placelist.parse_osm("way/abc", "places.csv:7")
 
 
 def test_a_local_reference_cannot_be_combined_with_others():
-    with pytest.raises(SystemExit, match="stands alone"):
+    with pytest.raises(ValidationError, match="stands alone"):
         placelist.parse_osm("local/westerheide-amrum; node/6928685546")
 
 
 def test_two_local_references_cannot_be_combined_either():
-    with pytest.raises(SystemExit, match="stands alone"):
+    with pytest.raises(ValidationError, match="stands alone"):
         placelist.parse_osm("local/merlingmark; local/dreihardereck")
 
 
@@ -151,7 +152,7 @@ def test_parse_point_of_two_empty_cells_is_no_point():
 
 @pytest.mark.parametrize("lat,lon", [("54.65097", ""), ("", "8.34019")])
 def test_parse_point_needs_both_cells(lat, lon):
-    with pytest.raises(SystemExit, match="go together"):
+    with pytest.raises(ValidationError, match="go together"):
         placelist.parse_point(lat, lon, "curation.csv:15")
 
 
@@ -160,14 +161,14 @@ def test_parse_point_needs_both_cells(lat, lon):
     ("54°39'N", "8°20'E"),
 ])
 def test_parse_point_needs_decimal_degrees(lat, lon):
-    with pytest.raises(SystemExit, match="not numbers"):
+    with pytest.raises(ValidationError, match="not numbers"):
         placelist.parse_point(lat, lon)
 
 
 @pytest.mark.parametrize("lat,lon", [("91", "8.3"), ("-90.5", "8.3"), ("54.6", "181"),
                                      ("54.6", "-180.01")])
 def test_parse_point_refuses_coordinates_off_the_globe(lat, lon):
-    with pytest.raises(SystemExit, match="out of range"):
+    with pytest.raises(ValidationError, match="out of range"):
         placelist.parse_point(lat, lon)
 
 
@@ -212,12 +213,12 @@ def test_empty_set_tags_are_no_tags():
 
 
 def test_set_tags_entry_without_equals_is_refused():
-    with pytest.raises(SystemExit, match="not key=value"):
+    with pytest.raises(ValidationError, match="not key=value"):
         placelist.parse_set_tags("place=island;islet")
 
 
 def test_set_tags_entry_with_empty_key_is_refused():
-    with pytest.raises(SystemExit, match="empty key"):
+    with pytest.raises(ValidationError, match="empty key"):
         placelist.parse_set_tags("=island")
 
 

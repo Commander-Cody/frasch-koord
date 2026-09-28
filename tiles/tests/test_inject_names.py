@@ -16,7 +16,8 @@ import math
 import osmium
 import pytest
 
-from frasch import dialects
+from frasch import paths, registry
+from frasch.errors import PipelineError, ValidationError
 from frasch import inject_names
 from frasch import locate
 from frasch import placelist
@@ -48,11 +49,11 @@ def test_square_is_centred_on_the_node():
 # ----------------------------------------------------------------- name_tags ---
 @pytest.fixture(scope="module")
 def reg():
-    return dialects.read()
+    return registry.read()
 
 
 def place(line=2, **cells):
-    r = {c: "" for c in placelist.COLUMNS}
+    r = {c: "" for c in placelist.columns()}
     r.update(cells, _line=line)
     return r
 
@@ -182,7 +183,7 @@ def test_missing_curation_file_is_nothing_curated(tmp_path):
 
 
 def test_missing_curation_file_named_explicitly_stops(tmp_path):
-    with pytest.raises(SystemExit, match="not found"):
+    with pytest.raises(PipelineError, match="not found"):
         inject_names.load_curation(str(tmp_path / "absent.csv"), required=True)
 
 
@@ -196,19 +197,19 @@ def test_missing_curation_file_named_explicitly_stops(tmp_path):
     ({"osm": "node/1; node/2", "polygon_km2": "5"}, "exactly one node"),
 ])
 def test_bad_curation_row_stops_the_build(tmp_path, bad, message):
-    with pytest.raises(SystemExit, match=message):
+    with pytest.raises(ValidationError, match=message):
         inject_names.load_curation(curation_file(tmp_path, bad))
 
 
 def test_second_row_for_one_local_reference_stops_the_build(tmp_path):
     row = {"osm": "local/huelltoft", "lat": "54.881287", "lon": "8.771304"}
-    with pytest.raises(SystemExit, match="second row"):
+    with pytest.raises(ValidationError, match="second row"):
         inject_names.load_curation(curation_file(tmp_path, row, row))
 
 
 def test_second_polygon_for_one_node_stops_the_build(tmp_path):
     row = {"osm": "node/85929111", "polygon_km2": "50"}
-    with pytest.raises(SystemExit, match="second polygon_km2"):
+    with pytest.raises(ValidationError, match="second polygon_km2"):
         inject_names.load_curation(curation_file(tmp_path, row, row))
 
 
@@ -333,10 +334,10 @@ def read_extract(path):
 
 def places_csv(rows):
     buf = io.StringIO(newline="")
-    w = csv.DictWriter(buf, fieldnames=placelist.COLUMNS, lineterminator="\n")
+    w = csv.DictWriter(buf, fieldnames=placelist.columns(), lineterminator="\n")
     w.writeheader()
     for r in rows:
-        w.writerow({k: r.get(k, "") for k in placelist.COLUMNS})
+        w.writerow({k: r.get(k, "") for k in placelist.columns()})
     return buf.getvalue()
 
 
@@ -350,7 +351,7 @@ def injected(tmp_path_factory):
     locate.main([str(d / "in.osm.pbf"), "--names", str(d / "places.csv"),
                  "--out", str(d / "osm_objects.json")])
     inject_names.run(str(d / "in.osm.pbf"), str(d / "out.osm.pbf"),
-                     str(d / "places.csv"), dialects.DEFAULT_PATH,
+                     str(d / "places.csv"), paths.DIALECTS,
                      str(d / "areas.geojson"), curation_csv=curation,
                      objects_json=str(d / "osm_objects.json"))
     objs = read_extract(d / "out.osm.pbf")
@@ -428,9 +429,9 @@ def test_an_object_nobody_located_stops_the_build(tmp_path):
     (tmp_path / "osm_objects.json").write_text(
         locate.objects_json(locate.Objects({}, {"extracts": []})), encoding="utf-8")
     write_extract(tmp_path / "in.osm.pbf")
-    with pytest.raises(SystemExit, match=f"node/{HOLM}"):
+    with pytest.raises(PipelineError, match=f"node/{HOLM}"):
         inject_names.run(str(tmp_path / "in.osm.pbf"), str(tmp_path / "out.osm.pbf"),
-                         str(tmp_path / "places.csv"), dialects.DEFAULT_PATH,
+                         str(tmp_path / "places.csv"), paths.DIALECTS,
                          str(tmp_path / "areas.geojson"),
                          objects_json=str(tmp_path / "osm_objects.json"))
     assert not (tmp_path / "out.osm.pbf").exists()

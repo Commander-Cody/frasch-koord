@@ -102,19 +102,19 @@ def test_refused_entry_redecided_meanwhile_is_not_appended_back(w, monkeypatch):
     assert lines(w.patch) == [newer]         # the newer decision wins
 
 
-def test_bad_curation_csv_leaves_places_csv_untouched(w):
+def test_bad_curation_csv_leaves_places_csv_untouched(w, capsys):
     w.curation.write_text("osm,name,lat,lon,note\n", encoding="utf-8")  # columns missing
     append(w.patch, entry(2, action="local", slug="taarep", lat=54.6, lon=8.9),
            entry(3, action="osm", osm="node/1"))
     before, patch_before = w.places.read_bytes(), w.patch.read_bytes()
-    with pytest.raises(SystemExit, match="missing column"):
-        w.apply()
+    assert w.apply() == 1
+    assert "missing column" in capsys.readouterr().err
     assert w.places.read_bytes() == before
     assert w.patch.read_bytes() == patch_before
     assert archived(w) == []
 
 
-def test_places_csv_changed_meanwhile_writes_nothing_and_restores_the_patch(w, monkeypatch):
+def test_places_csv_changed_meanwhile_writes_nothing_and_restores_the_patch(w, monkeypatch, capsys):
     first = entry(2, action="local", slug="taarep", lat=54.6, lon=8.9)
     append(w.patch, first)
     late = entry(3, action="skip")
@@ -125,37 +125,37 @@ def test_places_csv_changed_meanwhile_writes_nothing_and_restores_the_patch(w, m
         append(w.patch, late)                           # the browser appends
 
     during_read(monkeypatch, meanwhile)
-    with pytest.raises(SystemExit, match="changed on disk"):
-        w.apply()
+    assert w.apply() == 1
+    assert "changed on disk" in capsys.readouterr().err
     assert w.places.read_text(encoding="utf-8") == theirs
     assert w.curation.read_text(encoding="utf-8") == CURATION_HEADER
     assert lines(w.patch) == [first, late]              # in decision order
     assert archived(w) == []
 
 
-def test_curation_csv_changed_meanwhile_writes_nothing(w, monkeypatch):
+def test_curation_csv_changed_meanwhile_writes_nothing(w, monkeypatch, capsys):
     first = entry(2, action="local", slug="taarep", lat=54.6, lon=8.9)
     append(w.patch, first)
     theirs = CURATION_HEADER + "local/nai,Neu,54.7,8.8,,,,,by hand\n"
     before = w.places.read_bytes()
     during_read(monkeypatch, lambda: w.curation.write_text(theirs, encoding="utf-8"))
-    with pytest.raises(SystemExit, match="changed on disk"):
-        w.apply()
+    assert w.apply() == 1
+    assert "changed on disk" in capsys.readouterr().err
     assert w.places.read_bytes() == before
     assert w.curation.read_text(encoding="utf-8") == theirs
     assert lines(w.patch) == [first]
     assert archived(w) == []
 
 
-def test_failed_places_write_removes_a_new_curation_csv(w, monkeypatch):
+def test_failed_places_write_removes_a_new_curation_csv(w, monkeypatch, capsys):
     """curation.csv is written first; a places.csv write that then fails
     takes it out again -- here, a file that did not exist before."""
     w.curation.unlink()
     append(w.patch, entry(2, action="local", slug="taarep", lat=54.6, lon=8.9))
     theirs = places_text(ROWS + [{"kind": "settlement", "mooring": "Nai", "de": "Neu"}])
     during_read(monkeypatch, lambda: w.places.write_text(theirs, encoding="utf-8"))
-    with pytest.raises(SystemExit, match="changed on disk"):
-        w.apply()
+    assert w.apply() == 1
+    assert "changed on disk" in capsys.readouterr().err
     assert not w.curation.exists()
     assert w.places.read_text(encoding="utf-8") == theirs
 

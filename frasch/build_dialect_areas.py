@@ -28,7 +28,7 @@ file is written -- a *silently smaller* dialect area is worse than a build
 that fails, since nothing else would ever notice the gap.  `--allow-missing`
 builds anyway, the same way a partial/unclosed ring already only warns: that
 ring's object did produce *some* geometry, just not all of it. Both outputs
-are written atomically (`placelist.atomic_write`) and only once every
+are written atomically (`files.atomic_write`) and only once every
 reference has been resolved and every polygon assembled, so a failed or
 interrupted run never leaves a truncated or half-updated file, and each one's
 `properties.built_from` records the git blob hash of dialect_areas.csv and
@@ -70,14 +70,12 @@ import csv
 import json
 import math
 import os
-import sys
 import time
 
 import osmium
 
-from frasch import dialects, paths
-from frasch import placelist
-from frasch import provenance
+from frasch import cli, dialects, files, paths, placelist, provenance, registry
+from frasch.errors import PipelineError, ValidationError
 
 DEFAULT_AREAS = dialects.AREA_LIST_PATH
 DEFAULT_OUT = dialects.DEFAULT_AREAS
@@ -110,12 +108,12 @@ def read_areas(path, reg):
     loop and the "not in the extract" report need.
     """
     if not os.path.exists(path):
-        raise SystemExit(f"dialect area list not found: {path}")
+        raise PipelineError(f"dialect area list not found: {path}")
     rows, problems = dialects.area_rows(path, reg)
     if problems:
         n, what = problems[0]
-        raise SystemExit(f"{path}:{n}: {what}")
-    with placelist.open_csv(path) as fh:
+        raise ValidationError([f"{path}:{n}: {what}" for n, what in problems])
+    with files.open_csv(path) as fh:
         fields = csv.DictReader(fh).fieldnames or []
     for col in ("name", "note"):
         # Only the review overlay needs these; an older CSV still builds.
@@ -301,12 +299,13 @@ def round_geojson(obj, nd=ROUND):
     return obj
 
 
+@cli.command
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("pbf", nargs="+", help="OSM extract(s) holding the areas")
     ap.add_argument("--areas", default=DEFAULT_AREAS)
-    ap.add_argument("--registry", default=dialects.DEFAULT_PATH)
+    ap.add_argument("--registry", default=paths.DIALECTS)
     ap.add_argument("--out", default=DEFAULT_OUT)
     ap.add_argument("--simplify", type=float, default=SIMPLIFY_DEG,
                     help=f"tolerance in degrees (default {SIMPLIFY_DEG})")
@@ -330,13 +329,10 @@ def main(argv=None):
                          "produced no geometry at all (default: stop and "
                          "write nothing)")
     a = ap.parse_args(argv)
-    try:
-        from shapely.geometry import mapping
-        from shapely.ops import unary_union
-    except ImportError:
-        raise SystemExit("shapely is needed (run `uv sync` in the repo root)") from None
+    from shapely.geometry import mapping
+    from shapely.ops import unary_union
 
-    reg = dialects.read(a.registry)
+    reg = registry.read(a.registry)
     by_ref, labels, rows = read_areas(a.areas, reg)
     want_unassigned = bool(a.parts_out) and not a.no_unassigned
     print(f"area list : {a.areas} -> {len(by_ref)} OSM objects, "
@@ -405,7 +401,7 @@ def main(argv=None):
             "geometry": round_geojson(mapping(geom)),
         })
     if not features:
-        raise SystemExit("no geometry found -- is the extract the right region?")
+        raise PipelineError("no geometry found -- is the extract the right region?")
 
     for p in problems:
         print(f"  ! {p}")
@@ -420,7 +416,7 @@ def main(argv=None):
             # stopped build -- nothing downstream would ever notice the gap.
             # Nothing may be written past this point (see the module
             # docstring): both --out and --parts-out are still untouched.
-            raise SystemExit(f"{report}\n\nrun with --allow-missing to build "
+            raise PipelineError(f"{report}\n\nrun with --allow-missing to build "
                               f"anyway; nothing was written")
 
     built_from = provenance.built_from(
@@ -450,12 +446,12 @@ def main(argv=None):
 
 
 def write_geojson(path, fc):
-    """Write one GeoJSON FeatureCollection atomically (placelist.atomic_write):
+    """Write one GeoJSON FeatureCollection atomically (files.atomic_write):
     a crash or Ctrl-C half-way must leave either the old file or the new one,
     never a truncated one."""
     data = json.dumps(fc, ensure_ascii=False, separators=(",", ":")) + "\n"
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    placelist.atomic_write(path, data)
+    files.atomic_write(path, data)
 
 
 def simplified(geom, tol):
@@ -539,6 +535,3 @@ def write_parts(a, parts_fc, skipped, free):
           f"{f', {skipped} row(s) without geometry' if skipped else ''}, "
           f"{os.path.getsize(a.parts_out)/1e3:.0f} kB)")
 
-
-if __name__ == "__main__":
-    sys.exit(main())

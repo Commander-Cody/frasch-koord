@@ -44,7 +44,7 @@ import time
 
 import osmium
 
-from frasch import paths, placelist
+from frasch import cli, files, paths
 from frasch.provenance import extract_stamp
 
 DEFAULT_OUT = paths.CANDIDATES
@@ -282,6 +282,7 @@ def read_records(path):
                 yield rec
 
 
+@cli.command
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -294,7 +295,7 @@ def main(argv=None):
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     counts = collections.Counter()
     t0 = time.time()
-    with placelist.replacing(args.out, text=True) as fh:
+    with files.replacing(args.out, text=True) as fh:
         fh.write(json.dumps(header(args.pbf), ensure_ascii=False) + "\n")
         for p in args.pbf:
             src = os.path.basename(p).split("-latest")[0].split(".")[0]
@@ -311,6 +312,3 @@ def main(argv=None):
             print(f"  {v:8,d}  {k}")
     return 0
 
-
-if __name__ == "__main__":
-    sys.exit(main())
