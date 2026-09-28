@@ -1,62 +1,5 @@
-/* Curation review view (?curate). Dev tool: dense, plain, always light —
-   the map behind it is light too. Never ships to the public site: main.tsx
-   only loads it under `vite dev`. */
-
-.curate-panel {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  bottom: 12px;
-  z-index: 1;
-  width: min(420px, calc(100vw - 24px));
-  overflow-y: auto;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-  padding: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  font-family: system-ui, sans-serif;
-  font-size: 13px;
-  color-scheme: light;
-  color: #222;
-}
-
-.curate-title {
-  margin: 0;
-  font-size: 15px;
-}
-
-.curate-counts {
-  margin: 0;
-  color: #666;
-  font-size: 12px;
-}
-
-.curate-header {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  position: sticky;
-  top: -10px;
-  background: white;
-  padding-top: 2px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid #eee;
-  z-index: 2;
-}
-
-.curate-input {
-  font: inherit;
-  padding: 5px 7px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  width: 100%;
-  box-sizing: border-box;
-  background: #fff;
-  color: #222;
-}
+/* Curation review view (?curate): its own rules. What it shares with the
+   dialect-area view is in DevPanel.css. */
 
 .curate-row {
   display: flex;
@@ -65,7 +8,7 @@
   flex-wrap: wrap;
 }
 
-.curate-row .curate-input {
+.curate-row .dev-panel-input {
   flex: 1 1 0;
 }
 
@@ -224,34 +167,6 @@
   color: #888;
 }
 
-.curate-facts {
-  margin: 0;
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 1px 8px;
-  font-size: 12px;
-}
-
-.curate-facts > div {
-  display: contents;
-}
-
-.curate-facts dt {
-  color: #888;
-}
-
-.curate-facts dd {
-  margin: 0;
-}
-
-.curate-section {
-  margin: 6px 0 0;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: #666;
-}
-
 .curate-done-note {
   margin: 0;
   font-size: 12px;
@@ -349,22 +264,7 @@
 }
 
 .curate-mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
   color: #555;
-  overflow-wrap: anywhere;
-}
-
-.curate-error {
-  margin: 0;
-  color: #b3261e;
-  font-size: 12px;
-}
-
-.curate-hint-text {
-  margin: 0;
-  color: #777;
-  font-size: 12px;
 }
 
 /* ------------------------------------------------------------- map pins */

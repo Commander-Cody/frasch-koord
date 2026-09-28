@@ -19,7 +19,12 @@ import type { MapMouseEvent, Map as MapLibreMap } from 'maplibre-gl';
 
 import type { MapViewHandle } from '../components/Map';
 import { primary } from '../names';
+import { replaceQueryParams } from '../queryParams';
 import { decidedRows, isValidSlug, type PatchEntry } from './curatePatch';
+import DevPanel from './DevPanel';
+import { FIT_PADDING } from './panelLayout';
+import { useDeepLinkParam } from './useDeepLinkParam';
+import { useListNavigation } from './useListNavigation';
 import './CuratePanel.css';
 
 /* ------------------------------------------------------------------ types */
@@ -120,8 +125,6 @@ const MAX_LISTED_REFS = 12;
 /** Kinds whose curation row can carry an area instead of a bare point. */
 const POLYGON_KINDS = new Set(['koog', 'harde', 'landscape', 'island', 'hallig', 'sand']);
 
-/** The panel covers the left edge, so pins must be fitted to the right of it. */
-const FIT_PADDING = { left: 460, top: 60, right: 60, bottom: 60 };
 const FIT_MAX_ZOOM = 14;
 
 /** Source/layer ids of the hint-radius circle; removed again on every change. */
@@ -328,13 +331,6 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
       cancelled = true;
     };
   }, []);
-
-  /* ----------------------------------------------------- deep link (?row=) */
-
-  // `?curate&row=schorkewarw-2` opens that row: a session note ("I stopped
-  // there"), a link from a report, or a scripted screenshot. The current row
-  // is written back so reloading keeps the place.
-  const initialId = useRef<string | null>(new URLSearchParams(window.location.search).get('row'));
 
   /* ------------------------------------------------------------ derived */
 
@@ -557,14 +553,7 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
   const goTo = useCallback(
     (id: string) => {
       setSelectedId(id);
-      const params = new URLSearchParams(window.location.search);
-      params.set('row', id);
-      // Keep MapLibre's `#zoom/lat/lon` hash: it is part of the resume state.
-      window.history.replaceState(
-        window.history.state,
-        '',
-        `${window.location.pathname}?${params}${window.location.hash}`,
-      );
+      replaceQueryParams({ row: id });
       const row = rows.find((candidate) => candidate.id === id) ?? null;
       const de = row ? primary(row.de) : '';
       setLookupQuery(row ? de || primary(row.da) || row.name : '');
@@ -584,43 +573,19 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
     [rows],
   );
 
-  // Once the worklist is there, honour the deep link (only once).
-  useEffect(() => {
-    const id = initialId.current;
-    if (id === null || rows.length === 0) return;
-    initialId.current = null;
-    if (rows.some((row) => row.id === id)) goTo(id);
-  }, [rows, goTo]);
-
-  const move = useCallback(
-    (delta: number) => {
-      if (visible.length === 0) return;
-      const at = visible.findIndex((row) => row.id === selectedId);
-      const next = at < 0 ? 0 : Math.min(visible.length - 1, Math.max(0, at + delta));
-      goTo(visible[next].id);
+  // `?curate&row=schorkewarw-2` opens that row: a session note ("I stopped
+  // there"), a link from a report, or a scripted screenshot. `goTo` writes the
+  // current row back so reloading keeps the place.
+  const openLinkedRow = useCallback(
+    (id: string) => {
+      if (rows.some((row) => row.id === id)) goTo(id);
     },
-    [visible, selectedId, goTo],
+    [rows, goTo],
   );
+  useDeepLinkParam('row', rows.length > 0, openLinkedRow);
 
-  // Global so the keys work wherever the eye is, but never while typing.
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      const tag = target?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable) {
-        return;
-      }
-      if (event.key === 'ArrowDown' || event.key === 'j') {
-        event.preventDefault();
-        move(1);
-      } else if (event.key === 'ArrowUp' || event.key === 'k') {
-        event.preventDefault();
-        move(-1);
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [move]);
+  const visibleIds = useMemo(() => visible.map((row) => row.id), [visible]);
+  useListNavigation(visibleIds, selectedId, goTo);
 
   // Keep the selected row in view when it moved by keyboard.
   useEffect(() => {
@@ -763,30 +728,6 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
 
   /* -------------------------------------------------------------- render */
 
-  if (loadError) {
-    return (
-      <div className="curate-panel">
-        <h1 className="curate-title">Curation review</h1>
-        <p className="curate-error">
-          Could not load the worklist: {loadError}
-        </p>
-        <p className="curate-hint-text">
-          The curation view needs the Vite dev server (<code>npm run dev</code>) and a worklist
-          exported with <code>names/curate.py export</code>.
-        </p>
-      </div>
-    );
-  }
-
-  if (!worklist) {
-    return (
-      <div className="curate-panel">
-        <h1 className="curate-title">Curation review</h1>
-        <p className="curate-hint-text">Loading…</p>
-      </div>
-    );
-  }
-
   const refsValid = parseRefs(manualRef) !== null;
   const polygonRelevant = selected ? POLYGON_KINDS.has(selected.kind) : false;
   const canSaveLocal = Boolean(selected) && isValidSlug(slug) && position !== null;
@@ -796,55 +737,68 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
   const checkedQids = [...new Set(checkedRefs.flatMap((item) => (item.wikidata ? [item.wikidata] : [])))];
 
   return (
-    <div className="curate-panel">
-      <header className="curate-header">
-        <h1 className="curate-title">Curation review</h1>
-        <p className="curate-counts">
-          {rows.length - doneCount} open · {doneCount} done · {visible.length} shown
-        </p>
-        <input
-          type="search"
-          className="curate-input"
-          placeholder="filter: Frisian, German, hint"
-          value={filterText}
-          onChange={(event) => setFilterText(event.target.value)}
-        />
-        <div className="curate-row">
-          <select
-            className="curate-input"
-            aria-label="kind"
-            value={filterKind}
-            onChange={(event) => setFilterKind(event.target.value)}
-          >
-            <option value="">all kinds</option>
-            {kinds.map((kind) => (
-              <option key={kind} value={kind}>
-                {kind}
-              </option>
-            ))}
-          </select>
-          <select
-            className="curate-input"
-            aria-label="result"
-            value={filterResult}
-            onChange={(event) =>
-              setFilterResult(event.target.value as 'all' | 'ambiguous' | 'not_found')
-            }
-          >
-            <option value="all">all results</option>
-            <option value="ambiguous">ambiguous</option>
-            <option value="not_found">not found</option>
-          </select>
-        </div>
-        <label className="curate-check">
+    <DevPanel
+      className="curate-panel"
+      title="Curation review"
+      what="the worklist"
+      needs={
+        <>
+          The curation view needs the Vite dev server (<code>npm run dev</code>) and a worklist
+          exported with <code>names/curate.py export</code>.
+        </>
+      }
+      loaded={worklist !== null}
+      error={loadError}
+      header={
+        <>
+          <p className="dev-panel-counts">
+            {rows.length - doneCount} open · {doneCount} done · {visible.length} shown
+          </p>
           <input
-            type="checkbox"
-            checked={hideDone}
-            onChange={(event) => setHideDone(event.target.checked)}
+            type="search"
+            className="dev-panel-input"
+            placeholder="filter: Frisian, German, hint"
+            value={filterText}
+            onChange={(event) => setFilterText(event.target.value)}
           />
-          hide done
-        </label>
-      </header>
+          <div className="curate-row">
+            <select
+              className="dev-panel-input"
+              aria-label="kind"
+              value={filterKind}
+              onChange={(event) => setFilterKind(event.target.value)}
+            >
+              <option value="">all kinds</option>
+              {kinds.map((kind) => (
+                <option key={kind} value={kind}>
+                  {kind}
+                </option>
+              ))}
+            </select>
+            <select
+              className="dev-panel-input"
+              aria-label="result"
+              value={filterResult}
+              onChange={(event) =>
+                setFilterResult(event.target.value as 'all' | 'ambiguous' | 'not_found')
+              }
+            >
+              <option value="all">all results</option>
+              <option value="ambiguous">ambiguous</option>
+              <option value="not_found">not found</option>
+            </select>
+          </div>
+          <label className="curate-check">
+            <input
+              type="checkbox"
+              checked={hideDone}
+              onChange={(event) => setHideDone(event.target.checked)}
+            />
+            hide done
+          </label>
+        </>
+      }
+    >
 
       <ul className="curate-list" ref={listRef}>
         {visible.length === 0 && <li className="curate-empty">nothing matches the filter</li>}
@@ -889,7 +843,7 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
               {selected.id} · places.csv line {selected.line}
             </span>
           </h2>
-          <dl className="curate-facts">
+          <dl className="dev-panel-facts">
             {Object.entries(selected.names ?? {}).map(([column, value]) => (
               <div key={column}>
                 <dt>{column}</dt>
@@ -942,9 +896,9 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
             </p>
           )}
 
-          <h3 className="curate-section">Candidates ({selected.candidates.length})</h3>
+          <h3 className="dev-panel-section">Candidates ({selected.candidates.length})</h3>
           {selected.candidates.length === 0 && (
-            <p className="curate-hint-text">no candidates — use the lookups below</p>
+            <p className="dev-panel-hint">no candidates — use the lookups below</p>
           )}
           {selected.candidates.length > 1 && (
             <div className="curate-row">
@@ -1001,7 +955,7 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
                   </span>
                   <span className="curate-candidate-body">
                     <span className="curate-candidate-name">{candidate.name}</span>
-                    <span className="curate-mono">{candidate.ref}</span>
+                    <span className="dev-panel-mono curate-mono">{candidate.ref}</span>
                     <span className="curate-candidate-meta">
                       {candidate.class}
                       {typeof candidate.km === 'number' ? ` · ${candidate.km} km` : ''}
@@ -1028,9 +982,9 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
             ))}
           </ul>
 
-          <h3 className="curate-section">Look up in OSM</h3>
+          <h3 className="dev-panel-section">Look up in OSM</h3>
           <input
-            className="curate-input"
+            className="dev-panel-input"
             value={lookupQuery}
             aria-label="lookup query"
             onChange={(event) => setLookupQuery(event.target.value)}
@@ -1052,9 +1006,9 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
               openstreetmap.org
             </a>
           </div>
-          {lookupBusy && <p className="curate-hint-text">searching…</p>}
-          {lookupError && <p className="curate-error">{lookupError}</p>}
-          {lookupSource && !lookupError && <p className="curate-hint-text">{lookupSource}</p>}
+          {lookupBusy && <p className="dev-panel-hint">searching…</p>}
+          {lookupError && <p className="dev-panel-error">{lookupError}</p>}
+          {lookupSource && !lookupError && <p className="dev-panel-hint">{lookupSource}</p>}
           <ul className="curate-candidates">
             {lookupResults.map((result, i) => (
               <li
@@ -1081,7 +1035,7 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
                   </span>
                   <span className="curate-candidate-body">
                     <span className="curate-candidate-name">{result.name || '(unnamed)'}</span>
-                    <span className="curate-mono">{result.ref}</span>
+                    <span className="dev-panel-mono curate-mono">{result.ref}</span>
                     <span className="curate-candidate-meta">{result.what || result.tags}</span>
                   </span>
                 </button>
@@ -1105,7 +1059,7 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
 
           {checkedRefs.length > 0 && (
             <div className="curate-multi">
-              <span className="curate-mono">
+              <span className="dev-panel-mono curate-mono">
                 {checkedRefs.length} selected:{' '}
                 {checkedRefs
                   .slice(0, MAX_LISTED_REFS)
@@ -1114,7 +1068,7 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
                 {checkedRefs.length > MAX_LISTED_REFS ? '; …' : ''}
               </span>
               {checkedQids.length > 1 && (
-                <p className="curate-hint-text">
+                <p className="dev-panel-hint">
                   different wikidata ids ({checkedQids.join(', ')}) — none saved
                 </p>
               )}
@@ -1139,9 +1093,9 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
             </div>
           )}
 
-          <h3 className="curate-section">OSM reference by hand</h3>
+          <h3 className="dev-panel-section">OSM reference by hand</h3>
           <input
-            className="curate-input"
+            className="dev-panel-input"
             placeholder="way/177387348; node/123 or an openstreetmap.org URL"
             value={manualRef}
             aria-label="osm reference"
@@ -1164,19 +1118,19 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
               Pick reference
             </button>
             {manualRef.trim() && !refsValid && (
-              <span className="curate-error">node/way/relation id or OSM URL expected</span>
+              <span className="dev-panel-error">node/way/relation id or OSM URL expected</span>
             )}
           </div>
 
-          <h3 className="curate-section">Local reference (place OSM does not have)</h3>
+          <h3 className="dev-panel-section">Local reference (place OSM does not have)</h3>
           <input
-            className="curate-input"
+            className="dev-panel-input"
             value={slug}
             aria-label="slug"
             onChange={(event) => setSlug(event.target.value)}
           />
           {!isValidSlug(slug) && (
-            <p className="curate-error">slug must look like `toftem-emmelsbuell`</p>
+            <p className="dev-panel-error">slug must look like `toftem-emmelsbuell`</p>
           )}
           <div className="curate-row">
             <button
@@ -1186,13 +1140,13 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
             >
               {pickingPosition ? 'click the map…' : 'set position on map'}
             </button>
-            <span className="curate-mono">
+            <span className="dev-panel-mono curate-mono">
               {position ? `${position.lat.toFixed(6)}, ${position.lon.toFixed(6)}` : 'no position'}
             </span>
           </div>
           {polygonRelevant && (
             <input
-              className="curate-input"
+              className="dev-panel-input"
               type="number"
               min="0"
               step="0.1"
@@ -1221,9 +1175,9 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
             Save local
           </button>
 
-          <h3 className="curate-section">Note / skip</h3>
+          <h3 className="dev-panel-section">Note / skip</h3>
           <input
-            className="curate-input"
+            className="dev-panel-input"
             placeholder="note (optional, any action)"
             value={note}
             aria-label="note"
@@ -1247,9 +1201,9 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
               </button>
             )}
           </div>
-          {postError && <p className="curate-error">could not save: {postError}</p>}
+          {postError && <p className="dev-panel-error">could not save: {postError}</p>}
         </section>
       )}
-    </div>
+    </DevPanel>
   );
 }
