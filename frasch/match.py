@@ -59,7 +59,6 @@ import argparse
 import collections
 import csv
 import json
-import math
 import os
 import re
 import sys
@@ -68,6 +67,7 @@ import unicodedata
 
 from frasch import build_candidates, cli, files, paths, placelist
 from frasch.errors import PipelineError
+from frasch.geo import NF_CENTRE, haversine, in_north_frisia
 from frasch.placelist import (
     any_name,
     format_osm,
@@ -88,8 +88,6 @@ MATCH_COLUMNS = ["id", "line", "kind", "name", "de", "osm", "wikidata", "status"
                  "result", "match_name", "match_tags", "lon", "lat",
                  "candidates", "note"]
 
-NF_CENTRE = (8.9, 54.7)                      # lon, lat
-NF_BBOX = (7.8, 54.15, 9.55, 55.12)   # North Frisia incl. Helgoland
 CLUSTER_KM = 3.0        # objects this close describe the same feature
 SEPARATION_KM = 30.0    # a winner must be this far from every rival
 HINT_KM = 8.0           # a village-sized hint
@@ -162,17 +160,6 @@ def split_name_values(v: str):
         if m:
             vals.append((m.group(1).strip(), 2))
     return [(x, pen) for x, pen in vals if x]
-
-
-def haversine(lon1, lat1, lon2, lat2):
-    if None in (lon1, lat1, lon2, lat2):
-        return None
-    r = 6371.0
-    p1, p2 = math.radians(lat1), math.radians(lat2)
-    dp = p2 - p1
-    dl = math.radians(lon2 - lon1)
-    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
-    return 2 * r * math.asin(math.sqrt(a))
 
 
 # -------------------------------------------------------- kind / tag rules ---
@@ -651,9 +638,7 @@ def _decide(kind, plaus, hint_pt):
             cl["hint_d"] = d
             cl["hint_ok"] = d is not None and d <= hint_pt[2]
         cl["nf_d"] = haversine(cl["lon"], cl["lat"], *NF_CENTRE)
-        cl["in_nf"] = (cl["lon"] is not None
-                       and NF_BBOX[0] <= cl["lon"] <= NF_BBOX[2]
-                       and NF_BBOX[1] <= cl["lat"] <= NF_BBOX[3])
+        cl["in_nf"] = in_north_frisia(cl["lon"], cl["lat"])
     if hint_pt:
         # the sheet says where the feature lies -- that is binding, also when
         # there is only one candidate (OSM's only "Morsum" is on Sylt, but the

@@ -54,7 +54,7 @@ import re
 import sys
 import time
 
-from frasch import build_candidates, cli, curationlist, errors, files, match, paths, placelist
+from frasch import build_candidates, cli, curationlist, geo, errors, files, match, paths, placelist
 from frasch.errors import PipelineError, ValidationError
 
 CAND_PATH = paths.CANDIDATES
@@ -233,7 +233,7 @@ def cmd_export(args):
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as fh:
         json.dump({"generated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                   "bbox": list(match.NF_BBOX),
+                   "bbox": list(geo.NF_BBOX),
                    "kind_order": KIND_ORDER,
                    "rows": out}, fh, ensure_ascii=False, indent=1)
         fh.write("\n")

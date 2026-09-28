@@ -15,7 +15,7 @@ Tag filter (object must carry a name-ish tag AND one of):
            protected_area,
   man_made=*, historic=*, amenity=harbour, harbour=*, leisure=marina,
   admin_level=*, wikidata=*, wikipedia=*,
-  highway=*  -- only inside the North Frisia bbox (lon 8.2-9.5, lat 54.2-55.1)
+  highway=*  -- only inside North Frisia (frasch.geo.NF_BBOX, Helgoland included)
 
 Why these: a reconnaissance pass over Schleswig-Holstein showed that
   * Warften are mostly place=isolated_dwelling / place=hamlet nodes, plus
@@ -44,12 +44,11 @@ import time
 
 import osmium
 
-from frasch import cli, files, paths
+from frasch import cli, files, geo, paths
 from frasch.provenance import extract_stamp
 
 DEFAULT_OUT = paths.CANDIDATES
 
-NF_BBOX = (8.2, 54.2, 9.5, 55.1)          # lon_min, lat_min, lon_max, lat_max
 
 NATURAL_KEEP = {
     "water", "bay", "strait", "wetland", "sand", "shoal", "beach", "island",
@@ -106,10 +105,6 @@ def classify(tags: dict):
     elif "wikipedia" in tags:
         cls.append("wikipedia")
     return cls or None
-
-
-def in_bbox(lon, lat, b=NF_BBOX):
-    return lon is not None and b[0] <= lon <= b[2] and b[1] <= lat <= b[3]
 
 
 class WayCentroids:
@@ -230,8 +225,8 @@ def process(pbf: str, src: str, out, counts, idx="flex_mem"):
 
         tags = dict(otags)
         cls = classify(tags) or []
-        # named roads: only inside the North Frisia bbox
-        if "highway" in tags and in_bbox(lon, lat):
+        # named roads: only inside North Frisia
+        if "highway" in tags and geo.in_north_frisia(lon, lat):
             cls.append("highway=" + tags["highway"])
         if not cls:
             continue
