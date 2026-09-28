@@ -38,9 +38,8 @@ import json
 import os
 from typing import NamedTuple
 
-import osmium
 
-from frasch import build_dialect_areas, cli, files, paths, placelist, provenance
+from frasch import cli, osmgeom, osmscan, files, paths, placelist, provenance
 from frasch.errors import PipelineError
 
 DEFAULT_OUT = paths.OBJECTS
@@ -69,16 +68,16 @@ def locate_in(pbf, refs) -> dict:
     """One extract: three id-filtered passes (the relations, their and the
     referenced ways, all their nodes) -- never a location cache for the
     whole file, which the dev machine has no memory for."""
-    relations = scan_relations(pbf, {i for t, i in refs if t == "r"})
+    relations = osmscan.relations(pbf, {i for t, i in refs if t == "r"})
     way_ids = {i for t, i in refs if t == "w"}
     for rel in relations.values():
         way_ids |= set(rel["rings"]["outer"]) | set(rel["rings"]["inner"])
-    ways = scan_ways(pbf, way_ids)
+    ways = osmscan.ways(pbf, way_ids)
     node_ids = {i for t, i in refs if t == "n"}
     node_ids |= {r["label"] for r in relations.values() if r["label"] is not None}
     for way in ways.values():
         node_ids |= set(way["nodes"])
-    nodes = scan_nodes(pbf, node_ids)
+    nodes = osmscan.nodes(pbf, node_ids)
     locs = {i: n["loc"] for i, n in nodes.items()}
     rel_rings = {i: r["rings"] for i, r in relations.items()}
     way_nodes = {i: way["nodes"] for i, way in ways.items()}
@@ -138,9 +137,9 @@ def _area_object(ref, source, rel_rings, way_nodes, locs):
 
 def _inside_point(ref, rel_rings, way_nodes, locs):
     """A point inside the object's own polygon, or None when it does not
-    close.  Ring assembly is names/build_dialect_areas.py's, so a place and
-    the areas it is compared against are read out of OSM the same way."""
-    for geom in build_dialect_areas.polygons_for(ref, rel_rings, way_nodes, locs, []):
+    close.  Ring assembly is frasch.osmgeom's, so a place and the areas it
+    is compared against are read out of OSM the same way."""
+    for geom in osmgeom.polygons_for(ref, rel_rings, way_nodes, locs, []):
         if geom.is_empty:
             continue
         try:
@@ -191,53 +190,6 @@ def dialect_at(obj, areas) -> str | None:
         if tag:
             return tag
     return None
-
-
-# ------------------------------------------------------------ the passes ----
-def scan_relations(pbf, ids) -> dict:
-    """-> {id: {"rings": {"outer": [way ids], "inner": [way ids]},
-               "label": node id or None, "tags": {...}}}"""
-    out = {}
-    if not ids:
-        return out
-    fp = osmium.FileProcessor(pbf, osmium.osm.RELATION) \
-               .with_filter(osmium.filter.IdFilter(ids))
-    for r in fp:
-        rings, label = {"outer": [], "inner": []}, None
-        for m in r.members:
-            if m.type == "n" and m.role in ("label", "admin_centre") and label is None:
-                label = m.ref
-            elif m.type == "w":
-                rings["inner" if m.role == "inner" else "outer"].append(m.ref)
-        out[r.id] = {"rings": rings, "label": label, "tags": dict(r.tags)}
-    return out
-
-
-def scan_ways(pbf, ids) -> dict:
-    """-> {id: {"nodes": [node ids], "tags": {...}}}"""
-    out = {}
-    if not ids:
-        return out
-    fp = osmium.FileProcessor(pbf, osmium.osm.WAY) \
-               .with_filter(osmium.filter.IdFilter(ids))
-    for w in fp:
-        if len(w.nodes):
-            out[w.id] = {"nodes": [n.ref for n in w.nodes], "tags": dict(w.tags)}
-    return out
-
-
-def scan_nodes(pbf, ids) -> dict:
-    """-> {id: {"loc": (lon, lat), "tags": {...}}} for the nodes with a valid
-    location."""
-    out = {}
-    if not ids:
-        return out
-    fp = osmium.FileProcessor(pbf, osmium.osm.NODE) \
-               .with_filter(osmium.filter.IdFilter(ids))
-    for n in fp:
-        if n.location.valid():
-            out[n.id] = {"loc": (n.location.lon, n.location.lat), "tags": dict(n.tags)}
-    return out
 
 
 class Objects(NamedTuple):

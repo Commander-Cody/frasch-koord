@@ -74,7 +74,7 @@ import time
 
 import osmium
 
-from frasch import cli, dialects, files, paths, placelist, provenance, registry
+from frasch import cli, osmgeom, osmscan, dialects, files, paths, placelist, provenance, registry
 from frasch.errors import PipelineError, ValidationError
 
 DEFAULT_AREAS = dialects.AREA_LIST_PATH
@@ -124,25 +124,6 @@ def read_areas(path, reg):
     return by_ref, labels, rows
 
 
-# ------------------------------------------------------------- reading ----
-def read_relations(path, ids):
-    """-> {rel_id: {'outer': [way ids], 'inner': [way ids]}} for the wanted
-    relations that are in this file."""
-    out = {}
-    if not ids:
-        return out
-    fp = osmium.FileProcessor(path, osmium.osm.RELATION) \
-               .with_filter(osmium.filter.IdFilter(ids))
-    for r in fp:
-        rings = {"outer": [], "inner": []}
-        for m in r.members:
-            if m.type != "w":
-                continue                       # label / admin_centre nodes
-            rings["inner" if m.role == "inner" else "outer"].append(m.ref)
-        out[r.id] = rings
-    return out
-
-
 def read_admin_relations(path, ags_prefix, skip):
     """Municipality relations of one district that no dialect claims.
 
@@ -168,120 +149,9 @@ def read_admin_relations(path, ags_prefix, skip):
         key = next((tags[k] for k in AGS_KEYS if k in tags), "")
         if not key.startswith(ags_prefix):
             continue
-        members = {"outer": [], "inner": []}
-        for m in r.members:
-            if m.type != "w":
-                continue
-            members["inner" if m.role == "inner" else "outer"].append(m.ref)
-        rings[r.id] = members
+        rings[r.id] = osmscan.rings_of(r)
         names[r.id] = tags.get("name") or ""
     return rings, names
-
-
-def read_ways(path, ids):
-    """-> {way_id: [node ids]}."""
-    out = {}
-    if not ids:
-        return out
-    fp = osmium.FileProcessor(path, osmium.osm.WAY) \
-               .with_filter(osmium.filter.IdFilter(ids))
-    for w in fp:
-        out[w.id] = [n.ref for n in w.nodes]
-    return out
-
-
-def read_nodes(path, ids):
-    """-> {node_id: (lon, lat)}."""
-    out = {}
-    if not ids:
-        return out
-    fp = osmium.FileProcessor(path, osmium.osm.NODE) \
-               .with_filter(osmium.filter.IdFilter(ids))
-    for n in fp:
-        out[n.id] = (n.location.lon, n.location.lat)
-    return out
-
-
-# ------------------------------------------------------------ assembly ----
-def assemble_rings(ways):
-    """Join way node-lists end to end into closed rings.
-    -> (rings, unclosed) as lists of node ids."""
-    segments = [list(w) for w in ways if len(w) >= 2]
-    rings, unclosed = [], []
-    while segments:
-        cur = segments.pop(0)
-        joined = True
-        while cur[0] != cur[-1] and joined:
-            joined = False
-            for i, seg in enumerate(segments):
-                if seg[0] == cur[-1]:
-                    cur += seg[1:]
-                elif seg[-1] == cur[-1]:
-                    cur += seg[-2::-1]
-                elif seg[-1] == cur[0]:
-                    cur = seg[:-1] + cur
-                elif seg[0] == cur[0]:
-                    cur = seg[:0:-1] + cur
-                else:
-                    continue
-                segments.pop(i)
-                joined = True
-                break
-        if cur[0] == cur[-1] and len(cur) >= 4:
-            rings.append(cur)
-        else:
-            unclosed.append(cur)
-    return rings, unclosed
-
-
-def polygons_for(ref, rel, ways, nodes, problems):
-    """The shapely polygon(s) of one referenced object."""
-    from shapely.geometry import Polygon
-    from shapely.ops import unary_union
-
-    def ring_coords(ring):
-        try:
-            return [nodes[n] for n in ring]
-        except KeyError:
-            return None
-
-    def build(way_ids, what):
-        rings, unclosed = assemble_rings([ways[w] for w in way_ids if w in ways])
-        missing = [w for w in way_ids if w not in ways]
-        if missing:
-            problems.append(f"{placelist.format_osm([ref])}: {len(missing)} "
-                            f"{what} way(s) not in the file")
-        if unclosed:
-            problems.append(f"{placelist.format_osm([ref])}: {len(unclosed)} "
-                            f"unclosed {what} ring(s) -- skipped")
-        out = []
-        for ring in rings:
-            coords = ring_coords(ring)
-            if coords is None:
-                problems.append(f"{placelist.format_osm([ref])}: a {what} ring "
-                                f"has nodes that are not in the file -- skipped")
-                continue
-            poly = Polygon(coords)
-            if not poly.is_valid:
-                poly = poly.buffer(0)
-            out.append(poly)
-        return out
-
-    if ref[0] == "w":
-        if ref[1] not in ways:
-            return []
-        return build([ref[1]], "outer")
-    rings = rel.get(ref[1])
-    if rings is None:
-        return []
-    outer = build(rings["outer"], "outer")
-    inner = build(rings["inner"], "inner")
-    if not outer:
-        return []
-    geom = unary_union(outer)
-    if inner:
-        geom = geom.difference(unary_union(inner))
-    return [geom]
 
 
 def km2(geom):
@@ -347,7 +217,7 @@ def main(argv=None):
         want = {ref for ref in by_ref if ref not in geoms}
         rel_ids = {i for t, i in want if t == "r"}
         way_ids = {i for t, i in want if t == "w"}
-        rel = read_relations(path, rel_ids)
+        rel = {i: r["rings"] for i, r in osmscan.relations(path, rel_ids).items()}
         # The unclaimed municipalities ride along in the same way/node passes:
         # their member ways are mostly the *same* ways, since neighbours share
         # a boundary.
@@ -360,22 +230,22 @@ def main(argv=None):
                      if ("r", i) not in free}
             rel.update(loose)
         member_ids = {w for r in rel.values() for w in r["outer"] + r["inner"]}
-        ways = read_ways(path, way_ids | member_ids)
+        ways = {i: w["nodes"] for i, w in osmscan.ways(path, way_ids | member_ids).items()}
         node_ids = {n for w in ways.values() for n in w}
-        nodes = read_nodes(path, node_ids)
+        nodes = {i: n["loc"] for i, n in osmscan.nodes(path, node_ids).items()}
         print(f"{os.path.basename(path)}: {len(rel)-len(loose)}/{len(rel_ids)} "
               f"relations, {len(ways):,} ways, {len(nodes):,} nodes"
               f"{f', {len(loose)} unclaimed municipalities' if loose else ''} "
               f"({time.time()-t0:.0f}s)")
         for ref in sorted(want):
-            polys = polygons_for(ref, rel, ways, nodes, problems)
+            polys = osmgeom.polygons_for(ref, rel, ways, nodes, problems)
             if polys:
                 geoms[ref] = polys
         for rel_id in sorted(loose):
             ref = ("r", rel_id)
             # Their own problems are noise: nobody has claimed these, so a
             # broken ring means "not reviewable", not "the data is wrong".
-            polys = polygons_for(ref, rel, ways, nodes, [])
+            polys = osmgeom.polygons_for(ref, rel, ways, nodes, [])
             if polys:
                 free[ref] = polys
                 free_names[ref] = loose_names.get(rel_id, "")

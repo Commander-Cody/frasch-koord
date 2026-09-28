@@ -107,11 +107,15 @@ def extract_problems(a, tmp) -> list[str]:
         objects_from, areas_from = stamped_extracts(a.objects, a), stamped_extracts(a.areas, a)
     except LookupError as missing:
         return [str(missing)]
+    # the two commands themselves, as `just objects` and `just areas` run
+    # them; a failure is on stderr already
     with contextlib.redirect_stdout(io.StringIO()):
-        locate.main(objects_from + ["--names", a.names, "--out", objects])
-        build_dialect_areas.main(areas_from + ["--areas", a.area_list,
-                                               "--registry", a.dialects,
-                                               "--out", areas, "--parts-out", parts])
+        if locate.main(objects_from + ["--names", a.names, "--out", objects]):
+            return [f"{a.objects} cannot be rebuilt (see above)"]
+        if build_dialect_areas.main(areas_from + ["--areas", a.area_list,
+                                                  "--registry", a.dialects,
+                                                  "--out", areas, "--parts-out", parts]):
+            return [f"{a.areas} cannot be rebuilt (see above)"]
     return (differs(a.objects, objects, "just objects")
             + differs(a.areas, areas, "just areas")
             + differs(a.parts, parts, "just areas"))
