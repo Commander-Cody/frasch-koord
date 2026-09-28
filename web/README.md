@@ -442,7 +442,7 @@ Where the data comes from (`src/names.ts`):
 Two details worth knowing:
 
 - **The area dialect's name and the local form are often the same string.**
-  `names/dialects.py:dialect_name()` falls the dialect of the place's own area
+  `frasch/dialects.py:dialect_name()` falls the dialect of the place's own area
   back to the `local` column, so e.g. `names["frr-x-fering"]` on Föhr *is* the
   local form. The card shows such a name once, on the local line, which names
   the dialect it belongs to.
