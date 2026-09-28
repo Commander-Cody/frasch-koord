@@ -6,7 +6,7 @@ on:
 
 jobs:
   python:
-    name: Name pipeline (ruff, pytest, check.py, just check, shellcheck)
+    name: Name pipeline
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -33,7 +33,7 @@ jobs:
         run: uv run shellcheck tiles/*.sh web/scripts/*.sh
 
   web:
-    name: Web app (lint, typecheck, test, build)
+    name: Web app
     runs-on: ubuntu-latest
     defaults:
       run:
