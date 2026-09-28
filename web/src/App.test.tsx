@@ -3,6 +3,7 @@ import { forwardRef } from 'react';
 import { render, screen } from '@testing-library/react';
 
 import './i18n';
+import App from './App';
 
 // MapLibre needs WebGL, which jsdom has not; a bare container stands in for
 // it, which is all this test needs: whether it survives.
@@ -30,9 +31,7 @@ it('keeps the map when the place card crashes', async () => {
   const entry = { id: 'naibel', names: {}, name_de: 'Niebüll', lon: 8.83, lat: 54.79, kind: 'settlement' };
   vi.stubGlobal('fetch', async () => new Response(JSON.stringify({ built_from: {}, places: [entry] }), { status: 200 }));
   // A link to the place opens its card as soon as the name list is there.
-  // App reads the link at module load, so set it before importing App.
   window.history.replaceState(null, '', '/?place=naibel');
-  const { default: App } = await import('./App');
 
   render(<App />);
 

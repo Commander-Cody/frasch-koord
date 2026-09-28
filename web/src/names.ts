@@ -102,8 +102,8 @@ function chainStep(entry: NameEntry, key: string): { name?: string; source: stri
  * Danish is the last resort for the few places the list knows no German
  * name for (Aalborg, Skagen).
  */
-export function resolveName(entry: NameEntry, labels: string): ShownName {
-  for (const key of labelChain(labels)) {
+export function resolveName(entry: NameEntry, view: string): ShownName {
+  for (const key of labelChain(view)) {
     const { name, source } = chainStep(entry, key);
     if (name) return { name, source };
   }
@@ -112,8 +112,8 @@ export function resolveName(entry: NameEntry, labels: string): ShownName {
 }
 
 /** The name to show for an entry in the selected view, see `resolveName`. */
-export function displayName(entry: NameEntry, labels: string): string {
-  return resolveName(entry, labels).name;
+export function displayName(entry: NameEntry, view: string): string {
+  return resolveName(entry, view).name;
 }
 
 // ------------------------------------------------------ name-list cells ----

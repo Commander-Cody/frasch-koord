@@ -4,7 +4,7 @@ import { initReactI18next } from 'react-i18next';
 import de from './locales/de.json';
 import frrMooring from './locales/frr-x-mooring.json';
 import { labelOption } from './config';
-import { INITIAL_LABELS } from './urlState';
+import { initialView } from './urlState';
 
 // Mooring UI strings that nobody has written yet (see
 // src/locales/frr-x-mooring.json) are left as empty strings - never invented -
@@ -19,7 +19,7 @@ void i18n.use(initReactI18next).init({
   // The initial UI language is the one of the label option the page opens
   // in, the link's `?view=` or the default (App switches it on every
   // selector change).
-  lng: labelOption(INITIAL_LABELS).uiLanguage,
+  lng: labelOption(initialView()).uiLanguage,
   fallbackLng: 'de',
   returnEmptyString: false,
   interpolation: { escapeValue: false },

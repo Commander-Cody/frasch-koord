@@ -15,7 +15,7 @@ it('searches past entries without an id or with a repeated one', () => {
   const entries = [entry, { ...entry }, { ...entry, id: undefined }] as unknown as NameEntry[];
 
   render(
-    <SearchPanel entries={entries} status="ready" labels="frr-x-mooring" onLabelsChange={() => {}} onSelect={() => {}} />,
+    <SearchPanel entries={entries} status="ready" view="frr-x-mooring" onViewChange={() => {}} onSelect={() => {}} />,
   );
   fireEvent.change(screen.getByPlaceholderText(/./), { target: { value: 'Niebüll' } });
 

@@ -7,7 +7,7 @@
 // rewrites the whole hash on every move, so nothing else can live there; these
 // go in the query string, which it leaves alone.
 
-import { DEFAULT_LABELS, labelOption } from './config';
+import { DEFAULT_VIEW, labelOption } from './config';
 
 const VIEW_PARAM = 'view';
 const PLACE_PARAM = 'place';
@@ -58,6 +58,9 @@ export function writeUrlState(state: UrlState): void {
 /**
  * The label option the page opens in: the link's `?view=` when it names one
  * of the selector's options, else the default — a stale tag from an old link
- * must not leave the map without labels or the UI without a language.
+ * must not leave the map without labels or the UI without a language. A
+ * function, read when a view mounts: the URL changes once the page runs.
  */
-export const INITIAL_LABELS = labelOption(readUrlState().view ?? DEFAULT_LABELS).tag;
+export function initialView(): string {
+  return labelOption(readUrlState().view ?? DEFAULT_VIEW).tag;
+}

@@ -91,7 +91,7 @@ export function dialectLabelKey(tag: string): string {
 }
 
 /** Label option selected on first load. */
-export const DEFAULT_LABELS = 'frr-x-mooring';
+export const DEFAULT_VIEW = 'frr-x-mooring';
 
 /** An entry of the (single) label selector: a dialect view or the local view. */
 export interface LabelOption {
@@ -130,7 +130,7 @@ export const LABEL_OPTIONS: LabelOption[] = [
 export function labelOption(tag: string): LabelOption {
   return (
     LABEL_OPTIONS.find((o) => o.tag === tag) ??
-    LABEL_OPTIONS.find((o) => o.tag === DEFAULT_LABELS) ??
+    LABEL_OPTIONS.find((o) => o.tag === DEFAULT_VIEW) ??
     LABEL_OPTIONS[0]
   );
 }

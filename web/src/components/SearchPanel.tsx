@@ -24,8 +24,8 @@ export interface SearchPanelProps {
   /** Whether that list is there yet, or failed to load. */
   status: NamesData['status'];
   /** Selected label option tag (a dialect, or LOCAL_TAG). */
-  labels: string;
-  onLabelsChange: (labels: string) => void;
+  view: string;
+  onViewChange: (view: string) => void;
   /** `name` is the entry's display name in the current view (for the map marker). */
   onSelect: (entry: NameEntry, name: string) => void;
 }
@@ -68,8 +68,8 @@ function indexable(entries: NameEntry[]): NameEntry[] {
 export default function SearchPanel({
   entries,
   status,
-  labels,
-  onLabelsChange,
+  view,
+  onViewChange,
   onSelect,
 }: SearchPanelProps) {
   const { t } = useTranslation();
@@ -99,7 +99,7 @@ export default function SearchPanel({
   const showList = open && !failed && query.trim().length > 0;
 
   const select = (entry: NameEntry) => {
-    const name = displayName(entry, labels);
+    const name = displayName(entry, view);
     setQuery(name);
     setOpen(false);
     onSelect(entry, name);
@@ -168,8 +168,8 @@ export default function SearchPanel({
       <select
         className="dialect-select"
         aria-label={t('dialect.label')}
-        value={labels}
-        onChange={(e) => onLabelsChange(e.target.value)}
+        value={view}
+        onChange={(e) => onViewChange(e.target.value)}
       >
         {LABEL_OPTIONS.map((option) => (
           <option key={option.tag} value={option.tag}>
@@ -193,7 +193,7 @@ export default function SearchPanel({
             </li>
           )}
           {results.map((entry, i) => {
-            const name = displayName(entry, labels);
+            const name = displayName(entry, view);
             return (
               <li
                 key={entry.id}
