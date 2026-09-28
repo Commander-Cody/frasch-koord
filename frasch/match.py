@@ -596,7 +596,7 @@ def match_row(row, index: NameIndex, hints: HintResolver, claimed=None):
                       if m["t"] == best["t"] and is_linear(m)
                       and norm(m["tags"].get("name", "")) == bn}, key=int)
     out.update(
-        osm_type={"n": "node", "w": "way", "r": "relation"}[best["t"]],
+        osm_type=placelist.TYPE_NAME[best["t"]],
         osm_id=";".join(ids),
         match_name=best["tags"].get("name") or best["tags"].get("name:de", ""),
         match_tags=decisive_tags(best),

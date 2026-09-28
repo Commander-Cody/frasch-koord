@@ -8,8 +8,9 @@ with MapLibre GL JS.
 
 | directory | what |
 |---|---|
-| [`names/`](names/README.md) | the name list (`places.csv`, the single source of truth) and the Python pipeline that matches it to OSM, checks it and exports the search index |
+| [`names/`](names/README.md) | the name list (`places.csv`, the single source of truth) and the pipeline that matches it to OSM, checks it and exports the search index |
 | [`tiles/`](tiles/README.md) | the tile build: injects the names into an OSM extract, then runs Planetiler |
+| [`frasch/`](names/README.md#code) | the Python code of both, one package; the scripts in `names/` and `tiles/` only launch its commands |
 | [`web/`](web/README.md) | the frontend: React + Vite + TypeScript, MapLibre, PMTiles |
 | [`docs/`](docs/project-decisions.md) | decisions and open questions |
 

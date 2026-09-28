@@ -43,7 +43,17 @@ import argparse
 import json
 import os
 
-from frasch import cli, curationlist, dialects, files, locate, paths, placelist, provenance, registry
+from frasch import (
+    cli,
+    curationlist,
+    dialects,
+    files,
+    locate,
+    paths,
+    placelist,
+    provenance,
+    registry,
+)
 from frasch.errors import PipelineError, ValidationError
 
 DEFAULT_OUT = paths.SEARCH_INDEX

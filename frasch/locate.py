@@ -38,8 +38,7 @@ import json
 import os
 from typing import NamedTuple
 
-
-from frasch import cli, osmgeom, osmscan, files, paths, placelist, provenance
+from frasch import cli, files, osmgeom, osmscan, paths, placelist, provenance
 from frasch.errors import PipelineError
 
 DEFAULT_OUT = paths.OBJECTS

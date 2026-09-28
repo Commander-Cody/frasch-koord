@@ -74,7 +74,17 @@ import time
 
 import osmium
 
-from frasch import cli, osmgeom, osmscan, dialects, files, paths, placelist, provenance, registry
+from frasch import (
+    cli,
+    dialects,
+    files,
+    osmgeom,
+    osmscan,
+    paths,
+    placelist,
+    provenance,
+    registry,
+)
 from frasch.errors import PipelineError, ValidationError
 
 DEFAULT_AREAS = dialects.AREA_LIST_PATH

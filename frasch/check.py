@@ -19,7 +19,16 @@ import re
 import sys
 from dataclasses import dataclass
 
-from frasch import cli, curationlist, dialects, errors, files, paths, placelist, registry
+from frasch import (
+    cli,
+    curationlist,
+    dialects,
+    errors,
+    files,
+    paths,
+    placelist,
+    registry,
+)
 from frasch.registry import Registry
 
 

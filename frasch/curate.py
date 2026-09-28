@@ -46,9 +46,9 @@ Run:  .venv/bin/python names/curate.py            # = export
 from __future__ import annotations
 
 import argparse
-import functools
 import collections
 import csv
+import functools
 import json
 import os
 import sys
@@ -56,9 +56,19 @@ import time
 
 import jsonschema
 
-from frasch import candidates, cli, curationlist, errors, files, geo, nameindex, paths, placelist
-from frasch.hints import HINT_FALLBACK, HintResolver
+from frasch import (
+    candidates,
+    cli,
+    curationlist,
+    errors,
+    files,
+    geo,
+    nameindex,
+    paths,
+    placelist,
+)
 from frasch.errors import PipelineError, ValidationError
+from frasch.hints import HINT_FALLBACK, HintResolver
 
 CAND_PATH = paths.CANDIDATES
 MATCH_PATH = paths.MATCHES
