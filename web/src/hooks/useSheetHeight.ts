@@ -1,6 +1,11 @@
 import { useEffect } from 'react';
 import type { RefObject } from 'react';
 
+/**
+ * The place card's height as `--sheet-height` on the app element, for App.css
+ * to lift the attribution above the bottom sheet on a phone. Tracked while the
+ * card is open: its content changes with the place and the view.
+ */
 export function useSheetHeight(
   appRef: RefObject<HTMLElement | null>,
   cardRef: RefObject<HTMLElement | null>,
