@@ -5,12 +5,18 @@ import DevPanel from './DevPanel';
 
 afterEach(cleanup);
 
-const needs = <>This view needs the Vite dev server.</>;
+/** What stays the same between the states. */
+const curation = {
+  className: 'curate-panel',
+  title: 'Curation review',
+  what: 'the worklist',
+  needs: <>This view needs the Vite dev server.</>,
+};
 
 describe('DevPanel', () => {
   it('says it is loading, and shows nothing of the panel yet', () => {
     render(
-      <DevPanel className="curate-panel" title="Curation review" what="the worklist" needs={needs} loaded={false} error={null}>
+      <DevPanel {...curation} loaded={false} error={null}>
         <p>rows</p>
       </DevPanel>,
     );
@@ -21,7 +27,7 @@ describe('DevPanel', () => {
 
   it('says what failed to load, and what the view needs, instead of the panel', () => {
     render(
-      <DevPanel className="curate-panel" title="Curation review" what="the worklist" needs={needs} loaded={false} error="HTTP 404">
+      <DevPanel {...curation} loaded={false} error="HTTP 404">
         <p>rows</p>
       </DevPanel>,
     );
@@ -33,16 +39,14 @@ describe('DevPanel', () => {
 
   it('offers to load again after an error, where the panel can', () => {
     const reload = vi.fn();
-    render(
-      <DevPanel className="area-panel" title="Dialect areas" what="the areas" needs={needs} loaded={false} error="HTTP 404" onReload={reload} />,
-    );
+    render(<DevPanel {...curation} loaded={false} error="HTTP 404" onReload={reload} />);
     fireEvent.click(screen.getByRole('button', { name: 'Reload' }));
     expect(reload).toHaveBeenCalled();
   });
 
   it('shows the panel once loaded', () => {
     render(
-      <DevPanel className="curate-panel" title="Curation review" what="the worklist" needs={needs} loaded error={null}>
+      <DevPanel {...curation} loaded error={null}>
         <p>rows</p>
       </DevPanel>,
     );
