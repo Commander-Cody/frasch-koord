@@ -147,7 +147,7 @@ then reads TileJSON straight out of the archive itself.
 ### Dialect registry and the selector
 
 `names/dialects.csv` is the single list of North Frisian dialects for the
-whole project; the exporter writes it to `src/generated/dialects.json`
+whole project; `names/dialects.py --export` (`uv run just dialects`) writes it to `src/generated/dialects.json`
 (`{tag, column, label, status, view}` per dialect, registry order) which
 `src/config.ts` imports — **generated, do not edit by hand.** `config.ts`
 derives the one dropdown from it:
@@ -345,7 +345,10 @@ single Warft (which in any case doesn't render before `place-warft`'s
 
 `src/components/SearchPanel.tsx` builds a MiniSearch index over
 `public/data/names.json`, which `App` fetches once at startup (`useNames` in
-`src/names.ts`) and shares with the place card. Schema (one entry per place):
+`src/names.ts`) and shares with the place card. It is an object:
+`{"built_from": {...}, "places": [entry, ...]}`. `built_from` records what the
+file was built from (see "Build provenance" below). Schema of an entry (one
+per place):
 
 ```jsonc
 {
@@ -355,7 +358,7 @@ single Warft (which in any case doesn't render before `place-warft`'s
   "local": "string",              // omitted when unknown: the place's own name
   "dialect": "frr-x-fering",      // omitted outside the Frisian dialect areas
   "variety": "Foortuftinge",      // omitted: sub-dialect of the local name
-  "name_nds": "string",           // omitted: OSM's Low Saxon name of the matched object
+  "name_nds": "string",           // omitted: OSM's Low Saxon name of the place's object
   "name_de": "string",            // German name, shown alongside as a hint
   "name_da": "string",            // omitted: Danish name, where the list has one
   "wikidata": "Q3127",            // omitted: QID of the place, where the row has one
@@ -374,8 +377,24 @@ object) and tiles built before them name the row's OSM reference (or its QID)
 instead; `entryLookup` in `src/names.ts` resolves those too — an object two
 rows claim opens the first.
 
-Written by `names/export_search_index.py`; only non-empty values are
-exported, so an absent field really means "no such name".
+Written by `names/export_search_index.py` (`uv run just index`); only
+non-empty values are exported, so an absent field really means "no such
+name". An entry lies where the first OSM object of its row lies (a node's
+location, a point inside a polygon; Planetiler places a polygon's map label
+itself, so that may sit elsewhere), and has that object's `dialect` and
+`local` name, the same as its map label: both come from
+`names/osm_objects.json` and `names/dialect_areas.geojson` through the same
+code (see `names/README.md`, "Where the objects are").
+
+**Build provenance.** `built_from` holds the git blob hashes of the files the
+index was built from (`places.csv`, `dialects.csv`, `curation.csv`,
+`dialect_areas.geojson`, `osm_objects.json`) and the OSM extracts the objects
+were located in. `tiles/build.sh` writes the same stamp into the PMTiles
+archive's `description`. Once `names.json` has loaded, `useProvenanceCheck`
+(`src/provenance.ts`) reads the archive's metadata and logs a `console.warn`
+naming every input the two were built from differently — the map labels and
+the place cards may then disagree. A tile source that is not a `pmtiles://`
+archive (`VITE_TILES_URL`) is not checked.
 
 **All** of an entry's names (every dialect, the local one, Low Saxon and German)
 are flattened into one indexed string, so a place stays findable under any of
@@ -416,8 +435,8 @@ Where the data comes from (`src/names.ts`):
 - Low Saxon (`name_nds`) is the same kind of name: the list has no column for
   it, but both chains fall back to `name:nds` before German. A clicked card
   takes it from the tile, one opened from search from `names.json`
-  (`export_search_index.py` reads it off the matched OSM object in
-  `names/work/matches.csv`). It gets its own line (`card.lowSaxon`) only where
+  (`export_search_index.py` takes it from the object's entry in
+  `names/osm_objects.json`). It gets its own line (`card.lowSaxon`) only where
   it differs from both the headline and the German name.
 
 Two details worth knowing:

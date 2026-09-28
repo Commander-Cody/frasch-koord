@@ -3,7 +3,11 @@
 be a place / water / landscape / Warft / Koog / road / country.
 
 Output: names/work/candidates.jsonl  (one JSON object per line)
-  {"src","t","id","lon","lat","cls","tags":{...}}
+  first line  {"header": {"extracts": [{"file", "replication_timestamp"}, ...]}}
+              -- the extracts it was built from (read_header); match.py warns
+              when that set changes between two of its runs
+  then        {"src","t","id","lon","lat","cls","tags":{...}}  per candidate
+              (read_records)
 
 Tag filter (object must carry a name-ish tag AND one of):
   place=*, natural=<water-ish/island-ish>, water=*, waterway=*, landuse=*,
@@ -41,6 +45,10 @@ import time
 import osmium
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+import placelist  # noqa: E402
+from provenance import extract_stamp  # noqa: E402
+
 DEFAULT_OUT = os.path.join(HERE, "work", "candidates.jsonl")
 
 NF_BBOX = (8.2, 54.2, 9.5, 55.1)          # lon_min, lat_min, lon_max, lat_max
@@ -107,24 +115,27 @@ def in_bbox(lon, lat, b=NF_BBOX):
 
 
 class WayCentroids:
-    """Compact way_id -> centroid store (ways arrive in ascending id order)."""
+    """Compact way_id -> centroid store, looked up by bisection.
+
+    Ways must arrive in ascending id order, as they do in a sorted extract
+    (Geofabrik's are).  Out-of-order input raises: the lookup would silently
+    miss, and every relation would lose its position."""
 
     def __init__(self):
         self.ids = array.array("q")
         self.lon = array.array("f")
         self.lat = array.array("f")
-        self._sorted = True
 
     def add(self, wid, lon, lat):
         if self.ids and wid < self.ids[-1]:
-            self._sorted = False
+            raise ValueError(f"way {wid} comes after way {self.ids[-1]}: the "
+                             f"extract is not sorted by id -- sort it first "
+                             f"(`osmium sort in.osm.pbf -o sorted.osm.pbf`)")
         self.ids.append(wid)
         self.lon.append(lon)
         self.lat.append(lat)
 
     def get(self, wid):
-        if not self._sorted:
-            return None
         i = bisect.bisect_left(self.ids, wid)
         if i < len(self.ids) and self.ids[i] == wid:
             return self.lon[i], self.lat[i]
@@ -246,6 +257,33 @@ def process(pbf: str, src: str, out, counts, idx="flex_mem"):
           file=sys.stderr)
 
 
+# -------------------------------------------------------- candidates.jsonl ---
+def header(pbfs) -> dict:
+    """The first line of candidates.jsonl: the extracts, in the order read."""
+    return {"header": {"extracts": [extract_stamp(p) for p in pbfs]}}
+
+
+def read_header(path) -> list[dict] | None:
+    """The extracts a candidates.jsonl was built from, as `extract_stamp`
+    gives them; None for a file written before it had a header."""
+    with open(path, encoding="utf-8") as fh:
+        first = fh.readline()
+    if not first.strip():
+        return None
+    line = json.loads(first)
+    return line["header"]["extracts"] if "header" in line else None
+
+
+def read_records(path):
+    """The candidate records of a candidates.jsonl, one at a time (the file
+    is tens of megabytes), without its header."""
+    with open(path, encoding="utf-8") as fh:
+        for line in fh:
+            rec = json.loads(line)
+            if "header" not in rec:
+                yield rec
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -258,7 +296,8 @@ def main(argv=None):
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     counts = collections.Counter()
     t0 = time.time()
-    with open(args.out, "w", encoding="utf-8") as fh:
+    with placelist.replacing(args.out, text=True) as fh:
+        fh.write(json.dumps(header(args.pbf), ensure_ascii=False) + "\n")
         for p in args.pbf:
             src = os.path.basename(p).split("-latest")[0].split(".")[0]
             print(f"scanning {p} ...", file=sys.stderr)

@@ -391,6 +391,19 @@ def test_a_dialect_area_reference_on_two_rows_is_reported(world):
         ("dialect_areas.csv", 3, "relation/1147134 is already on line 2")]
 
 
+def test_a_dialect_area_node_reference_is_reported(world):
+    # a node can never be a polygon (#24)
+    places = world / "places.csv"
+    places.write_text(places_text([TOFTUM]), encoding="utf-8")
+    areas = world / "dialect_areas.csv"
+    areas.write_text("dialect,osm,name,note\n"
+                     "frr-x-solring,node/1,Not an area,\n", encoding="utf-8")
+    problems = check.check(places, world / "curation.csv", areas=areas)
+    assert [(os.path.basename(p.path), p.line) for p in problems] == [
+        ("dialect_areas.csv", 2)]
+    assert "node/1" in problems[0].message
+
+
 def test_fix_on_a_damaged_list_still_reports_every_problem(world, capsys):
     places = world / "places.csv"
     text = places_text([{**TOFTUM, "id": ""}, {**NIEBUELL, "kind": "town"}, TOFTUM])

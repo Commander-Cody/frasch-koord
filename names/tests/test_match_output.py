@@ -1,8 +1,11 @@
 """match.py's worklist -- work/matches.csv and REPORT.md -- names a row by its
-id, which stays put when rows are added above it (#23)."""
+id, which stays put when rows are added above it (#23); a dry run changes no
+tracked file, and REPORT.md depends on the inputs alone (#24)."""
 from __future__ import annotations
 
 import csv
+import hashlib
+import re
 
 import match
 from conftest import cand, places_text, write_candidates
@@ -16,16 +19,23 @@ ROWS = [
 ]
 
 
-def run_match(world):
-    places = world / "places.csv"
-    places.write_text(places_text(ROWS), encoding="utf-8")
+def write_inputs(world):
+    (world / "places.csv").write_text(places_text(ROWS), encoding="utf-8")
     write_candidates(world / "work" / "candidates.jsonl", TOFTUM, *UPHUSUM)
-    code = match.main(["--names", str(places),
+
+
+def match_main(world, *extra):
+    code = match.main(["--names", str(world / "places.csv"),
                        "--candidates", str(world / "work" / "candidates.jsonl"),
                        "--matches", str(world / "work" / "matches.csv"),
                        "--report", str(world / "REPORT.md"), "--offline",
-                       "--wikidata-cache", str(world / "work" / "wd.json")])
+                       "--wikidata-cache", str(world / "work" / "wd.json"), *extra])
     assert code == 0
+
+
+def run_match(world):
+    write_inputs(world)
+    match_main(world)
 
 
 def test_matches_csv_keys_each_row_by_its_id(world):
@@ -39,3 +49,25 @@ def test_the_report_names_a_row_by_id_and_line(world):
     run_match(world)
     report = (world / "REPORT.md").read_text(encoding="utf-8")
     assert "| aphusem-2 | 3 | settlement | Aphüsem | Uphusum |" in report
+
+
+def tracked_hashes(world):
+    """sha256 of every file of the world outside the git-ignored work/."""
+    return {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in world.iterdir() if p.is_file()}
+
+
+def test_a_dry_run_changes_no_tracked_file(world):
+    write_inputs(world)
+    (world / "REPORT.md").write_text("# an older report\n", encoding="utf-8")
+    before = tracked_hashes(world)
+    match_main(world, "--dry-run")
+    assert tracked_hashes(world) == before
+    assert sorted(before) == ["REPORT.md", "curation.csv", "places.csv"]
+
+
+def test_the_report_carries_no_date_or_run_time(world):
+    # a real run on unchanged inputs must leave the tracked REPORT.md as it was
+    run_match(world)
+    report = (world / "REPORT.md").read_text(encoding="utf-8")
+    assert not re.search(r"\d{4}-\d\d-\d\d|\d+s\b", report)

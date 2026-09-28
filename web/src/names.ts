@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 
 import { DIALECTS, siteUrl } from './config';
 import { labelChain } from './labelChain';
+import type { BuiltFrom } from './provenance';
 
 /**
  * One entry of public/data/names.json, written by names/export_search_index.py.
@@ -35,8 +36,8 @@ export interface NameEntry {
   name_frr?: string;
   /**
    * Low Saxon name — OSM's `name:nds`, never our name list (it has no Low
-   * Saxon column). names/export_search_index.py takes it from the matched OSM
-   * object, a tile feature carries it itself. The label chain falls back to it
+   * Saxon column). names/export_search_index.py takes it from the object's
+   * entry in names/osm_objects.json, a tile feature carries it itself. The label chain falls back to it
    * before German, so the card needs it for the same reason as `name_frr`.
    */
   name_nds?: string;
@@ -127,6 +128,8 @@ export interface NamesData {
   entries: NameEntry[];
   /** The entry a `?place=` link or a tile's `frasch:ref` names, see `entryLookup`. */
   find: EntryLookup;
+  /** What the list was built from, to compare with the tiles' (see provenance.ts). */
+  builtFrom?: BuiltFrom;
 }
 
 /** Finds the entry a reference names, see `entryLookup`. */
@@ -176,11 +179,12 @@ export function useNames(): NamesData {
         // res.json() rejects that, and anything else that is not the list.
         return res.json();
       })
-      .then((entries: unknown) => {
-        if (!Array.isArray(entries)) throw new Error('not a list of entries');
+      .then((index: unknown) => {
+        const { built_from: builtFrom, places } = (index ?? {}) as { built_from?: BuiltFrom; places?: unknown };
+        if (!Array.isArray(places)) throw new Error('no list of places');
         if (cancelled) return;
-        const list = entries as NameEntry[];
-        setData({ status: 'ready', entries: list, find: entryLookup(list) });
+        const list = places as NameEntry[];
+        setData({ status: 'ready', entries: list, find: entryLookup(list), builtFrom });
       })
       .catch((err: unknown) => {
         console.error('Failed to load names.json', err);

@@ -13,6 +13,7 @@ dialect.  This script turns those references into geometry.
                            [--areas names/dialect_areas.csv]
                            [--out names/dialect_areas.geojson]
                            [--parts-out names/dialect_areas_parts.geojson]
+                           [--allow-missing]
 
 The result is **committed**: it is a handful of kilobytes, the injector and
 the search exporter need it on every build, and a planet build must not have
@@ -20,6 +21,19 @@ to re-extract boundaries.  Re-run it when dialect_areas.csv changes or when a
 municipality boundary in OSM has moved -- with a Schleswig-Holstein extract
 (`tiles/data/schleswig-holstein-latest.osm.pbf`), which covers every Frisian
 area there is.
+
+A reference from dialect_areas.csv that produced no geometry at all (wrong
+extract, a typo'd id, an object deleted upstream) stops the run before either
+file is written -- a *silently smaller* dialect area is worse than a build
+that fails, since nothing else would ever notice the gap.  `--allow-missing`
+builds anyway, the same way a partial/unclosed ring already only warns: that
+ring's object did produce *some* geometry, just not all of it. Both outputs
+are written atomically (`placelist.atomic_write`) and only once every
+reference has been resolved and every polygon assembled, so a failed or
+interrupted run never leaves a truncated or half-updated file, and each one's
+`properties.built_from` records the git blob hash of dialect_areas.csv and
+dialects.csv plus the file name and replication timestamp of every extract
+read, so a stale file can be told apart from a current one.
 
 Two files come out of one run, from the same in-memory geometry so that they
 cannot disagree:
@@ -65,6 +79,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import dialects  # noqa: E402
 import placelist  # noqa: E402
+import provenance  # noqa: E402
 
 DEFAULT_AREAS = dialects.AREA_LIST_PATH
 DEFAULT_OUT = dialects.DEFAULT_AREAS
@@ -312,6 +327,10 @@ def main(argv=None):
     ap.add_argument("--no-unassigned", action="store_true",
                     help="skip the extra relation scan; --parts-out then holds "
                          "only the municipalities the CSV assigns")
+    ap.add_argument("--allow-missing", action="store_true",
+                    help="build even when a dialect_areas.csv reference "
+                         "produced no geometry at all (default: stop and "
+                         "write nothing)")
     a = ap.parse_args(argv)
     try:
         from shapely.geometry import mapping
@@ -393,27 +412,52 @@ def main(argv=None):
     for p in problems:
         print(f"  ! {p}")
     if missing:
-        print(f"\n{len(missing)} object(s) not found in the extract(s):")
-        for ref in sorted(missing):
-            print(f"  {placelist.format_osm([ref])}  {labels.get(ref) or '?'} "
-                  f"({by_ref[ref]})")
+        lines = [f"{len(missing)} object(s) not found in the extract(s):"]
+        lines += [f"  {placelist.format_osm([ref])}  {labels.get(ref) or '?'} "
+                  f"({by_ref[ref]})" for ref in sorted(missing)]
+        report = "\n".join(lines)
+        print(f"\n{report}")
+        if not a.allow_missing:
+            # A dialect area silently missing a reference is worse than a
+            # stopped build -- nothing downstream would ever notice the gap.
+            # Nothing may be written past this point (see the module
+            # docstring): both --out and --parts-out are still untouched.
+            raise SystemExit(f"{report}\n\nrun with --allow-missing to build "
+                              f"anyway; nothing was written")
+
+    built_from = provenance.built_from(
+        {"dialect_areas.csv": a.areas, "dialects.csv": a.registry},
+        [provenance.extract_stamp(p) for p in a.pbf])
+
+    # Both files are computed in full before either is written, so a problem
+    # building --parts-out cannot leave --out written on its own.
+    parts = None
+    if a.parts_out:
+        parts = build_parts_fc(a, reg, rows, geoms, free, free_names, built_from)
 
     fc = {"type": "FeatureCollection",
           "properties": {"source": os.path.basename(a.areas),
-                         "simplify_deg": a.simplify},
+                         "simplify_deg": a.simplify,
+                         "built_from": built_from},
           "features": features}
-    os.makedirs(os.path.dirname(a.out), exist_ok=True)
-    with open(a.out, "w", encoding="utf-8") as fh:
-        json.dump(fc, fh, ensure_ascii=False, separators=(",", ":"))
-        fh.write("\n")
+    write_geojson(a.out, fc)
     print(f"\nwrote {a.out} ({len(features)} features, {total} polygons, "
           f"{os.path.getsize(a.out)/1e3:.0f} kB)")
     idx = dialects.AreaIndex.from_geojson(a.out)
     print(f"reads back as {len(idx)} polygon(s): {idx.summary()}")
 
-    if a.parts_out:
-        write_parts(a, reg, rows, geoms, free, free_names)
+    if parts is not None:
+        write_parts(a, *parts, free)
     return 0
+
+
+def write_geojson(path, fc):
+    """Write one GeoJSON FeatureCollection atomically (placelist.atomic_write):
+    a crash or Ctrl-C half-way must leave either the old file or the new one,
+    never a truncated one."""
+    data = json.dumps(fc, ensure_ascii=False, separators=(",", ":")) + "\n"
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    placelist.atomic_write(path, data)
 
 
 def simplified(geom, tol):
@@ -425,9 +469,12 @@ def simplified(geom, tol):
     return geom
 
 
-def write_parts(a, reg, rows, geoms, free, free_names):
-    """One Feature per municipality for the review overlay -- see the module
-    docstring for why this is a separate file from --out."""
+def build_parts_fc(a, reg, rows, geoms, free, free_names, built_from):
+    """-> (fc, skipped): the --parts-out FeatureCollection -- one Feature per
+    municipality, see the module docstring for why this is a separate file
+    from --out -- and the count of rows with no geometry (already in the
+    `missing` report).  Pure: building it does not touch disk, so it can run
+    to completion before anything is written (see `main`)."""
     from shapely.geometry import mapping
     from shapely.ops import unary_union
 
@@ -478,12 +525,17 @@ def write_parts(a, reg, rows, geoms, free, free_names):
           "properties": {"source": os.path.basename(a.areas),
                          "simplify_deg": a.parts_simplify,
                          "unit": "one feature per municipality",
-                         "unassigned_ags": a.unassigned_ags if free else ""},
+                         "unassigned_ags": a.unassigned_ags if free else "",
+                         "built_from": built_from},
           "features": features}
-    os.makedirs(os.path.dirname(a.parts_out), exist_ok=True)
-    with open(a.parts_out, "w", encoding="utf-8") as fh:
-        json.dump(fc, fh, ensure_ascii=False, separators=(",", ":"))
-        fh.write("\n")
+    return fc, skipped
+
+
+def write_parts(a, parts_fc, skipped, free):
+    """Write the --parts-out FeatureCollection `build_parts_fc` built, and
+    report on it."""
+    write_geojson(a.parts_out, parts_fc)
+    features = parts_fc["features"]
     print(f"wrote {a.parts_out} ({len(features)} features: "
           f"{len(features)-len(free)} assigned, {len(free)} unassigned"
           f"{f', {skipped} row(s) without geometry' if skipped else ''}, "

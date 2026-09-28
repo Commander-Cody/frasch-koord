@@ -121,3 +121,53 @@ def test_lookup_takes_coordinate_strings():
 
 def test_an_empty_index_knows_no_dialect():
     assert dialects.AreaIndex([]).lookup(8.84, 54.59) is None
+
+
+# -------------------------------------------------------------- area_rows ---
+# A node can never be a polygon, and `local/` names an object our own
+# curation.csv invents -- neither belongs in an OSM-boundary area list (#24).
+def test_area_rows_rejects_a_node_reference(tmp_path, reg):
+    areas = tmp_path / "dialect_areas.csv"
+    areas.write_text("dialect,osm,name,note\n"
+                     "frr-x-mooring,node/1,A node,\n", encoding="utf-8")
+    rows, problems = dialects.area_rows(str(areas), reg)
+    assert rows == []
+    assert len(problems) == 1
+    line, reason = problems[0]
+    assert line == 2
+    assert "node/1" in reason
+    assert "way" in reason and "relation" in reason
+
+
+def test_area_rows_rejects_a_local_reference(tmp_path, reg):
+    areas = tmp_path / "dialect_areas.csv"
+    areas.write_text("dialect,osm,name,note\n"
+                     "frr-x-mooring,local/some-slug,A local place,\n", encoding="utf-8")
+    rows, problems = dialects.area_rows(str(areas), reg)
+    assert rows == []
+    assert len(problems) == 1
+    line, reason = problems[0]
+    assert line == 2
+    assert "local/some-slug" in reason
+
+
+def test_area_rows_still_accepts_way_and_relation_references(tmp_path, reg):
+    areas = tmp_path / "dialect_areas.csv"
+    areas.write_text("dialect,osm,name,note\n"
+                     "frr-x-mooring,way/1;relation/2,Fine,\n", encoding="utf-8")
+    rows, problems = dialects.area_rows(str(areas), reg)
+    assert problems == []
+    assert rows[0]["refs"] == [("w", 1), ("r", 2)]
+
+
+# ------------------------------------------------------------- --export ---
+def test_the_frontend_gets_the_registry_without_the_notes(tmp_path):
+    registry = tmp_path / "dialects.csv"
+    registry.write_text("tag,column,label,status,view,note\n"
+                        "frr-x-mooring,mooring,Mooring,living,yes,Bökingharde\n",
+                        encoding="utf-8")
+    out = tmp_path / "generated" / "dialects.json"
+    dialects.main(["--registry", str(registry), "--export", str(out)])
+    assert out.read_text(encoding="utf-8") == (
+        '[{"tag":"frr-x-mooring","column":"mooring","label":"Mooring",'
+        '"status":"living","view":"yes"}]\n')

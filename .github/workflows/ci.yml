@@ -6,7 +6,7 @@ on:
 
 jobs:
   python:
-    name: Name pipeline (ruff, pytest, check.py)
+    name: Name pipeline (ruff, pytest, check.py, just check, shellcheck)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -23,6 +23,14 @@ jobs:
       - name: Check the name files
         if: ${{ !cancelled() }}
         run: uv run python names/check.py --summary "$GITHUB_STEP_SUMMARY"
+      # The committed build outputs (names.json, dialects.json, the dialect
+      # areas, the objects file) must be what the committed inputs give.
+      - name: Check the build outputs against their inputs
+        if: ${{ !cancelled() }}
+        run: uv run just check
+      - name: Shellcheck
+        if: ${{ !cancelled() }}
+        run: uv run shellcheck tiles/*.sh web/scripts/*.sh
 
   web:
     name: Web app (lint, typecheck, test, build)

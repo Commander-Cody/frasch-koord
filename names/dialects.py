@@ -30,6 +30,9 @@ One name belongs to a place beyond its dialect columns:
 CLI:  `names/dialects.py`          prints the registry
       `names/dialects.py --tags`   prints `frr-x-mooring,frr-x-wieding,...`
                                    (tiles/build.sh feeds it to Planetiler)
+      `names/dialects.py --export web/src/generated/dialects.json`
+                                   writes the registry the frontend compiles
+                                   in (every column but `note`)
 """
 from __future__ import annotations
 
@@ -50,6 +53,7 @@ DEFAULT_AREAS = os.path.join(HERE, "dialect_areas.geojson")
 AREA_LIST_PATH = os.path.join(HERE, "dialect_areas.csv")
 
 FIELDS = ["tag", "column", "label", "status", "view", "note"]
+EXPORT_FIELDS = FIELDS[:-1]            # what the frontend gets: all but `note`
 STATUSES = {"living", "extinct"}
 VIEWS = {"yes", "no"}
 
@@ -137,6 +141,13 @@ def area_rows(path: str, reg) -> tuple[list[dict], list[tuple[int, str]]]:
                 continue
             if not refs:
                 problems.append((n, "no OSM reference"))
+                continue
+            bad = [r for r in refs if r[0] not in ("w", "r")]
+            if bad:
+                # a node can never be a polygon, and `local/` names an object
+                # of our own invention (curation.csv), not an OSM boundary
+                problems.append((n, f"{placelist.format_osm(bad)}: only way/ "
+                                    f"or relation/ references are allowed here"))
                 continue
             taken = [r for r in refs if r in first_line]
             if taken:
@@ -284,9 +295,17 @@ def main(argv=None):
                          "(tiles/build.sh feeds them to Planetiler)")
     ap.add_argument("--columns", action="store_true",
                     help="print the places.csv columns instead")
+    ap.add_argument("--export", metavar="PATH",
+                    help="write the registry as JSON for the frontend "
+                         "(web/src/generated/dialects.json)")
     a = ap.parse_args(argv)
     reg = read(a.registry)
-    if a.tags:
+    if a.export:
+        os.makedirs(os.path.dirname(os.path.abspath(a.export)), exist_ok=True)
+        placelist.atomic_write(a.export, json.dumps(
+            [{k: d[k] for k in EXPORT_FIELDS} for d in reg],
+            ensure_ascii=False, separators=(",", ":")) + "\n")
+    elif a.tags:
         print(",".join(tags(reg)))
     elif a.columns:
         print(",".join(columns(reg)))

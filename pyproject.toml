@@ -11,10 +11,14 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "mapbox-vector-tile>=2.2.0",
+    "pmtiles>=3.8.1",
     "pytest",
     "pytest-github-actions-annotate-failures>=0.4.2",
     "pytest-md-report>=0.8.0",
     "ruff",
+    "rust-just>=1.58.0",
+    "shellcheck-py>=0.11.0.1",
 ]
 
 [tool.uv]

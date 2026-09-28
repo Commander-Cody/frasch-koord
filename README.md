@@ -23,7 +23,14 @@ uv sync
 .venv/bin/pytest                    # tests of names/ and tiles/
 .venv/bin/python names/check.py     # check places.csv, curation.csv, dialects.csv
 .venv/bin/ruff check .
+uv run just check                   # the committed build outputs match their inputs
+uv run shellcheck tiles/*.sh web/scripts/*.sh
 ```
+
+The whole pipeline — extracts, matching, locating, dialect areas, search
+index, tiles — runs through the recipes of the `justfile`
+(`uv run just --list`; `just` comes with `uv sync`). See
+[`names/README.md`](names/README.md#workflow).
 
 Node 24 (see `web/.nvmrc`), for the frontend:
 

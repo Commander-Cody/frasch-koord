@@ -18,6 +18,7 @@ import pytest
 
 import dialects
 import inject_names
+import locate
 import placelist
 
 
@@ -220,6 +221,7 @@ NORDWARFT = 1347936331
 HALLIG_RING = 500000001
 UNTOUCHED_WAY = 600000001
 HAMBURGER_HALLIG = 5615880
+KREIS = 27019
 
 # closed rings: the Nordwarft on Ockholm, the Hamburger Hallig's outline
 NORDWARFT_NODES = {9000000001: (8.826, 54.668), 9000000002: (8.830, 54.668),
@@ -236,6 +238,11 @@ PLACES = [
          hint="Ockholm", osm=f"way/{NORDWARFT}", status="ok"),
     dict(id="hamborjer-hali", kind="hallig", mooring="Hamborjer Håli", de="Hamburger Hallig",
          osm=f"relation/{HAMBURGER_HALLIG}", status="ok"),
+    # the Kreis relation runs along the Hallig's outline here: a district
+    # around a Hallig, so its inside point lies in the Hallig's area
+    dict(id="kris", kind="landscape", mooring="Kris Nordfraschlönj",
+         nordgoes="Noordfräischloun Krais", de="Kreis Nordfriesland",
+         osm=f"relation/{KREIS}", status="ok"),
     dict(id="waasterhias", kind="settlement", oomrang="Waasterhias", de="Westerheide",
          osm="local/westerheide-amrum", status="ok"),
 ]
@@ -299,6 +306,11 @@ def write_extract(path):
         w.add_way(Way(id=NORDWARFT, version=1, visible=True, nodes=ring + ring[:1],
                       tags={"name": "Nordwarft", "landuse": "residential"}))
         w.add_relation(Relation(
+            id=KREIS, version=1, visible=True,
+            members=[("w", HALLIG_RING, "outer")],
+            tags={"type": "boundary", "boundary": "administrative",
+                  "admin_level": "6", "name": "Kreis Nordfriesland"}))
+        w.add_relation(Relation(
             id=HAMBURGER_HALLIG, version=1, visible=True,
             members=[("w", HALLIG_RING, "outer")],
             tags={"type": "boundary", "boundary": "administrative",
@@ -319,21 +331,28 @@ def read_extract(path):
     return out
 
 
-@pytest.fixture(scope="module")
-def injected(tmp_path_factory):
-    d = tmp_path_factory.mktemp("inject")
+def places_csv(rows):
     buf = io.StringIO(newline="")
     w = csv.DictWriter(buf, fieldnames=placelist.COLUMNS, lineterminator="\n")
     w.writeheader()
-    for r in PLACES:
+    for r in rows:
         w.writerow({k: r.get(k, "") for k in placelist.COLUMNS})
-    (d / "places.csv").write_text(buf.getvalue(), encoding="utf-8")
+    return buf.getvalue()
+
+
+@pytest.fixture(scope="module")
+def injected(tmp_path_factory):
+    d = tmp_path_factory.mktemp("inject")
+    (d / "places.csv").write_text(places_csv(PLACES), encoding="utf-8")
     curation = curation_file(d, *CURATION)
     (d / "areas.geojson").write_text(json.dumps(AREAS), encoding="utf-8")
     write_extract(d / "in.osm.pbf")
+    locate.main([str(d / "in.osm.pbf"), "--names", str(d / "places.csv"),
+                 "--out", str(d / "osm_objects.json")])
     inject_names.run(str(d / "in.osm.pbf"), str(d / "out.osm.pbf"),
                      str(d / "places.csv"), dialects.DEFAULT_PATH,
-                     str(d / "areas.geojson"), curation_csv=curation)
+                     str(d / "areas.geojson"), curation_csv=curation,
+                     objects_json=str(d / "osm_objects.json"))
     objs = read_extract(d / "out.osm.pbf")
     return objs, {(t, i): (tags, extra) for t, i, tags, extra in objs}
 
@@ -355,7 +374,7 @@ def test_every_input_object_is_still_there(injected):
     _, by_key = injected
     for key in [("n", NORDSTRAND), ("n", HOLM), ("n", UNTOUCHED_NODE), ("n", TAMMENSIEL),
                 ("w", NORDWARFT), ("w", HALLIG_RING), ("w", UNTOUCHED_WAY),
-                ("r", HAMBURGER_HALLIG)]:
+                ("r", KREIS), ("r", HAMBURGER_HALLIG)]:
         assert key in by_key
 
 
@@ -394,6 +413,27 @@ def test_matched_relation_gets_the_smallest_area_and_its_curation(injected):
                     "frasch:dialect": "frr-x-hallig",
                     "frasch:ref": "hamborjer-hali",
                     "place": "island", "frasch:minzoom": "12"}
+
+
+def test_a_district_gets_no_dialect(injected):
+    _, by_key = injected
+    tags, _ = by_key[("r", KREIS)]
+    assert "frasch:dialect" not in tags and "frasch:local" not in tags
+    assert tags["frasch:ref"] == "kris"
+
+
+def test_an_object_nobody_located_stops_the_build(tmp_path):
+    (tmp_path / "places.csv").write_text(places_csv([PLACES[0]]), encoding="utf-8")
+    (tmp_path / "areas.geojson").write_text(json.dumps(AREAS), encoding="utf-8")
+    (tmp_path / "osm_objects.json").write_text(
+        locate.objects_json(locate.Objects({}, {"extracts": []})), encoding="utf-8")
+    write_extract(tmp_path / "in.osm.pbf")
+    with pytest.raises(SystemExit, match=f"node/{HOLM}"):
+        inject_names.run(str(tmp_path / "in.osm.pbf"), str(tmp_path / "out.osm.pbf"),
+                         str(tmp_path / "places.csv"), dialects.DEFAULT_PATH,
+                         str(tmp_path / "areas.geojson"),
+                         objects_json=str(tmp_path / "osm_objects.json"))
+    assert not (tmp_path / "out.osm.pbf").exists()
 
 
 def test_a_relations_member_way_is_left_alone(injected):

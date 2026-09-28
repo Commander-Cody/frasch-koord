@@ -1,5 +1,5 @@
 # tile build inputs/outputs (large, reproducible)
-tiles/data/
+tiles/data
 tiles/planetiler.jar
 *.pmtiles
 *.mbtiles

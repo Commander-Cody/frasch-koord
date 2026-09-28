@@ -10,6 +10,7 @@ import SearchPanel from './components/SearchPanel';
 import type { NameEntry, PlaceSelection, TileProps } from './names';
 import { displayName, useNames } from './names';
 import { labelOption } from './config';
+import { useProvenanceCheck } from './provenance';
 import { INITIAL_LABELS, readUrlState, writeUrlState } from './urlState';
 import './App.css';
 
@@ -57,7 +58,8 @@ function App() {
   // Run (and cleared) as soon as the card for the new selection is laid out.
   const pendingMove = useRef<((inset: number) => void) | null>(null);
   // One fetch of the name list for both the search index and the card.
-  const { status: namesStatus, entries, find } = useNames();
+  const { status: namesStatus, entries, find, builtFrom } = useNames();
+  useProvenanceCheck(builtFrom);
 
   // Map labels and UI chrome move together: each option names the UI language
   // it comes with (the local view has no dialect of its own and borrows one,
