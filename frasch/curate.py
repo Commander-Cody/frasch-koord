@@ -46,13 +46,15 @@ Run:  .venv/bin/python names/curate.py            # = export
 from __future__ import annotations
 
 import argparse
+import functools
 import collections
 import csv
 import json
 import os
-import re
 import sys
 import time
+
+import jsonschema
 
 from frasch import candidates, cli, curationlist, errors, files, geo, nameindex, paths, placelist
 from frasch.hints import HINT_FALLBACK, HintResolver
@@ -75,8 +77,6 @@ KIND_ORDER = ["settlement", "island", "hallig", "helgoland", "sand",
 SH_SRC = "schleswig-holstein"
 
 RESULTS = ("ambiguous", "not_found")
-ACTIONS = ("osm", "local", "skip", "clear")
-SLUG = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 
 # ------------------------------------------------------------- candidates ---
 def parse_candidates(cell: str) -> list[dict]:
@@ -257,6 +257,100 @@ def read_patch(path):
     return sorted(last.values(), key=lambda e: (e.get("line") or 0, e["_patch_line"]))
 
 
+@functools.cache
+def patch_validator():
+    with open(paths.PATCH_SCHEMA, encoding="utf-8") as fh:
+        return jsonschema.Draft202012Validator(json.load(fh))
+
+
+def schema_problem(entry) -> str | None:
+    """What breaks names/curate-patch.schema.json in one entry, or None."""
+    entry = {k: v for k, v in entry.items() if k != "_patch_line"}
+    error = next(iter(sorted(patch_validator().iter_errors(entry), key=str)), None)
+    if error is None:
+        return None
+    where = "/".join(map(str, error.absolute_path))
+    return f"{where + ': ' if where else ''}{error.message} (curate-patch.schema.json)"
+
+
+def entry_problem(entry, row, names) -> str | None:
+    """Why apply refuses an entry before looking at its decision, or None:
+    the row it names must exist and be the matcher's to fill."""
+    if not patch_key(entry):
+        return ("no `id` (a patch from before the row ids -- "
+                "re-run names/curate.py export and decide it again)")
+    if (why := schema_problem(entry)):
+        return why
+    if row is None:
+        return f"no row with id {patch_key(entry)!r} in {names} (deleted since the export?)"
+    if not placelist.owned_by_matcher(row):
+        return (f"{names}:{row['_line']} is not the matcher's to fill "
+                f"(status={row['status'] or 'empty'}, osm={row['osm'] or '-'})")
+    return None
+
+
+def decide(entry, row) -> str | None:
+    """Write an `osm` or `skip` decision into `row`; -> why not, or None."""
+    if entry["action"] == "skip":
+        row["status"] = "skip"
+        return None
+    try:
+        refs = placelist.parse_osm(entry.get("osm"))
+    except errors.Invalid as exc:
+        return str(exc)
+    if not refs:
+        return "action=osm without an `osm` reference"
+    if any(t == placelist.LOCAL_TYPE for t, _ in refs):
+        return "a local reference is action=local, not action=osm"
+    row["osm"] = placelist.format_osm(refs)
+    row["wikidata"] = entry.get("wikidata") or row["wikidata"]
+    row["status"] = "ok"
+    return None
+
+
+def decide_local(entry, row, used_slugs) -> tuple[str | None, dict | None]:
+    """Write a `local` decision -- a place OSM does not have -- into `row`;
+    -> (why not, or None; the curation row that positions it)."""
+    slug = entry.get("slug")
+    if not slug:
+        return "action=local needs a `slug`", None
+    if slug in used_slugs:
+        return f"local/{slug} is already taken", None
+    if "lat" not in entry or "lon" not in entry:
+        return "action=local needs `lat` and `lon`", None
+    row["osm"] = f"local/{slug}"
+    row["wikidata"] = ""
+    row["status"] = "ok"
+    used_slugs.add(slug)
+    cur = {c: "" for c in curationlist.COLUMNS}
+    cur.update(osm=row["osm"], lat=fmt_deg(entry["lat"]), lon=fmt_deg(entry["lon"]),
+               note=(entry.get("note") or "").strip())
+    if entry.get("polygon_km2") is not None:
+        # the README's Koog route: no labelled node, only a square of that
+        # area -- and OpenMapTiles labels a polygon only as island
+        cur.update(polygon_km2=f"{entry['polygon_km2']:g}", set_tags="place=island")
+    return None, cur
+
+
+def decision_text(entry, row, curation) -> str:
+    """What an applied decision changed, for the log."""
+    if entry["action"] == "skip":
+        return "status = skip"
+    if entry["action"] == "osm":
+        return (f"osm = {row['osm']}"
+                + (f", wikidata = {entry['wikidata']}" if entry.get("wikidata") else "")
+                + ", status = ok")
+    text = (f"osm = {row['osm']}, status = ok; "
+            f"{curation} += {fmt_deg(entry['lat'])}/{fmt_deg(entry['lon'])}")
+    if entry.get("polygon_km2") is not None:
+        return text + f", polygon_km2 = {entry['polygon_km2']:g}"
+    if row["kind"] not in curationlist.POINT_TAGS:
+        text += (f"\n    warning: kind={row['kind']} has no default `place=` "
+                 f"(curationlist.POINT_TAGS) -- put one into the curation row's "
+                 f"`set_tags` before the next build")
+    return text
+
+
 def curation_name(row):
     """The free-text label of the appended curation row -- German, else Danish,
     else Frisian, plus the hint, so the file stays readable by a human."""
@@ -317,101 +411,22 @@ def _apply(args):
                   f"({entry.get('name')} / {entry.get('de')}): {why}")
 
         for e in entries:
-            action = e.get("action")
-            if action == "clear":
+            if e.get("action") == "clear":
                 continue                     # withdrawn in the browser
-            if action not in ACTIONS:
-                refuse(e, f"unknown action {action!r}")
-                continue
-            if not patch_key(e):
-                refuse(e, "no `id` (a patch from before the row ids -- "
-                          "re-run names/curate.py export and decide it again)")
-                continue
             row = by_id.get(patch_key(e))
-            if row is None:
-                refuse(e, f"no row with id {patch_key(e)!r} in {args.names} "
-                          f"(deleted since the export?)")
+            why = entry_problem(e, row, args.names)
+            if why is None and e["action"] == "local":
+                why, cur = decide_local(e, row, used_slugs)
+                if cur:
+                    cur["name"] = curation_name(row)
+                    new_curation.append(cur)
+            elif why is None:
+                why = decide(e, row)
+            if why:
+                refuse(e, why)
                 continue
-            where = f"{args.names}:{row['_line']}"
-            if not placelist.owned_by_matcher(row):
-                refuse(e, f"{where} is not the matcher's to fill "
-                          f"(status={row['status'] or 'empty'}, osm={row['osm'] or '-'})")
-                continue
-
-            if action == "skip":
-                print(f"  {where} {placelist.describe(row)}: status = skip")
-                row["status"] = "skip"
-            elif action == "osm":
-                try:
-                    refs = placelist.parse_osm(e.get("osm"), where)
-                except errors.Invalid as exc:
-                    refuse(e, str(exc))
-                    continue
-                if not refs:
-                    refuse(e, "action=osm without an `osm` reference")
-                    continue
-                if any(t == placelist.LOCAL_TYPE for t, _ in refs):
-                    refuse(e, "a local reference is action=local, not action=osm")
-                    continue
-                qid = (e.get("wikidata") or "").strip()
-                if qid and not re.fullmatch(r"Q\d+", qid):
-                    refuse(e, f"bad wikidata id {qid!r}")
-                    continue
-                row["osm"] = placelist.format_osm(refs)
-                if qid:
-                    row["wikidata"] = qid
-                row["status"] = "ok"
-                print(f"  {where} {placelist.describe(row)}: osm = {row['osm']}"
-                      + (f", wikidata = {qid}" if qid else "") + ", status = ok")
-            else:                            # local: a place OSM does not have
-                slug = (e.get("slug") or "").strip()
-                if not SLUG.fullmatch(slug):
-                    refuse(e, f"bad slug {slug!r} (lowercase letters, digits, hyphens)")
-                    continue
-                if slug in used_slugs:
-                    refuse(e, f"local/{slug} is already taken")
-                    continue
-                try:
-                    pos = curationlist.parse_point(str(e.get("lat", "")),
-                                                str(e.get("lon", "")),
-                                                f"patch line {e['_patch_line']}")
-                except errors.Invalid as exc:
-                    refuse(e, str(exc))
-                    continue
-                if pos is None:
-                    refuse(e, "action=local needs `lat` and `lon`")
-                    continue
-                km2 = e.get("polygon_km2")
-                if km2 is not None:
-                    try:
-                        km2 = float(km2)
-                    except (TypeError, ValueError):
-                        refuse(e, f"polygon_km2 {km2!r} is not a number")
-                        continue
-                    if km2 <= 0:
-                        refuse(e, f"polygon_km2 {km2} must be positive")
-                        continue
-                lon, lat = pos
-                row["osm"] = f"local/{slug}"
-                row["wikidata"] = ""
-                row["status"] = "ok"
-                used_slugs.add(slug)
-                cur = {c: "" for c in curationlist.COLUMNS}
-                cur.update(osm=row["osm"], name=curation_name(row),
-                           lat=fmt_deg(lat), lon=fmt_deg(lon),
-                           note=(e.get("note") or "").strip())
-                if km2 is not None:
-                    # the README's Koog route: no labelled node, only a square of
-                    # that area -- and OpenMapTiles labels a polygon only as island
-                    cur.update(polygon_km2=f"{km2:g}", set_tags="place=island")
-                new_curation.append(cur)
-                print(f"  {where} {placelist.describe(row)}: osm = {row['osm']}, "
-                      f"status = ok; {args.curation} += {cur['lat']}/{cur['lon']}"
-                      + (f", polygon_km2 = {cur['polygon_km2']}" if km2 is not None else ""))
-                if km2 is None and row["kind"] not in curationlist.POINT_TAGS:
-                    print(f"    warning: kind={row['kind']} has no default `place=` "
-                          f"(curationlist.POINT_TAGS) -- put one into the curation "
-                          f"row's `set_tags` before the next build")
+            print(f"  {args.names}:{row['_line']} {placelist.describe(row)}: "
+                  f"{decision_text(e, row, args.curation)}")
             applied += 1
 
         if args.dry_run:

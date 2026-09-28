@@ -256,3 +256,15 @@ def test_every_decision_without_an_id_is_refused_and_kept(w):
     append(w.patch, *old)
     assert w.apply() == 1
     assert lines(w.patch) == old
+
+
+def test_an_entry_that_breaks_the_patch_schema_is_refused_and_kept(w, capsys):
+    # names/curate-patch.schema.json is the contract with the browser; a
+    # hand-edited or foreign line must not crash apply or reach the list
+    broken = entry(2, action="local", slug="taarep", lat=54.6, lon=8.9, note=42)
+    append(w.patch, broken)
+    before = w.places.read_bytes()
+    assert w.apply() == 1
+    assert "42 is not of type 'string'" in capsys.readouterr().out
+    assert w.places.read_bytes() == before
+    assert lines(w.patch) == [broken]
