@@ -1,4 +1,5 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { useEffect, useImperativeHandle, useRef, useState } from 'react';
+import type { Ref } from 'react';
 import {
   Map as MapLibreMap,
   Marker,
@@ -65,6 +66,8 @@ export interface MapViewProps {
    * click handling.
    */
   onSelectFeature?: (feature: MapGeoJSONFeature | null, at: LngLat) => void;
+  /** The imperative handle below, for App's search and place card and the dev views. */
+  ref?: Ref<MapViewHandle>;
 }
 
 /**
@@ -96,10 +99,7 @@ export interface MapViewHandle {
  * Full-viewport MapLibre map. Exposes a small imperative handle via ref so
  * parents (e.g. search) can fly to a location and drop a marker.
  */
-const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
-  { view, onSelectFeature },
-  ref,
-) {
+export default function MapView({ view, onSelectFeature, ref }: MapViewProps) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement | null>(null);
   // Something the map needs (tiles, glyphs, sprites, the worker) failed to
@@ -264,6 +264,4 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
       )}
     </>
   );
-});
-
-export default MapView;
+}
