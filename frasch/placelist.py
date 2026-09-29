@@ -217,10 +217,10 @@ def parse_osm(cell: str | None, where: str = "") -> list[Ref]:
     return out
 
 
-def osm_refs(cell: str | None) -> list[OsmRef]:
+def osm_refs(cell: str | None, where: str = "") -> list[OsmRef]:
     """The references to OSM objects of an `osm` cell -- none for a local
     reference."""
-    return [(t, i) for t, i in parse_osm(cell) if isinstance(i, int)]
+    return [(t, i) for t, i in parse_osm(cell, where) if isinstance(i, int)]
 
 
 def format_osm(refs: Iterable[Ref]) -> str:
