@@ -197,7 +197,15 @@ export default function SearchPanel({
         </p>
       )}
       {showList && (
-        <ul id={listId} className="search-results" role="listbox">
+        <ul
+          id={listId}
+          className="search-results"
+          // The WAI-ARIA combobox pattern: the input controls a list of
+          // options, which no native element offers (<datalist> cannot be styled
+          // or labelled per option, <select> is not a search field).
+          // eslint-disable-next-line jsx-a11y/no-noninteractive-element-to-interactive-role
+          role="listbox"
+        >
           {results.length === 0 && (
             <li className="search-empty">
               {t(status === 'loading' ? 'search.loading' : 'search.noResults')}
@@ -209,6 +217,7 @@ export default function SearchPanel({
               <li
                 key={entry.id}
                 id={`${listId}-${i}`}
+                // eslint-disable-next-line jsx-a11y/no-noninteractive-element-to-interactive-role -- see the listbox
                 role="option"
                 aria-selected={i === activeIdx}
                 className={i === activeIdx ? 'is-active' : undefined}
