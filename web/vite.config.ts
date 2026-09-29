@@ -16,6 +16,21 @@ export default defineConfig({
   // MapLibre's worker is bundled on its own (see src/components/Map.tsx) and
   // started as a module worker, so it is built as an ES module too.
   worker: { format: 'es' },
+  // The libraries change far less often than the app: in chunks of their own
+  // a browser keeps them cached across deploys. MapLibre (with pmtiles) is
+  // most of the bytes; the rest of node_modules is the second chunk.
+  build: {
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            { name: 'maplibre', test: /node_modules[\\/](maplibre-gl|@maplibre|pmtiles)[\\/]/, priority: 2 },
+            { name: 'vendor', test: /node_modules[\\/]/, priority: 1 },
+          ],
+        },
+      },
+    },
+  },
   test: {
     environment: 'jsdom',
     // Vitest hands every stylesheet over empty; a `?raw` import is read as
