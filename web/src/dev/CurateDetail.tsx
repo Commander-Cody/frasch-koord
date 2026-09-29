@@ -90,14 +90,18 @@ export default function CurateDetail({ row, done, bbox, mapRef, onSave }: Curate
   const [activeRef, setActiveRef] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [postError, setPostError] = useState<string | null>(null);
+  // One decision at a time: a double click must not append two patch lines.
+  const [saving, setSaving] = useState(false);
 
   useRowPins({ mapRef, row, bbox, lookupResults: lookup.results, checked, onActivate: setActiveRef, onToggle: toggle });
 
   const decide = (decision: Decision) => {
+    if (saving) return;
+    setSaving(true);
     setPostError(null);
-    onSave(row, withNote(decision, note)).catch((err: unknown) =>
-      setPostError(err instanceof Error ? err.message : String(err)),
-    );
+    onSave(row, withNote(decision, note))
+      .catch((err: unknown) => setPostError(err instanceof Error ? err.message : String(err)))
+      .finally(() => setSaving(false));
   };
   const pick = (ref: string, wikidata?: string) => decide(osmDecision(ref, wikidata));
   const flyTo = (lon: number, lat: number) =>
@@ -121,47 +125,50 @@ export default function CurateDetail({ row, done, bbox, mapRef, onSave }: Curate
         </p>
       )}
 
-      <Candidates
-        candidates={row.candidates}
-        activeRef={activeRef}
-        isChecked={isChecked}
-        onToggle={toggle}
-        onCheckAll={checkAll}
-        onShow={(candidate) => {
-          setActiveRef(candidate.ref);
-          if (hasPoint(candidate)) flyTo(candidate.lon, candidate.lat);
-        }}
-        onPick={pick}
-      />
-      <CurateLookup
-        lookup={lookup}
-        isChecked={isChecked}
-        onToggle={toggle}
-        onShow={(result) => flyTo(result.lon, result.lat)}
-        onPick={pick}
-      />
-      {checked.length > 0 && <CheckedPick checked={checked} onClear={clear} decide={decide} />}
-      <ManualRef decide={decide} />
-      <LocalRef row={row} initialSlug={slugify(de || row.name)} mapRef={mapRef} decide={decide} />
+      {/* Inert while a decision is on its way to the patch. */}
+      <fieldset className="curate-decisions" disabled={saving} aria-busy={saving}>
+        <Candidates
+          candidates={row.candidates}
+          activeRef={activeRef}
+          isChecked={isChecked}
+          onToggle={toggle}
+          onCheckAll={checkAll}
+          onShow={(candidate) => {
+            setActiveRef(candidate.ref);
+            if (hasPoint(candidate)) flyTo(candidate.lon, candidate.lat);
+          }}
+          onPick={pick}
+        />
+        <CurateLookup
+          lookup={lookup}
+          isChecked={isChecked}
+          onToggle={toggle}
+          onShow={(result) => flyTo(result.lon, result.lat)}
+          onPick={pick}
+        />
+        {checked.length > 0 && <CheckedPick checked={checked} onClear={clear} decide={decide} />}
+        <ManualRef decide={decide} />
+        <LocalRef row={row} initialSlug={slugify(de || row.name)} mapRef={mapRef} decide={decide} />
 
-      <h3 className="dev-panel-section">Note / skip</h3>
-      <input
-        className="dev-panel-input"
-        placeholder="note (optional, any action)"
-        value={note}
-        aria-label="note"
-        onChange={(event) => setNote(event.target.value)}
-      />
-      <div className="curate-row">
-        <button type="button" onClick={() => decide({ action: 'skip' })}>
-          Skip
-        </button>
-        {done && (
-          <button type="button" onClick={() => decide({ action: 'clear' })}>
-            Clear
+        <h3 className="dev-panel-section">Note / skip</h3>
+        <input
+          className="dev-panel-input"
+          placeholder="note (optional, any action)"
+          value={note}
+          aria-label="note"
+          onChange={(event) => setNote(event.target.value)}
+        />
+        <div className="curate-row">
+          <button type="button" onClick={() => decide({ action: 'skip' })}>
+            Skip
           </button>
-        )}
-      </div>
+          {done && (
+            <button type="button" onClick={() => decide({ action: 'clear' })}>
+              Clear
+            </button>
+          )}
+        </div>
+      </fieldset>
       {postError && <p className="dev-panel-error">could not save: {postError}</p>}
     </section>
   );

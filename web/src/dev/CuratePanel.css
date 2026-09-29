@@ -152,6 +152,11 @@
   padding-top: 6px;
 }
 
+/* Only there to disable the decisions while one is saved; lays out nothing. */
+.curate-decisions {
+  display: contents;
+}
+
 .curate-detail-title {
   margin: 0;
   font-size: 14px;

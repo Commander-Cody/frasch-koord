@@ -2,7 +2,7 @@
 // the browser against the public instances and bounded to the worklist's
 // bbox. Light, hand-driven use only — that is what their usage policies allow.
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import type { Bbox } from './curateWorklist';
 
@@ -26,9 +26,12 @@ function tagSummary(tags: Record<string, string> | undefined): string {
   return INTERESTING_TAGS.filter((k) => tags[k]).map((k) => `${k}=${tags[k]}`).join(' ');
 }
 
-/** Escapes a user's query for the Overpass `~"…"` regex. */
+/**
+ * Escapes a user's query for the Overpass `~"…"` regex: its special
+ * characters, and the `"` that would end the QL string around it.
+ */
 function escapeRegex(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return text.replace(/[.*+?^${}()|[\]\\"]/g, '\\$&');
 }
 
 interface NominatimHit {
@@ -42,11 +45,11 @@ interface NominatimHit {
   lon: string;
 }
 
-async function searchNominatim(query: string, [w, s, e, n]: Bbox): Promise<LookupResult[]> {
+async function searchNominatim(query: string, [w, s, e, n]: Bbox, signal: AbortSignal): Promise<LookupResult[]> {
   const url =
     'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=25&bounded=1' +
     `&viewbox=${w},${n},${e},${s}&q=${encodeURIComponent(query)}`;
-  const res = await fetch(url);
+  const res = await fetch(url, { signal });
   if (!res.ok) throw new Error(`Nominatim HTTP ${res.status} (rate limited?)`);
   const hits = (await res.json()) as NominatimHit[];
   return hits
@@ -70,12 +73,16 @@ interface OverpassElement {
   tags?: Record<string, string>;
 }
 
-async function searchOverpass(query: string, [w, s, e, n]: Bbox): Promise<LookupResult[]> {
+async function searchOverpass(query: string, [w, s, e, n]: Bbox, signal: AbortSignal): Promise<LookupResult[]> {
   const overpassQuery =
     '[out:json][timeout:25];' +
     `nwr["name"~"${escapeRegex(query)}",i](${s},${w},${n},${e});` +
     'out center tags 60;';
-  const res = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: overpassQuery });
+  const res = await fetch('https://overpass-api.de/api/interpreter', {
+    method: 'POST',
+    body: overpassQuery,
+    signal,
+  });
   if (!res.ok) throw new Error(`Overpass HTTP ${res.status} (busy/rate limited?)`);
   const body = (await res.json()) as { elements?: OverpassElement[] };
   const results: LookupResult[] = [];
@@ -112,22 +119,31 @@ export interface OsmLookup {
   run: (service: LookupService) => Promise<void>;
 }
 
-/** The lookup's query, starting at `initialQuery`, and what the last search found. */
+/**
+ * The lookup's query, starting at `initialQuery`, and what the last search
+ * found. A search still on its way when the component unmounts is aborted.
+ */
 export function useOsmLookup(bbox: Bbox, initialQuery: string): OsmLookup {
   const [query, setQuery] = useState(initialQuery);
   const [results, setResults] = useState<LookupResult[]>([]);
   const [source, setSource] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const pending = useRef<AbortController | null>(null);
+
+  useEffect(() => () => pending.current?.abort(), []);
 
   const run = async (service: LookupService) => {
+    const controller = new AbortController();
+    pending.current = controller;
     setBusy(true);
     setError(null);
     try {
-      const found = await SERVICES[service](query, bbox);
+      const found = await SERVICES[service](query, bbox, controller.signal);
       setResults(found);
       setSource(`${service}: ${found.length} result(s)`);
     } catch (err: unknown) {
+      if (controller.signal.aborted) return;
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
