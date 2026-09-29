@@ -78,9 +78,7 @@ export function usePlaceSelection(
   const selectEntry = (entry: NameEntry, name: string) => {
     const zoom = ZOOM_BY_KIND[entry.kind] ?? DEFAULT_TARGET_ZOOM;
     moveAfterCard((inset) => mapRef.current?.flyTo([entry.lon, entry.lat], zoom, { title: name }, inset));
-    // A search result carries only the index's stored fields — no Danish
-    // name, no Wikidata id — so the card gets the full name-list entry.
-    setSelection({ entry: find(entry.id) ?? entry });
+    setSelection({ entry });
   };
 
   const close = useCallback(() => {

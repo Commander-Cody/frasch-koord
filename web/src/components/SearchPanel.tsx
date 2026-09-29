@@ -12,10 +12,18 @@ import ShareButton from './ShareButton';
  * Index document: every name of an entry flattened into one searchable
  * string. A place must be findable under any of its dialect names no matter
  * which view is selected — somebody typing "Naibel" while the map is in
- * Fering still means Niebüll.
+ * Fering still means Niebüll. The index keeps only the id; a hit is looked
+ * up in the name list again, so the index never has to know its schema.
  */
-interface IndexedEntry extends NameEntry {
+interface IndexedEntry {
+  id: string;
   text: string;
+}
+
+/** The index over the name list, and the entries its hits name. */
+interface SearchIndex {
+  index: MiniSearch<IndexedEntry>;
+  byId: Map<string, NameEntry>;
 }
 
 export interface SearchPanelProps {
@@ -32,19 +40,10 @@ export interface SearchPanelProps {
 
 const MAX_RESULTS = 8;
 
-function createIndex() {
-  return new MiniSearch<IndexedEntry>({
-    fields: ['text'],
-    // Everything `displayName` reads, so a result is named as its map label is.
-    storeFields: ['id', 'names', 'local', 'dialect', 'variety', 'name_nds', 'name_de', 'name_da', 'lon', 'lat', 'kind'],
-    searchOptions: { prefix: true, fuzzy: 0.2 },
-  });
-}
-
 /** Flattens all of an entry's names into the indexed `text` field, deduplicated. */
 function toIndexed(entry: NameEntry): IndexedEntry {
   const all = [...Object.values(entry.names ?? {}), entry.local, entry.name_nds, entry.name_de];
-  return { ...entry, text: [...new Set(all.filter(Boolean))].join(' ') };
+  return { id: entry.id, text: [...new Set(all.filter(Boolean))].join(' ') };
 }
 
 /**
@@ -65,6 +64,24 @@ function indexable(entries: NameEntry[]): NameEntry[] {
   return kept;
 }
 
+function createSearchIndex(entries: NameEntry[]): SearchIndex | null {
+  if (entries.length === 0) return null;
+  const kept = indexable(entries);
+  const index = new MiniSearch<IndexedEntry>({
+    fields: ['text'],
+    searchOptions: { prefix: true, fuzzy: 0.2 },
+  });
+  index.addAll(kept.map(toIndexed));
+  return { index, byId: new Map(kept.map((entry) => [entry.id, entry])) };
+}
+
+function search({ index, byId }: SearchIndex, query: string): NameEntry[] {
+  return index
+    .search(query)
+    .slice(0, MAX_RESULTS)
+    .flatMap((hit) => byId.get(hit.id) ?? []);
+}
+
 export default function SearchPanel({
   entries,
   status,
@@ -80,18 +97,12 @@ export default function SearchPanel({
   const [open, setOpen] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
 
-  const index = useMemo(() => {
-    if (entries.length === 0) return null;
-    const idx = createIndex();
-    idx.addAll(indexable(entries).map(toIndexed));
-    return idx;
-  }, [entries]);
+  const searchIndex = useMemo(() => createSearchIndex(entries), [entries]);
 
   const results = useMemo<NameEntry[]>(() => {
-    if (!index || query.trim().length === 0) return [];
-    // MiniSearch spreads the stored fields onto each result object.
-    return index.search(query).slice(0, MAX_RESULTS) as unknown as NameEntry[];
-  }, [index, query]);
+    if (!searchIndex || query.trim().length === 0) return [];
+    return search(searchIndex, query);
+  }, [searchIndex, query]);
 
   // Without the name list there is nothing to search: say so once, under
   // the field, instead of "no results" to every query.
