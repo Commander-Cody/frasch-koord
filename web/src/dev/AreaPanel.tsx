@@ -305,15 +305,13 @@ export default function AreaPanel({ mapRef }: AreaPanelProps) {
 
     // Idempotent on purpose: `addSource` itself fires `styledata`, React
     // StrictMode mounts every effect twice in development, and a style rebuild
-    // calls this again to put the layers back.
+    // calls this again to put the layers back. A source that is there already
+    // holds this collection (a new one re-runs the effect, which removes the
+    // old), so only a style that lost it needs the data again.
     const ensure = () => {
       if (cancelled) return;
       try {
-        const existing = map.getSource(SOURCE) as GeoJSONSource | undefined;
-        if (existing) {
-          existing.setData(collection as unknown as SourceData);
-          return;
-        }
+        if (map.getSource(SOURCE)) return;
         map.addSource(SOURCE, { type: 'geojson', data: collection as unknown as SourceData });
         const before = map.getLayer(BEFORE_ID) ? BEFORE_ID : undefined;
         for (const spec of layerSpecs()) map.addLayer(spec, before);
