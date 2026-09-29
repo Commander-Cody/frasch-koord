@@ -127,8 +127,9 @@ Sölring, Öömrang, Halunder and Hålifrasch names. They are now first-class.
    Gotteskoog border villages Holm, Uphusum, Galmsbüll and
    the Stedesand/Klixbüll/Bosbüll assignment to the Karrharde.
    *(Corrected 2026-09-30: the file has 64 rows — 39 mainland, 25
-   island/Hallig. It had 83 until the owner removed 19 mainland rows on
-   2026-09-20; the geojson follows it, see the 2026-09-20 entry below.)*
+   island/Hallig. It had 83 until the owner removed 20 mainland rows and
+   added Husum on 2026-09-20; the geojson follows it, see the 2026-09-20
+   entry below.)*
 
 ## Decided 2026-09-17: places OSM does not have get their own point
 

@@ -41,7 +41,7 @@ reason more than the verdict.
 
 | ✓ | name | assigned | line | what to decide |
 |---|---|---|---|---|
-| [ ] | Holm | Mooring (Bökingharde) | 36 | on the Bökingharde/Karrharde boundary; note says best guess |
+| [ ] | Holm | Karrharder | 36 | on the Bökingharde/Karrharde boundary. Moved to Karrharder on 2026-09-20, but its note still says "best-guess Bökingharde": the dialect cell and the note contradict each other |
 | [ ] | Uphusum | Karrharder | 42 | Karrharde/Bökingharde/Wiedingharde tripoint; note says best guess. The row already carries a **Wiedingharder** name (`Äphüsem`) in `places.csv` |
 | [ ] | Galmsbüll | Mooring | 32 | historic Horsbüllharde = old Wiedingharde; later Amt Bökingharde |
 

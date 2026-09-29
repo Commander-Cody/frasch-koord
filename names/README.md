@@ -133,7 +133,7 @@ Wikipedia, 2026-09-16) are a **draft**: the `note` column carries `high`,
 `medium` or `low` with the reason, and every `medium`/`low` row deserves a
 look — particularly the Gotteskoog border villages (Holm, Uphusum,
 Galmsbüll). Move a municipality by changing its `dialect` cell and
-re-running the build script below. Nordstrand, Pellworm, Eiderstedt, Husum and
+re-running the build script below. Nordstrand, Pellworm, Eiderstedt and
 Friedrichstadt deliberately have no row: no living or historic Frisian dialect
 is assigned there, so the local view shows Low Saxon.
 
