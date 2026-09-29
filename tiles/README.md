@@ -33,7 +33,7 @@ Planetiler runs with `--extra_name_tags=frasch:kind,frasch:minzoom,frasch:maxzoo
 
 | attribute | source | meaning |
 |---|---|---|
-| `frasch:kind` | `places.csv`'s `kind` column, or `set_tags` in `curation.csv` | `island`, `hallig`, `sand`, `settlement`, `koog`, `harde`, `warft`, `landscape`, `water`, `road`, `country`, `helgoland`, `other` — lets the style give a Hallig a different symbol from an island, even though OMT calls both `class=island` |
+| `frasch:kind` | `places.csv`'s `kind` column, or `set_tags` in `curation.csv` | `island`, `hallig`, `sand`, `settlement`, `koog`, `harde`, `warft`, `landscape`, `water`, `road`, `country`, `helgoland` — lets the style give a Hallig a different symbol from an island, even though OMT calls both `class=island` |
 | `frasch:minzoom` | `curation.csv`'s `minzoom` column | the earliest zoom the label should appear at. **Planetiler does not enforce this** — it is a hint the style must honour, and it can only push a label later, never earlier. |
 | `frasch:maxzoom` | `curation.csv`'s `maxzoom` column | the last zoom (inclusive) the label should be shown at. Style-enforced like `frasch:minzoom`. Nordstrand's synthetic island polygon uses it to hand over to the village label at z12. |
 | `frasch:dialect` | `names/dialect_areas.geojson` at the object's position in `names/osm_objects.json` (point in polygon, smallest area wins; none for an administrative area above municipality level) | the dialect spoken **where the object is**, e.g. `frr-x-hallig` — not necessarily a dialect the object has a name in. Absent outside the Frisian areas. |

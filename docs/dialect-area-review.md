@@ -1,6 +1,6 @@
 # Dialect-area review checklist (issue #2)
 
-The 58 mainland rows of `names/dialect_areas.csv` were assigned from German
+The 39 mainland rows of `names/dialect_areas.csv` were assigned from German
 Wikipedia by a research agent; the 25 island/Hallig rows are older and were not
 part of that run. Nothing here is owner-verified yet, and a wrong row is
 invisible in the data: a place is joined to a dialect area by point-in-polygon
@@ -36,29 +36,6 @@ reason more than the verdict.
   row claims in grey. Click one — the detail block gives its
   `relation/<id>` with a copy button. Paste it into a new row, re-run the
   build, press Reload; the polygon takes the dialect's colour.
-
-## Priority 0 — 23 municipalities lost their rows
-
-`names/dialect_areas.geojson` (committed, and what the tiles and the search
-index actually use) still covers 23 municipalities that **no CSV row claims any
-more**. They show up grey in the review view. Either the rows were dropped by
-mistake and should come back, or they were dropped on purpose and the committed
-geojson is stale — until this is settled, `dialect_areas.csv` and
-`dialect_areas.geojson` disagree about who speaks what.
-
-Karrharde: Ladelund, Westre, Bramstedtlund, Ellhöft.
-Nordergoesharde: Löwenstedt, Joldelund, Viöl, Behrendorf, Haselund, Goldelund,
-Sollwitt, Goldebek, Bondelum, Kolkerheide.
-Südergoesharde: Ostenfeld (Husum), Schwabstedt, Wester-Ohrstedt, Schwesing,
-Immenstedt, Rantrum, Oster-Ohrstedt, Olderup, Mildstedt.
-
-Note that the CSV's own notes cite several of these as settled: Westre is named
-as a "confirmed Karrharde village" in Lexgaard's note, and Schwabstedt and
-Mildstedt are the Kirchspielslandgemeinden that justify six Südergoesharde
-rows. That points to rows having gone missing rather than been retired.
-
-- [ ] Decide: restore the 23 rows, or accept the smaller areas and rebuild
-      `names/dialect_areas.geojson`.
 
 ## Priority 1 — the Gotteskoog border villages
 
