@@ -131,8 +131,8 @@ The island rows are certain. The mainland rows (39 municipalities of Kreis
 Nordfriesland, assigned to the six Harden by historic membership from German
 Wikipedia, 2026-09-16) are a **draft**: the `note` column carries `high`,
 `medium` or `low` with the reason, and every `medium`/`low` row deserves a
-look — particularly the Gotteskoog border villages (Holm, Uphusum, Lexgaard,
-Braderup, Galmsbüll). Move a municipality by changing its `dialect` cell and
+look — particularly the Gotteskoog border villages (Holm, Uphusum,
+Galmsbüll). Move a municipality by changing its `dialect` cell and
 re-running the build script below. Nordstrand, Pellworm, Eiderstedt, Husum and
 Friedrichstadt deliberately have no row: no living or historic Frisian dialect
 is assigned there, so the local view shows Low Saxon.

@@ -124,7 +124,7 @@ Sölring, Öömrang, Halunder and Hålifrasch names. They are now first-class.
    Wikipedia on 2026-09-16 (historic Harde membership; Bohmstedt, Drelsdorf and
    Ahrenshöft follow the documented Mittelgoesharder dialect instead). Rows
    whose `note` says `medium` or `low` need the owner's check, above all the
-   Gotteskoog border villages Holm, Uphusum, Lexgaard, Braderup, Galmsbüll and
+   Gotteskoog border villages Holm, Uphusum, Galmsbüll and
    the Stedesand/Klixbüll/Bosbüll assignment to the Karrharde.
    *(Corrected 2026-09-30: the file has 64 rows — 39 mainland, 25
    island/Hallig. It had 83 until the owner removed 19 mainland rows on
