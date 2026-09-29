@@ -13,6 +13,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "mapbox-vector-tile>=2.2.0",
+    "mypy>=2.3.1",
     "pmtiles>=3.8.1",
     "pytest",
     "pytest-github-actions-annotate-failures>=0.4.2",
@@ -20,6 +21,9 @@ dev = [
     "ruff",
     "rust-just>=1.58.0",
     "shellcheck-py>=0.11.0.1",
+    "types-jsonschema>=4.26.0.20260518",
+    "types-requests>=2.33.0.20260906",
+    "types-shapely>=2.1.0.20260728",
 ]
 
 [build-system]
@@ -41,3 +45,16 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["F", "E9", "B"]
+
+# Strict everywhere, tests included (#44).  names/tests is on the path for the
+# fixture helpers the tile tests import too (`conftest`, `osm_fixture`).
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["frasch", "names", "tiles"]
+mypy_path = "names/tests"
+exclude = ["^tiles/data/", "^names/work/"]
+
+[[tool.mypy.overrides]]
+module = ["mapbox_vector_tile"]
+ignore_missing_imports = true
