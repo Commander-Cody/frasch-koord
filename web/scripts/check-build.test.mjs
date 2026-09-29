@@ -33,6 +33,38 @@ describe('checkBuild', () => {
     expect(checkBuild(dist).problems).toEqual([]);
   });
 
+  it('refuses a build without the worker', () => {
+    rmSync(join(dist, 'assets', WORKER));
+    expect(checkBuild(dist).problems).toEqual([
+      'no maplibre-gl-worker-<hash>.js in dist/assets',
+      `assets/index-Cd34.js refers to assets/${WORKER}, which dist/ does not have`,
+    ]);
+  });
+
+  it('refuses a worker no chunk names', () => {
+    put('assets/index-Cd34.js', 'setWorkerUrl(new URL("/maplibre-gl-worker.mjs", import.meta.url));');
+    expect(checkBuild(dist).problems).toEqual([`${WORKER} is emitted but no chunk refers to it`]);
+  });
+
+  it('refuses a chunk that names a worker dist/ does not have', () => {
+    put('assets/other-Ij90.js', 'new Worker("/assets/maplibre-gl-worker-Stale.js")');
+    expect(checkBuild(dist).problems).toEqual([
+      'assets/other-Ij90.js refers to assets/maplibre-gl-worker-Stale.js, which dist/ does not have',
+    ]);
+  });
+
+  it('follows an import to a chunk next to it', () => {
+    put('assets/app-Kl12.js', 'import{a}from"./index-Cd34.js";');
+    expect(checkBuild(dist).problems).toEqual([]);
+  });
+
+  it('refuses an import of a chunk dist/ does not have', () => {
+    put('assets/app-Kl12.js', 'import{a}from"./vendor-Mn34.js";');
+    expect(checkBuild(dist).problems).toEqual([
+      'assets/app-Kl12.js imports ./vendor-Mn34.js, which dist/ does not have',
+    ]);
+  });
+
   it('refuses a dev tool in a chunk', () => {
     put('assets/dev-Ef56.js', 'fetch("/__curate/worklist")');
     expect(checkBuild(dist).problems).toEqual(['assets/dev-Ef56.js contains "__curate": a dev tool is in the build']);

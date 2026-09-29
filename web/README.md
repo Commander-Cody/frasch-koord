@@ -38,7 +38,7 @@ make a build differ from `npm run dev`, and each has a check:
 After a build:
 
 ```sh
-npm run check:build   # dist/ has the worker the bundle names, no dev tool strings
+npm run check:build   # dist/ has the worker the bundle names; no dev tool, no dialect-area review data or notes
 npm run smoke         # vite preview + headless Chromium: map loads, search, card
 ```
 
@@ -535,13 +535,14 @@ The checklist of rows to confirm is `docs/dialect-area-review.md`.
 follows the selected label option (see "Dialect registry and the selector").
 One JSON file per dialect in `src/locales/`, same keys in each:
 
-- `de.json` — German UI strings (search placeholder, dialect label, "no
-  results", the place card's row labels under `card.*`, the kind names under
-  `kind.*` — both our own `frasch:kind` values and the OpenMapTiles `class`
-  values a place outside the name list has — and the attribution text). This
-  is the fallback language (`fallbackLng: 'de'`).
+- `de.json` — German UI strings (the page title `app.title`, search
+  placeholder, dialect label, "no results", the place card's row labels under
+  `card.*`, the kind names under `kind.*` — both our own `frasch:kind` values
+  and the OpenMapTiles `class` values a place outside the name list has). This
+  is the fallback language (`fallbackLng: 'de'`). The map's attribution is not
+  among them: it is a fixed licence notice (`src/style/localize.ts`).
 - `frr-x-mooring.json` — Mooring UI strings. Strings nobody has written yet
-  (`attribution`, `dialect.local`, all of `card.*` and `kind.*`) are left as
+  (`app.title`, `search.loading`, `search.error`, `errors.*`) are left as
   **empty strings — never invented** — so the UI falls back to German rather
   than showing blank text
   (`returnEmptyString: false` makes i18next treat an empty string as
