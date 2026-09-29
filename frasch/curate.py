@@ -53,6 +53,8 @@ import json
 import os
 import sys
 import time
+from collections.abc import Callable, Collection, Iterable, Sequence
+from typing import Any, Final, Literal, NotRequired, TypedDict, final
 
 import jsonschema
 
@@ -67,8 +69,11 @@ from frasch import (
     paths,
     placelist,
 )
+from frasch.candidates import Candidate
 from frasch.errors import PipelineError, ValidationError
 from frasch.hints import HINT_FALLBACK, HintResolver
+from frasch.paths import StrPath
+from frasch.placelist import OsmRef, PlaceRow, Row
 
 CAND_PATH = paths.CANDIDATES
 MATCH_PATH = paths.MATCHES
@@ -88,8 +93,51 @@ SH_SRC = "schleswig-holstein"
 
 RESULTS = ("ambiguous", "not_found")
 
+# ------------------------------------------------------------- the worklist ---
+# curate.json, as web/src/dev/curateWorklist.ts reads it
+
+# a candidate as match.py's `candidates` cell names it (`class` is a keyword)
+_Listed = TypedDict("_Listed", {"ref": str, "name": str, "class": str,
+                                "km": int | None})
+
+
+class ListedCandidate(_Listed):
+    key: OsmRef
+
+
+class WorkCandidate(_Listed):
+    lon: float | None
+    lat: float | None
+    tags: str
+    in_sh: bool
+    wikidata: NotRequired[str]
+
+
+class WorkRow(TypedDict):
+    id: str
+    line: int
+    kind: str
+    result: str
+    name: str
+    names: dict[str, str]
+    de: str
+    da: str
+    hint: str
+    note: str
+    why: str
+    hint_point: list[float] | None
+    candidates: list[WorkCandidate]
+
+
+class Worklist(TypedDict):
+    generated: str
+    bbox: list[float]
+    kind_order: list[str]
+    rows: list[WorkRow]
+
+
 # ------------------------------------------------------------- candidates ---
-def parse_candidates(cell: str) -> list[dict]:
+def parse_candidates(cell: str | None) -> list[ListedCandidate]:
     """The `candidates` column of work/matches.csv -> one dict per candidate.
 
     `match.fmt_cand` writes `type/id:name:class:km` joined by `;` and escapes
@@ -98,7 +146,7 @@ def parse_candidates(cell: str) -> list[dict]:
     (A name with a `;` would still split wrongly -- fmt_cand truncates names to
     40 characters, so that stays a theoretical loss.)
     """
-    out = []
+    out: list[ListedCandidate] = []
     for part in (cell or "").split(";"):
         part = part.strip()
         if not part:
@@ -117,11 +165,12 @@ def parse_candidates(cell: str) -> list[dict]:
     return out
 
 
-def stream_records(path, keys, hint_norms):
+def stream_records(path: StrPath, keys: Collection[OsmRef],
+                   hint_norms: Collection[str]) -> list[Candidate]:
     """One pass over work/candidates.jsonl, keeping the records the worklist
     refers to (by id) and those a location hint could name (by normalised
     name) -- roughly a thousand of 180 000."""
-    kept = []
+    kept: list[Candidate] = []
     for rec in candidates.read_records(path):
         if (rec["t"], rec["id"]) in keys:
             kept.append(rec)
@@ -138,13 +187,31 @@ def stream_records(path, keys, hint_norms):
 
 
 # ----------------------------------------------------------------- export ---
-def cmd_export(args):
+def work_candidate(listed: ListedCandidate, rec: Candidate | None,
+                   in_sh: bool) -> WorkCandidate:
+    """A candidate as the worklist shows it: with its position and what it is,
+    when candidates.jsonl still has its record."""
+    c: WorkCandidate = {"ref": listed["ref"], "name": listed["name"],
+                        "class": listed["class"], "km": listed["km"],
+                        "lon": None, "lat": None, "tags": "", "in_sh": False}
+    if rec is None:                     # candidates.jsonl rebuilt since the run
+        return c
+    c["lon"], c["lat"] = rec["lon"], rec["lat"]
+    c["tags"] = candidates.decisive_tags(rec)
+    c["in_sh"] = in_sh
+    if rec["tags"].get("wikidata"):
+        c["wikidata"] = rec["tags"]["wikidata"]
+    return c
+
+
+def cmd_export(args: argparse.Namespace) -> int:
     rows, _fields = placelist.read(args.names)
     by_id = {r["id"]: r for r in rows}
     if not os.path.exists(args.matches):
         raise PipelineError(f"{args.matches} not found -- run names/match.py first")
 
-    work, stale, unowned = [], 0, 0
+    work: list[tuple[PlaceRow, dict[str, str]]] = []
+    stale, unowned = 0, 0
     with open(args.matches, encoding="utf-8", newline="") as fh:
         reader = csv.DictReader(fh)
         if "id" not in (reader.fieldnames or []):
@@ -162,7 +229,8 @@ def cmd_export(args):
                 continue
             work.append((row, m))
 
-    keys, hint_norms = set(), set()
+    keys: set[OsmRef] = set()
+    hint_norms: set[str] = set()
     for row, m in work:
         for c in parse_candidates(m["candidates"]):
             keys.add(c["key"])
@@ -176,27 +244,21 @@ def cmd_export(args):
           f"({len(keys):,} candidates, {len(hint_norms)} hint names, "
           f"{time.time()-t0:.0f}s)")
     hints = HintResolver(index)
-    srcs = collections.defaultdict(set)
+    srcs: collections.defaultdict[OsmRef, set[str | None]] = collections.defaultdict(set)
     for rec in index.recs:
         srcs[(rec["t"], rec["id"])].add(rec.get("src"))
 
-    out, n_pos, n_hint = [], 0, 0
+    out: list[WorkRow] = []
+    n_pos, n_hint = 0, 0
     for row, m in work:
         cands = []
-        for c in parse_candidates(m["candidates"]):
-            key = c.pop("key")
-            rec = index.by_key.get(key)
-            if rec is not None:
-                c.update(lon=rec["lon"], lat=rec["lat"],
-                         tags=candidates.decisive_tags(rec),
-                         in_sh=SH_SRC in srcs[key])
-                if rec["tags"].get("wikidata"):
-                    c["wikidata"] = rec["tags"]["wikidata"]
-                if rec["lon"] is not None:
-                    n_pos += 1
-            else:                       # candidates.jsonl rebuilt since the run
-                c.update(lon=None, lat=None, tags="", in_sh=False)
-            cands.append(c)
+        for listed in parse_candidates(m["candidates"]):
+            ref = listed["key"]
+            found = index.by_key.get(ref)
+            in_sh = found is not None and SH_SRC in srcs[ref]
+            cands.append(work_candidate(listed, found, in_sh))
+            if found is not None and found["lon"] is not None:
+                n_pos += 1
         hint_pt = hints.resolve(row["hint"].split(";")[0].strip())
         if hint_pt:
             n_hint += 1
@@ -216,11 +278,13 @@ def cmd_export(args):
     out.sort(key=lambda r: (order.get(r["kind"], len(order)), r["line"]))
 
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
+    worklist: Worklist = {
+        "generated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "bbox": list(geo.NF_BBOX),
+        "kind_order": KIND_ORDER,
+        "rows": out}
     with open(args.out, "w", encoding="utf-8") as fh:
-        json.dump({"generated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                   "bbox": list(geo.NF_BBOX),
-                   "kind_order": KIND_ORDER,
-                   "rows": out}, fh, ensure_ascii=False, indent=1)
+        json.dump(worklist, fh, ensure_ascii=False, indent=1)
         fh.write("\n")
     cnt = collections.Counter(r["result"] for r in out)
     print(f"wrote {len(out)} rows to {args.out} "
@@ -237,22 +301,58 @@ def cmd_export(args):
 
 
 # ------------------------------------------------------------------ apply ---
-def patch_key(entry):
+class PatchEntry(TypedDict):
+    """One line of the patch, as names/curate-patch.schema.json allows it."""
+    id: str
+    action: Literal["osm", "local", "skip", "clear"]
+    line: NotRequired[int]
+    kind: NotRequired[str]
+    name: NotRequired[str]
+    de: NotRequired[str]
+    osm: NotRequired[str]
+    wikidata: NotRequired[str]
+    slug: NotRequired[str]
+    lat: NotRequired[float]
+    lon: NotRequired[float]
+    polygon_km2: NotRequired[float]
+    note: NotRequired[str]
+    at: NotRequired[str]
+
+
+# what apply adds to a line it read: its line number in the patch, and for a
+# line that is no valid entry what is wrong with it and the line's value itself
+_PATCH_LINE: Final = "_patch_line"
+_PROBLEM: Final = "_problem"
+_RAW: Final = "_raw"
+
+
+@final
+class ReadEntry(PatchEntry):
+    """A valid line of the patch as apply read it."""
+    _patch_line: int
+
+
+@final
+class RefusedLine(TypedDict):
+    """A line of the patch that is no valid entry, as apply read it."""
+    _patch_line: int
+    _problem: str
+    _raw: Any                           # the line's JSON value
+
+
+PatchLine = ReadEntry | RefusedLine
+
+
+def patch_key(value: object) -> str | None:
     """What makes two patch entries decisions about the same row: its id.
     The `line`, `name` and `de` an entry also carries are only there for the
     messages -- they change when the list is edited, the id does not.  None
-    for an entry without a usable one."""
-    ident = entry.get("id")
+    for a line (as the patch holds it) without a usable one."""
+    ident = value.get("id") if isinstance(value, dict) else None
     return ident if isinstance(ident, str) and ident else None
 
 
-# what apply adds to an entry it read: its line in the patch, and for a line
-# that is no valid entry what is wrong with it and -- when it is no object at
-# all -- the line's value itself
-_PATCH_LINE, _PROBLEM, _RAW = "_patch_line", "_problem", "_raw"
-
-
-def read_patch(path):
+def read_patch(path: StrPath) -> list[PatchLine]:
     """-> the last entry per row, in line order.  The browser appends, never
     rewrites, so a row decided twice simply has two lines; `clear` withdraws,
     whatever line either was sent with.
@@ -262,7 +362,7 @@ def read_patch(path):
     back the row's earlier decision.  A line without a usable id (a patch
     from before the row ids) is a decision of its own, never swallowed by a
     later one."""
-    last = {}
+    last: dict[str | tuple[str, int], PatchLine] = {}
     with open(path, encoding="utf-8") as fh:
         for n, line in enumerate(fh, start=1):
             line = line.strip()
@@ -273,43 +373,49 @@ def read_patch(path):
             except ValueError as exc:
                 print(f"{path}:{n}: not JSON ({exc}) -- ignored", file=sys.stderr)
                 continue
-            last[patch_key(e) or ("line", n)] = e
+            last[patch_key(stored(e)) or ("line", n)] = e
     return sorted(last.values(), key=_patch_order)
 
 
-def patch_entry(value, n) -> dict:
+def patch_entry(value: Any, n: int) -> PatchLine:
     """One parsed line of the patch as apply handles it: the entry plus its
-    line; `_problem` says what makes it no valid entry."""
-    if not isinstance(value, dict):
-        return {_PATCH_LINE: n, _RAW: value,
-                _PROBLEM: "not a JSON object (curate-patch.schema.json)"}
-    e = dict(value, **{_PATCH_LINE: n})
-    if (why := schema_problem(value)):
-        e[_PROBLEM] = why
-    return e
+    line, or the line's value and what makes it no valid entry."""
+    why = (schema_problem(value) if isinstance(value, dict)
+           else "not a JSON object (curate-patch.schema.json)")
+    if why:
+        return {_PATCH_LINE: n, _PROBLEM: why, _RAW: value}
+    entry: PatchEntry = value           # valid: the schema's shape
+    return {**entry, _PATCH_LINE: n}
 
 
-def _patch_order(entry):
+def _patch_order(entry: PatchLine) -> tuple[int, int]:
     """Places.csv order (the row's `line` when the worklist was exported),
     then patch order."""
     line = entry.get("line") if _PROBLEM not in entry else None
     return (line or 0, entry[_PATCH_LINE])
 
 
-def stored(entry):
-    """An entry as the patch holds it: without what apply added."""
-    if _RAW in entry:
+def stored(entry: PatchLine) -> object:
+    """A line as the patch holds it: without what apply added."""
+    if _PROBLEM in entry:
         return entry[_RAW]
-    return {k: v for k, v in entry.items() if k not in (_PATCH_LINE, _PROBLEM)}
+    return {k: v for k, v in entry.items() if k != _PATCH_LINE}
+
+
+def _names_of(entry: PatchLine) -> str:
+    """`name / de` of the row a line is about, for the messages."""
+    value = stored(entry)
+    fields = value if isinstance(value, dict) else {}
+    return f"{fields.get('name')} / {fields.get('de')}"
 
 
 @functools.cache
-def patch_validator():
+def patch_validator() -> jsonschema.Draft202012Validator:
     with open(paths.PATCH_SCHEMA, encoding="utf-8") as fh:
         return jsonschema.Draft202012Validator(json.load(fh))
 
 
-def schema_problem(entry) -> str | None:
+def schema_problem(entry: object) -> str | None:
     """What breaks names/curate-patch.schema.json in one entry, or None."""
     error = next(iter(sorted(patch_validator().iter_errors(entry), key=str)), None)
     if error is None:
@@ -318,23 +424,25 @@ def schema_problem(entry) -> str | None:
     return f"{where + ': ' if where else ''}{error.message} (curate-patch.schema.json)"
 
 
-def entry_problem(entry, row, names) -> str | None:
-    """Why apply refuses an entry before looking at its decision, or None:
-    the row it names must exist and be the matcher's to fill."""
-    if _RAW not in entry and "id" not in entry:
+def line_problem(line: RefusedLine) -> str:
+    """Why apply refuses a line that is no valid entry."""
+    raw = line[_RAW]
+    if isinstance(raw, dict) and "id" not in raw:
         return ("no `id` (a patch from before the row ids -- "
                 "re-run names/curate.py export and decide it again)")
-    if _PROBLEM in entry:
-        return entry[_PROBLEM]
-    if row is None:
-        return f"no row with id {patch_key(entry)!r} in {names} (deleted since the export?)"
+    return line[_PROBLEM]
+
+
+def owner_problem(row: PlaceRow, names: str) -> str | None:
+    """Why apply refuses an entry's row before looking at its decision, or
+    None: the row must be the matcher's to fill."""
     if not placelist.owned_by_matcher(row):
         return (f"{names}:{row.line} is not the matcher's to fill "
                 f"(status={row['status'] or 'empty'}, osm={row['osm'] or '-'})")
     return None
 
 
-def decide(entry, row) -> str | None:
+def decide(entry: PatchEntry, row: dict[str, str]) -> str | None:
     """Write an `osm` or `skip` decision into `row`; -> why not, or None."""
     if entry["action"] == "skip":
         row["status"] = "skip"
@@ -353,7 +461,8 @@ def decide(entry, row) -> str | None:
     return None
 
 
-def decide_local(entry, row, used_slugs) -> tuple[str | None, dict | None]:
+def decide_local(entry: PatchEntry, row: dict[str, str],
+                 used_slugs: set[str]) -> tuple[str | None, dict[str, str] | None]:
     """Write a `local` decision -- a place OSM does not have -- into `row`;
     -> (why not, or None; the curation row that positions it)."""
     slug = entry.get("slug")
@@ -361,23 +470,24 @@ def decide_local(entry, row, used_slugs) -> tuple[str | None, dict | None]:
         return "action=local needs a `slug`", None
     if slug in used_slugs:
         return f"local/{slug} is already taken", None
-    if "lat" not in entry or "lon" not in entry:
+    lat, lon = entry.get("lat"), entry.get("lon")
+    if lat is None or lon is None:
         return "action=local needs `lat` and `lon`", None
     row["osm"] = f"local/{slug}"
     row["wikidata"] = ""
     row["status"] = "ok"
     used_slugs.add(slug)
     cur = {c: "" for c in curationlist.COLUMNS}
-    cur.update(osm=row["osm"], lat=fmt_deg(entry["lat"]), lon=fmt_deg(entry["lon"]),
+    cur.update(osm=row["osm"], lat=fmt_deg(lat), lon=fmt_deg(lon),
                note=(entry.get("note") or "").strip())
-    if entry.get("polygon_km2") is not None:
+    if (km2 := entry.get("polygon_km2")) is not None:
         # the README's Koog route: no labelled node, only a square of that
         # area -- and OpenMapTiles labels a polygon only as island
-        cur.update(polygon_km2=f"{entry['polygon_km2']:g}", set_tags="place=island")
+        cur.update(polygon_km2=f"{km2:g}", set_tags="place=island")
     return None, cur
 
 
-def decision_text(entry, row, curation) -> str:
+def decision_text(entry: PatchEntry, row: Row, curation: str) -> str:
     """What an applied decision changed, for the log."""
     if entry["action"] == "skip":
         return "status = skip"
@@ -387,8 +497,8 @@ def decision_text(entry, row, curation) -> str:
                 + ", status = ok")
     text = (f"osm = {row['osm']}, status = ok; "
             f"{curation} += {fmt_deg(entry['lat'])}/{fmt_deg(entry['lon'])}")
-    if entry.get("polygon_km2") is not None:
-        return text + f", polygon_km2 = {entry['polygon_km2']:g}"
+    if (km2 := entry.get("polygon_km2")) is not None:
+        return text + f", polygon_km2 = {km2:g}"
     if row["kind"] not in curationlist.POINT_TAGS:
         text += (f"\n    warning: kind={row['kind']} has no default `place=` "
                  f"(curationlist.POINT_TAGS) -- put one into the curation row's "
@@ -396,7 +506,7 @@ def decision_text(entry, row, curation) -> str:
     return text
 
 
-def curation_name(row):
+def curation_name(row: Row) -> str:
     """The free-text label of the appended curation row -- German, else Danish,
     else Frisian, plus the hint, so the file stays readable by a human."""
     name = (placelist.primary(row["de"]) or placelist.primary(row["da"])
@@ -404,16 +514,16 @@ def curation_name(row):
     return f"{name} ({row['hint']})" if row["hint"] else name
 
 
-def fmt_deg(v):
+def fmt_deg(v: float) -> str:
     return f"{v:.6f}".rstrip("0").rstrip(".")
 
 
-def cmd_apply(args):
+def cmd_apply(args: argparse.Namespace) -> int:
     with placelist.lock(args.names):
         return _apply(args)
 
 
-def _apply(args):
+def _apply(args: argparse.Namespace) -> int:
     # Everything that can refuse the whole run is checked before the patch is
     # touched: the name list, and curation.csv (read once, kept as bytes, so
     # the rows appended to it land after exactly what was checked).
@@ -442,24 +552,31 @@ def _apply(args):
         snapshot = source = f"{root}.{stamp}.applied{ext}"
         os.rename(args.patch, snapshot)
 
-    cur_written = None                   # digest of the curation.csv apply wrote
+    cur_written: str | None = None       # digest of the curation.csv apply wrote
+    new_curation: list[dict[str, str]] = []
     try:
         entries = read_patch(source)
-        applied, refused, new_curation = 0, 0, []
-        kept_back = []                   # refused entries survive the archiving
+        applied, refused = 0, 0
+        kept_back: list[PatchLine] = []  # refused entries survive the archiving
 
-        def refuse(entry, why):
+        def refuse(entry: PatchLine, why: str) -> None:
             nonlocal refused
             refused += 1
             kept_back.append(entry)
-            print(f"  refused patch line {entry[_PATCH_LINE]} "
-                  f"({entry.get('name')} / {entry.get('de')}): {why}")
+            print(f"  refused patch line {entry[_PATCH_LINE]} ({_names_of(entry)}): {why}")
 
         for e in entries:
-            if e.get("action") == "clear" and _PROBLEM not in e:
+            if _PROBLEM in e:
+                refuse(e, line_problem(e))
+                continue
+            if e["action"] == "clear":
                 continue                     # withdrawn in the browser
-            row = by_id.get(patch_key(e))
-            why = entry_problem(e, row, args.names)
+            row = by_id.get(e["id"])
+            if row is None:
+                refuse(e, f"no row with id {e['id']!r} in {args.names} "
+                          f"(deleted since the export?)")
+                continue
+            why = owner_problem(row, args.names)
             if why is None and e["action"] == "local":
                 why, cur = decide_local(e, row, used_slugs)
                 if cur:
@@ -513,12 +630,12 @@ def _apply(args):
     return 1 if refused else 0
 
 
-def append_back(path, entries):
+def append_back(path: str, entries: Iterable[PatchLine]) -> int:
     """Append refused entries to the live patch -- appending, never
     rewriting, because the dev server may be appending to it too.  An entry
     whose row has been decided again since then is dropped: the newer
     decision wins, as it would in `read_patch`.  -> how many were appended."""
-    newer = set()
+    newer: set[str] = set()
     ends_nl = True
     if os.path.exists(path):
         with open(path, encoding="utf-8") as fh:
@@ -529,17 +646,17 @@ def append_back(path, entries):
                 e = json.loads(line)
             except ValueError:
                 continue
-            if isinstance(e, dict) and patch_key(e):
-                newer.add(patch_key(e))
+            if (key := patch_key(e)):
+                newer.add(key)
     lines = [json.dumps(stored(e), ensure_ascii=False) + "\n"
-             for e in entries if patch_key(e) not in newer]
+             for e in entries if patch_key(stored(e)) not in newer]
     if lines:
         with open(path, "a", encoding="utf-8") as fh:
             fh.write(("" if ends_nl else "\n") + "".join(lines))
     return len(lines)
 
 
-def restore_patch(snapshot, path):
+def restore_patch(snapshot: str, path: str) -> None:
     """Undo taking the snapshot after a failed apply: the snapshot becomes the
     patch again, followed by whatever the browser appended in the meantime."""
     while True:
@@ -562,7 +679,8 @@ def restore_patch(snapshot, path):
         os.unlink(newer)
 
 
-def unwrite_curation(path, old, written, refs):
+def unwrite_curation(path: str, old: bytes | None, written: str,
+                     refs: Sequence[str]) -> None:
     """Undo apply's curation.csv write after the places.csv write failed: put
     back `old` (its bytes before; None = there was no file), unless someone
     changed the file after apply wrote it (`written`, its digest) -- then say
@@ -584,7 +702,7 @@ def unwrite_curation(path, old, written, refs):
 
 # ------------------------------------------------------------------- main ---
 @cli.command
-def main(argv=None):
+def main(argv: Sequence[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if not argv or (argv[0] not in ("export", "apply", "-h", "--help")):
         argv.insert(0, "export")         # export is what one runs every time
@@ -610,5 +728,6 @@ def main(argv=None):
     ap_.set_defaults(func=cmd_apply)
 
     args = ap.parse_args(argv)
-    return args.func(args)
+    run: Callable[[argparse.Namespace], int] = args.func
+    return run(args)
 
