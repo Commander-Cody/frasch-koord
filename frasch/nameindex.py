@@ -32,7 +32,7 @@ _UML = {"ä": "ae", "ö": "oe", "ü": "ue", "Ä": "ae", "Ö": "oe", "Ü": "ue",
         "Æ": "ae", "é": "e", "è": "e", "á": "a", "à": "a"}
 
 
-def norm(s: str) -> str:
+def norm(s: str | None) -> str:
     if not s:
         return ""
     s = s.strip().lower()
