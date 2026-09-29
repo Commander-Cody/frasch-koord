@@ -298,16 +298,28 @@ export function usePositionPin({ mapRef, position, setPosition, picking, setPick
     };
   }, [picking, mapRef, setPosition, setPicking]);
 
+  // One marker for the component's lifetime, moved rather than recreated: a
+  // drag sets the position it already shows.
+  const marker = useRef<Marker | null>(null);
   useEffect(() => {
     const map = mapRef.current?.getMap();
     if (!map || !position) return;
-    const marker = new Marker({ color: '#2e7d32', draggable: true }).setLngLat([position.lon, position.lat]).addTo(map);
-    marker.on('dragend', () => {
-      const at = marker.getLngLat();
+    if (marker.current) {
+      marker.current.setLngLat([position.lon, position.lat]);
+      return;
+    }
+    const pin = new Marker({ color: '#2e7d32', draggable: true }).setLngLat([position.lon, position.lat]).addTo(map);
+    pin.on('dragend', () => {
+      const at = pin.getLngLat();
       setPosition({ lon: at.lng, lat: at.lat });
     });
-    return () => {
-      marker.remove();
-    };
+    marker.current = pin;
   }, [position, mapRef, setPosition]);
+  useEffect(
+    () => () => {
+      marker.current?.remove();
+      marker.current = null;
+    },
+    [],
+  );
 }

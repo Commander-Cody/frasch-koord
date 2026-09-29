@@ -3,6 +3,7 @@ import type { RefObject } from 'react';
 import type { LngLat, MapGeoJSONFeature } from 'maplibre-gl';
 
 import type { MapViewHandle } from '../components/Map';
+import { PHONE_MEDIA } from '../layout';
 import type { EntryLookup, NameEntry, PlaceSelection, TileProps } from '../names';
 import { displayName } from '../names';
 
@@ -19,12 +20,6 @@ const ZOOM_BY_KIND: Record<string, number> = {
   warft: 15,
 };
 const DEFAULT_TARGET_ZOOM = 14;
-
-/**
- * Phone width, where the search panel is a top bar and the place card a
- * bottom sheet over the map. Must match the media query in App.css.
- */
-const PHONE_MEDIA = '(max-width: 600px)';
 
 /** A map move given how many pixels at the bottom of the map the card covers. */
 type Move = (inset: number) => void;
@@ -78,9 +73,7 @@ export function usePlaceSelection(
   const selectEntry = (entry: NameEntry, name: string) => {
     const zoom = ZOOM_BY_KIND[entry.kind] ?? DEFAULT_TARGET_ZOOM;
     moveAfterCard((inset) => mapRef.current?.flyTo([entry.lon, entry.lat], zoom, { title: name }, inset));
-    // A search result carries only the index's stored fields — no Danish
-    // name, no Wikidata id — so the card gets the full name-list entry.
-    setSelection({ entry: find(entry.id) ?? entry });
+    setSelection({ entry });
   };
 
   const close = useCallback(() => {

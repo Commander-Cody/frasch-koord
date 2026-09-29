@@ -127,13 +127,13 @@ belongs to a dialect.
 | `name` | free-text label so a human can read the row |
 | `note` | why this object |
 
-The island rows are certain. The mainland rows (81 municipalities of Kreis
+The island rows are certain. The mainland rows (39 municipalities of Kreis
 Nordfriesland, assigned to the six Harden by historic membership from German
 Wikipedia, 2026-09-16) are a **draft**: the `note` column carries `high`,
 `medium` or `low` with the reason, and every `medium`/`low` row deserves a
-look — particularly the Gotteskoog border villages (Holm, Uphusum, Lexgaard,
-Braderup, Galmsbüll). Move a municipality by changing its `dialect` cell and
-re-running the build script below. Nordstrand, Pellworm, Eiderstedt, Husum and
+look — particularly the Gotteskoog border villages (Holm, Uphusum,
+Galmsbüll). Move a municipality by changing its `dialect` cell and
+re-running the build script below. Nordstrand, Pellworm, Eiderstedt and
 Friedrichstadt deliberately have no row: no living or historic Frisian dialect
 is assigned there, so the local view shows Low Saxon.
 
@@ -230,7 +230,7 @@ and let the matcher try.
 **Let the matcher fill the blanks**:
 
 ```bash
-cd /home/thore/Repos/frasch-maps
+# from the repository root
 PY=.venv/bin/python           # `uv sync` creates it, see the root README.md
 
 # once per OSM extract (~6 min for SH + DK, ~250 MB, git-ignored)

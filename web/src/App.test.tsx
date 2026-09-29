@@ -1,5 +1,4 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { forwardRef } from 'react';
 import { render, screen } from '@testing-library/react';
 
 import './i18n';
@@ -8,9 +7,9 @@ import App from './App';
 // MapLibre needs WebGL, which jsdom has not; a bare container stands in for
 // it, which is all this test needs: whether it survives.
 vi.mock('./components/Map', () => ({
-  default: forwardRef(function MapStub() {
+  default: function MapStub() {
     return <div className="map-container" data-testid="map" />;
-  }),
+  },
 }));
 
 // A card that trips over a malformed names.json entry.

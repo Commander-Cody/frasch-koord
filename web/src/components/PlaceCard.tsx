@@ -6,6 +6,7 @@ import { DIALECTS, dialect, dialectLabelKey } from '../config';
 import type { DialectEntry } from '../config';
 import type { PlaceSelection } from '../names';
 import { cardEntry, osmUrl, placeOsmRef, resolveName, wikidataUrl } from '../names';
+import CloseButton from './CloseButton';
 import './PlaceCard.css';
 
 export interface PlaceCardProps {
@@ -16,6 +17,14 @@ export interface PlaceCardProps {
   /** The card element: App measures it, where it is the phone bottom sheet. */
   ref?: Ref<HTMLElement>;
 }
+
+/** Locale keys of the labels of the names in no dialect of the registry, by `resolveName`'s source. */
+const SOURCE_LABEL_KEYS: Partial<Record<string, string>> = {
+  frr: 'card.frisian',
+  nds: 'card.lowSaxon',
+  de: 'card.german',
+  da: 'card.danish',
+};
 
 /** One line of the name list below the headline. */
 interface Line {
@@ -58,18 +67,9 @@ export default function PlaceCard({ selection, view, onClose, ref: cardRef }: Pl
   // Mooring says Waiguurd), calling both "Mooring" would contradict itself.
   const localIsAreaName = area !== undefined && entry.names?.[area.tag] === entry.local;
   const localLabel = localIsAreaName ? `${t('card.local')} · ${dialectLabel(area)}` : t('card.local');
-  const headlineLabel =
-    shownAs === 'local'
-      ? localLabel
-      : shownAs === 'frr'
-        ? t('card.frisian')
-        : shownAs === 'nds'
-          ? t('card.lowSaxon')
-          : shownAs === 'de'
-            ? t('card.german')
-            : shownAs === 'da'
-              ? t('card.danish')
-              : shownDialect && dialectLabel(shownDialect);
+  const sourceKey = SOURCE_LABEL_KEYS[shownAs];
+  const sourceLabel = sourceKey ? t(sourceKey) : shownDialect && dialectLabel(shownDialect);
+  const headlineLabel = shownAs === 'local' ? localLabel : sourceLabel;
 
   const lines = useMemo<Line[]>(() => {
     const out: Line[] = [];
@@ -116,9 +116,7 @@ export default function PlaceCard({ selection, view, onClose, ref: cardRef }: Pl
 
   return (
     <aside ref={cardRef} className="place-card" aria-label={t('card.title')}>
-      <button type="button" className="place-card-close" aria-label={t('card.close')} onClick={onClose}>
-        ×
-      </button>
+      <CloseButton className="place-card-close" label={t('card.close')} onClick={onClose} />
       <h2 className="place-card-name">{headline}</h2>
       <p className="place-card-meta">
         {headlineLabel}

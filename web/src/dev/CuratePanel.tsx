@@ -16,7 +16,7 @@
  * the selected row's detail with its lookups, and the map pins are their own
  * modules (CurateList, CurateDetail, CurateLookup, curateMapLayers).
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 
 import type { MapViewHandle } from '../components/Map';
@@ -42,6 +42,8 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
   const [entries, setEntries] = useState<PatchEntry[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // For a save that resolves later: has the user moved on meanwhile?
+  const selectedIdNow = useRef<string | null>(null);
   const [filter, setFilter] = useState(NO_FILTER);
 
   useEffect(() => {
@@ -76,6 +78,7 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
   /* --------------------------------------------------------- navigation */
 
   const goTo = useCallback((id: string) => {
+    selectedIdNow.current = id;
     setSelectedId(id);
     replaceQueryParams({ row: id });
   }, []);
@@ -111,7 +114,9 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
       const stored = await postPatchEntry(entry);
       // Mirror the appended line locally so the list turns "done" at once.
       setEntries((prev) => [...prev, stored]);
-      if (entry.action !== 'clear') advance(row.id);
+      // Only from where the user still is: they may have gone to another row
+      // while the save was on its way.
+      if (entry.action !== 'clear' && selectedIdNow.current === row.id) advance(row.id);
     },
     [advance],
   );

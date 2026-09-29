@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import CloseButton from './components/CloseButton';
 import ErrorBoundary from './components/ErrorBoundary';
 import MapView from './components/Map';
 import type { MapViewHandle } from './components/Map';
@@ -79,9 +80,7 @@ function PanelError({ onClose }: { onClose: () => void }) {
   return (
     <div className="panel-error" role="alert">
       <span>{t('errors.panel')}</span>
-      <button type="button" className="place-card-close" aria-label={t('card.close')} onClick={onClose}>
-        ×
-      </button>
+      <CloseButton className="place-card-close" label={t('card.close')} onClick={onClose} />
     </div>
   );
 }

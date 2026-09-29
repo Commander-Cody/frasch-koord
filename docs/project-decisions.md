@@ -57,7 +57,7 @@ Requirement: **the map must never be blank anywhere**. Therefore: one full plane
 - Base style: **OSM Bright**, labels rewritten to `coalesce(name:<dialect>, name:frr, name:de, name)`.
 - Fonts: Mooring only needs Latin with diacritics → standard Noto Sans glyphs, self-hosted under `web/public/fonts`.
 - Hosting (proposed): Cloudflare R2 for the PMTiles (range requests, no egress fees) + static site on Cloudflare Pages or GitHub Pages.
-- Code license (proposed): MIT.
+- Code license: MIT (decided 2026-09-26, see below).
 - Frontend: plain `maplibre-gl` (no react-map-gl), `pmtiles` protocol, MiniSearch, i18next. UI strings: German placeholders; Mooring strings pending (not to be invented by tooling).
 
 ### Map curation mechanism (2026-09-15, verified)
@@ -124,11 +124,12 @@ Sölring, Öömrang, Halunder and Hålifrasch names. They are now first-class.
    Wikipedia on 2026-09-16 (historic Harde membership; Bohmstedt, Drelsdorf and
    Ahrenshöft follow the documented Mittelgoesharder dialect instead). Rows
    whose `note` says `medium` or `low` need the owner's check, above all the
-   Gotteskoog border villages Holm, Uphusum, Lexgaard, Braderup, Galmsbüll and
+   Gotteskoog border villages Holm, Uphusum, Galmsbüll and
    the Stedesand/Klixbüll/Bosbüll assignment to the Karrharde.
-   *(Corrected 2026-09-20: this said "81 municipality rows" and "(29)". The
-   file has 83 rows — 58 mainland, 25 island/Hallig — and 22 of them are
-   `medium` or `low`: 17 + 5. See the 2026-09-20 entry below.)*
+   *(Corrected 2026-09-30: the file has 64 rows — 39 mainland, 25
+   island/Hallig. It had 83 until the owner removed 20 mainland rows and
+   added Husum on 2026-09-20; the geojson follows it, see the 2026-09-20
+   entry below.)*
 
 ## Decided 2026-09-17: places OSM does not have get their own point
 
@@ -220,8 +221,8 @@ the original sheet (co-authors would have to agree to the license).
 
 The code is MIT (root `LICENSE`, 2026-09-26, #22). The style fork keeps OSM
 Bright's BSD / CC BY notice in `web/src/style/LICENSE-osm-bright.md`. The map's attribution
-control must show "© OpenStreetMap contributors" and the OpenMapTiles credit
-before launch; the Mooring locale's attribution string is still empty.
+control shows "© OpenStreetMap contributors" and the OpenMapTiles credit, as a
+fixed licence notice in every UI language (`web/src/style/localize.ts`).
 
 ## Decided 2026-09-19: review the matcher's leftovers on the map (issue #1)
 
@@ -313,7 +314,7 @@ legend row draws that dialect alone.
 **Confidence is deliberately not modelled**: no `confidence` column, no parsing
 of the `note`, no hatching or dimming. Colour is the dialect and nothing else;
 the raw note on selection is the whole story. **The view is read-only**, unlike
-`?curate`: `dialect_areas.csv` is 83 hand-edited lines and the build takes
+`?curate`: `dialect_areas.csv` is 64 hand-edited lines and the build takes
 seconds, so a patch file would only add a second way to change the data.
 
 The checklist is `docs/dialect-area-review.md`, keyed by name rather than line
@@ -321,16 +322,10 @@ The checklist is `docs/dialect-area-review.md`, keyed by name rather than line
 research run (Galmsbüll, Holm, Stedesand, Ahrenshöft, Süderhöft) and were
 trimmed to their last complete clause — no re-research, nothing added.
 
-**Open, and the first thing the review turned up:** `dialect_areas.geojson` and
-`dialect_areas.csv` disagree. The committed geojson still covers **23
-municipalities no row claims any more** (Ladelund, Westre, Viöl, Schwabstedt,
-Mildstedt, Ostenfeld …) and still has Galmsbüll as Wiedingharder rather than
-Mooring. Rebuilding it from today's CSV would strip those 23 of their dialect
-area — every place inside them loses its area-derived local name — so the file
-was left untouched pending a decision. The CSV's own notes cite Westre as a
-"confirmed Karrharde village" and Schwabstedt and Mildstedt as the
-Kirchspielslandgemeinden justifying six Südergoesharde rows, which suggests
-rows went missing rather than being retired. Priority 0 of the checklist.
+*(Resolved 2026-09-30: the review first found 23 municipalities in the
+committed geojson that no CSV row claimed any more. The owner had removed
+those rows on purpose; the geojson was rebuilt from the CSV on 2026-09-27, and
+`just check` now fails when the two disagree.)*
 
 ## Decided 2026-09-27: every `places.csv` row has a stable id (issue #23)
 
@@ -424,10 +419,9 @@ apply` (with the `jsonschema` package) and the web side both take from. See
 `names/README.md#code`.
 
 ## Remaining open questions
-1. Code license (MIT proposed).
-2. Hosting provider (R2 + Pages proposed, nothing set up yet).
-3. When to do the planet build (needs the VM; only after the North Frisia build looks right).
-4. Whether to also push confirmed names to OSM `name:frr` (separate track; import guidelines).
+1. Hosting provider (R2 + Pages proposed, nothing set up yet).
+2. When to do the planet build (needs the VM; only after the North Frisia build looks right).
+3. Whether to also push confirmed names to OSM `name:frr` (separate track; import guidelines).
 
 ## Name-mapping pipeline (built 2026-09-15)
 
@@ -469,6 +463,6 @@ Open questions for the list owner (from the first run):
 1. Hand-review the *ambiguous* / *not found* rows in `names/REPORT.md`; write `osm` references (and `ok`/`skip`) into `names/places.csv`.
 2. Run `tiles/build.sh schleswig-holstein`, open the web app, check labels.
 3. Translate the UI strings in `web/src/locales/frr-x-mooring.json`.
-4. Choose name-list license and hosting; first deployment of the SH build.
+4. Choose hosting; first deployment of the SH build.
 5. Extend name matching to Denmark tiles (Rudbøl, Rømø, Tønder …) and country names via Wikidata.
 6. Planet build on a rented VM.

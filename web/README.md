@@ -38,7 +38,7 @@ make a build differ from `npm run dev`, and each has a check:
 After a build:
 
 ```sh
-npm run check:build   # dist/ has the worker the bundle names, no dev tool strings
+npm run check:build   # dist/ has the worker the bundle names; no dev tool, no dialect-area review data or notes
 npm run smoke         # vite preview + headless Chromium: map loads, search, card
 ```
 
@@ -106,13 +106,11 @@ and the site's base path (`siteUrl()` in `src/config.ts`). That path is gitignor
 built PMTiles archive there, e.g.:
 
 ```sh
-ln -s ../../../tiles/data/schleswig-holstein-baseline.pmtiles \
+ln -s ../../../tiles/data/schleswig-holstein.pmtiles \
   web/public/tiles/schleswig-holstein.pmtiles
 ```
 
-(This symlink already exists in this checkout, pointing at
-`tiles/data/schleswig-holstein-baseline.pmtiles`; it won't survive a fresh
-clone since it's gitignored — recreate it locally.)
+A fresh clone does not have it: create it after building the tiles.
 
 The `pmtiles://` protocol is registered once with MapLibre in
 `src/components/Map.tsx` (`addProtocol('pmtiles', protocol.tile)`); MapLibre
@@ -217,7 +215,7 @@ OpenMapTiles schema plus our extras, injected by the `tiles/` build
   (integer): islands 3..6 by area, villages ~10..14.
 - `frasch:kind` (string, **only on features from our name list or
   curation**): `island`, `hallig`, `sand`, `settlement`, `koog`, `harde`,
-  `warft`, `landscape`, `water`, `road`, `country`, `helgoland`, `other`.
+  `warft`, `landscape`, `water`, `road`, `country`, `helgoland`.
   Missing on many features — the style always `coalesce`s around its
   absence rather than assuming it's there.
 - `frasch:minzoom` (**string**, e.g. `"10"`, only where curated): the
@@ -337,9 +335,8 @@ single Warft (which in any case doesn't render before `place-warft`'s
   [openmaptiles/fonts v2.0 release](https://github.com/openmaptiles/fonts/releases/tag/v2.0)
   (extracted as-is — that asset already contains exactly these three
   stacks, all Unicode ranges, nothing extra). **~102 MB** on disk (256
-  range files × 3 stacks). That's committed as-is per the task's "include
-  all ranges if they are cheap" guidance; revisit (e.g. trim to Latin/
-  Latin-Extended only) if repo size becomes a problem.
+  range files × 3 stacks). All ranges are kept; trim to Latin/Latin-Extended
+  if the deployment size becomes a problem.
 
 ## Search
 
@@ -538,13 +535,14 @@ The checklist of rows to confirm is `docs/dialect-area-review.md`.
 follows the selected label option (see "Dialect registry and the selector").
 One JSON file per dialect in `src/locales/`, same keys in each:
 
-- `de.json` — German UI strings (search placeholder, dialect label, "no
-  results", the place card's row labels under `card.*`, the kind names under
-  `kind.*` — both our own `frasch:kind` values and the OpenMapTiles `class`
-  values a place outside the name list has — and the attribution text). This
-  is the fallback language (`fallbackLng: 'de'`).
+- `de.json` — German UI strings (the page title `app.title`, search
+  placeholder, dialect label, "no results", the place card's row labels under
+  `card.*`, the kind names under `kind.*` — both our own `frasch:kind` values
+  and the OpenMapTiles `class` values a place outside the name list has). This
+  is the fallback language (`fallbackLng: 'de'`). The map's attribution is not
+  among them: it is a fixed licence notice (`src/style/localize.ts`).
 - `frr-x-mooring.json` — Mooring UI strings. Strings nobody has written yet
-  (`attribution`, `dialect.local`, all of `card.*` and `kind.*`) are left as
+  (`app.title`, `search.loading`, `search.error`, `errors.*`) are left as
   **empty strings — never invented** — so the UI falls back to German rather
   than showing blank text
   (`returnEmptyString: false` makes i18next treat an empty string as

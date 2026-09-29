@@ -4,11 +4,12 @@
  *
  * `names/dialect_areas_parts.geojson` lives next to the CSV it is generated
  * from, outside the Vite root, so the browser cannot reach it; the dev server
- * hands it over. Dev only (`apply: 'serve'`) for two reasons: a production
- * build has no business carrying a review tool, and the file quotes the
- * research notes verbatim ("best guess only", "no direct source found") about
- * assignments the owner has not confirmed yet. That prose should not ship to
- * the public site.
+ * hands it over. Dev only (`apply: 'serve'`), so that none of it is in the
+ * release build: the build has no business carrying a review tool, and the
+ * file quotes the research notes (`low: … best-guess Bökingharde`) about
+ * assignments the owner has not confirmed yet. The file and the notes are no
+ * secret — they are in the repository — but the map should not present them
+ * as fact. `npm run check:build` fails when either reaches dist/.
  *
  * Read-only, unlike vite-plugins/curate.ts: the review writes nothing back,
  * `names/dialect_areas.csv` is edited by hand.

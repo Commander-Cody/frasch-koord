@@ -1,4 +1,7 @@
 {
+  "app": {
+    "title": ""
+  },
   "search": {
     "placeholder": "Stää säke…",
     "noResults": "Niinj riseltoote",
@@ -74,6 +77,5 @@
     "municipality": "Gemiinde",
     "region": "Regjoon",
     "continent": "Kontinänt"
-  },
-  "attribution": ""
+  }
 }
