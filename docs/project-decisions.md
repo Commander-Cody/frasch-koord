@@ -408,6 +408,21 @@ from search; the committed `names.json` had been built from an uncommitted
 2026-09-16 note that positions come from the injector's own pre-passes and
 the 2026-09-17 note on how the search index looks positions up.
 
+## Decided 2026-09-28: the Python code is one package (issue #25)
+
+All Python of `names/` and `tiles/` moved into the package `frasch/` at the
+repo root, installed editable by uv; the scripts stay where they were as
+launchers, so the justfile, `tiles/build.sh` and the docs keep their paths.
+Library code raises (`ValidationError` with every problem found, not only the
+first); only a command's `main()` exits. Each concept exists once: the dialect
+registry reader (passed in, not read at import), the curation file
+(`curationlist`), the North Frisia box (`geo`, the matcher's box with
+Helgoland, so `build_candidates.py` now keeps Helgoland's roads too), the PBF
+passes and ring assembly (`osmscan`, `osmgeom`), the name index. The curation
+patch has a JSON Schema (`names/curate-patch.schema.json`) that `curate.py
+apply` (with the `jsonschema` package) and the web side both take from. See
+`names/README.md#code`.
+
 ## Remaining open questions
 1. Code license (MIT proposed).
 2. Hosting provider (R2 + Pages proposed, nothing set up yet).

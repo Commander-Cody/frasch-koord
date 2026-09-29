@@ -19,11 +19,10 @@ import json
 import osmium
 import pytest
 
-import check_tiles
-import dialects
-import export_search_index
-import inject_names
-import locate
+from frasch import check_tiles, paths
+from frasch import export_search_index
+from frasch import inject_names
+from frasch import locate
 from conftest import places_text
 from osm_fixture import ring, write_extract
 
@@ -101,7 +100,7 @@ def built(tmp_path_factory):
     locate.main([str(d / "in.osm.pbf"), "--names", str(d / "places.csv"),
                  "--out", str(d / "osm_objects.json")])
     inject_names.run(str(d / "in.osm.pbf"), str(d / "out.osm.pbf"), str(d / "places.csv"),
-                     dialects.DEFAULT_PATH, str(d / "areas.geojson"),
+                     paths.DIALECTS, str(d / "areas.geojson"),
                      curation_csv=str(d / "curation.csv"),
                      objects_json=str(d / "osm_objects.json"))
     export_search_index.main(["--names", str(d / "places.csv"),

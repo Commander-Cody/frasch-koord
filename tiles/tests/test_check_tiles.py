@@ -2,7 +2,7 @@
 disagreeing."""
 from __future__ import annotations
 
-import check_tiles
+from frasch import check_tiles
 
 STIARDEBEL = {"id": "stiardebel", "osm": "node/1; way/2", "lon": 9.25, "lat": 54.5,
               "dialect": "frr-x-suedgoes", "local": "Stiardebel"}

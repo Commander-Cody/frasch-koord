@@ -6,11 +6,14 @@ Malformed name cells (unbalanced brackets, `?`, `;` without a space) are
 deliberately not pinned down here: names/check.py owns them."""
 from __future__ import annotations
 
+import json
+import re
 import shutil
 
 import pytest
 
-import placelist
+from frasch import paths, placelist
+from frasch.errors import ValidationError
 
 
 # ------------------------------------------------------------- name cells ---
@@ -92,22 +95,22 @@ def test_parse_osm_reads_a_local_reference():
     "local/-westerheide",
 ])
 def test_parse_osm_refuses_a_bad_reference(cell):
-    with pytest.raises(SystemExit, match="bad reference"):
+    with pytest.raises(ValidationError, match="bad reference"):
         placelist.parse_osm(cell, "places.csv:7")
 
 
 def test_parse_osm_error_says_where():
-    with pytest.raises(SystemExit, match="places.csv:7"):
+    with pytest.raises(ValidationError, match="places.csv:7"):
         placelist.parse_osm("way/abc", "places.csv:7")
 
 
 def test_a_local_reference_cannot_be_combined_with_others():
-    with pytest.raises(SystemExit, match="stands alone"):
+    with pytest.raises(ValidationError, match="stands alone"):
         placelist.parse_osm("local/westerheide-amrum; node/6928685546")
 
 
 def test_two_local_references_cannot_be_combined_either():
-    with pytest.raises(SystemExit, match="stands alone"):
+    with pytest.raises(ValidationError, match="stands alone"):
         placelist.parse_osm("local/merlingmark; local/dreihardereck")
 
 
@@ -133,48 +136,6 @@ def test_format_osm_normalises_the_separator():
         "way/1347936331; node/1332249790"
 
 
-# ------------------------------------------------------------- parse_point ---
-def test_parse_point_returns_lon_then_lat():
-    # arguments are (lat, lon) like the curation columns, the result is
-    # (lon, lat) like GeoJSON and shapely
-    assert placelist.parse_point("54.65097", "8.34019") == (8.34019, 54.65097)
-
-
-def test_parse_point_ignores_surrounding_blanks():
-    assert placelist.parse_point(" 54.881287 ", "8.771304 ") == (8.771304, 54.881287)
-
-
-def test_parse_point_of_two_empty_cells_is_no_point():
-    assert placelist.parse_point("", "") is None
-    assert placelist.parse_point(None, None) is None
-
-
-@pytest.mark.parametrize("lat,lon", [("54.65097", ""), ("", "8.34019")])
-def test_parse_point_needs_both_cells(lat, lon):
-    with pytest.raises(SystemExit, match="go together"):
-        placelist.parse_point(lat, lon, "curation.csv:15")
-
-
-@pytest.mark.parametrize("lat,lon", [
-    ("54,65097", "8,34019"),          # a German spreadsheet's decimal comma
-    ("54°39'N", "8°20'E"),
-])
-def test_parse_point_needs_decimal_degrees(lat, lon):
-    with pytest.raises(SystemExit, match="not numbers"):
-        placelist.parse_point(lat, lon)
-
-
-@pytest.mark.parametrize("lat,lon", [("91", "8.3"), ("-90.5", "8.3"), ("54.6", "181"),
-                                     ("54.6", "-180.01")])
-def test_parse_point_refuses_coordinates_off_the_globe(lat, lon):
-    with pytest.raises(SystemExit, match="out of range"):
-        placelist.parse_point(lat, lon)
-
-
-def test_parse_point_accepts_the_edges_of_the_globe():
-    assert placelist.parse_point("-90", "180") == (180.0, -90.0)
-
-
 # --------------------------------------------------- the real name list ---
 def test_real_name_list_round_trips_byte_identical(tmp_path):
     """Reading and writing back the real places.csv changes nothing -- the
@@ -186,39 +147,6 @@ def test_real_name_list_round_trips_byte_identical(tmp_path):
     rows, fields = placelist.read(str(copy))
     placelist.write(rows, str(copy), fields)
     assert copy.read_bytes() == before
-
-
-# ------------------------------------------------------------ parse_set_tags ---
-def test_set_tags_are_k_equals_v_pairs():
-    assert placelist.parse_set_tags("place=island;frasch:kind=island") == {
-        "place": "island", "frasch:kind": "island"}
-
-
-def test_set_tags_ignore_blanks_and_empty_pairs():
-    assert placelist.parse_set_tags(" place = island ;; ") == {"place": "island"}
-
-
-def test_set_tags_value_may_contain_an_equals_sign():
-    assert placelist.parse_set_tags("note=a=b") == {"note": "a=b"}
-
-
-def test_set_tags_value_may_be_empty():
-    assert placelist.parse_set_tags("name:de=") == {"name:de": ""}
-
-
-def test_empty_set_tags_are_no_tags():
-    assert placelist.parse_set_tags("") == {}
-    assert placelist.parse_set_tags(None) == {}
-
-
-def test_set_tags_entry_without_equals_is_refused():
-    with pytest.raises(SystemExit, match="not key=value"):
-        placelist.parse_set_tags("place=island;islet")
-
-
-def test_set_tags_entry_with_empty_key_is_refused():
-    with pytest.raises(SystemExit, match="empty key"):
-        placelist.parse_set_tags("=island")
 
 
 # ------------------------------------------------------------------- slug ---
@@ -233,3 +161,29 @@ def test_set_tags_entry_with_empty_key_is_refused():
 ])
 def test_slug_folds_a_name_to_lowercase_ascii(name, slug):
     assert placelist.slug(name) == slug
+
+
+# ------------------------------------------------ the patch schema agrees ---
+def _schema():
+    with open(paths.PATCH_SCHEMA, encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+SLUGS = ["taarep", "westerheide-amrum", "a1", "hus-2", "", "Taarep", "wester_heide",
+         "-westerheide", "westerheide-", "wester--heide", "wester heide", "hüs"]
+QIDS = ["Q35", "Q21003", "Q1", "q35", "Q", "35", "Q35;Q36", "Q3 5", "QQ35"]
+
+
+@pytest.mark.parametrize("text", SLUGS)
+def test_the_patch_schema_takes_the_slugs_the_name_list_takes(text):
+    # curate.py apply checks a slug by the schema and writes `local/<slug>`,
+    # which placelist.read checks by SLUG: the two must never disagree
+    schema = _schema()["$defs"]["slug"]["pattern"]
+    assert bool(re.search(schema, text)) == bool(placelist.SLUG.fullmatch(text))
+
+
+@pytest.mark.parametrize("text", QIDS)
+def test_the_patch_schema_takes_the_wikidata_ids_the_name_list_takes(text):
+    # the schema allows an empty cell, the name list leaves an empty one alone
+    schema = _schema()["properties"]["wikidata"]["pattern"]
+    assert bool(re.search(schema, text)) == bool(placelist.WIKIDATA_ID.fullmatch(text))

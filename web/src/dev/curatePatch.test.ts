@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import patchSchema from '../../../names/curate-patch.schema.json';
 import { decidedRows, type PatchEntry } from './curatePatch';
 
 function decision(id: string, line: number, action: PatchEntry['action'], osm?: string): PatchEntry {
@@ -21,5 +22,35 @@ describe('decidedRows', () => {
     // a row was added above between the two: the same row, another line
     const done = decidedRows([decision('schorkewarw', 11, 'osm', 'node/1'), decision('schorkewarw', 12, 'clear')]);
     expect(done.has('schorkewarw')).toBe(false);
+  });
+});
+
+// PatchEntry is written by hand; these pin it to the patch contract. The
+// records fail to compile when the type gains or loses a field or an action,
+// the comparisons fail when the schema does.
+describe('PatchEntry', () => {
+  it('has exactly the fields of the patch schema', () => {
+    const fields: Record<keyof PatchEntry, true> = {
+      id: true,
+      line: true,
+      kind: true,
+      name: true,
+      de: true,
+      action: true,
+      osm: true,
+      wikidata: true,
+      slug: true,
+      lat: true,
+      lon: true,
+      polygon_km2: true,
+      note: true,
+      at: true,
+    };
+    expect(Object.keys(fields).sort()).toEqual(Object.keys(patchSchema.properties).sort());
+  });
+
+  it('has exactly the actions of the patch schema', () => {
+    const actions: Record<PatchEntry['action'], true> = { osm: true, local: true, skip: true, clear: true };
+    expect(Object.keys(actions).sort()).toEqual([...patchSchema.properties.action.enum].sort());
   });
 });

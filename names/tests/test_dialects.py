@@ -5,17 +5,17 @@ from __future__ import annotations
 import pytest
 from shapely.geometry import box
 
-import dialects
-import placelist
+from frasch import dialects, registry
+from frasch import placelist
 
 
 @pytest.fixture(scope="module")
 def reg():
-    return dialects.read()
+    return registry.read()
 
 
 def row(**cells):
-    r = {c: "" for c in placelist.COLUMNS}
+    r = {c: "" for c in placelist.columns()}
     r.update(cells)
     return r
 

@@ -11,7 +11,7 @@ import './PlaceCard.css';
 export interface PlaceCardProps {
   selection: PlaceSelection;
   /** Selected label option tag (a dialect, or LOCAL_TAG) — the view the headline is in. */
-  labels: string;
+  view: string;
   onClose: () => void;
   /** The card element: App measures it, where it is the phone bottom sheet. */
   ref?: Ref<HTMLElement>;
@@ -36,7 +36,7 @@ interface Line {
  * Its data is `cardEntry(selection)` — the name-list entry where the place has
  * one, filled up from the clicked tile feature (see names.ts).
  */
-export default function PlaceCard({ selection, labels, onClose, ref: cardRef }: PlaceCardProps) {
+export default function PlaceCard({ selection, view, onClose, ref: cardRef }: PlaceCardProps) {
   const { t } = useTranslation();
   const entry = useMemo(() => cardEntry(selection), [selection]);
   // Dialect names are translated like any other UI string; the registry
@@ -49,7 +49,7 @@ export default function PlaceCard({ selection, labels, onClose, ref: cardRef }: 
   // What the headline actually is — the selected dialect only when that
   // dialect has a name for the place. The card must not label a fallback
   // with the dialect the map claims to be in.
-  const { name: headline, source: shownAs } = resolveName(entry, labels);
+  const { name: headline, source: shownAs } = resolveName(entry, view);
   const area = entry.dialect ? dialect(entry.dialect) : undefined;
   const shownDialect = dialect(shownAs);
   const kind = entry.kind ? t(`kind.${entry.kind}`, { defaultValue: '' }) : '';
@@ -79,7 +79,7 @@ export default function PlaceCard({ selection, labels, onClose, ref: cardRef }: 
       // The headline already shows this one.
       if (d.tag === shownAs) continue;
       // The area's own dialect falls back to the `local` column in
-      // names/dialects.py, so its name can be the very same string as the
+      // frasch/dialects.py, so its name can be the very same string as the
       // local form. Show it once, on the local line, which names the dialect.
       if (d.tag === entry.dialect && name === entry.local) continue;
       out.push({ key: d.tag, label: dialectLabel(d), extinct: d.status === 'extinct', name });

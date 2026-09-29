@@ -60,9 +60,6 @@ export const LAYERS = [SELECTED, SELECTED_CASING, LINE, FILL];
  *  so no place label is ever covered by the overlay. */
 export const BEFORE_ID = 'waterway-name';
 
-/** Padding that keeps a fitted area clear of the panel. */
-export const FIT_PADDING = { left: 460, top: 60, right: 60, bottom: 60 };
-
 export const colorExpr: ExpressionSpecification = [
   'case',
   ['!', ['get', 'assigned']],

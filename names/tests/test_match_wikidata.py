@@ -6,7 +6,7 @@ import json
 import pytest
 import requests
 
-import match
+from frasch import match
 from conftest import places_text
 
 COUNTRIES = [
@@ -81,20 +81,20 @@ def test_not_found_is_still_not_found(run, outage):
     assert "Q55" in text
 
 
-def test_corrupt_cache_fails_instead_of_starting_empty(run, outage):
+def test_corrupt_cache_fails_instead_of_starting_empty(run, outage, capsys):
     run_match, places, cache = run
     before = places.read_bytes()
     cache.write_text('{"Dänemark": "Q35", ', encoding="utf-8")
-    with pytest.raises(SystemExit, match="Wikidata cache"):
-        run_match("--offline")
+    assert run_match("--offline") == 1
+    assert "Wikidata cache" in capsys.readouterr().err
     assert places.read_bytes() == before
 
 
-def test_cache_of_the_wrong_shape_fails(run, outage):
+def test_cache_of_the_wrong_shape_fails(run, outage, capsys):
     run_match, _places, cache = run
     cache.write_text('["Q35"]', encoding="utf-8")
-    with pytest.raises(SystemExit, match="delete the file"):
-        run_match("--offline")
+    assert run_match("--offline") == 1
+    assert "delete the file" in capsys.readouterr().err
 
 
 def test_user_agent_names_a_contact():

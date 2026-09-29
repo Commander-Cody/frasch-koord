@@ -130,12 +130,12 @@ then reads TileJSON straight out of the archive itself.
   2026-09-15, when the `place`-layer label group was restructured for
   Frisian place kinds (see "Label classes" below). Everything else in the
   file is still stock OSM Bright.
-- `src/style/localize.ts` — `buildStyle(baseStyle, tilesUrl, labels)` keeps
+- `src/style/localize.ts` — `buildStyle(baseStyle, tilesUrl, view)` keeps
   doing only what has to stay dynamic at runtime:
   - points the `openmaptiles` source at `tilesUrl` and adds OSM/OpenMapTiles
     attribution to it;
   - rewrites every name-based symbol layer's `text-field` to
-    `nameExpression(labels)` below;
+    `nameExpression(view)` below;
   - points `glyphs`/`sprite` at the locally hosted copies below, resolved
     as absolute URLs against the page origin (MapLibre requires this for
     sprites).
@@ -160,8 +160,8 @@ derives the one dropdown from it:
   the way the people of that place speak (the injector's `frasch:local`), so
   one map shows Mooring around Niebüll, Fering on Föhr, Sölring on Sylt…
 
-Each option carries a `uiLanguage`, and `App.tsx` calls
-`i18n.changeLanguage(option.uiLanguage)` when the selection changes, so map
+Each option carries a `uiLanguage`, and `useView` (`src/hooks/useView.ts`)
+calls `i18n.changeLanguage(option.uiLanguage)` when the selection changes, so map
 labels and UI chrome move together. A dialect view uses its own dialect;
 the local view has no dialect of its own and borrows one —
 `LOCAL_VIEW_UI_LANGUAGE` in `config.ts` (Mooring today) is the single place
@@ -442,7 +442,7 @@ Where the data comes from (`src/names.ts`):
 Two details worth knowing:
 
 - **The area dialect's name and the local form are often the same string.**
-  `names/dialects.py:dialect_name()` falls the dialect of the place's own area
+  `frasch/dialects.py:dialect_name()` falls the dialect of the place's own area
   back to the `local` column, so e.g. `names["frr-x-fering"]` on Föhr *is* the
   local form. The card shows such a name once, on the local line, which names
   the dialect it belongs to.

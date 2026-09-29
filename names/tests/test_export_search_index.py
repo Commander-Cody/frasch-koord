@@ -5,12 +5,14 @@ injector reads too, so a place is where its map label is (#24)."""
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 
 import pytest
 
-import export_search_index
-import locate
+from frasch import export_search_index
+from frasch import paths as default_paths
+from frasch import locate
 from conftest import places_text
 
 NAIBEL = {"id": "naibel", "kind": "settlement", "mooring": "Naibel", "de": "Niebüll",
@@ -61,16 +63,20 @@ def paths(world):
     return world
 
 
-def export_into(world, rows):
+def export_status(world, rows):
+    """Run the export command on `rows` -> its exit status."""
     (world / "places.csv").write_text(places_text(rows), encoding="utf-8")
-    out = world / "names.json"
-    export_search_index.main([
+    return export_search_index.main([
         "--names", str(world / "places.csv"),
         "--objects", str(world / "osm_objects.json"),
         "--curation", str(world / "curation.csv"),
         "--areas", str(world / "areas.geojson"),
-        "--out", str(out)])
-    return json.loads(out.read_text(encoding="utf-8"))
+        "--out", str(world / "names.json")])
+
+
+def export_into(world, rows):
+    assert export_status(world, rows) == 0
+    return json.loads((world / "names.json").read_text(encoding="utf-8"))
 
 
 @pytest.fixture
@@ -122,10 +128,10 @@ def test_the_low_saxon_name_comes_from_the_object(export):
     assert export([NAIBEL])["naibel"]["name_nds"] == "Niböl"
 
 
-def test_a_row_whose_object_was_never_located_stops_the_export(paths):
+def test_a_row_whose_object_was_never_located_stops_the_export(paths, capsys):
     moved = NAIBEL | {"osm": "node/99"}
-    with pytest.raises(SystemExit, match=r"naibel.*node/99"):
-        export_into(paths, [moved])
+    assert export_status(paths, [moved]) == 1
+    assert re.search(r"naibel.*node/99", capsys.readouterr().err)
     assert not (paths / "names.json").exists()
 
 
@@ -144,7 +150,7 @@ def test_the_index_records_what_it_was_built_from(paths):
     stamp = export_into(paths, [NAIBEL])["built_from"]
     assert stamp == {
         "places.csv": git_hash(paths / "places.csv"),
-        "dialects.csv": git_hash(export_search_index.dialects.DEFAULT_PATH),
+        "dialects.csv": git_hash(default_paths.DIALECTS),
         "curation.csv": git_hash(paths / "curation.csv"),
         "dialect_areas.geojson": git_hash(paths / "areas.geojson"),
         "osm_objects.json": git_hash(paths / "osm_objects.json"),

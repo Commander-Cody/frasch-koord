@@ -6,7 +6,7 @@ import os
 
 import pytest
 
-import check
+from frasch import check
 from conftest import CURATION_HEADER, TOFTUM, places_text
 
 NIEBUELL = {"kind": "settlement", "mooring": "Naibel", "de": "Niebüll",
@@ -20,7 +20,7 @@ def names(world):
     def run(places: str, curation: str = CURATION_HEADER, dialects: str | None = None):
         (world / "places.csv").write_text(places, encoding="utf-8")
         (world / "curation.csv").write_text(curation, encoding="utf-8")
-        registry = check.placelist.DIALECTS_PATH
+        registry = check.paths.DIALECTS
         if dialects is not None:
             registry = world / "dialects.csv"
             registry.write_text(dialects, encoding="utf-8")

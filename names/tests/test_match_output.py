@@ -7,7 +7,7 @@ import csv
 import hashlib
 import re
 
-import match
+from frasch import match
 from conftest import cand, places_text, write_candidates
 
 TOFTUM = cand("n", 240044107, 8.83, 54.71, place="village", name="Toftum")

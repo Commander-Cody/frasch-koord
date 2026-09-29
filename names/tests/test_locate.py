@@ -7,8 +7,8 @@ import json
 
 import pytest
 
-import dialects
-import locate
+from frasch import dialects
+from frasch import locate
 from conftest import places_text
 from osm_fixture import ring, write_extract
 from shapely.geometry import Point, Polygon

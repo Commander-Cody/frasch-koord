@@ -6,7 +6,8 @@ import os
 
 import pytest
 
-import placelist
+from frasch import errors, placelist
+from frasch.errors import PipelineError
 from conftest import places_text
 
 ROWS = [
@@ -71,7 +72,7 @@ def test_refuses_to_overwrite_a_concurrent_change(places):
     # a spreadsheet saves the file while the script is busy
     theirs = places_text(ROWS + [{"kind": "settlement", "mooring": "Nai", "de": "Neu"}])
     places.write_text(theirs, encoding="utf-8")
-    with pytest.raises(placelist.Conflict):
+    with pytest.raises(errors.Conflict):
         placelist.write(rows, str(places), fields)
     assert places.read_text(encoding="utf-8") == theirs
 
@@ -101,7 +102,7 @@ def test_second_write_in_one_run_is_allowed(places):
 
 def test_lock_is_exclusive(places):
     with placelist.lock(str(places)):
-        with pytest.raises(SystemExit, match="another match.py"):
+        with pytest.raises(PipelineError, match="another match.py"):
             with placelist.lock(str(places)):
                 pass
     with placelist.lock(str(places)):   # released again

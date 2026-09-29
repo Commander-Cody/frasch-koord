@@ -1,0 +1,437 @@
+"""Read / write names/places.csv -- the hand-edited name list.
+
+The file is the single source of truth for every North Frisian label on the
+map.  Its conventions (see names/README.md):
+
+* a name cell may hold several variants separated by `;` -- the first one is
+  the primary name (the map label).  A `;` inside a remark does not separate
+  variants (`Huađer; Huuger (Sölring; Wisinge)` is two names)
+* `(...)` after a variant is a remark about it (local variety, source), never
+  part of the name
+* one column per dialect (`mooring`, `wieding`, ... -- the list comes from
+  the dialect registry, frasch.registry), plus `local` (the form the people of
+  the place itself use when it differs from the dialect of the area, e.g.
+  Fahretoft)
+* `osm` holds one or more OSM references: `node/123`, `way/1; way/2` -- or
+  ONE local reference `local/<slug>` for a place OSM does not have.  The
+  slug keys a row of names/curation.csv that carries the position (`lat` /
+  `lon`); the injector adds a node (or a label polygon) of its own for it
+* `status` is `auto` (written by match.py, recomputed on every run), `ok`
+  (checked by a human), `skip` (never put on the map) or empty
+
+Everything here is deliberately small and free of OSM libraries so that the
+matcher, the injector and the checks can all share it.  The column layout
+depends on the dialect registry: the functions that need it take a
+`Registry` (frasch.registry) and fall back to the default one.  The
+dialect-aware name logic (the fallbacks) lives one layer up in
+frasch.dialects.
+"""
+from __future__ import annotations
+
+import contextlib
+import csv
+import errno
+import io
+import os
+import re
+import unicodedata
+
+from frasch import files, paths, registry
+from frasch.errors import Invalid, PipelineError, ValidationError
+from frasch.registry import LOCAL_COLUMN, Registry
+
+DEFAULT_PATH = paths.PLACES
+
+
+def name_columns(reg: Registry | None = None) -> list[str]:
+    """The name columns in the order `any_name` tries them: the first
+    (= Mooring) dialect, `local` -- the sub-dialect form of the place itself,
+    not a dialect of its own -- then the other dialects."""
+    dialect_columns = (reg or registry.default()).columns
+    return [dialect_columns[0], LOCAL_COLUMN] + dialect_columns[1:]
+
+
+def columns(reg: Registry | None = None) -> list[str]:
+    """The columns of the name list, in the order it is written in."""
+    return (["kind"] + name_columns(reg)
+            + ["de", "hint", "da", "osm", "wikidata", "status", "note", "id"])
+
+
+KINDS = {"settlement", "koog", "harde", "island", "hallig", "sand", "warft",
+         "landscape", "water", "road", "country", "helgoland", "not_a_place"}
+STATUSES = {"", "auto", "ok", "skip"}
+
+# The tile attribute naming the row a label comes from: its `id`.  The
+# injector writes it; a curation.csv row may set it by hand (names/check.py
+# makes sure it names a row).
+REF_KEY = "frasch:ref"
+
+OSM_TYPES = {"node": "n", "way": "w", "relation": "r"}
+# `local/<slug>`: not an OSM object but a place of our own, positioned in
+# names/curation.csv.  Keyed like the others, with the slug as its id.
+LOCAL_TYPE = "l"
+TYPE_NAME = {v: k for k, v in OSM_TYPES.items()} | {LOCAL_TYPE: "local"}
+# the shape of a row id and of a local reference's slug
+SLUG = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
+WIKIDATA_ID = re.compile(r"Q\d+")
+
+_REMARK = re.compile(r"\(([^()]*)\)")
+
+
+def split_variants(cell: str | None) -> list[str]:
+    """Split a name cell on `;` -- but not inside brackets, because a remark
+    may itself list several dialects: `Huađer; Huuger (Sölring; Wisinge)` is
+    two variants, not three."""
+    out, buf, depth = [], [], 0
+    for ch in cell or "":
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth = max(0, depth - 1)
+        if ch == ";" and depth == 0:
+            out.append("".join(buf))
+            buf = []
+        else:
+            buf.append(ch)
+    out.append("".join(buf))
+    return out
+
+
+def parts(cell: str | None) -> list[tuple[str, str]]:
+    """`"Rübel; Rübbel (wisinge)"` -> `[("Rübel", ""), ("Rübbel", "wisinge")]`.
+
+    The remark comes back without its brackets; several brackets on one
+    variant are joined with `; `.  Variants without a name are dropped."""
+    out = []
+    for part in split_variants(cell):
+        remarks = [m.group(1).strip() for m in _REMARK.finditer(part)]
+        name = _REMARK.sub("", part).strip().rstrip("?").strip()
+        if name:
+            out.append((name, "; ".join(r for r in remarks if r)))
+    return out
+
+
+def variants(cell: str | None) -> list[str]:
+    """`"Rübel; Rübbel (wisinge)"` -> `["Rübel", "Rübbel"]` (remarks stripped)."""
+    out = []
+    for name, _ in parts(cell):
+        if name not in out:
+            out.append(name)
+    return out
+
+
+def primary(cell: str | None) -> str:
+    v = variants(cell)
+    return v[0] if v else ""
+
+
+def remark(cell: str | None) -> str:
+    """The remark of the PRIMARY variant of a cell (`""` when it has none)."""
+    p = parts(cell)
+    return p[0][1] if p else ""
+
+
+def label(row: dict, column: str = "mooring") -> str:
+    """The map label of a row for one dialect column (its primary variant)."""
+    return primary(row.get(column))
+
+
+def any_name(row: dict, reg: Registry | None = None) -> str:
+    """The row's Frisian name in any dialect -- the answer to "does this row
+    carry a Frisian name at all?".  Mooring first, then `local`, then the
+    other dialects in registry order."""
+    for column in name_columns(reg):
+        name = primary(row.get(column))
+        if name:
+            return name
+    return ""
+
+
+def on_map(row: dict, reg: Registry | None = None) -> bool:
+    """Whether a row puts names on the map: it has a Frisian name and is
+    neither `skip` nor `not_a_place`.  The injector labels these rows'
+    objects, and the search index lists them."""
+    return (row["status"] != "skip" and row["kind"] != "not_a_place"
+            and bool(any_name(row, reg)))
+
+
+def owned_by_matcher(row: dict) -> bool:
+    """May match.py (and `curate.py apply`) (re)write this row's osm /
+    wikidata / status?  Not a row a human decided -- `ok`/`skip`, a
+    hand-filled reference, a local reference, `not_a_place` -- only one it
+    filled itself (`auto`) or one with nothing in it yet."""
+    if local_ref(row["osm"]):
+        return False              # a local reference: OSM has no object for it
+    if row["kind"] == "not_a_place" or row["status"] == "skip":
+        return False
+    if row["status"] == "auto":
+        return True
+    return not row["osm"] and not row["wikidata"]
+
+
+def parse_osm(cell: str | None, where: str = "") -> list[tuple[str, int | str]]:
+    """`"way/12; way/13"` -> `[("w", 12), ("w", 13)]`;
+    `"local/westerheide-amrum"` -> `[("l", "westerheide-amrum")]`.
+
+    A local reference stands alone: it is the whole cell, never one of
+    several."""
+    out = []
+    for ref in (cell or "").split(";"):
+        ref = ref.strip()
+        if not ref:
+            continue
+        m = re.fullmatch(rf"(node|way|relation)/(\d+)|(local)/({SLUG.pattern})", ref)
+        if not m:
+            raise Invalid(where, f"bad reference {ref!r} (expected node/ID, "
+                                 f"way/ID, relation/ID or local/slug with a slug "
+                                 f"of lowercase letters, digits and hyphens)")
+        if m.group(3):
+            out.append((LOCAL_TYPE, m.group(4)))
+        else:
+            out.append((OSM_TYPES[m.group(1)], int(m.group(2))))
+    if len(out) > 1 and any(t == LOCAL_TYPE for t, _ in out):
+        raise Invalid(where, f"a local reference stands alone, it cannot be "
+                             f"combined with other references: {cell!r}")
+    return out
+
+
+def format_osm(refs) -> str:
+    return "; ".join(f"{TYPE_NAME[t]}/{i}" for t, i in refs)
+
+
+def local_ref(cell: str | None) -> str | None:
+    """The slug when the cell is a local reference (`local/<slug>`), else None.
+
+    Places OSM does not have (Harden, most Köge, vanished Halligen, a Warft
+    nobody has mapped) get a reference of our own; names/curation.csv
+    positions it and says how the map treats it, the injector adds the object,
+    the search index takes the position from there, and `match.py` leaves the
+    row alone."""
+    refs = parse_osm(cell)
+    if refs and refs[0][0] == LOCAL_TYPE:
+        return refs[0][1]
+    return None
+
+
+def claimed_refs(row: dict) -> list:
+    """The objects a row puts on the map: the references in its `osm` cell,
+    none for a `skip` row, which never reaches the map.  Only one row per
+    object can: the injector labels an object once."""
+    if row["status"] == "skip":
+        return []
+    return parse_osm(row.get("osm"))
+
+
+def header_problem(fields, reg: Registry | None = None) -> str | None:
+    """What is wrong with the header of the name list, or None."""
+    if "lat" in fields or "lon" in fields:
+        return ("`lat`/`lon` moved to names/curation.csv (2026-09-18): reference "
+                "the place as local/<slug> in `osm` and delete the two columns")
+    what = files.csv_header_problem(fields, columns(reg))
+    if what and "id" not in fields:
+        what += " (names/check.py --fix adds `id`)"
+    elif what and what.startswith("missing"):
+        what += " (dialect columns come from names/dialects.csv)"
+    return what
+
+
+def row_problems(row: dict) -> list[str]:
+    """What is wrong with one row of the name list (its cells stripped), in
+    the rules `read` enforces.  names/check.py adds the stricter ones."""
+    out = []
+    if row["kind"] not in KINDS:
+        out.append(f"unknown kind {row['kind']!r}")
+    if row["status"] not in STATUSES:
+        out.append(f"unknown status {row['status']!r} (auto / ok / skip / empty)")
+    try:
+        local = local_ref(row["osm"])
+    except Invalid as exc:
+        out.append(exc.reason)
+        local = None
+    if row["wikidata"] and not WIKIDATA_ID.fullmatch(row["wikidata"]):
+        out.append(f"bad wikidata id {row['wikidata']!r}")
+    if row["wikidata"] and local:
+        out.append("a local reference is for a place OSM does not have -- it "
+                   "cannot have a wikidata id")
+    return out
+
+
+def id_problem(row: dict, seen: dict[str, int]) -> str | None:
+    """What is wrong with a row's `id` -- missing, malformed, or used by an
+    earlier row (`seen`: id -> line) -- or None."""
+    ident = row["id"]
+    if not ident:
+        return "no id (run names/check.py --fix to give new rows one)"
+    if not SLUG.fullmatch(ident):
+        return (f"bad id {ident!r} (lowercase letters, digits and hyphens; "
+                f"run names/check.py --fix for a new row)")
+    if ident in seen:
+        return f"id {ident} is already used on line {seen[ident]}"
+    return None
+
+
+# the letters NFKD does not take apart into a base letter and a diacritic
+_ASCII_FOLD = str.maketrans({"ß": "ss", "æ": "ae", "Æ": "ae", "ø": "o", "Ø": "o",
+                             "đ": "d", "Đ": "d"})
+
+
+def slug(text: str) -> str:
+    """`"Schörkewärw"` -> `"schorkewarw"`, `"e Strönj"` -> `"e-stronj"`:
+    lowercase ASCII letters and digits, the rest folded or turned into
+    hyphens."""
+    text = unicodedata.normalize("NFKD", text.translate(_ASCII_FOLD))
+    text = text.encode("ascii", "ignore").decode().lower()
+    return re.sub(r"[^a-z0-9]+", "-", text).strip("-")
+
+
+def new_id(row: dict, taken: set[str], reg: Registry | None = None) -> str:
+    """An id for a row that has none: the slug of its Frisian name (German,
+    then Danish, when it has none), with `-2`, `-3`, ... when that is taken."""
+    base = (slug(any_name(row, reg)) or slug(primary(row.get("de")))
+            or slug(primary(row.get("da"))) or "row")
+    ident, n = base, 1
+    while ident in taken:
+        n += 1
+        ident = f"{base}-{n}"
+    return ident
+
+
+def fill_ids(path: str = DEFAULT_PATH, reg: Registry | None = None) -> int:
+    """Give every row of the name list without an `id` one (`new_id`), and
+    the file the `id` column when it has none -- the one step that both
+    introduced the ids and keeps new rows keyed.  An id, once written, never
+    changes.  Writes nothing when every row has one.  -> the number of ids
+    given.
+
+    It reads the file as raw CSV, because `read` refuses a row without an id;
+    a row whose cells do not line up with the header stops it, since there is
+    no telling which cell would be the id."""
+    with open(path, "rb") as fh:
+        data = fh.read()
+    reader = csv.reader(io.StringIO(files.decode(data), newline=""))
+    header = next(reader, [])
+    fields = header if "id" in header else header + ["id"]
+    if (what := header_problem(fields, reg)):
+        raise ValidationError(f"{path}: {what}")
+    rows = []
+    for cells in reader:
+        if not cells:
+            continue
+        if (what := files.cell_count_problem(cells, header)):
+            raise ValidationError(f"{path}:{reader.line_num}: {what}")
+        rows.append(dict(zip(header, cells, strict=True)))
+    taken = {r["id"].strip() for r in rows if r.get("id", "").strip()}
+    given = 0
+    for r in rows:
+        if not r.get("id", "").strip():
+            r["id"] = new_id(r, taken, reg)
+            taken.add(r["id"])
+            given += 1
+    if given or fields is not header:
+        _read_digests[os.path.abspath(path)] = files.digest(data)
+        write(rows, path, fields)
+    return given
+
+
+def read(path: str = DEFAULT_PATH, reg: Registry | None = None):
+    """-> (rows, fieldnames).  A row is identified by its `id`; it also gets
+    `_line`, its physical line number in the file (header = 1), for the
+    messages that point an editor at it.  A ValidationError lists every row
+    that breaks the rules."""
+    with open(path, "rb") as fh:
+        data = fh.read()
+    # remembered so that `write` can tell whether someone else (match.py,
+    # curate.py apply, a spreadsheet) wrote the file in the meantime
+    _read_digests[os.path.abspath(path)] = files.digest(data)
+    with io.StringIO(files.decode(data), newline="") as fh:
+        reader = csv.DictReader(fh)
+        fields = list(reader.fieldnames or [])
+        if (what := header_problem(fields, reg)):
+            raise ValidationError(f"{path}: {what}")
+        rows, problems, seen = [], [], {}
+        for row in reader:
+            n = reader.line_num                  # blank lines count too
+            what = _row_problem(row, seen)
+            if what:
+                problems.append(f"{path}:{n}: {what}")
+                continue
+            row = _stripped(row)
+            row["_line"] = n
+            seen[row["id"]] = n
+            rows.append(row)
+    if problems:
+        raise ValidationError(problems)
+    return rows, fields
+
+
+def _row_problem(row: dict, seen: dict[str, int]) -> str | None:
+    """The first thing wrong with one raw row of `read`, or None."""
+    if None in row:                              # more cells than columns
+        return f"row has more cells than the header (a stray comma?): {row[None]}"
+    row = _stripped(row)
+    problems = row_problems(row) + [id_problem(row, seen)]
+    return next((p for p in problems if p), None)
+
+
+def _stripped(row: dict) -> dict:
+    return {k: (v or "").strip() for k, v in row.items()}
+
+
+def write(rows, path: str = DEFAULT_PATH, fields=None):
+    """Write the name list -- atomically, and only if nobody else changed the
+    file since this process `read` it.
+
+    The file is the source of truth and holds uncommitted hand edits, so a
+    crash or Ctrl-C half-way must not leave it truncated (the rows go to a
+    temporary file that then replaces the original in one step), and a run
+    must not overwrite what a spreadsheet or another script saved while it
+    was busy (it stops instead with `Conflict`; re-run it)."""
+    fields = fields or columns()
+    expect = _read_digests.get(os.path.abspath(path))
+    if expect is None:
+        raise RuntimeError(f"placelist.write({path!r}) without a placelist.read "
+                           f"of it first -- nothing to check for changes against")
+    buf = io.StringIO(newline="")
+    w = csv.DictWriter(buf, fieldnames=fields, lineterminator="\n",
+                       extrasaction="ignore")
+    w.writeheader()
+    for r in rows:
+        w.writerow({k: r.get(k, "") for k in fields})
+    data = buf.getvalue().encode("utf-8")
+    files.atomic_write(path, data, expect=expect)
+    _read_digests[os.path.abspath(path)] = files.digest(data)
+
+
+_read_digests: dict[str, str] = {}      # abspath -> sha256 of what `read` saw
+
+
+@contextlib.contextmanager
+def lock(names_path: str = DEFAULT_PATH):
+    """Hold `work/.lock` next to the name list for the duration of a
+    read-modify-write run, so that match.py and curate.py apply never run at
+    the same time.  Advisory (`flock`): a spreadsheet does not take it -- that
+    is what the check in `write` is for."""
+    import fcntl  # POSIX only; the pipeline runs in WSL
+    work = os.path.join(os.path.dirname(os.path.abspath(names_path)), "work")
+    os.makedirs(work, exist_ok=True)
+    lock_path = os.path.join(work, ".lock")
+    with open(lock_path, "a") as fh:
+        try:
+            fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as exc:
+            if exc.errno not in (errno.EWOULDBLOCK, errno.EAGAIN, errno.EACCES):
+                raise
+            raise PipelineError(f"{lock_path} is held: another match.py or "
+                                f"curate.py apply is running -- wait for it to "
+                                f"finish") from None
+        try:
+            yield
+        finally:
+            fcntl.flock(fh, fcntl.LOCK_UN)
+
+
+def describe(row: dict, reg: Registry | None = None) -> str:
+    """One-line human reference to a row for messages and the report."""
+    name = any_name(row, reg) or "-"
+    de = primary(row.get("de")) or primary(row.get("da")) or "-"
+    return f"{name} ({de})"

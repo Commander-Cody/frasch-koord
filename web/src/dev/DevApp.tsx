@@ -7,11 +7,11 @@
  * `import.meta.env.DEV`, so a production build leaves it (and both panels)
  * out entirely.
  */
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 
 import MapView from '../components/Map';
 import type { MapViewHandle } from '../components/Map';
-import { INITIAL_LABELS } from '../urlState';
+import { initialView } from '../urlState';
 import AreaPanel from './AreaPanel';
 import CuratePanel from './CuratePanel';
 import '../App.css';
@@ -20,6 +20,7 @@ export type DevTool = 'curate' | 'areas';
 
 export default function DevApp({ tool }: { tool: DevTool }) {
   const mapRef = useRef<MapViewHandle | null>(null);
+  const [view] = useState(initialView);
   // Neither view offers the label selector: they are about which OSM object a
   // row means, and which dialect an area is, not about how the map reads, so
   // they stay in the view the page opened in. Both bring their own click
@@ -27,7 +28,7 @@ export default function DevApp({ tool }: { tool: DevTool }) {
   // the public view's `?view=`/`?place=` into the URL.
   return (
     <div className="app">
-      <MapView ref={mapRef} labels={INITIAL_LABELS} />
+      <MapView ref={mapRef} view={view} />
       {tool === 'curate' ? <CuratePanel mapRef={mapRef} /> : <AreaPanel mapRef={mapRef} />}
     </div>
   );

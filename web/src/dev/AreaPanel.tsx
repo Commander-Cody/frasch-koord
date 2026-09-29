@@ -27,7 +27,6 @@ import {
   COLOR_UNKNOWN,
   DIALECT_COLORS,
   FILL,
-  FIT_PADDING,
   LAYERS,
   LINE,
   SELECTED,
@@ -37,6 +36,11 @@ import {
   layerSpecs,
 } from './areaLayers';
 import { DIALECTS } from '../config';
+import { replaceQueryParams } from '../queryParams';
+import DevPanel from './DevPanel';
+import { FIT_PADDING } from './panelLayout';
+import { useDeepLinkParam } from './useDeepLinkParam';
+import { useListNavigation } from './useListNavigation';
 import './AreaPanel.css';
 
 /* ------------------------------------------------------------------ data */
@@ -241,15 +245,6 @@ export default function AreaPanel({ mapRef }: AreaPanelProps) {
 
   const selected = selectedFid === null ? null : (byFid.get(selectedFid) ?? null);
 
-  /* --------------------------------------------------- deep link (?area=) */
-
-  // `?areas&area=relation/1147134` opens the municipality with that OSM
-  // reference — a link from the checklist, or just resuming where the last
-  // session stopped. A reference belongs to one dialect_areas.csv row only
-  // (names/check.py enforces it), and unlike a line number it stays put when
-  // rows are added. An unknown one is ignored.
-  const initialRef = useRef<string | null>(new URLSearchParams(window.location.search).get('area'));
-
   /* ----------------------------------------------------------- selection */
 
   const applySelection = useCallback((map: MapLibreMap, fid: number | null) => {
@@ -265,17 +260,8 @@ export default function AreaPanel({ mapRef }: AreaPanelProps) {
 
       const feature = fid === null ? null : (byFid.get(fid) ?? null);
 
-      const params = new URLSearchParams(window.location.search);
       // The deep-link key: the first OSM reference of the feature's row.
-      const ref = feature ? osmRefs(feature.properties.osm)[0] : undefined;
-      if (ref) params.set('area', ref);
-      else params.delete('area');
-      // Keep MapLibre's `#zoom/lat/lon` hash: it is part of the resume state.
-      window.history.replaceState(
-        window.history.state,
-        '',
-        `${window.location.pathname}?${params}${window.location.hash}`,
-      );
+      replaceQueryParams({ area: feature ? osmRefs(feature.properties.osm)[0] : undefined });
 
       const map = mapRef.current?.getMap();
       if (map) {
@@ -292,14 +278,23 @@ export default function AreaPanel({ mapRef }: AreaPanelProps) {
     [applySelection, byFid, mapRef],
   );
 
-  // Honour the deep link once the geometry is there (only once).
-  useEffect(() => {
-    const ref = initialRef.current;
-    if (ref === null || features.length === 0) return;
-    initialRef.current = null;
-    const hit = features.find((feature) => osmRefs(feature.properties.osm).includes(ref));
-    if (hit) select(hit.properties.fid, { fly: true });
-  }, [features, select]);
+  const selectAndFly = useCallback((fid: number) => select(fid, { fly: true }), [select]);
+
+  /* --------------------------------------------------- deep link (?area=) */
+
+  // `?areas&area=relation/1147134` opens the municipality with that OSM
+  // reference — a link from the checklist, or just resuming where the last
+  // session stopped. A reference belongs to one dialect_areas.csv row only
+  // (names/check.py enforces it), and unlike a line number it stays put when
+  // rows are added. An unknown one is ignored.
+  const openLinkedArea = useCallback(
+    (ref: string) => {
+      const hit = features.find((feature) => osmRefs(feature.properties.osm).includes(ref));
+      if (hit) selectAndFly(hit.properties.fid);
+    },
+    [features, selectAndFly],
+  );
+  useDeepLinkParam('area', features.length > 0, openLinkedArea);
 
   /* ------------------------------------------------------------- overlay */
 
@@ -408,78 +403,50 @@ export default function AreaPanel({ mapRef }: AreaPanelProps) {
 
   /* ---------------------------------------------------------- navigation */
 
-  const move = useCallback(
-    (delta: number) => {
-      if (visible.length === 0) return;
-      const flat = sections.flatMap((section) => section.items);
-      const at = flat.findIndex((feature) => feature.properties.fid === selectedFid);
-      const next = at < 0 ? 0 : Math.min(flat.length - 1, Math.max(0, at + delta));
-      select(flat[next].properties.fid, { fly: true });
-    },
-    [sections, visible.length, select, selectedFid],
+  // The list's order: by section, as shown.
+  const listedFids = useMemo(
+    () => sections.flatMap((section) => section.items.map((feature) => feature.properties.fid)),
+    [sections],
   );
+  useListNavigation(listedFids, selectedFid, selectAndFly);
 
   /* -------------------------------------------------------------- render */
-
-  if (loadError) {
-    return (
-      <div className="area-panel">
-        <h1 className="area-title">Dialect areas</h1>
-        <p className="area-error">Could not load the areas: {loadError}</p>
-        <p className="area-hint">
-          This view needs the Vite dev server (<code>npm run dev</code>) and the geometry built
-          by <code>names/build_dialect_areas.py</code>.
-        </p>
-        <button type="button" onClick={reload}>
-          Reload
-        </button>
-      </div>
-    );
-  }
-
-  if (!collection) {
-    return (
-      <div className="area-panel">
-        <h1 className="area-title">Dialect areas</h1>
-        <p className="area-hint">loading…</p>
-      </div>
-    );
-  }
 
   const assignedCount = features.filter((feature) => feature.properties.assigned).length;
 
   return (
-    <div
+    <DevPanel
       className="area-panel"
-      onKeyDown={(event) => {
-        if (event.target instanceof HTMLInputElement) return;
-        if (event.key === 'ArrowDown' || event.key === 'j') {
-          event.preventDefault();
-          move(1);
-        } else if (event.key === 'ArrowUp' || event.key === 'k') {
-          event.preventDefault();
-          move(-1);
-        }
-      }}
+      title="Dialect areas"
+      what="the areas"
+      needs={
+        <>
+          This view needs the Vite dev server (<code>npm run dev</code>) and the geometry built by{' '}
+          <code>names/build_dialect_areas.py</code>.
+        </>
+      }
+      loaded={collection !== null}
+      error={loadError}
+      onReload={reload}
+      header={
+        <>
+          <p className="dev-panel-counts area-counts">
+            {assignedCount} assigned · {features.length - assignedCount} not assigned ·{' '}
+            {visible.length} shown
+            <button className="area-reload" type="button" onClick={reload}>
+              Reload
+            </button>
+          </p>
+          <input
+            className="dev-panel-input"
+            value={filterText}
+            aria-label="filter by name, OSM reference or note"
+            placeholder="filter by name, osm ref or note…"
+            onChange={(event) => setFilterText(event.target.value)}
+          />
+        </>
+      }
     >
-      <div className="area-header">
-        <h1 className="area-title">Dialect areas</h1>
-        <p className="area-counts">
-          {assignedCount} assigned · {features.length - assignedCount} not assigned ·{' '}
-          {visible.length} shown
-          <button className="area-reload" type="button" onClick={reload}>
-            Reload
-          </button>
-        </p>
-        <input
-          className="area-input"
-          value={filterText}
-          aria-label="filter by name, OSM reference or note"
-          placeholder="filter by name, osm ref or note…"
-          onChange={(event) => setFilterText(event.target.value)}
-        />
-      </div>
-
       <ul className="area-legend">
         {groups.map((group) => (
           <li key={group.key}>
@@ -500,7 +467,7 @@ export default function AreaPanel({ mapRef }: AreaPanelProps) {
       {selected && (
         <div className="area-detail">
           <h2 className="area-detail-name">{selected.properties.name || '(unnamed)'}</h2>
-          <dl className="area-facts">
+          <dl className="dev-panel-facts area-facts">
             <div>
               <dt>dialect</dt>
               <dd>
@@ -514,7 +481,7 @@ export default function AreaPanel({ mapRef }: AreaPanelProps) {
                       }}
                     />{' '}
                     {selected.properties.label}{' '}
-                    <span className="area-mono">{selected.properties.dialect}</span>
+                    <span className="dev-panel-mono">{selected.properties.dialect}</span>
                   </>
                 ) : (
                   <em>not in dialect_areas.csv</em>
@@ -525,7 +492,7 @@ export default function AreaPanel({ mapRef }: AreaPanelProps) {
               <div>
                 <dt>row</dt>
                 <dd>
-                  <span className="area-mono">dialect_areas.csv:{selected.properties.line}</span>
+                  <span className="dev-panel-mono">dialect_areas.csv:{selected.properties.line}</span>
                 </dd>
               </div>
             )}
@@ -539,7 +506,7 @@ export default function AreaPanel({ mapRef }: AreaPanelProps) {
                 {osmRefs(selected.properties.osm).map((ref) => (
                   <a
                     key={ref}
-                    className="area-mono"
+                    className="dev-panel-mono"
                     href={`https://www.openstreetmap.org/${ref}`}
                     target="_blank"
                     rel="noopener"
@@ -554,11 +521,11 @@ export default function AreaPanel({ mapRef }: AreaPanelProps) {
             selected.properties.note ? (
               <p className="area-note">{selected.properties.note}</p>
             ) : (
-              <p className="area-hint">no note on this row</p>
+              <p className="dev-panel-hint">no note on this row</p>
             )
           ) : (
             <div className="area-add">
-              <p className="area-hint">
+              <p className="dev-panel-hint">
                 No row claims this municipality, so nothing inside it gets a dialect. To add
                 it, paste this into <code>names/dialect_areas.csv</code>, re-run
                 <code> names/build_dialect_areas.py</code>, then press Reload.
@@ -574,11 +541,11 @@ export default function AreaPanel({ mapRef }: AreaPanelProps) {
         </div>
       )}
 
-      {sections.length === 0 && <p className="area-hint">nothing matches that filter</p>}
+      {sections.length === 0 && <p className="dev-panel-hint">nothing matches that filter</p>}
 
       {sections.map((section) => (
         <div key={section.key}>
-          <p className="area-section">
+          <p className="dev-panel-section">
             <span className="area-swatch" style={{ background: section.color }} />{' '}
             {section.label} ({section.items.length})
           </p>
@@ -607,6 +574,6 @@ export default function AreaPanel({ mapRef }: AreaPanelProps) {
           </ul>
         </div>
       ))}
-    </div>
+    </DevPanel>
   );
 }

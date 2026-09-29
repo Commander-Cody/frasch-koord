@@ -7,7 +7,8 @@
 // rewrites the whole hash on every move, so nothing else can live there; these
 // go in the query string, which it leaves alone.
 
-import { DEFAULT_LABELS, labelOption } from './config';
+import { DEFAULT_VIEW, labelOption } from './config';
+import { replaceQueryParams } from './queryParams';
 
 const VIEW_PARAM = 'view';
 const PLACE_PARAM = 'place';
@@ -33,31 +34,18 @@ export function readUrlState(): UrlState {
 
 /**
  * Mirrors `state` into the address bar, keeping any other query parameter and
- * the viewport hash. `replaceState`, not `pushState`: picking a dialect or a
- * place is not a navigation the back button should step through.
+ * the viewport hash (see queryParams.ts).
  */
 export function writeUrlState(state: UrlState): void {
-  const params = new URLSearchParams(window.location.search);
-  for (const [key, value] of [
-    [VIEW_PARAM, state.view],
-    [PLACE_PARAM, state.place],
-  ] as const) {
-    if (value) params.set(key, value);
-    else params.delete(key);
-  }
-  // Old ids are `node/123`; a slash is fine in a query and reads much
-  // better than %2F in a link people paste into chats.
-  const query = params.toString().replace(/%2F/gi, '/');
-  const { pathname, hash } = window.location;
-  const url = `${pathname}${query ? `?${query}` : ''}${hash}`;
-  if (url !== `${pathname}${window.location.search}${hash}`) {
-    window.history.replaceState(window.history.state, '', url);
-  }
+  replaceQueryParams({ [VIEW_PARAM]: state.view, [PLACE_PARAM]: state.place });
 }
 
 /**
  * The label option the page opens in: the link's `?view=` when it names one
  * of the selector's options, else the default — a stale tag from an old link
- * must not leave the map without labels or the UI without a language.
+ * must not leave the map without labels or the UI without a language. A
+ * function, read when a view mounts: the URL changes once the page runs.
  */
-export const INITIAL_LABELS = labelOption(readUrlState().view ?? DEFAULT_LABELS).tag;
+export function initialView(): string {
+  return labelOption(readUrlState().view ?? DEFAULT_VIEW).tag;
+}

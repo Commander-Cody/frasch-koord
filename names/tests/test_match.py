@@ -1,34 +1,37 @@
-"""match.py: normalisation, name-value variants, kind rules, clustering, which
-rows the matcher owns, and the decision `match_row` makes for a row
+"""match.py: kind rules, clustering, which rows the matcher owns, and the
+decision `match_row` makes for a row
 (README "Matching rules (v1)").
 
-`match_row` runs against a real `Index` built from a tiny candidates.jsonl in
-build_candidates.py's format.  The records are real OSM objects (ids,
+`match_row` runs against a real `NameIndex` built from a tiny candidates.jsonl
+in build_candidates.py's format.  The records are real OSM objects (ids,
 positions and tags as in the Schleswig-Holstein / Denmark extracts of
 September 2026), trimmed to the tags the matcher reads."""
 from __future__ import annotations
 
 import pytest
 
-import match
-import placelist
+from frasch import match
+from frasch import placelist
+from frasch.nameindex import NameIndex
+from frasch.hints import HintResolver
+from frasch.candidates import read_records
 from conftest import cand, write_candidates
 
 
 def make_index(tmp_path, *recs):
-    return match.Index(str(write_candidates(tmp_path / "candidates.jsonl", *recs)))
+    return NameIndex(read_records(str(write_candidates(tmp_path / "candidates.jsonl", *recs))))
 
 
 def row(**cells):
     """A places.csv row as placelist.read returns it."""
-    r = {c: "" for c in placelist.COLUMNS}
+    r = {c: "" for c in placelist.columns()}
     r.update(cells, _line=2)
     return r
 
 
 def run(tmp_path, r, *recs):
     index = make_index(tmp_path, *recs)
-    return match.match_row(r, index, match.HintResolver(index))
+    return match.match_row(r, index, HintResolver(index))
 
 
 # real objects -------------------------------------------------------------
@@ -64,65 +67,6 @@ HOOGE = cand("w", 1472528450, 8.538734, 54.572607, name="Hooge", place="island",
              natural="coastline", wikidata="Q17047971")
 OCKHOLM = cand("n", 240080339, 8.827915, 54.665533, name="Ockholm", name__de="Ockholm",
                name__da="Okholm", place="village")
-
-
-# ------------------------------------------------------------------- norm ---
-@pytest.mark.parametrize("a,b", [
-    ("Holm", " holm "),                             # case, surrounding blanks
-    ("Groß-Morsum", "Gross Morsum"),                # ß, hyphen
-    ("Süderlügum", "Suederluegum"),                 # ü
-    ("Ockholmer Koog", "Ockholmer  Koog"),          # inner blanks
-    ("Højer", "Hoejer"),                            # ø
-    ("Åbenrå", "Aabenraa"),                         # å
-    ("Ærø", "Aeroe"),                               # æ
-    ("Langeneß", "Langeness"),
-    ("Wyk auf Föhr", "Wyk-auf-Foehr"),
-])
-def test_norm_treats_spellings_as_equal(a, b):
-    assert match.norm(a) == match.norm(b)
-
-
-def test_norm_spelling():
-    assert match.norm("Sønder Løgum") == "soender loegum"
-    assert match.norm("Groß-Morsum") == "gross morsum"
-
-
-def test_norm_does_not_split_compounds():
-    # README: `Gotteskoogsee` does not match OSM's `Gotteskoog See`
-    assert match.norm("Gotteskoogsee") != match.norm("Gotteskoog See")
-
-
-def test_norm_of_nothing_is_empty():
-    assert match.norm("") == ""
-    assert match.norm(None) == ""
-
-
-# ------------------------------------------------------ split_name_values ---
-def test_plain_name_is_its_only_value():
-    assert match.split_name_values("Holm") == [("Holm", 0)]
-
-
-def test_multilingual_slash_list_gives_each_language_unpenalised():
-    vals = match.split_name_values("North Sea / Nordsee / Noordzee")
-    assert ("Nordsee", 0) in vals
-    assert ("North Sea / Nordsee / Noordzee", 0) in vals
-
-
-def test_semicolon_list_gives_each_value_unpenalised():
-    vals = match.split_name_values("Nord-Ost-Strand;Nordoststrand")
-    assert ("Nord-Ost-Strand", 0) in vals and ("Nordoststrand", 0) in vals
-
-
-@pytest.mark.parametrize("value,bare", [
-    ("Kampen (Sylt)", "Kampen"),                    # OSM's disambiguator
-    ("Kreis Dithmarschen", "Dithmarschen"),         # a type word in front
-    ("Wyk auf Föhr", "Wyk"),                        # the island behind
-    ("Hallig Hooge", "Hooge"),
-])
-def test_osm_annotations_give_a_penalised_bare_name(value, bare):
-    vals = match.split_name_values(value)
-    assert (value, 0) in vals
-    assert (bare, 2) in vals
 
 
 # ---------------------------------------------------------------- kind_ok ---
@@ -200,13 +144,13 @@ def test_a_record_without_location_is_a_cluster_of_its_own():
     ({"kind": "not_a_place"}, False),
 ])
 def test_owned_by_matcher(cells, owned):
-    assert match.owned_by_matcher(row(**{"kind": "settlement", **cells})) is owned
+    assert placelist.owned_by_matcher(row(**{"kind": "settlement", **cells})) is owned
 
 
 def test_a_local_reference_is_never_the_matchers_even_as_auto():
     # the only way it matters: `local/` with status auto would otherwise count
     r = row(kind="settlement", osm="local/westerheide-amrum", status="auto")
-    assert match.owned_by_matcher(r) is False
+    assert placelist.owned_by_matcher(r) is False
 
 
 # -------------------------------------------------------------- match_row ---

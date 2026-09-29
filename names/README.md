@@ -101,8 +101,9 @@ $PY names/dialects.py            # print the registry
 $PY names/dialects.py --tags     # frr-x-mooring,frr-x-wieding,...  (tiles/build.sh)
 ```
 
-The shared name logic lives in `dialects.py` next to the reader, because
-injector, exporter and frontend must agree on it:
+The shared name logic lives in `frasch/dialects.py`, on top of the
+registry's one reader (`frasch/registry.py`), because injector, exporter and
+frontend must agree on it:
 
 * **the name of a place in dialect T** = its column, else — if T is the
   dialect of the area the place lies in — `local`
@@ -171,7 +172,7 @@ between two municipalities that actually touch become visible. Committed, for
 the same reason as the dissolved file. `--no-unassigned` skips the extra
 relation scan.
 
-Both files are written atomically (`placelist.atomic_write`) and only once
+Both files are written atomically (`frasch.files.atomic_write`) and only once
 every reference has resolved and every polygon is assembled, so a crashed or
 interrupted run never leaves a truncated file. Each one's `properties` records
 a `built_from`: the git blob hash of `dialect_areas.csv` and `dialects.csv`,
@@ -422,7 +423,7 @@ with a real `osm` reference. One local reference, one row per file.
   tagged with the row's `name:<dialect>` / `frasch:*` tags, `name` = the
   German name (else Danish, else any Frisian name — OpenMapTiles drops a
   nameless place node), and a default `place=` value from `kind`
-  (`POINT_TAGS` in that file: `settlement`/`warft` → `hamlet`, `island` /
+  (`POINT_TAGS` in `frasch/curationlist.py`: `settlement`/`warft` → `hamlet`, `island` /
   `hallig` → `island`; a `kind` with no default needs `place=` in the
   curation row's `set_tags`, or the build stops). The curation row's
   `set_tags`/`minzoom`/`maxzoom` are applied last, so `set_tags` can override
@@ -558,9 +559,9 @@ references: coordinates and tag fixes belong in `curation.csv` and the build.
 | `dialects.csv` | the dialect registry — edit this |
 | `dialect_areas.csv` | which OSM object belongs to which dialect — edit this |
 | `curation.csv` | per-object map tuning, and the position for places OSM does not have — edit this |
-| `placelist.py` | reads/writes/validates `places.csv`; shared by the scripts below |
-| `dialects.py` | the registry, the dialect name logic and the area lookup; shared by injector, exporter and matcher. `--export` writes `web/src/generated/dialects.json` |
-| `locate.py` | OSM extract(s) → `osm_objects.json`: where each object of the name list is; `dialect_at`, the one dialect lookup of injector and exporter |
+| `check.py` | checks the hand-edited files, every problem with its line (`--fix` gives new rows an id) |
+| `dialects.py` | prints the registry; `--tags` for Planetiler, `--export` writes `web/src/generated/dialects.json` |
+| `locate.py` | OSM extract(s) → `osm_objects.json`: where each object of the name list is |
 | `osm_objects.json` | generated, **committed**: the located objects (see "Where the objects are") |
 | `provenance.py` | the `built_from` stamps; prints the tiles' |
 | `check_built.py` | `just check`: the committed outputs match their inputs |
@@ -574,3 +575,34 @@ references: coordinates and tag fixes belong in `curation.csv` and the build.
 | `REPORT.md` | generated worklist |
 | `work/` | git-ignored caches (candidates, matches, Wikidata lookups, the extracts the last match used) and the curation view's `curate.json` / `curate-patch.jsonl` |
 | `bootstrap/` | the original sheet export (`sheet-export.csv`) |
+| `curate-patch.schema.json` | the JSON Schema of one line of `work/curate-patch.jsonl`: the contract between the curation view, the Vite dev server and `curate.py apply` |
+
+The `.py` files here (and `tiles/inject_names.py`, `tiles/check_tiles.py`)
+are launchers: each runs the `main()` of the module of the same name in
+`frasch/`.
+
+## Code
+
+All Python code is one package, `frasch/` at the repo root (installed
+editable by `uv sync`). Library code raises (`frasch.errors`: a
+`ValidationError` lists every problem a reader found); only a command's
+`main()` turns that into a message and exit status 1. Nothing is read at
+import: whatever needs the dialect registry takes it as a parameter, the
+default `names/dialects.csv` is read on first use.
+
+| module | what |
+|---|---|
+| `paths` | the default location of every file |
+| `errors`, `cli` | what library code raises; the `main()` wrapper that turns it into an exit status |
+| `files` | reading the hand-edited CSVs, atomic writes |
+| `registry` | the one reader of `dialects.csv` |
+| `placelist` | reads/writes/validates `places.csv`: cells, references, ids, the lock |
+| `curationlist` | the one reader of `curation.csv`, and appending to it |
+| `dialects` | the dialect name logic (`dialect_name`, `local_name`) and the area lookup (`AreaIndex`) |
+| `locate` | the objects file, and `dialect_at`, the one dialect lookup of injector and exporter |
+| `geo` | the North Frisia box, its centre, haversine |
+| `osmscan`, `osmgeom` | the id-filtered passes over an extract; ring assembly and polygons |
+| `candidates`, `nameindex`, `hints` | the candidates file, the name index of the matcher and the curation export, location hints |
+| `searchindex` | builds the search index (`export_search_index` writes it, `check_built` compares it) |
+| `provenance` | the `built_from` stamps |
+| the rest | one module per command, as in the table above |

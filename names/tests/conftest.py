@@ -6,16 +6,9 @@ from __future__ import annotations
 import csv
 import io
 import json
-import os
-import sys
-
 import pytest
 
-NAMES = os.path.normpath(os.path.join(os.path.dirname(__file__), ".."))
-if NAMES not in sys.path:
-    sys.path.insert(0, NAMES)
-
-import placelist  # noqa: E402
+from frasch import placelist
 
 
 def places_text(rows) -> str:
@@ -23,11 +16,11 @@ def places_text(rows) -> str:
     are not empty.  A row without an `id` key gets `row-<n>` (n counting from
     1); pass `id` explicitly -- even empty -- to control it."""
     buf = io.StringIO(newline="")
-    w = csv.DictWriter(buf, fieldnames=placelist.COLUMNS, lineterminator="\n")
+    w = csv.DictWriter(buf, fieldnames=placelist.columns(), lineterminator="\n")
     w.writeheader()
     for n, r in enumerate(rows, start=1):
         r = {"id": f"row-{n}", **r}
-        w.writerow({k: r.get(k, "") for k in placelist.COLUMNS})
+        w.writerow({k: r.get(k, "") for k in placelist.columns()})
     return buf.getvalue()
 
 
@@ -56,6 +49,20 @@ def write_candidates(path, *recs):
 
 
 CURATION_HEADER = "osm,name,lat,lon,set_tags,minzoom,maxzoom,polygon_km2,note\n"
+
+
+def curation_file(directory, *rows):
+    """Write a curation.csv of `rows` (dicts of the cells that are not empty)
+    into `directory` and return its path."""
+    columns = CURATION_HEADER.strip().split(",")
+    buf = io.StringIO(newline="")
+    w = csv.DictWriter(buf, fieldnames=columns, lineterminator="\n")
+    w.writeheader()
+    for r in rows:
+        w.writerow({k: r.get(k, "") for k in columns})
+    path = directory / "curation.csv"
+    path.write_text(buf.getvalue(), encoding="utf-8")
+    return str(path)
 
 
 @pytest.fixture

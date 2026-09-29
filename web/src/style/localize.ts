@@ -59,15 +59,15 @@ function referencesName(textField: unknown): boolean {
  * Rewrites `baseStyle` into a label-aware, self-hosted style:
  *  - points the `openmaptiles` source at `tilesUrl`
  *  - rewrites every symbol layer's name-based `text-field` to the chain of
- *    `nameExpression(labels)` above
+ *    `nameExpression(view)` above
  *  - points `glyphs`/`sprite` at the copies this site hosts itself
  *
- * `labels` is a dialect tag or LOCAL_TAG (see `nameExpression`).
+ * `view` is a dialect tag or LOCAL_TAG (see `nameExpression`).
  */
 export function buildStyle(
   baseStyle: StyleSpecification,
   tilesUrl: string,
-  labels: string,
+  view: string,
 ): StyleSpecification {
   const style: StyleSpecification = structuredClone(baseStyle);
 
@@ -85,7 +85,7 @@ export function buildStyle(
   };
 
   // (b) Rewrite name-based text-fields to follow the selected label chain.
-  const textFieldExpression = nameExpression(labels);
+  const textFieldExpression = nameExpression(view);
   style.layers = style.layers.map((layer: LayerSpecification): LayerSpecification => {
     if (layer.type !== 'symbol' || !layer.layout) return layer;
     const textField = (layer.layout as Record<string, unknown>)['text-field'];

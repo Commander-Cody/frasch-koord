@@ -57,7 +57,7 @@ export interface MapViewProps {
    * (LOCAL_TAG). Passed straight to `buildStyle`; the style is rebuilt on
    * every change.
    */
-  labels: string;
+  view: string;
   /**
    * Called with the place label a click hit, or `null` when it hit none, and
    * where the click was. Left out by the dev views, which bring their own
@@ -96,7 +96,7 @@ export interface MapViewHandle {
  * parents (e.g. search) can fly to a location and drop a marker.
  */
 const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
-  { labels, onSelectFeature },
+  { view, onSelectFeature },
   ref,
 ) {
   const { t } = useTranslation();
@@ -107,7 +107,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   const [failure, setFailure] = useState<'error' | 'timeout' | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markerRef = useRef<Marker | null>(null);
-  const appliedLabels = useRef(labels);
+  const appliedView = useRef(view);
   // The click handler is registered once, on the map rather than on layer
   // ids (those would have to be re-registered after every setStyle), so it
   // reads the current callback through a ref instead of capturing it.
@@ -162,7 +162,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
     ensurePmtilesProtocol();
     if (!containerRef.current) return;
 
-    const style = buildStyle(fraschBright as unknown as StyleSpecification, TILES_URL, labels);
+    const style = buildStyle(fraschBright as unknown as StyleSpecification, TILES_URL, view);
     const map = new MapLibreMap({
       container: containerRef.current,
       style,
@@ -247,10 +247,10 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   // StrictMode's double effect invocation in development.
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || appliedLabels.current === labels) return;
-    appliedLabels.current = labels;
-    map.setStyle(buildStyle(fraschBright as unknown as StyleSpecification, TILES_URL, labels));
-  }, [labels]);
+    if (!map || appliedView.current === view) return;
+    appliedView.current = view;
+    map.setStyle(buildStyle(fraschBright as unknown as StyleSpecification, TILES_URL, view));
+  }, [view]);
 
   return (
     <>

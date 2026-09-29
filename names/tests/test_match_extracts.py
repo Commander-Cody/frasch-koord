@@ -5,9 +5,11 @@ from __future__ import annotations
 
 import json
 
-import curate
-import match
-import placelist
+from frasch import curate
+from frasch import match
+from frasch import placelist
+from frasch.nameindex import NameIndex
+from frasch.candidates import read_records
 from conftest import cand, places_text, write_candidates
 
 SH = {"file": "schleswig-holstein-latest.osm.pbf",
@@ -23,7 +25,7 @@ ROWS = [{"id": "toftem", "kind": "settlement", "mooring": "Toftem", "de": "Toftu
 
 
 def test_the_index_skips_the_header(tmp_path):
-    index = match.Index(str(write_candidates(tmp_path / "c.jsonl", HEADER, TOFTUM)))
+    index = NameIndex(read_records(str(write_candidates(tmp_path / "c.jsonl", HEADER, TOFTUM))))
     assert [r["id"] for r in index.recs] == [240044107]
 
 

@@ -1,4 +1,4 @@
-"""inject_names.py: reading the curation file, the tags an object gets, and a
+"""inject_names.py: an absent curation file, the tags an object gets, and a
 whole `run()` over a tiny extract written here with pyosmium.
 
 The extract mirrors real places (ids and positions from the
@@ -16,10 +16,13 @@ import math
 import osmium
 import pytest
 
-import dialects
-import inject_names
-import locate
-import placelist
+from frasch import paths, registry
+from frasch.errors import PipelineError
+from frasch import inject_names
+from frasch import locate
+from frasch import placelist
+from conftest import curation_file
+from osm_fixture import write_extract as write_osm
 
 
 # ------------------------------------------------------------- square_around ---
@@ -48,11 +51,11 @@ def test_square_is_centred_on_the_node():
 # ----------------------------------------------------------------- name_tags ---
 @pytest.fixture(scope="module")
 def reg():
-    return dialects.read()
+    return registry.read()
 
 
 def place(line=2, **cells):
-    r = {c: "" for c in placelist.COLUMNS}
+    r = {c: "" for c in placelist.columns()}
     r.update(cells, _line=line)
     return r
 
@@ -111,105 +114,14 @@ def test_name_tags_refer_to_the_rows_id(reg):
 
 
 # ------------------------------------------------------------- load_curation ---
-CURATION_HEADER = ["osm", "name", "lat", "lon", "set_tags", "minzoom", "maxzoom",
-                   "polygon_km2", "note"]
-
-
-def curation_file(tmp_path, *rows):
-    path = tmp_path / "curation.csv"
-    buf = io.StringIO(newline="")
-    w = csv.DictWriter(buf, fieldnames=CURATION_HEADER, lineterminator="\n")
-    w.writeheader()
-    for r in rows:
-        w.writerow({k: r.get(k, "") for k in CURATION_HEADER})
-    path.write_text(buf.getvalue(), encoding="utf-8")
-    return str(path)
-
-
-def test_curation_row_tags_an_osm_object(tmp_path):
-    path = curation_file(tmp_path, {"osm": "way/177387348", "name": "Habel",
-                                    "set_tags": "place=island"})
-    by_id, synthetic, points = inject_names.load_curation(path)
-    assert by_id == {("w", 177387348): {"tags": {"place": "island"}, "label": "Habel"}}
-    assert synthetic == {} and points == {}
-
-
-def test_curation_zooms_become_string_tags(tmp_path):
-    path = curation_file(tmp_path, {"osm": "node/355956234", "name": "Tammensiel",
-                                    "minzoom": "10", "maxzoom": "12"})
-    by_id, _, _ = inject_names.load_curation(path)
-    assert by_id[("n", 355956234)]["tags"] == {"frasch:minzoom": "10",
-                                               "frasch:maxzoom": "12"}
-
-
-def test_curation_row_with_several_objects_tags_each(tmp_path):
-    path = curation_file(tmp_path, {"osm": "way/44051131; way/44051132",
-                                    "name": "Arlau",
-                                    "set_tags": "name:frr-x-mooring=Arlou"})
-    by_id, _, _ = inject_names.load_curation(path)
-    assert set(by_id) == {("w", 44051131), ("w", 44051132)}
-    assert by_id[("w", 44051132)]["tags"] == {"name:frr-x-mooring": "Arlou"}
-
-
-def test_curation_row_with_nothing_to_apply_is_skipped(tmp_path):
-    path = curation_file(tmp_path, {"osm": "node/1", "name": "just a note",
-                                    "note": "look at this later"})
-    assert inject_names.load_curation(path) == ({}, {}, {})
-
-
-def test_polygon_km2_row_describes_a_square_not_a_tag_change(tmp_path):
-    path = curation_file(tmp_path, {"osm": "node/85929111", "name": "Nordstrand",
-                                    "set_tags": "place=island", "maxzoom": "11",
-                                    "polygon_km2": "50"})
-    by_id, synthetic, _ = inject_names.load_curation(path)
-    assert by_id == {}
-    assert synthetic == {("n", 85929111): {
-        "km2": 50.0, "tags": {"place": "island", "frasch:maxzoom": "11"},
-        "label": "Nordstrand"}}
-
-
-def test_local_reference_row_positions_a_place(tmp_path):
-    path = curation_file(tmp_path, {"osm": "local/westerheide-amrum",
-                                    "name": "Westerheide (Amrum)",
-                                    "lat": "54.65097", "lon": "8.34019"})
-    _, _, points = inject_names.load_curation(path)
-    p = points[("l", "westerheide-amrum")]
-    assert (p["lon"], p["lat"], p["km2"], p["tags"]) == (8.34019, 54.65097, None, {})
-
-
+# (the file's rules are frasch.curationlist's, see names/tests/test_curationlist.py)
 def test_missing_curation_file_is_nothing_curated(tmp_path):
     assert inject_names.load_curation(str(tmp_path / "absent.csv")) == ({}, {}, {})
 
 
 def test_missing_curation_file_named_explicitly_stops(tmp_path):
-    with pytest.raises(SystemExit, match="not found"):
+    with pytest.raises(PipelineError, match="not found"):
         inject_names.load_curation(str(tmp_path / "absent.csv"), required=True)
-
-
-@pytest.mark.parametrize("bad,message", [
-    ({"osm": "node/85929111", "lat": "54.48", "lon": "8.86"}, "only go with a local"),
-    ({"osm": "local/westerheide-amrum"}, "needs `lat` and `lon`"),
-    ({"osm": "node/355956234", "minzoom": "ten"}, "not an integer"),
-    ({"osm": "node/85929111", "polygon_km2": "0"}, "not a positive number"),
-    ({"osm": "node/85929111", "polygon_km2": "fifty"}, "not a positive number"),
-    ({"osm": "way/177387348", "polygon_km2": "5"}, "exactly one node"),
-    ({"osm": "node/1; node/2", "polygon_km2": "5"}, "exactly one node"),
-])
-def test_bad_curation_row_stops_the_build(tmp_path, bad, message):
-    with pytest.raises(SystemExit, match=message):
-        inject_names.load_curation(curation_file(tmp_path, bad))
-
-
-def test_second_row_for_one_local_reference_stops_the_build(tmp_path):
-    row = {"osm": "local/huelltoft", "lat": "54.881287", "lon": "8.771304"}
-    with pytest.raises(SystemExit, match="second row"):
-        inject_names.load_curation(curation_file(tmp_path, row, row))
-
-
-def test_second_polygon_for_one_node_stops_the_build(tmp_path):
-    row = {"osm": "node/85929111", "polygon_km2": "50"}
-    with pytest.raises(SystemExit, match="second polygon_km2"):
-        inject_names.load_curation(curation_file(tmp_path, row, row))
 
 
 # ------------------------------------------------------------ a whole run() ---
@@ -333,10 +245,10 @@ def read_extract(path):
 
 def places_csv(rows):
     buf = io.StringIO(newline="")
-    w = csv.DictWriter(buf, fieldnames=placelist.COLUMNS, lineterminator="\n")
+    w = csv.DictWriter(buf, fieldnames=placelist.columns(), lineterminator="\n")
     w.writeheader()
     for r in rows:
-        w.writerow({k: r.get(k, "") for k in placelist.COLUMNS})
+        w.writerow({k: r.get(k, "") for k in placelist.columns()})
     return buf.getvalue()
 
 
@@ -350,7 +262,7 @@ def injected(tmp_path_factory):
     locate.main([str(d / "in.osm.pbf"), "--names", str(d / "places.csv"),
                  "--out", str(d / "osm_objects.json")])
     inject_names.run(str(d / "in.osm.pbf"), str(d / "out.osm.pbf"),
-                     str(d / "places.csv"), dialects.DEFAULT_PATH,
+                     str(d / "places.csv"), paths.DIALECTS,
                      str(d / "areas.geojson"), curation_csv=curation,
                      objects_json=str(d / "osm_objects.json"))
     objs = read_extract(d / "out.osm.pbf")
@@ -428,9 +340,9 @@ def test_an_object_nobody_located_stops_the_build(tmp_path):
     (tmp_path / "osm_objects.json").write_text(
         locate.objects_json(locate.Objects({}, {"extracts": []})), encoding="utf-8")
     write_extract(tmp_path / "in.osm.pbf")
-    with pytest.raises(SystemExit, match=f"node/{HOLM}"):
+    with pytest.raises(PipelineError, match=f"node/{HOLM}"):
         inject_names.run(str(tmp_path / "in.osm.pbf"), str(tmp_path / "out.osm.pbf"),
-                         str(tmp_path / "places.csv"), dialects.DEFAULT_PATH,
+                         str(tmp_path / "places.csv"), paths.DIALECTS,
                          str(tmp_path / "areas.geojson"),
                          objects_json=str(tmp_path / "osm_objects.json"))
     assert not (tmp_path / "out.osm.pbf").exists()
@@ -508,3 +420,19 @@ def test_synthetic_square_carries_the_nodes_names_and_its_own_tags(injected):
     assert tags == {"name": "Nordstrand", "name:frr-x-mooring": "e Strönj",
                     "frasch:ref": "relation/1420555", "place": "island",
                     "frasch:kind": "island", "frasch:maxzoom": "11"}
+
+
+# ------------------------------------------------------------- waterways ---
+def test_the_member_ways_of_a_matched_waterway_relation_are_found(tmp_path):
+    # the Arlau: the row names the river relation, the labels go on its ways
+    nodes = {i: ((8.9 + i / 100, 54.6), {}) for i in range(1, 5)}
+    path = write_osm(tmp_path / "river.osm.pbf", nodes=nodes,
+                     ways={10: ([1, 2], {"waterway": "river"}),
+                           11: ([2, 3], {"waterway": "river"}),
+                           12: ([3, 4], {"highway": "track"})},
+                     relations={20: ([("w", 10, "main_stream"), ("w", 11, "side_stream")],
+                                     {"type": "waterway", "name": "Arlau"}),
+                                21: ([("w", 12, "")], {"type": "route"})})
+    by_id = {("r", 20): [{}], ("r", 21): [{}]}
+    assert inject_names.scan_waterways(str(path), by_id) == {
+        ("w", 10): (("r", 20), "Arlau"), ("w", 11): (("r", 20), "Arlau")}

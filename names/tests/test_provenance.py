@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-import provenance
+from frasch import provenance
 from osm_fixture import write_extract
 
 

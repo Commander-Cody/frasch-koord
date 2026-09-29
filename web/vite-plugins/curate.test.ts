@@ -15,6 +15,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createCurateMiddleware } from './curate.ts';
+import patchSchema from '../../names/curate-patch.schema.json' with { type: 'json' };
 
 /** A response, as seen by whoever called `.end()` on it. */
 interface CapturedResponse {
@@ -161,6 +162,30 @@ describe('createCurateMiddleware', () => {
     const onDisk = await readPatchEntries();
     expect(onDisk).toHaveLength(1);
     expect(Object.keys(onDisk[0]).sort()).toEqual(['action', 'at', 'de', 'id', 'kind', 'line', 'name', 'osm'].sort());
+  });
+
+  it('keeps every field the patch schema defines, and sets `at` itself', async () => {
+    // One value per schema property, whatever its type: the whitelist is
+    // about names, and the schema is what `apply` validates against.
+    const entry: Record<string, unknown> = Object.fromEntries(
+      Object.keys(patchSchema.properties).map((key) => [key, `${key}-value`]),
+    );
+    const res = await post(jsonHeaders, JSON.stringify({ ...entry, ...validEntry, at: 'forged' }));
+    expect(res.status).toBe(200);
+    const [stored] = await readPatchEntries();
+    expect(Object.keys(stored).sort()).toEqual(Object.keys(patchSchema.properties).sort());
+    expect(stored.at).not.toBe('forged');
+  });
+
+  it.each(patchSchema.properties.action.enum)('accepts the schema action %s', async (action) => {
+    const res = await post(jsonHeaders, JSON.stringify({ ...validEntry, action }));
+    expect(res.status).toBe(200);
+  });
+
+  it('rejects an action the schema does not list with 400', async () => {
+    const res = await post(jsonHeaders, JSON.stringify({ ...validEntry, action: 'delete' }));
+    expect(res.status).toBe(400);
+    expect(await readPatchEntries()).toEqual([]);
   });
 
   it.each([
