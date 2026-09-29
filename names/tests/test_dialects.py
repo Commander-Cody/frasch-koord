@@ -2,19 +2,22 @@
 the "smallest area containing a point wins" rule of the area lookup."""
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from shapely.geometry import box
+from shapely.geometry.base import BaseGeometry
 
 from frasch import dialects, registry
 from frasch import placelist
 
 
 @pytest.fixture(scope="module")
-def reg():
+def reg() -> registry.Registry:
     return registry.read()
 
 
-def row(**cells):
+def row(**cells: str) -> dict[str, str]:
     r = {c: "" for c in placelist.columns()}
     r.update(cells)
     return r
@@ -29,54 +32,55 @@ BRODERSWARFT = row(kind="warft", mooring="Brouderswärw",
 
 
 # ---------------------------------------------------------- dialect_name ---
-def test_dialect_name_is_the_dialects_column(reg):
+def test_dialect_name_is_the_dialects_column(reg: registry.Registry) -> None:
     assert dialects.dialect_name(HANSWARFT, "frr-x-hallig", None, reg) == "Hansweerf"
     assert dialects.dialect_name(HANSWARFT, "frr-x-mooring", None, reg) == "Hanswärw"
 
 
-def test_dialect_name_is_the_primary_variant(reg):
+def test_dialect_name_is_the_primary_variant(reg: registry.Registry) -> None:
     r = row(kind="hallig", hallig="Schorkeweerw; Nees-Schorkeweerw")
     assert dialects.dialect_name(r, "frr-x-hallig", None, reg) == "Schorkeweerw"
 
 
-def test_dialect_name_falls_back_to_local_in_the_areas_own_dialect(reg):
+def test_dialect_name_falls_back_to_local_in_the_areas_own_dialect(reg: registry.Registry) -> None:
     # the Foortuftinge form IS the name in the dialect spoken at Fahretoft
     assert dialects.dialect_name(BRODERSWARFT, "frr-x-nordgoes", "frr-x-nordgoes",
                                  reg) == "Brouersweerw"
 
 
-def test_dialect_name_does_not_fall_back_to_local_for_another_dialect(reg):
+def test_dialect_name_does_not_fall_back_to_local_for_another_dialect(
+        reg: registry.Registry) -> None:
     assert dialects.dialect_name(BRODERSWARFT, "frr-x-wieding", "frr-x-nordgoes", reg) == ""
 
 
-def test_dialect_name_does_not_fall_back_outside_any_area(reg):
+def test_dialect_name_does_not_fall_back_outside_any_area(reg: registry.Registry) -> None:
     assert dialects.dialect_name(BRODERSWARFT, "frr-x-nordgoes", None, reg) == ""
 
 
-def test_dialect_name_keeps_its_column_over_local(reg):
+def test_dialect_name_keeps_its_column_over_local(reg: registry.Registry) -> None:
     # the column wins even in the area's own dialect
     assert dialects.dialect_name(BRODERSWARFT, "frr-x-mooring", "frr-x-mooring",
                                  reg) == "Brouderswärw"
 
 
 # ------------------------------------------------------------ local_name ---
-def test_local_name_is_the_local_column_first(reg):
+def test_local_name_is_the_local_column_first(reg: registry.Registry) -> None:
     assert dialects.local_name(BRODERSWARFT, "frr-x-mooring", reg) == "Brouersweerw"
 
 
-def test_local_name_is_the_local_column_also_outside_any_area(reg):
+def test_local_name_is_the_local_column_also_outside_any_area(reg: registry.Registry) -> None:
     assert dialects.local_name(BRODERSWARFT, None, reg) == "Brouersweerw"
 
 
-def test_local_name_falls_back_to_the_areas_dialect(reg):
+def test_local_name_falls_back_to_the_areas_dialect(reg: registry.Registry) -> None:
     assert dialects.local_name(HANSWARFT, "frr-x-hallig", reg) == "Hansweerf"
 
 
-def test_local_name_is_empty_outside_any_area_without_local(reg):
+def test_local_name_is_empty_outside_any_area_without_local(reg: registry.Registry) -> None:
     assert dialects.local_name(HANSWARFT, None, reg) == ""
 
 
-def test_local_name_is_empty_when_the_area_dialect_has_no_name(reg):
+def test_local_name_is_empty_when_the_area_dialect_has_no_name(reg: registry.Registry) -> None:
     # a Mooring-only row on Sylt: no Sölring form known, nothing local to say
     r = row(kind="settlement", mooring="Muasem", de="Morsum")
     assert dialects.local_name(r, "frr-x-solring", reg) == ""
@@ -93,40 +97,41 @@ INNER = box(8.82, 54.58, 8.86, 54.60)       # Hamburger Hallig
     [("frr-x-mooring", OUTER), ("frr-x-hallig", INNER)],
     [("frr-x-hallig", INNER), ("frr-x-mooring", OUTER)],
 ], ids=["large-first", "small-first"])
-def test_the_smallest_area_containing_the_point_wins(polygons):
+def test_the_smallest_area_containing_the_point_wins(
+        polygons: list[tuple[str, BaseGeometry]]) -> None:
     areas = dialects.AreaIndex(polygons)
     assert areas.lookup(8.84, 54.59) == "frr-x-hallig"
 
 
-def test_a_point_only_in_the_large_area_gets_its_dialect():
+def test_a_point_only_in_the_large_area_gets_its_dialect() -> None:
     areas = dialects.AreaIndex([("frr-x-mooring", OUTER), ("frr-x-hallig", INNER)])
     assert areas.lookup(8.90, 54.62) == "frr-x-mooring"
 
 
-def test_a_point_outside_every_area_has_no_dialect():
+def test_a_point_outside_every_area_has_no_dialect() -> None:
     # Nordstrand has no Frisian area at all
     areas = dialects.AreaIndex([("frr-x-mooring", OUTER), ("frr-x-hallig", INNER)])
     assert areas.lookup(8.87, 54.49) is None
 
 
-def test_a_point_on_the_outline_is_inside():
+def test_a_point_on_the_outline_is_inside() -> None:
     areas = dialects.AreaIndex([("frr-x-mooring", OUTER)])
     assert areas.lookup(8.80, 54.60) == "frr-x-mooring"
 
 
-def test_lookup_takes_coordinate_strings():
+def test_lookup_takes_coordinate_strings() -> None:
     areas = dialects.AreaIndex([("frr-x-mooring", OUTER)])
     assert areas.lookup("8.90", "54.62") == "frr-x-mooring"
 
 
-def test_an_empty_index_knows_no_dialect():
+def test_an_empty_index_knows_no_dialect() -> None:
     assert dialects.AreaIndex([]).lookup(8.84, 54.59) is None
 
 
 # -------------------------------------------------------------- area_rows ---
 # A node can never be a polygon, and `local/` names an object our own
 # curation.csv invents -- neither belongs in an OSM-boundary area list (#24).
-def test_area_rows_rejects_a_node_reference(tmp_path, reg):
+def test_area_rows_rejects_a_node_reference(tmp_path: Path, reg: registry.Registry) -> None:
     areas = tmp_path / "dialect_areas.csv"
     areas.write_text("dialect,osm,name,note\n"
                      "frr-x-mooring,node/1,A node,\n", encoding="utf-8")
@@ -139,7 +144,7 @@ def test_area_rows_rejects_a_node_reference(tmp_path, reg):
     assert "way" in reason and "relation" in reason
 
 
-def test_area_rows_rejects_a_local_reference(tmp_path, reg):
+def test_area_rows_rejects_a_local_reference(tmp_path: Path, reg: registry.Registry) -> None:
     areas = tmp_path / "dialect_areas.csv"
     areas.write_text("dialect,osm,name,note\n"
                      "frr-x-mooring,local/some-slug,A local place,\n", encoding="utf-8")
@@ -151,7 +156,8 @@ def test_area_rows_rejects_a_local_reference(tmp_path, reg):
     assert "local/some-slug" in reason
 
 
-def test_area_rows_still_accepts_way_and_relation_references(tmp_path, reg):
+def test_area_rows_still_accepts_way_and_relation_references(tmp_path: Path,
+                                                             reg: registry.Registry) -> None:
     areas = tmp_path / "dialect_areas.csv"
     areas.write_text("dialect,osm,name,note\n"
                      "frr-x-mooring,way/1;relation/2,Fine,\n", encoding="utf-8")
@@ -161,7 +167,7 @@ def test_area_rows_still_accepts_way_and_relation_references(tmp_path, reg):
 
 
 # ------------------------------------------------------------- --export ---
-def test_the_frontend_gets_the_registry_without_the_notes(tmp_path):
+def test_the_frontend_gets_the_registry_without_the_notes(tmp_path: Path) -> None:
     registry = tmp_path / "dialects.csv"
     registry.write_text("tag,column,label,status,view,note\n"
                         "frr-x-mooring,mooring,Mooring,living,yes,Bökingharde\n",

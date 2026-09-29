@@ -171,7 +171,7 @@ class AreaIndex:
         flat.sort(key=lambda tg: tg[1].area)     # smallest first -> first hit wins
         return cls(flat)
 
-    def lookup(self, lon: float, lat: float) -> str | None:
+    def lookup(self, lon: float | str, lat: float | str) -> str | None:
         if self.tree is None:
             return None
         from shapely.geometry import Point
