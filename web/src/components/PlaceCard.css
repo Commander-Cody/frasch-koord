@@ -114,7 +114,7 @@
 /* Phone width (App.css has the rest of that layout): a bottom sheet across
    the full width. As tall as its content, at most half the screen — the
    place it is about stays in view above it (hooks/usePlaceSelection.ts moves
-   the map). */
+   the map). The width is PHONE_MEDIA in layout.ts. */
 @media (max-width: 600px) {
   .place-card {
     position: fixed;
