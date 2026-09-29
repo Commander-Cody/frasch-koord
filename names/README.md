@@ -590,6 +590,12 @@ editable by `uv sync`). Library code raises (`frasch.errors`: a
 import: whatever needs the dialect registry takes it as a parameter, the
 default `names/dialects.csv` is read on first use.
 
+Everything is typed and checked by `mypy --strict` in CI (tests included).
+A record with fixed keys is a `TypedDict` in the module that produces it
+(`candidates.Candidate`, `locate.LocatedObject`, `searchindex.SearchEntry`,
+…); a row of `places.csv` is a plain `dict[str, str]` of its cells, and
+`placelist.read` returns them as `PlaceRow`s, which also know their `line`.
+
 | module | what |
 |---|---|
 | `paths` | the default location of every file |

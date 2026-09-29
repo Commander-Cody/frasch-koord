@@ -24,6 +24,7 @@ uv sync
 .venv/bin/pytest                    # tests of names/ and tiles/
 .venv/bin/python names/check.py     # check places.csv, curation.csv, dialects.csv
 .venv/bin/ruff check .
+.venv/bin/mypy                      # strict type check of all Python code, tests included
 uv run just check                   # the committed build outputs match their inputs
 uv run shellcheck tiles/*.sh web/scripts/*.sh
 ```
