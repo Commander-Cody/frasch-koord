@@ -6,6 +6,7 @@ import { DIALECTS, dialect, dialectLabelKey } from '../config';
 import type { DialectEntry } from '../config';
 import type { PlaceSelection } from '../names';
 import { cardEntry, osmUrl, placeOsmRef, resolveName, wikidataUrl } from '../names';
+import CloseButton from './CloseButton';
 import './PlaceCard.css';
 
 export interface PlaceCardProps {
@@ -116,9 +117,7 @@ export default function PlaceCard({ selection, view, onClose, ref: cardRef }: Pl
 
   return (
     <aside ref={cardRef} className="place-card" aria-label={t('card.title')}>
-      <button type="button" className="place-card-close" aria-label={t('card.close')} onClick={onClose}>
-        ×
-      </button>
+      <CloseButton className="place-card-close" label={t('card.close')} onClick={onClose} />
       <h2 className="place-card-name">{headline}</h2>
       <p className="place-card-meta">
         {headlineLabel}

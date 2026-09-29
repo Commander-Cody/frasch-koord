@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next';
 import fraschBright from '../style/frasch-bright.json';
 import { buildStyle, placeLayerIds } from '../style/localize';
 import { TILES_URL } from '../config';
+import CloseButton from './CloseButton';
 
 // Register the pmtiles:// protocol with MapLibre exactly once, no matter
 // how many times this component mounts.
@@ -258,9 +259,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
       {failure && (
         <div className="map-error" role="alert">
           <span>{t('errors.map')}</span>
-          <button type="button" aria-label={t('errors.dismiss')} onClick={() => setFailure(null)}>
-            ×
-          </button>
+          <CloseButton label={t('errors.dismiss')} onClick={() => setFailure(null)} />
         </div>
       )}
     </>
