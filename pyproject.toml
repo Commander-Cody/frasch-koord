@@ -53,6 +53,8 @@ python_version = "3.12"
 strict = true
 files = ["frasch", "names", "tiles"]
 mypy_path = "names/tests"
+# pmtiles ships py.typed, but its functions are not annotated
+untyped_calls_exclude = ["pmtiles"]
 exclude = ["^tiles/data/", "^names/work/"]
 
 [[tool.mypy.overrides]]

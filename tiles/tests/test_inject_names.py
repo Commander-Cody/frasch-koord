@@ -12,6 +12,8 @@ import csv
 import io
 import json
 import math
+from collections.abc import Iterable, Mapping
+from pathlib import Path
 
 import osmium
 import pytest
@@ -21,19 +23,21 @@ from frasch.errors import PipelineError
 from frasch import inject_names
 from frasch import locate
 from frasch import placelist
+from frasch.geo import LonLat
+from frasch.registry import Registry
 from conftest import curation_file
-from osm_fixture import write_extract as write_osm
+from osm_fixture import Nodes, write_extract as write_osm
 
 
 # ------------------------------------------------------------- square_around ---
-def test_square_at_the_equator():
+def test_square_at_the_equator() -> None:
     # 4 km² -> 1 km from the centre to each side; 1 km = 1/111.32 degree
     d = 1 / 111.32
     corners = inject_names.square_around(0.0, 0.0, 4.0)
     assert corners == pytest.approx([(-d, -d), (d, -d), (d, d), (-d, d)])
 
 
-def test_square_at_sixty_degrees_is_twice_as_wide_in_longitude():
+def test_square_at_sixty_degrees_is_twice_as_wide_in_longitude() -> None:
     # cos 60° = 1/2: a kilometre spans twice the degrees of longitude
     d = 1 / 111.32
     (w, s), (e, _), (_, n), _ = inject_names.square_around(8.0, 60.0, 4.0)
@@ -41,7 +45,7 @@ def test_square_at_sixty_degrees_is_twice_as_wide_in_longitude():
     assert (s, n) == pytest.approx((60.0 - d, 60.0 + d))
 
 
-def test_square_is_centred_on_the_node():
+def test_square_is_centred_on_the_node() -> None:
     # Planetiler labels a polygon at its interior point: that must be the node
     corners = inject_names.square_around(8.865286, 54.487378, 50.0)
     assert sum(x for x, _ in corners) / 4 == pytest.approx(8.865286)
@@ -50,11 +54,11 @@ def test_square_is_centred_on_the_node():
 
 # ----------------------------------------------------------------- name_tags ---
 @pytest.fixture(scope="module")
-def reg():
+def reg() -> Registry:
     return registry.read()
 
 
-def place(line=2, **cells):
+def place(line: int = 2, **cells: str) -> placelist.PlaceRow:
     return placelist.PlaceRow({c: "" for c in placelist.columns()} | cells, line)
 
 
@@ -63,7 +67,7 @@ BRODERSWARFT = place(id="brouderswarw", kind="warft", mooring="Brouderswärw",
                      osm="node/1594721085")
 
 
-def test_name_tags_of_a_row_with_a_local_variety(reg):
+def test_name_tags_of_a_row_with_a_local_variety(reg: Registry) -> None:
     assert inject_names.name_tags([BRODERSWARFT], "frr-x-mooring", reg) == {
         "name:frr-x-mooring": "Brouderswärw",
         "frasch:kind": "warft",
@@ -74,12 +78,12 @@ def test_name_tags_of_a_row_with_a_local_variety(reg):
     }
 
 
-def test_name_tags_fill_the_areas_dialect_from_local(reg):
+def test_name_tags_fill_the_areas_dialect_from_local(reg: Registry) -> None:
     tags = inject_names.name_tags([BRODERSWARFT], "frr-x-nordgoes", reg)
     assert tags["name:frr-x-nordgoes"] == "Brouersweerw"
 
 
-def test_name_tags_outside_any_area_have_no_dialect(reg):
+def test_name_tags_outside_any_area_have_no_dialect(reg: Registry) -> None:
     hanswarft = place(id="hanswarw", kind="warft", mooring="Hanswärw", hallig="Hansweerf",
                       de="Hanswarft", osm="node/3410324993")
     assert inject_names.name_tags([hanswarft], None, reg) == {
@@ -90,7 +94,7 @@ def test_name_tags_outside_any_area_have_no_dialect(reg):
     }
 
 
-def test_name_tags_first_row_wins_per_tag(reg):
+def test_name_tags_first_row_wins_per_tag(reg: Registry) -> None:
     # two rows claim one object: the first in file order keeps its names,
     # the second only fills what the first leaves empty
     first = place(2, id="hulm", kind="settlement", mooring="Hulm", de="Holm",
@@ -104,7 +108,7 @@ def test_name_tags_first_row_wins_per_tag(reg):
     assert tags["frasch:ref"] == "hulm"
 
 
-def test_name_tags_refer_to_the_rows_id(reg):
+def test_name_tags_refer_to_the_rows_id(reg: Registry) -> None:
     # not to the object: the search index names the place by the row (#23)
     denmark = place(id="daanemark", kind="country", mooring="Däänemark",
                     de="Dänemark", wikidata="Q35")
@@ -113,11 +117,11 @@ def test_name_tags_refer_to_the_rows_id(reg):
 
 # ------------------------------------------------------------- load_curation ---
 # (the file's rules are frasch.curationlist's, see names/tests/test_curationlist.py)
-def test_missing_curation_file_is_nothing_curated(tmp_path):
+def test_missing_curation_file_is_nothing_curated(tmp_path: Path) -> None:
     assert inject_names.load_curation(str(tmp_path / "absent.csv")) == ({}, {}, {})
 
 
-def test_missing_curation_file_named_explicitly_stops(tmp_path):
+def test_missing_curation_file_named_explicitly_stops(tmp_path: Path) -> None:
     with pytest.raises(PipelineError, match="not found"):
         inject_names.load_curation(str(tmp_path / "absent.csv"), required=True)
 
@@ -172,7 +176,7 @@ CURATION = [
 ]
 
 
-def box(west, south, east, north):
+def box(west: float, south: float, east: float, north: float) -> list[list[list[float]]]:
     return [[[west, south], [east, south], [east, north], [west, north], [west, south]]]
 
 
@@ -189,7 +193,7 @@ AREAS = {"type": "FeatureCollection", "features": [
     ]]}
 
 
-def write_extract(path):
+def write_extract(path: Path) -> None:
     Node, Way, Relation = (osmium.osm.mutable.Node, osmium.osm.mutable.Way,
                            osmium.osm.mutable.Relation)
     nodes = {
@@ -229,19 +233,28 @@ def write_extract(path):
         w.close()
 
 
-def read_extract(path):
+# a node's (lon, lat), a way's node ids, nothing for a relation
+Extra = LonLat | list[int] | None
+# (type letter, id, tags, extra)
+ExtractObject = tuple[str, int, dict[str, str], Extra]
+# the objects in file order, and by (type letter, id)
+Injected = tuple[list[ExtractObject], dict[tuple[str, int], tuple[dict[str, str], Extra]]]
+
+
+def read_extract(path: Path) -> list[ExtractObject]:
     """-> [(type letter, id, tags, extra)] in file order; `extra` is a
     node's (lon, lat) or a way's node ids."""
-    out = []
+    out: list[ExtractObject] = []
     for o in osmium.FileProcessor(str(path)):
         t = o.type_str()
-        extra = ((o.location.lon, o.location.lat) if t == "n"
-                 else [n.ref for n in o.nodes] if t == "w" else None)
+        extra: Extra = ((o.location.lon, o.location.lat) if isinstance(o, osmium.osm.Node)
+                        else [n.ref for n in o.nodes] if isinstance(o, osmium.osm.Way)
+                        else None)
         out.append((t, o.id, dict(o.tags), extra))
     return out
 
 
-def places_csv(rows):
+def places_csv(rows: Iterable[Mapping[str, str]]) -> str:
     buf = io.StringIO(newline="")
     w = csv.DictWriter(buf, fieldnames=placelist.columns(), lineterminator="\n")
     w.writeheader()
@@ -251,7 +264,7 @@ def places_csv(rows):
 
 
 @pytest.fixture(scope="module")
-def injected(tmp_path_factory):
+def injected(tmp_path_factory: pytest.TempPathFactory) -> Injected:
     d = tmp_path_factory.mktemp("inject")
     (d / "places.csv").write_text(places_csv(PLACES), encoding="utf-8")
     curation = curation_file(d, *CURATION)
@@ -267,20 +280,20 @@ def injected(tmp_path_factory):
     return objs, {(t, i): (tags, extra) for t, i, tags, extra in objs}
 
 
-def test_output_is_nodes_then_ways_then_relations(injected):
+def test_output_is_nodes_then_ways_then_relations(injected: Injected) -> None:
     objs, _ = injected
     types = [t for t, *_ in objs]
     assert types == sorted(types, key="nwr".index)
 
 
 @pytest.mark.parametrize("t", "nwr")
-def test_output_ids_ascend_within_each_type(injected, t):
+def test_output_ids_ascend_within_each_type(injected: Injected, t: str) -> None:
     objs, _ = injected
     ids = [i for tt, i, *_ in objs if tt == t]
     assert ids == sorted(ids) and len(ids) == len(set(ids))
 
 
-def test_every_input_object_is_still_there(injected):
+def test_every_input_object_is_still_there(injected: Injected) -> None:
     _, by_key = injected
     for key in [("n", NORDSTRAND), ("n", HOLM), ("n", UNTOUCHED_NODE), ("n", TAMMENSIEL),
                 ("w", NORDWARFT), ("w", HALLIG_RING), ("w", UNTOUCHED_WAY),
@@ -288,14 +301,15 @@ def test_every_input_object_is_still_there(injected):
         assert key in by_key
 
 
-def test_objects_nobody_mentions_pass_unchanged(injected):
+def test_objects_nobody_mentions_pass_unchanged(injected: Injected) -> None:
     _, by_key = injected
-    assert by_key[("n", UNTOUCHED_NODE)] == ({"place": "village", "name": "Bredstedt"},
-                                             pytest.approx((8.9, 54.6)))
+    tags, loc = by_key[("n", UNTOUCHED_NODE)]
+    assert tags == {"place": "village", "name": "Bredstedt"}
+    assert loc == pytest.approx((8.9, 54.6))
     assert by_key[("w", UNTOUCHED_WAY)] == ({"highway": "track"}, [NORDSTRAND, HOLM])
 
 
-def test_matched_node_gets_its_names_and_keeps_its_tags(injected):
+def test_matched_node_gets_its_names_and_keeps_its_tags(injected: Injected) -> None:
     _, by_key = injected
     tags, _ = by_key[("n", HOLM)]
     # outside every dialect area: no frasch:dialect, no frasch:local
@@ -304,7 +318,7 @@ def test_matched_node_gets_its_names_and_keeps_its_tags(injected):
                     "frasch:ref": "hulm"}
 
 
-def test_matched_way_gets_the_dialect_of_its_area(injected):
+def test_matched_way_gets_the_dialect_of_its_area(injected: Injected) -> None:
     _, by_key = injected
     tags, _ = by_key[("w", NORDWARFT)]
     assert tags == {"name": "Nordwarft", "landuse": "residential",
@@ -314,7 +328,7 @@ def test_matched_way_gets_the_dialect_of_its_area(injected):
                     "frasch:local": "Noordweerw", "frasch:ref": "nordwarw"}
 
 
-def test_matched_relation_gets_the_smallest_area_and_its_curation(injected):
+def test_matched_relation_gets_the_smallest_area_and_its_curation(injected: Injected) -> None:
     _, by_key = injected
     tags, _ = by_key[("r", HAMBURGER_HALLIG)]
     assert tags == {"type": "boundary", "boundary": "administrative",
@@ -325,14 +339,14 @@ def test_matched_relation_gets_the_smallest_area_and_its_curation(injected):
                     "place": "island", "frasch:minzoom": "12"}
 
 
-def test_a_district_gets_no_dialect(injected):
+def test_a_district_gets_no_dialect(injected: Injected) -> None:
     _, by_key = injected
     tags, _ = by_key[("r", KREIS)]
     assert "frasch:dialect" not in tags and "frasch:local" not in tags
     assert tags["frasch:ref"] == "kris"
 
 
-def test_an_object_nobody_located_stops_the_build(tmp_path):
+def test_an_object_nobody_located_stops_the_build(tmp_path: Path) -> None:
     (tmp_path / "places.csv").write_text(places_csv([PLACES[0]]), encoding="utf-8")
     (tmp_path / "areas.geojson").write_text(json.dumps(AREAS), encoding="utf-8")
     (tmp_path / "osm_objects.json").write_text(
@@ -346,18 +360,18 @@ def test_an_object_nobody_located_stops_the_build(tmp_path):
     assert not (tmp_path / "out.osm.pbf").exists()
 
 
-def test_a_relations_member_way_is_left_alone(injected):
+def test_a_relations_member_way_is_left_alone(injected: Injected) -> None:
     _, by_key = injected
     assert by_key[("w", HALLIG_RING)][0] == {"natural": "coastline"}
 
 
-def test_curation_applies_to_objects_the_name_list_does_not_know(injected):
+def test_curation_applies_to_objects_the_name_list_does_not_know(injected: Injected) -> None:
     _, by_key = injected
     assert by_key[("n", TAMMENSIEL)][0] == {"place": "hamlet", "name": "Tammensiel",
                                             "frasch:minzoom": "10"}
 
 
-def test_curation_tags_win_over_the_original_tags(injected):
+def test_curation_tags_win_over_the_original_tags(injected: Injected) -> None:
     # the village node keeps place=village; only the square becomes an island
     _, by_key = injected
     assert by_key[("n", NORDSTRAND)][0] == {
@@ -366,11 +380,12 @@ def test_curation_tags_win_over_the_original_tags(injected):
         "frasch:minzoom": "12"}
 
 
-def new_objects(by_key, t, above):
+def new_objects(by_key: Mapping[tuple[str, int], tuple[dict[str, str], Extra]], t: str,
+                above: int) -> list[tuple[int, tuple[dict[str, str], Extra]]]:
     return sorted((i, v) for (tt, i), v in by_key.items() if tt == t and i > above)
 
 
-def test_local_reference_becomes_the_first_new_node(injected):
+def test_local_reference_becomes_the_first_new_node(injected: Injected) -> None:
     _, by_key = injected
     (nid, (tags, loc)), *_ = new_objects(by_key, "n", MAX_NODE)
     assert nid == MAX_NODE + 1
@@ -381,7 +396,7 @@ def test_local_reference_becomes_the_first_new_node(injected):
                     "frasch:ref": "waasterhias"}
 
 
-def test_synthetic_square_is_one_new_closed_way(injected):
+def test_synthetic_square_is_one_new_closed_way(injected: Injected) -> None:
     _, by_key = injected
     ((wid, (_, refs)),) = new_objects(by_key, "w", MAX_WAY)
     assert wid == MAX_WAY + 1
@@ -389,7 +404,7 @@ def test_synthetic_square_is_one_new_closed_way(injected):
     assert refs == corners + corners[:1]
 
 
-def test_synthetic_square_nodes_are_written_as_untagged_nodes(injected):
+def test_synthetic_square_nodes_are_written_as_untagged_nodes(injected: Injected) -> None:
     _, by_key = injected
     corners = new_objects(by_key, "n", MAX_NODE + 1)
     assert [nid for nid, _ in corners] == [MAX_NODE + 2, MAX_NODE + 3,
@@ -397,9 +412,10 @@ def test_synthetic_square_nodes_are_written_as_untagged_nodes(injected):
     assert all(tags == {} for _, (tags, _) in corners)
 
 
-def test_synthetic_square_is_fifty_km2_around_the_village_node(injected):
+def test_synthetic_square_is_fifty_km2_around_the_village_node(injected: Injected) -> None:
     _, by_key = injected
-    corners = [loc for _, (_, loc) in new_objects(by_key, "n", MAX_NODE + 1)]
+    corners = [loc for _, (_, loc) in new_objects(by_key, "n", MAX_NODE + 1)
+               if isinstance(loc, tuple)]
     lon = sum(x for x, _ in corners) / 4
     lat = sum(y for _, y in corners) / 4
     assert (lon, lat) == pytest.approx((8.865286, 54.487378), abs=1e-6)
@@ -410,7 +426,7 @@ def test_synthetic_square_is_fifty_km2_around_the_village_node(injected):
     assert side_ew == pytest.approx(math.sqrt(50), rel=1e-4)
 
 
-def test_synthetic_square_carries_the_nodes_names_and_its_own_tags(injected):
+def test_synthetic_square_carries_the_nodes_names_and_its_own_tags(injected: Injected) -> None:
     # names and ref from the (curated) node; place/kind/maxzoom from the
     # polygon row -- but not the node's own minzoom, which holds it to z12
     _, by_key = injected
@@ -421,9 +437,9 @@ def test_synthetic_square_carries_the_nodes_names_and_its_own_tags(injected):
 
 
 # ------------------------------------------------------------- waterways ---
-def test_the_member_ways_of_a_matched_waterway_relation_are_found(tmp_path):
+def test_the_member_ways_of_a_matched_waterway_relation_are_found(tmp_path: Path) -> None:
     # the Arlau: the row names the river relation, the labels go on its ways
-    nodes = {i: ((8.9 + i / 100, 54.6), {}) for i in range(1, 5)}
+    nodes: Nodes = {i: ((8.9 + i / 100, 54.6), {}) for i in range(1, 5)}
     path = write_osm(tmp_path / "river.osm.pbf", nodes=nodes,
                      ways={10: ([1, 2], {"waterway": "river"}),
                            11: ([2, 3], {"waterway": "river"}),
@@ -431,6 +447,6 @@ def test_the_member_ways_of_a_matched_waterway_relation_are_found(tmp_path):
                      relations={20: ([("w", 10, "main_stream"), ("w", 11, "side_stream")],
                                      {"type": "waterway", "name": "Arlau"}),
                                 21: ([("w", 12, "")], {"type": "route"})})
-    by_id = {("r", 20): [{}], ("r", 21): [{}]}
+    by_id: dict[placelist.Ref, list[placelist.Row]] = {("r", 20): [{}], ("r", 21): [{}]}
     assert inject_names.scan_waterways(str(path), by_id) == {
         ("w", 10): (("r", 20), "Arlau"), ("w", 11): (("r", 20), "Arlau")}

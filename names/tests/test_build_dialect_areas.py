@@ -3,6 +3,7 @@ dialect areas, or the build stops and writes nothing."""
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -14,7 +15,7 @@ from osm_fixture import ring, write_extract
 
 
 # ------------------------------------------------------------- read_areas ---
-def test_an_osm_reference_on_two_rows_is_refused(tmp_path):
+def test_an_osm_reference_on_two_rows_is_refused(tmp_path: Path) -> None:
     # the review overlay's `?areas&area=` links name a row by its reference (#23)
     areas = tmp_path / "dialect_areas.csv"
     areas.write_text("dialect,osm,name,note\n"
@@ -29,7 +30,8 @@ def test_an_osm_reference_on_two_rows_is_refused(tmp_path):
 # ------------------------------------------------------------------ main ---
 # A tiny triangle way stands in for a whole municipality; `--registry` still
 # points at the real dialects.csv so `frr-x-mooring` is a known tag.
-def _write_fixture(tmp_path, csv_rows, timestamp=None):
+def _write_fixture(tmp_path: Path, csv_rows: str,
+                   timestamp: str | None = None) -> tuple[Path, Path]:
     nodes, way = ring(1, (8.80, 54.55), (8.82, 54.55), (8.82, 54.57))
     pbf = write_extract(tmp_path / "extract.osm.pbf", nodes=nodes,
                         ways={1: (way, {})}, timestamp=timestamp)
@@ -38,7 +40,7 @@ def _write_fixture(tmp_path, csv_rows, timestamp=None):
     return pbf, areas
 
 
-def test_main_exits_nonzero_on_a_missing_reference_and_writes_nothing(tmp_path, capsys):
+def test_main_exits_nonzero_on_a_missing_reference_and_writes_nothing(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     pbf, areas = _write_fixture(tmp_path, "frr-x-mooring,way/1,Existing,\n"
                                           "frr-x-mooring,way/999,Missing,\n")
     out = tmp_path / "areas.geojson"
@@ -58,7 +60,7 @@ def test_main_exits_nonzero_on_a_missing_reference_and_writes_nothing(tmp_path, 
     assert parts_out.read_bytes() == b"stale-parts"
 
 
-def test_allow_missing_writes_despite_a_missing_reference(tmp_path):
+def test_allow_missing_writes_despite_a_missing_reference(tmp_path: Path) -> None:
     pbf, areas = _write_fixture(tmp_path, "frr-x-mooring,way/1,Existing,\n"
                                           "frr-x-mooring,way/999,Missing,\n")
     out = tmp_path / "areas.geojson"
@@ -73,7 +75,7 @@ def test_allow_missing_writes_despite_a_missing_reference(tmp_path):
     assert parts_out.exists()
 
 
-def test_output_is_stamped_with_its_inputs(tmp_path):
+def test_output_is_stamped_with_its_inputs(tmp_path: Path) -> None:
     pbf, areas = _write_fixture(tmp_path, "frr-x-mooring,way/1,Existing,\n",
                                 timestamp="2026-09-22T20:22:59Z")
     out = tmp_path / "areas.geojson"

@@ -2,6 +2,8 @@
 header naming the extracts it was built from, and the one-step write (#24)."""
 from __future__ import annotations
 
+from pathlib import Path
+
 import osmium
 import pytest
 
@@ -13,7 +15,7 @@ from osm_fixture import write_extract
 
 
 # ------------------------------------------------------------ WayCentroids ---
-def test_way_centroids_finds_a_way_by_id():
+def test_way_centroids_finds_a_way_by_id() -> None:
     ways = WayCentroids()
     ways.add(10, 8.5, 54.5)
     ways.add(20, 8.75, 54.75)
@@ -21,7 +23,7 @@ def test_way_centroids_finds_a_way_by_id():
     assert ways.get(15) is None
 
 
-def test_way_centroids_refuses_ways_out_of_order():
+def test_way_centroids_refuses_ways_out_of_order() -> None:
     # an unsorted extract used to make every later lookup return None, so
     # every relation silently lost its position
     ways = WayCentroids()
@@ -35,7 +37,7 @@ TOFTUM = ((8.83, 54.71), {"name": "Toftum", "place": "village"})
 HOYER = ((8.69, 54.96), {"name": "Højer", "name:de": "Hoyer", "place": "town"})
 
 
-def extracts(tmp_path):
+def extracts(tmp_path: Path) -> tuple[Path, Path]:
     """A Schleswig-Holstein and a Denmark extract, one village each."""
     sh = write_extract(tmp_path / "schleswig-holstein-latest.osm.pbf",
                        nodes={1: TOFTUM}, timestamp="2026-09-20T20:21:02Z")
@@ -44,13 +46,13 @@ def extracts(tmp_path):
     return sh, dk
 
 
-def build(tmp_path, *pbfs):
+def build(tmp_path: Path, *pbfs: Path) -> Path:
     out = tmp_path / "work" / "candidates.jsonl"
     assert build_candidates.main([*map(str, pbfs), "--out", str(out)]) == 0
     return out
 
 
-def test_header_names_every_extract_with_its_timestamp(tmp_path):
+def test_header_names_every_extract_with_its_timestamp(tmp_path: Path) -> None:
     out = build(tmp_path, *extracts(tmp_path))
     assert candidates.read_header(out) == [
         {"file": "schleswig-holstein-latest.osm.pbf",
@@ -60,7 +62,7 @@ def test_header_names_every_extract_with_its_timestamp(tmp_path):
     ]
 
 
-def test_records_follow_the_header(tmp_path):
+def test_records_follow_the_header(tmp_path: Path) -> None:
     out = build(tmp_path, *extracts(tmp_path))
     got = [(r["src"], r["t"], r["id"], r["tags"]["name"])
            for r in candidates.read_records(out)]
@@ -68,14 +70,14 @@ def test_records_follow_the_header(tmp_path):
                    ("denmark", "n", 2, "Højer")]
 
 
-def test_a_file_from_before_the_header_has_none_and_all_records(tmp_path):
+def test_a_file_from_before_the_header_has_none_and_all_records(tmp_path: Path) -> None:
     legacy = write_candidates(tmp_path / "candidates.jsonl",
                               cand("n", 1, 8.83, 54.71, name="Toftum", place="village"))
     assert candidates.read_header(legacy) is None
     assert [r["id"] for r in candidates.read_records(legacy)] == [1]
 
 
-def write_unsorted_extract(path):
+def write_unsorted_extract(path: Path) -> Path:
     """Two named ways in descending id order -- what `osmium sort` fixes."""
     Node, Way = osmium.osm.mutable.Node, osmium.osm.mutable.Way
     w = osmium.SimpleWriter(str(path), overwrite=True)
@@ -90,7 +92,7 @@ def write_unsorted_extract(path):
     return path
 
 
-def test_a_failed_build_leaves_the_old_file_and_no_temp_file(tmp_path):
+def test_a_failed_build_leaves_the_old_file_and_no_temp_file(tmp_path: Path) -> None:
     sh, _dk = extracts(tmp_path)
     old = build(tmp_path, sh)
     before = old.read_bytes()
