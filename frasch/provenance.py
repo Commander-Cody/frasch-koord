@@ -27,20 +27,33 @@ import argparse
 import hashlib
 import json
 import os
+from collections.abc import Mapping, Sequence
+from typing import TypedDict
 
 import osmium
 
 from frasch import cli, paths
+from frasch.paths import StrPath
 
 
-def blob_hash(path) -> str:
+class ExtractStamp(TypedDict):
+    """An OSM extract, as a `built_from` records it."""
+    file: str
+    replication_timestamp: str
+
+
+# `{label: blob hash, ..., "extracts": [ExtractStamp, ...]}`
+BuiltFrom = dict[str, str | list[ExtractStamp]]
+
+
+def blob_hash(path: StrPath) -> str:
     """The git blob hash of the file's content."""
     with open(path, "rb") as fh:
         data = fh.read()
     return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
 
 
-def extract_stamp(pbf) -> dict:
+def extract_stamp(pbf: StrPath) -> ExtractStamp:
     """`{"file", "replication_timestamp"}` of an OSM extract; the timestamp is
     `""` when the header has none."""
     reader = osmium.io.Reader(str(pbf))
@@ -51,27 +64,29 @@ def extract_stamp(pbf) -> dict:
     return {"file": os.path.basename(pbf), "replication_timestamp": timestamp}
 
 
-def built_from(inputs: dict, extracts: list) -> dict:
+def built_from(inputs: Mapping[str, StrPath], extracts: list[ExtractStamp]) -> BuiltFrom:
     """The stamp: `{label: blob hash}` for each input file (`inputs` maps a
     fixed label such as "places.csv" to the path actually read), plus the
     OSM extracts."""
-    return {label: blob_hash(path) for label, path in inputs.items()} | {"extracts": extracts}
+    hashes: BuiltFrom = {label: blob_hash(path) for label, path in inputs.items()}
+    return hashes | {"extracts": extracts}
 
 
-def stamp(places, dialects, curation, areas, objects) -> dict:
+def stamp(places: StrPath, dialects: StrPath, curation: StrPath, areas: StrPath,
+          objects: StrPath) -> BuiltFrom:
     """What the search index and the tiles are built from: the name list,
     the dialect registry, the curation, the dialect areas and the located
     objects -- and, through the objects file, the extracts they were located
     in."""
     with open(objects, encoding="utf-8") as fh:
-        extracts = json.load(fh)["built_from"]["extracts"]
+        extracts: list[ExtractStamp] = json.load(fh)["built_from"]["extracts"]
     return built_from({"places.csv": places, "dialects.csv": dialects,
                        "curation.csv": curation, "dialect_areas.geojson": areas,
                        "osm_objects.json": objects}, extracts)
 
 
 @cli.command
-def main(argv=None):
+def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--names", default=paths.PLACES)

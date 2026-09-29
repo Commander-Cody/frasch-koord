@@ -5,6 +5,9 @@ from __future__ import annotations
 
 import os
 
+# what a path parameter takes when the tests pass it a pathlib.Path
+StrPath = str | os.PathLike[str]
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 NAMES = os.path.join(ROOT, "names")
 WORK = os.path.join(NAMES, "work")          # git-ignored scratch

@@ -10,12 +10,14 @@ import contextlib
 import hashlib
 import os
 import tempfile
+from collections.abc import Iterator, Sequence
+from typing import IO, Literal, overload
 
 from frasch.errors import Conflict
 
 
 # ---------------------------------------------------------------- reading ---
-def open_csv(path: str):
+def open_csv(path: str) -> IO[str]:
     """Open one of the hand-edited CSV files for reading.  A spreadsheet's
     "CSV UTF-8" starts it with a byte order mark, which would otherwise end up
     in the first column's name."""
@@ -31,7 +33,7 @@ SEMICOLON_SEPARATED = ("the cells are separated by `;`, not `,` (a German-locale
                        "spreadsheet export?) -- save it as comma-separated CSV")
 
 
-def csv_header_problem(fields, required) -> str | None:
+def csv_header_problem(fields: Sequence[str], required: Sequence[str]) -> str | None:
     """What makes a CSV header unreadable -- a `;`-separated export, a column
     named twice, a missing one -- or None."""
     if len(fields) == 1 and ";" in fields[0]:
@@ -45,7 +47,7 @@ def csv_header_problem(fields, required) -> str | None:
     return None
 
 
-def cell_count_problem(cells, header) -> str | None:
+def cell_count_problem(cells: Sequence[str], header: Sequence[str]) -> str | None:
     """A row whose cells do not line up with the header's columns: a comma
     too many or too few, and every cell after it is in the wrong column."""
     if len(cells) != len(header):
@@ -72,7 +74,7 @@ def fingerprint(path: str) -> str:
         return MISSING
 
 
-def atomic_write(path: str, data: bytes | str, expect: str | None = None):
+def atomic_write(path: str, data: bytes | str, expect: str | None = None) -> None:
     """Replace `path` with `data` in one step (see `replacing`).
 
     `expect` (a `fingerprint`) makes it refuse -- with `Conflict`, leaving the
@@ -83,8 +85,14 @@ def atomic_write(path: str, data: bytes | str, expect: str | None = None):
         fh.write(data)
 
 
-@contextlib.contextmanager
-def replacing(path: str, expect: str | None = None, text: bool = False):
+@overload
+def replacing(path: str, expect: str | None = None,
+              text: Literal[False] = False) -> contextlib.AbstractContextManager[IO[bytes]]: ...
+@overload
+def replacing(path: str, expect: str | None = None, *,
+              text: Literal[True]) -> contextlib.AbstractContextManager[IO[str]]: ...
+def replacing(path: str, expect: str | None = None,
+              text: bool = False) -> contextlib.AbstractContextManager[IO[bytes] | IO[str]]:
     """A file handle whose content replaces `path` in one step when the block
     ends: it writes a temporary file next to it, flushes it to disk, then
     `os.replace`s it over the original.  A crash at any point -- or an
@@ -92,11 +100,18 @@ def replacing(path: str, expect: str | None = None, text: bool = False):
     half of one (a half-written JSON-lines file that ends at a line boundary
     looks complete).  `text` opens it as UTF-8 text instead of bytes, for
     files streamed line by line; `expect` as in `atomic_write`."""
+    return _replacing(path, expect, text)
+
+
+@contextlib.contextmanager
+def _replacing(path: str, expect: str | None,
+               text: bool) -> Iterator[IO[bytes] | IO[str]]:
     path = os.path.abspath(path)
     directory = os.path.dirname(path)
     fd, tmp = tempfile.mkstemp(dir=directory, prefix=f".{os.path.basename(path)}.",
                                suffix=".tmp")
     try:
+        fh: IO[bytes] | IO[str]
         with (os.fdopen(fd, "w", encoding="utf-8") if text else os.fdopen(fd, "wb")) as fh:
             yield fh
             fh.flush()
@@ -126,7 +141,7 @@ def _mode_for(path: str) -> int:
         return 0o666 & ~umask
 
 
-def _sync_directory(directory: str):
+def _sync_directory(directory: str) -> None:
     with contextlib.suppress(OSError):
         dfd = os.open(directory, os.O_RDONLY)
         try:

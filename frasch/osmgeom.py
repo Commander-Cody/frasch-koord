@@ -8,14 +8,21 @@ so a place and the areas it is compared against are read out of OSM the
 same way."""
 from __future__ import annotations
 
-from frasch.placelist import format_osm
+from collections.abc import Iterable, Mapping, Sequence
+
+from shapely.geometry.base import BaseGeometry
+
+from frasch.geo import LonLat
+from frasch.osmscan import Rings
+from frasch.placelist import OsmRef, format_osm
 
 
-def assemble_rings(ways):
+def assemble_rings(ways: Iterable[Sequence[int]]) -> tuple[list[list[int]], list[list[int]]]:
     """Join way node-lists end to end into closed rings.
     -> (rings, unclosed) as lists of node ids."""
     segments = [list(w) for w in ways if len(w) >= 2]
-    rings, unclosed = [], []
+    rings: list[list[int]] = []
+    unclosed: list[list[int]] = []
     while segments:
         cur = _chain(segments.pop(0), segments)
         if cur[0] == cur[-1] and len(cur) >= 4:
@@ -25,7 +32,7 @@ def assemble_rings(ways):
     return rings, unclosed
 
 
-def _chain(cur, segments):
+def _chain(cur: list[int], segments: list[list[int]]) -> list[int]:
     """`cur` extended by the `segments` that fit onto either end, until it
     closes or nothing fits any more; the used segments are removed."""
     joined = True
@@ -48,7 +55,8 @@ def _chain(cur, segments):
     return cur
 
 
-def polygons_for(ref, rel, ways, nodes, problems):
+def polygons_for(ref: OsmRef, rel: Mapping[int, Rings], ways: Mapping[int, Sequence[int]],
+                 nodes: Mapping[int, LonLat], problems: list[str]) -> list[BaseGeometry]:
     """The shapely polygon(s) of one referenced object: a way's own ring, a
     relation's outer rings minus its inner ones.
 
@@ -74,7 +82,9 @@ def polygons_for(ref, rel, ways, nodes, problems):
     return [geom]
 
 
-def _polygons(ref, way_ids, what, ways, nodes, problems):
+def _polygons(ref: OsmRef, way_ids: Iterable[int], what: str,
+              ways: Mapping[int, Sequence[int]], nodes: Mapping[int, LonLat],
+              problems: list[str]) -> list[BaseGeometry]:
     """The valid polygons of the closed rings the ways `way_ids` form."""
     from shapely.geometry import Polygon
 
@@ -85,7 +95,7 @@ def _polygons(ref, way_ids, what, ways, nodes, problems):
     rings, unclosed = assemble_rings([ways[w] for w in way_ids if w in ways])
     if unclosed:
         problems.append(f"{where}: {len(unclosed)} unclosed {what} ring(s) -- skipped")
-    out = []
+    out: list[BaseGeometry] = []
     for ring in rings:
         if any(n not in nodes for n in ring):
             problems.append(f"{where}: a {what} ring has nodes that are not in "

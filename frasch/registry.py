@@ -28,6 +28,8 @@ import csv
 import functools
 import os
 import re
+from collections.abc import Collection, Iterator, Mapping
+from typing import Literal, TypedDict
 
 from frasch import files, paths
 from frasch.errors import PipelineError, ValidationError
@@ -44,16 +46,26 @@ LOCAL_COLUMN = "local"
 _TAG = re.compile(r"frr-x-[a-z0-9]{1,8}(-[a-z0-9]{1,8})*$")
 
 
-class Registry:
-    """The dialects in file order, each a dict of the FIELDS."""
+class Dialect(TypedDict):
+    """One row of the registry: the FIELDS."""
+    tag: str
+    column: str
+    label: str
+    status: str
+    view: str
+    note: str
 
-    def __init__(self, dialects: list[dict]):
+
+class Registry:
+    """The dialects in file order."""
+
+    def __init__(self, dialects: list[Dialect]):
         self.dialects = list(dialects)
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Dialect]:
         return iter(self.dialects)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.dialects)
 
     @property
@@ -75,7 +87,7 @@ class Registry:
         not know."""
         return next((d["label"] for d in self.dialects if d["tag"] == tag), tag)
 
-    def _find(self, field: str, value: str) -> dict:
+    def _find(self, field: Literal["tag", "column"], value: str) -> Dialect:
         for d in self.dialects:
             if d[field] == value:
                 return d
@@ -83,7 +95,8 @@ class Registry:
                               f"(not in the dialect registry)")
 
 
-def row_problem(row: dict, seen_tags=(), seen_cols=()) -> str | None:
+def row_problem(row: Mapping[str, str], seen_tags: Collection[str] = (),
+                seen_cols: Collection[str] = ()) -> str | None:
     """What is wrong with one registry row (`seen_*`: the tags and columns of
     the rows above it), or None."""
     if not _TAG.fullmatch(row["tag"]):
@@ -105,7 +118,7 @@ def row_problem(row: dict, seen_tags=(), seen_cols=()) -> str | None:
     return None
 
 
-def rows(path: str) -> tuple[list[dict], list[tuple[int, str]]]:
+def rows(path: str) -> tuple[list[Dialect], list[tuple[int, str]]]:
     """-> (dialects, problems): the rows of the registry that follow its
     rules, and `(line, reason)` for every one that does not."""
     if not os.path.exists(path):
@@ -115,7 +128,10 @@ def rows(path: str) -> tuple[list[dict], list[tuple[int, str]]]:
         header = next(reader, [])
         if (what := files.csv_header_problem(header, FIELDS)):
             return [], [(1, what)]
-        found, problems, seen_tags, seen_cols = [], [], set(), set()
+        found: list[Dialect] = []
+        problems: list[tuple[int, str]] = []
+        seen_tags: set[str] = set()
+        seen_cols: set[str] = set()
         for cells in reader:
             n = reader.line_num
             if not cells:
@@ -129,10 +145,15 @@ def rows(path: str) -> tuple[list[dict], list[tuple[int, str]]]:
             if (what := row_problem(row, seen_tags, seen_cols)):
                 problems.append((n, what))
             else:
-                found.append(row)
+                found.append(_dialect(row))
             seen_tags.add(row["tag"])
             seen_cols.add(row["column"])
     return found, problems
+
+
+def _dialect(row: Mapping[str, str]) -> Dialect:
+    return Dialect(tag=row["tag"], column=row["column"], label=row["label"],
+                   status=row["status"], view=row["view"], note=row["note"])
 
 
 def read(path: str = paths.DIALECTS) -> Registry:

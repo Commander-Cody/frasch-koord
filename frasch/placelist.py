@@ -84,6 +84,8 @@ Row = Mapping[str, str]
 # One reference of an `osm` cell as `parse_osm` returns it: `("w", 12)` for
 # an OSM object, `("l", "westerheide-amrum")` for a local one.
 Ref = tuple[str, int | str]
+# one that names an OSM object: a node, way or relation id
+OsmRef = tuple[str, int]
 
 
 class PlaceRow(dict[str, str]):
@@ -213,6 +215,12 @@ def parse_osm(cell: str | None, where: str = "") -> list[Ref]:
         raise Invalid(where, f"a local reference stands alone, it cannot be "
                              f"combined with other references: {cell!r}")
     return out
+
+
+def osm_refs(cell: str | None) -> list[OsmRef]:
+    """The references to OSM objects of an `osm` cell -- none for a local
+    reference."""
+    return [(t, i) for t, i in parse_osm(cell) if isinstance(i, int)]
 
 
 def format_osm(refs: Iterable[Ref]) -> str:
