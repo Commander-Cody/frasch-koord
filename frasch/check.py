@@ -83,7 +83,7 @@ def cell_problem(cell: str) -> str | None:
 def _rows(path):
     """-> (header, [(line, cells), ...]) of a CSV file.  Blank lines are left
     out, as the readers skip them, but still counted: `line` is the line an
-    editor sees the row on, as in placelist.read's `_line`."""
+    editor sees the row on, as a `placelist.PlaceRow`'s `line`."""
     with files.open_csv(path) as fh:
         reader = csv.reader(fh)
         header = next(reader, [])

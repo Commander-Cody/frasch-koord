@@ -107,9 +107,9 @@ def build(names, dialects_csv, curation, areas_path, objects_path) -> dict:
         if not placelist.on_map(r, reg):
             continue
         try:
-            obj = entry_object(r, objects, local_points, f"{names}:{r['_line']}")
+            obj = entry_object(r, objects, local_points, f"{names}:{r.line}")
         except KeyError as missing:
-            unlocated.append(f"  {r['id']} (line {r['_line']}): "
+            unlocated.append(f"  {r['id']} (line {r.line}): "
                              f"{placelist.format_osm([missing.args[0]])}")
             continue
         if obj is not None:

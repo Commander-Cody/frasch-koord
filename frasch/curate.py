@@ -202,7 +202,7 @@ def cmd_export(args):
             n_hint += 1
         out.append({
             "id": row["id"],
-            "line": row["_line"],
+            "line": row.line,
             "kind": row["kind"],
             "result": m["result"],
             "name": placelist.any_name(row),
@@ -329,7 +329,7 @@ def entry_problem(entry, row, names) -> str | None:
     if row is None:
         return f"no row with id {patch_key(entry)!r} in {names} (deleted since the export?)"
     if not placelist.owned_by_matcher(row):
-        return (f"{names}:{row['_line']} is not the matcher's to fill "
+        return (f"{names}:{row.line} is not the matcher's to fill "
                 f"(status={row['status'] or 'empty'}, osm={row['osm'] or '-'})")
     return None
 
@@ -470,7 +470,7 @@ def _apply(args):
             if why:
                 refuse(e, why)
                 continue
-            print(f"  {args.names}:{row['_line']} {placelist.describe(row)}: "
+            print(f"  {args.names}:{row.line} {placelist.describe(row)}: "
                   f"{decision_text(e, row, args.curation)}")
             applied += 1
 

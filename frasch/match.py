@@ -642,7 +642,7 @@ def claimed_objects(rows):
         if owned_by_matcher(r):
             continue
         for key in placelist.claimed_refs(r):
-            out.setdefault(key, r["_line"])
+            out.setdefault(key, r.line)
     return out
 
 
@@ -740,7 +740,7 @@ def write_report(rows, results, path=REPORT_PATH):
         total[st] += 1
 
     def ref(r):
-        return f"{r['id']} | {r['_line']} | {r['kind']} | {any_name(r)} | {primary(r['de']) or primary(r['da'])}"
+        return f"{r['id']} | {r.line} | {r['kind']} | {any_name(r)} | {primary(r['de']) or primary(r['da'])}"
 
     L = []
     L.append("# Name matching report\n")
@@ -784,9 +784,9 @@ def write_report(rows, results, path=REPORT_PATH):
              "decide which, and `skip` the other.\n")
     L.append("| OSM object | rows (line) | Frisian names | German |")
     L.append("|---|---|---|---|")
-    for key, g in sorted(dups.items(), key=lambda kv: kv[1][0]["_line"]):
+    for key, g in sorted(dups.items(), key=lambda kv: kv[1][0].line):
         L.append(f"| `{format_osm([key])}` | "
-                 + ", ".join(f"{x['id']} ({x['_line']})" for x in g)
+                 + ", ".join(f"{x['id']} ({x.line})" for x in g)
                  + " | " + ", ".join(any_name(x) for x in g)
                  + f" | {primary(g[0]['de'])} |")
     L.append("")
@@ -819,7 +819,7 @@ def write_matches(rows, results, index, path=MATCH_PATH):
             res = results.get(r["id"])
             refs = parse_osm(r["osm"])
             hit = index.by_key.get(refs[0]) if refs else None
-            rec = {"id": r["id"], "line": r["_line"], "kind": r["kind"],
+            rec = {"id": r["id"], "line": r.line, "kind": r["kind"],
                    "name": any_name(r),
                    "de": primary(r["de"]), "osm": r["osm"],
                    "wikidata": r["wikidata"], "status": r["status"]}

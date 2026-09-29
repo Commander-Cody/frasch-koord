@@ -55,9 +55,7 @@ def reg():
 
 
 def place(line=2, **cells):
-    r = {c: "" for c in placelist.columns()}
-    r.update(cells, _line=line)
-    return r
+    return placelist.PlaceRow({c: "" for c in placelist.columns()} | cells, line)
 
 
 BRODERSWARFT = place(id="brouderswarw", kind="warft", mooring="Brouderswärw",

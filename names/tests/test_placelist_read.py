@@ -25,12 +25,12 @@ def test_refuses_a_semicolon_separated_list_with_a_clear_message(tmp_path):
 
 
 def test_line_numbers_are_those_of_the_file_after_a_blank_line(tmp_path):
-    # REPORT.md, curate.py and check.py all point editors at `_line`.
+    # REPORT.md, curate.py and check.py all point editors at a row's `line`.
     head, first, second, _ = places_text([TOFTUM, {**TOFTUM, "mooring": "Taftem"}]).split("\n")
     path = tmp_path / "places.csv"
     path.write_text("\n".join([head, first, "", second]) + "\n", encoding="utf-8")
     rows, _ = placelist.read(str(path))
-    assert [r["_line"] for r in rows] == [2, 4]
+    assert [r.line for r in rows] == [2, 4]
 
 
 @pytest.mark.parametrize("ids, reason", [

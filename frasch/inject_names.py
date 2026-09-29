@@ -132,7 +132,7 @@ def load_names(path, reg):
     for row in rows:
         if not placelist.on_map(row, reg):
             continue
-        refs = placelist.parse_osm(row["osm"], f"{path}:{row['_line']}")
+        refs = placelist.parse_osm(row["osm"], f"{path}:{row.line}")
         if refs:
             # a river or dyke is split into many OSM ways and all of them
             # need the label
@@ -168,9 +168,9 @@ def _conflicts(key, rows, reg):
             if not name:
                 continue
             if not kept:
-                kept, kept_line = name, row["_line"]
+                kept, kept_line = name, row.line
             elif name != kept:
-                out.append((key, column, kept, kept_line, name, row["_line"]))
+                out.append((key, column, kept, kept_line, name, row.line))
     return out
 
 
@@ -220,7 +220,7 @@ def point_tags(rows, area_tag, reg, curation_tags, where=""):
     tags.update(curation_tags)
     if "place" not in tags:
         raise ValidationError(f"{where}: kind {row['kind']!r} (places.csv line "
-                         f"{row['_line']}) has no default place= (POINT_TAGS in "
+                         f"{row.line}) has no default place= (POINT_TAGS in "
                          f"frasch/curationlist.py) -- give the curation row "
                          f"`place=...` in set_tags")
     return tags
@@ -513,7 +513,7 @@ def run(inp, out, names_csv, dialects_csv, areas_geojson, dry_run=False,
     if unplaced:
         lines = "\n".join(f"  {placelist.format_osm([k])}  "
                           f"{placelist.describe(by_id[k][0], reg)} "
-                          f"(places.csv line {by_id[k][0]['_line']})" for k in unplaced)
+                          f"(places.csv line {by_id[k][0].line})" for k in unplaced)
         raise ValidationError(f"{len(unplaced)} local reference(s) in {names_csv} have no "
                          f"row with lat/lon in {curation_csv or 'the curation file '
                          '(which is switched off)'}:\n{lines}")
