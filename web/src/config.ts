@@ -46,17 +46,19 @@ export interface DialectEntry {
    * dialectLabelKey), so the name follows the UI language.
    */
   label: string;
-  /** "living" | "extinct" — Südergoesharde names are historic. */
-  status: string;
+  /** Südergoesharde names are historic. */
+  status: 'living' | 'extinct';
   /** "yes" = offered as its own map view in the selector. */
-  view: string;
+  view: 'yes' | 'no';
 }
 
 /**
  * The dialect registry, in registry order. Generated from names/dialects.csv
  * by `names/dialects.py --export` (`just dialects`) — do not edit generated/dialects.json by hand.
+ * Cast because a JSON import widens every value to `string`;
+ * frasch/registry.py checks `status` and `view` before it exports them.
  */
-export const DIALECTS: DialectEntry[] = registry;
+export const DIALECTS = registry as DialectEntry[];
 
 /**
  * Pseudo-tag of the "local dialect" view: every place labelled the way the
