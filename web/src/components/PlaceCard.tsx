@@ -18,6 +18,14 @@ export interface PlaceCardProps {
   ref?: Ref<HTMLElement>;
 }
 
+/** Locale keys of the labels of the names in no dialect of the registry, by `resolveName`'s source. */
+const SOURCE_LABEL_KEYS: Partial<Record<string, string>> = {
+  frr: 'card.frisian',
+  nds: 'card.lowSaxon',
+  de: 'card.german',
+  da: 'card.danish',
+};
+
 /** One line of the name list below the headline. */
 interface Line {
   key: string;
@@ -59,18 +67,9 @@ export default function PlaceCard({ selection, view, onClose, ref: cardRef }: Pl
   // Mooring says Waiguurd), calling both "Mooring" would contradict itself.
   const localIsAreaName = area !== undefined && entry.names?.[area.tag] === entry.local;
   const localLabel = localIsAreaName ? `${t('card.local')} · ${dialectLabel(area)}` : t('card.local');
-  const headlineLabel =
-    shownAs === 'local'
-      ? localLabel
-      : shownAs === 'frr'
-        ? t('card.frisian')
-        : shownAs === 'nds'
-          ? t('card.lowSaxon')
-          : shownAs === 'de'
-            ? t('card.german')
-            : shownAs === 'da'
-              ? t('card.danish')
-              : shownDialect && dialectLabel(shownDialect);
+  const sourceKey = SOURCE_LABEL_KEYS[shownAs];
+  const sourceLabel = sourceKey ? t(sourceKey) : shownDialect && dialectLabel(shownDialect);
+  const headlineLabel = shownAs === 'local' ? localLabel : sourceLabel;
 
   const lines = useMemo<Line[]>(() => {
     const out: Line[] = [];
