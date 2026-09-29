@@ -8,7 +8,9 @@ Harden and a few spellings OSM does not know have fixed circles.
 """
 from __future__ import annotations
 
-from frasch.candidates import ISLAND_PLACES
+from collections.abc import Mapping
+
+from frasch.candidates import ISLAND_PLACES, Candidate
 from frasch.geo import NF_CENTRE, haversine
 from frasch.nameindex import NameIndex, norm
 
@@ -16,9 +18,12 @@ HINT_KM = 8.0           # a village-sized hint
 HINT_KM_ISLAND = 10.0   # a Hallig / small island
 HINT_KM_LARGE = 25.0    # Sylt, Foehr, Eiderstedt, a Harde ...
 
+# A hint's circle: lon, lat, radius in km.
+Circle = tuple[float, float, float]
+
 # Fallback centroids for hints that OSM does not carry as an object
 # (the historic Harden) or that are spelled differently in the sheet.
-HINT_FALLBACK = {
+HINT_FALLBACK: dict[str, Circle] = {
     "karrharde": (9.02, 54.80, 15.0),
     "boekingharde": (8.85, 54.77, 15.0),
     "wiedingharde": (8.72, 54.88, 12.0),
@@ -40,9 +45,9 @@ LARGE_HINTS = {"sylt", "foehr", "amrum", "eiderstedt", "pellworm", "nordstrand",
 class HintResolver:
     def __init__(self, index: NameIndex):
         self.index = index
-        self.cache = {}
+        self.cache: dict[str, Circle | None] = {}
 
-    def resolve(self, hint: str):
+    def resolve(self, hint: str) -> Circle | None:
         """-> (lon, lat, radius_km) or None"""
         key = norm(hint)
         if not key:
@@ -51,21 +56,22 @@ class HintResolver:
             self.cache[key] = HINT_FALLBACK.get(key) or self._lookup(hint, key)
         return self.cache[key]
 
-    def _lookup(self, hint, key):
-        places = [rec for rec, _rank in self.index.lookup(hint)
-                  if rec["lon"] is not None and _is_a_place(rec["tags"])]
+    def _lookup(self, hint: str, key: str) -> Circle | None:
+        places = [(rec, lon, lat) for rec, _rank in self.index.lookup(hint)
+                  if (lon := rec["lon"]) is not None and (lat := rec["lat"]) is not None
+                  and _is_a_place(rec["tags"])]
         if not places:
             return None
-        best = max(places, key=_plausibility)
-        return best["lon"], best["lat"], _radius(key, best["tags"])
+        best, lon, lat = max(places, key=lambda place: _plausibility(place[0]))
+        return lon, lat, _radius(key, best["tags"])
 
 
-def _is_a_place(tags) -> bool:
+def _is_a_place(tags: Mapping[str, str]) -> bool:
     return bool(tags.get("place") or tags.get("natural")
                 or tags.get("boundary") == "administrative")
 
 
-def _plausibility(rec) -> float:
+def _plausibility(rec: Candidate) -> float:
     """Nearer to North Frisia is better; an island or a village better
     still.  Of equals, the first record wins."""
     tags = rec["tags"]
@@ -77,7 +83,7 @@ def _plausibility(rec) -> float:
     return score
 
 
-def _radius(key, tags) -> float:
+def _radius(key: str, tags: Mapping[str, str]) -> float:
     if key in LARGE_HINTS:
         return HINT_KM_LARGE
     if (tags.get("place") in ISLAND_PLACES or tags.get("place") == "region"

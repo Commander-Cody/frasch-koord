@@ -11,8 +11,9 @@ from __future__ import annotations
 import collections
 import re
 import unicodedata
+from collections.abc import Iterable
 
-from frasch.candidates import osm_key
+from frasch.candidates import Candidate, osm_key
 
 # name tag -> how trustworthy an exact hit on it is (lower = better).  A hit on
 # the OSM `name` itself beats a hit on `name:de`, which beats alt/old names:
@@ -35,7 +36,7 @@ def norm(s: str) -> str:
     if not s:
         return ""
     s = s.strip().lower()
-    out = []
+    out: list[str] = []
     for ch in s:
         out.append(_UML.get(ch, ch))
     s = "".join(out)
@@ -56,7 +57,7 @@ _TYPE_PREFIX = re.compile(
 _AUF_SUFFIX = re.compile(r"^(.+?)\s+auf\s+\S.*$")
 
 
-def split_name_values(v: str):
+def split_name_values(v: str) -> list[tuple[str, int]]:
     """Variants of one OSM name value, as (value, extra rank penalty).
 
     * multilingual slash lists: `North Sea / Nordsee / Noordzee`
@@ -88,9 +89,10 @@ class NameIndex:
     value (`split_name_values`) is a key; a record found under several
     keeps its best rank."""
 
-    def __init__(self, recs):
+    def __init__(self, recs: Iterable[Candidate]):
         self.recs = list(recs)
-        self.by_name = collections.defaultdict(dict)   # norm -> {rec index: rank}
+        # norm -> {rec index: rank}
+        self.by_name: collections.defaultdict[str, dict[int, int]] = collections.defaultdict(dict)
         self.by_key = {osm_key(rec): rec for rec in self.recs}
         for i, rec in enumerate(self.recs):
             for field, rank in NAME_FIELD_RANK.items():
@@ -99,7 +101,7 @@ class NameIndex:
                     if n and rank + penalty < self.by_name[n].get(i, 99):
                         self.by_name[n][i] = rank + penalty
 
-    def lookup(self, name):
+    def lookup(self, name: str) -> list[tuple[Candidate, int]]:
         """-> [(record, name-field rank)]"""
         n = norm(name)
         if not n:

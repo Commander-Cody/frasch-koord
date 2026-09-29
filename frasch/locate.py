@@ -37,9 +37,10 @@ import argparse
 import json
 import os
 from collections.abc import Collection, Iterable, Mapping, Sequence
-from typing import NamedTuple, NotRequired, Protocol, TypedDict
+from typing import NamedTuple, NotRequired, TypedDict
 
 from frasch import cli, files, osmgeom, osmscan, paths, placelist, provenance
+from frasch.dialects import AreaIndex
 from frasch.errors import PipelineError
 from frasch.geo import LonLat
 from frasch.osmscan import Rings
@@ -201,13 +202,7 @@ def _outline_point(ref: OsmRef, label: int | None,
 MUNICIPALITY_LEVEL = 8
 
 
-class DialectLookup(Protocol):
-    """The dialect areas, as `dialect_at` asks them (frasch.dialects)."""
-
-    def lookup(self, lon: float, lat: float) -> str | None: ...
-
-
-def dialect_at(obj: LocatedObject, areas: DialectLookup | None) -> str | None:
+def dialect_at(obj: LocatedObject, areas: AreaIndex | None) -> str | None:
     """The dialect spoken where an object of the objects file lies, or None:
     the area around its point, else the area around its outline point.
 
