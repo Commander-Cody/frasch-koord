@@ -54,7 +54,7 @@ import os
 import sys
 import time
 from collections.abc import Callable, Collection, Iterable, Sequence
-from typing import Any, Final, Literal, NotRequired, TypedDict, final
+from typing import Any, Literal, NotRequired, TypedDict, final
 
 import jsonschema
 
@@ -319,12 +319,9 @@ class PatchEntry(TypedDict):
     at: NotRequired[str]
 
 
-# what apply adds to a line it read: its line number in the patch, and for a
-# line that is no valid entry what is wrong with it and the line's value itself
-_PATCH_LINE: Final = "_patch_line"
-_PROBLEM: Final = "_problem"
-_RAW: Final = "_raw"
-
+# What apply adds to a line it read: its line number in the patch
+# (`_patch_line`), and for a line that is no valid entry what is wrong with it
+# (`_problem`) and the line's value itself (`_raw`).
 
 @final
 class ReadEntry(PatchEntry):
@@ -337,7 +334,7 @@ class RefusedLine(TypedDict):
     """A line of the patch that is no valid entry, as apply read it."""
     _patch_line: int
     _problem: str
-    _raw: Any                           # the line's JSON value
+    _raw: object                        # the line's JSON value
 
 
 PatchLine = ReadEntry | RefusedLine
@@ -383,23 +380,23 @@ def patch_entry(value: Any, n: int) -> PatchLine:
     why = (schema_problem(value) if isinstance(value, dict)
            else "not a JSON object (curate-patch.schema.json)")
     if why:
-        return {_PATCH_LINE: n, _PROBLEM: why, _RAW: value}
+        return {"_patch_line": n, "_problem": why, "_raw": value}
     entry: PatchEntry = value           # valid: the schema's shape
-    return {**entry, _PATCH_LINE: n}
+    return {**entry, "_patch_line": n}
 
 
 def _patch_order(entry: PatchLine) -> tuple[int, int]:
     """Places.csv order (the row's `line` when the worklist was exported),
     then patch order."""
-    line = entry.get("line") if _PROBLEM not in entry else None
-    return (line or 0, entry[_PATCH_LINE])
+    line = entry.get("line") if "_problem" not in entry else None
+    return (line or 0, entry["_patch_line"])
 
 
 def stored(entry: PatchLine) -> object:
     """A line as the patch holds it: without what apply added."""
-    if _PROBLEM in entry:
-        return entry[_RAW]
-    return {k: v for k, v in entry.items() if k != _PATCH_LINE}
+    if "_problem" in entry:
+        return entry["_raw"]
+    return {k: v for k, v in entry.items() if k != "_patch_line"}
 
 
 def _names_of(entry: PatchLine) -> str:
@@ -426,11 +423,11 @@ def schema_problem(entry: object) -> str | None:
 
 def line_problem(line: RefusedLine) -> str:
     """Why apply refuses a line that is no valid entry."""
-    raw = line[_RAW]
+    raw = line["_raw"]
     if isinstance(raw, dict) and "id" not in raw:
         return ("no `id` (a patch from before the row ids -- "
                 "re-run names/curate.py export and decide it again)")
-    return line[_PROBLEM]
+    return line["_problem"]
 
 
 def owner_problem(row: PlaceRow, names: str) -> str | None:
@@ -563,10 +560,10 @@ def _apply(args: argparse.Namespace) -> int:
             nonlocal refused
             refused += 1
             kept_back.append(entry)
-            print(f"  refused patch line {entry[_PATCH_LINE]} ({_names_of(entry)}): {why}")
+            print(f"  refused patch line {entry['_patch_line']} ({_names_of(entry)}): {why}")
 
         for e in entries:
-            if _PROBLEM in e:
+            if "_problem" in e:
                 refuse(e, line_problem(e))
                 continue
             if e["action"] == "clear":
