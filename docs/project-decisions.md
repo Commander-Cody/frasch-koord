@@ -453,8 +453,9 @@ record of which one.
 ## Decided 2026-09-30: one command after an edit, `just update` (issue #57)
 
 Adding a place meant knowing which of `check.py --fix`, `curate.py apply`,
-`match.py`, `just objects`, `just areas`, `just index`, `curate.py export`
-and `just check` to run, and in which order. `uv run just update`
+`just candidates`, `match.py`, `just objects`, `just areas`, `just index`
+(with `just dialects`), `curate.py export` and `just check` to run, and in
+which order. `uv run just update`
 (`frasch/update.py`) now runs all of them in that order and ends with the
 files it changed and the rows left to curate. Owner's choices:
 

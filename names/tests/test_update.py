@@ -42,10 +42,10 @@ def write_sh_extract(world: Path, timestamp: str = "2026-09-20T20:21:02Z") -> Pa
                          timestamp=timestamp)
 
 
-def run(world: Path) -> int:
+def run(world: Path, *extra: str) -> int:
     """`update.main` on the files of `world`."""
     return update.main([
-        str(world / "schleswig-holstein-latest.osm.pbf"),
+        str(world / "schleswig-holstein-latest.osm.pbf"), *extra,
         "--names", str(world / "places.csv"),
         "--dialects", str(world / "dialects.csv"),
         "--curation", str(world / "curation.csv"),
@@ -134,6 +134,15 @@ def test_a_curation_apply_that_cannot_run_stops_the_run(
         assert run(workspace) == 1
     out = capsys.readouterr().out
     assert "update stopped: curation decisions failed" in out
+    assert not (workspace / "names.json").exists()
+
+
+def test_a_missing_extract_stops_the_run_with_how_to_get_it(
+        workspace: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    write_places(workspace, TOFTEM)
+    missing = workspace / "nowhere-latest.osm.pbf"
+    assert run(workspace, "--area-extract", str(missing)) == 1
+    assert f"{missing} not found" in capsys.readouterr().err
     assert not (workspace / "names.json").exists()
 
 

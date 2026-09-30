@@ -48,7 +48,7 @@ extracts:
 
 # after editing places.csv or curating in /?curate: bring every name file up to date
 update: extracts
-    {{py}} names/update.py {{extracts}}
+    {{py}} names/update.py {{extracts}} --area-extract tiles/data/schleswig-holstein-latest.osm.pbf
 
 # scan the extracts for every object that could be a place (names/work/candidates.jsonl)
 candidates: extracts

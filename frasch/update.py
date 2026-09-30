@@ -215,11 +215,12 @@ def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     ap.add_argument("--work", default=paths.WORK,
                     help="the git-ignored scratch directory of matching and curation")
     a = ap.parse_args(argv)
-    missing = [p for p in a.extracts if not os.path.exists(p)]
+    a.area_extract = a.area_extract or a.extracts[0]
+    missing = [p for p in dict.fromkeys([*a.extracts, a.area_extract])
+               if not os.path.exists(p)]
     if missing:
         raise PipelineError(f"{', '.join(missing)} not found -- download it with "
                             f"`just extracts`")
-    a.area_extract = a.area_extract or a.extracts[0]
     a.candidates, a.matches, a.worklist, a.patch, a.wikidata_cache = (
         os.path.join(a.work, os.path.basename(default)) for default in (
             paths.CANDIDATES, paths.MATCHES, paths.WORKLIST, paths.PATCH,

@@ -249,7 +249,9 @@ The slow steps run only when needed: the candidate scan when
 download, `REFRESH=1`), `locate.py` when the rows on the map name other OSM
 objects than `osm_objects.json` holds or the extracts changed, the dialect
 areas when their stamp names another `dialect_areas.csv`, `dialects.csv` or
-extract. A step that fails stops the run; a decision `curate.py apply`
+extract. (`locate.py` writes only the objects it finds, so while a row names
+an object no extract holds, it runs every time — and `just check` fails
+until the row is fixed.) A step that fails stops the run; a decision `curate.py apply`
 refuses does not — it stays in the patch, and the run exits 1 at its end.
 The tiles are not built (`just tiles`), and nothing is committed.
 
