@@ -56,6 +56,18 @@ export function decidedRows(entries: PatchEntry[]): Map<string, PatchEntry> {
   return last;
 }
 
+const WIKIDATA = new RegExp(patchSchema.properties.wikidata.pattern);
+
+/**
+ * The Wikidata id an OSM object's `wikidata` tag names, if it names exactly
+ * one. OSM sometimes lists several (`Q1;Q2`), which the patch contract — and
+ * so `apply` — refuses; the panel then saves none.
+ */
+export function singleWikidataId(tag: string | undefined): string | undefined {
+  const id = tag?.trim();
+  return id && WIKIDATA.test(id) ? id : undefined;
+}
+
 const SLUG = new RegExp(patchSchema.$defs.slug.pattern);
 
 /** Whether `slug` has the shape of a row id and of a `local/<slug>` reference. */
