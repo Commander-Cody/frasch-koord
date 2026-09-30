@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from frasch import locate, paths, placelist, provenance, update
+from frasch import build_dialect_areas, locate, paths, placelist, provenance, update
 from frasch.provenance import ExtractStamp
 from conftest import cand, places_text, write_candidates
 from osm_fixture import Nodes, ring, write_extract
@@ -254,6 +254,19 @@ def test_dialect_areas_are_stale_until_built_from_the_current_inputs(
     assert not update.areas_stale(outputs, area_list, registry, [SH])
     assert update.areas_stale(outputs, area_list, registry, [DK])
     area_list.write_text(AREA_LIST + "frr-x-fering,Wyk,relation/2,\n", encoding="utf-8")
+    assert update.areas_stale(outputs, area_list, registry, [SH])
+
+
+def test_dialect_areas_are_stale_after_a_registry_edit(workspace: Path) -> None:
+    area_list, registry = workspace / "dialect_areas.csv", workspace / "dialects.csv"
+    outputs = [workspace / "dialect_areas.geojson", workspace / "dialect_areas_parts.geojson"]
+    assert build_dialect_areas.main([
+        str(workspace / "schleswig-holstein-latest.osm.pbf"), "--areas", str(area_list),
+        "--registry", str(registry), "--out", str(outputs[0]),
+        "--parts-out", str(outputs[1])]) == 0
+    assert not update.areas_stale(outputs, area_list, registry, [SH])
+    text = registry.read_text(encoding="utf-8")
+    registry.write_text(text.replace(",Mooring,", ",Mooring (edited),", 1), encoding="utf-8")
     assert update.areas_stale(outputs, area_list, registry, [SH])
 
 

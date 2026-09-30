@@ -251,7 +251,8 @@ objects than `osm_objects.json` holds or the extracts changed, the dialect
 areas when their stamp names another `dialect_areas.csv`, `dialects.csv` or
 extract. (`locate.py` writes only the objects it finds, so while a row names
 an object no extract holds, it runs every time, and the run stops at the
-search index step. Its advice to run `just objects` does not help here: the
+search index step — or at the check step, when the missing reference is not
+the row's first. Their advice to run `just objects` does not help here: the
 objects step's `N not in <extract>: <ref>` line names the reference, and the
 fix is that row's `osm` cell.) A step that fails stops the run; a decision
 `curate.py apply` refuses does not — it stays in the patch, and the run
@@ -602,7 +603,7 @@ references: coordinates and tag fixes belong in `curation.csv` and the build.
 | `dialects.csv` | the dialect registry — edit this |
 | `dialect_areas.csv` | which OSM object belongs to which dialect — edit this |
 | `curation.csv` | per-object map tuning, and the position for places OSM does not have — edit this |
-| `update.py` | `just update`: everything below, in order, skipping the slow steps whose inputs did not change |
+| `update.py` | `just update`: runs the commands below in the pipeline's order (see [Workflow](#workflow)), skipping the slow steps whose inputs did not change |
 | `check.py` | checks the hand-edited files, every problem with its line (`--fix` gives new rows an id) |
 | `dialects.py` | prints the registry; `--tags` for Planetiler, `--export` writes `web/src/generated/dialects.json` |
 | `locate.py` | OSM extract(s) → `osm_objects.json`: where each object of the name list is |

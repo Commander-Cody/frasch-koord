@@ -11,7 +11,8 @@
 #
 # `update` runs the name part of it in one go -- after an edit to places.csv
 # or a session in the curation view: ids and checks, the view's decisions,
-# candidates, match, objects, areas, the worklist for the view, index, check.
+# candidates, match, objects, areas, the dialect registry, index, the
+# worklist for the view, check.
 # It skips the slow steps whose inputs did not change (names/update.py).
 #
 # `objects`, `areas`, `index` and `dialects` write committed files; `check`
