@@ -196,3 +196,108 @@ def test_region_stem_of_a_bare_name_is_itself() -> None:
 def test_region_stem_rejects_an_invalid_region() -> None:
     result = run("region_stem", "Europe/Denmark")
     assert result.returncode != 0
+
+
+# ------------------------------------------------------------- fetch_pinned ---
+def test_pinned_fetch_downloads_a_missing_file(tmp_path: Path) -> None:
+    src = tmp_path / "src.zip"
+    src.write_bytes(b"natural earth\n")
+    dest = tmp_path / "sources" / "ne.zip"
+    dest.parent.mkdir()
+
+    result = run("fetch_pinned", src.as_uri(), str(dest), sha256_of(src.read_bytes()))
+
+    assert result.returncode == 0, result.stderr
+    assert dest.read_bytes() == b"natural earth\n"
+
+
+def test_pinned_fetch_leaves_a_matching_file_alone(tmp_path: Path) -> None:
+    dest = tmp_path / "ne.zip"
+    dest.write_bytes(b"natural earth\n")
+
+    # the source does not even exist: a matching file is not fetched again
+    result = run("fetch_pinned", (tmp_path / "gone.zip").as_uri(), str(dest), sha256_of(b"natural earth\n"))
+
+    assert result.returncode == 0, result.stderr
+    assert dest.read_bytes() == b"natural earth\n"
+
+
+def test_pinned_fetch_replaces_a_file_with_the_wrong_checksum(tmp_path: Path) -> None:
+    src = tmp_path / "src.zip"
+    src.write_bytes(b"natural earth\n")
+    dest = tmp_path / "ne.zip"
+    dest.write_bytes(b"half a downloa")
+
+    result = run("fetch_pinned", src.as_uri(), str(dest), sha256_of(src.read_bytes()))
+
+    assert result.returncode == 0, result.stderr
+    assert dest.read_bytes() == b"natural earth\n"
+
+
+def test_pinned_fetch_fails_on_a_mismatching_download_and_leaves_nothing(tmp_path: Path) -> None:
+    src = tmp_path / "src.zip"
+    src.write_bytes(b"something else\n")
+    dest = tmp_path / "ne.zip"
+
+    result = run("fetch_pinned", src.as_uri(), str(dest), sha256_of(b"natural earth\n"))
+
+    assert result.returncode != 0
+    assert "checksum mismatch" in result.stderr
+    assert not dest.exists()
+    assert not Path(str(dest) + ".part").exists()
+
+
+# -------------------------------------- geofabrik_extract_name / _url (snapshot) ---
+def test_extract_name_without_a_snapshot_is_the_latest_file() -> None:
+    result = run("geofabrik_extract_name", "schleswig-holstein")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "schleswig-holstein-latest.osm.pbf"
+
+
+def test_extract_name_with_a_snapshot_is_the_dated_file() -> None:
+    result = run("geofabrik_extract_name", "schleswig-holstein", "260923")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "schleswig-holstein-260923.osm.pbf"
+
+
+def test_extract_name_takes_the_stem_of_a_full_path_region() -> None:
+    result = run("geofabrik_extract_name", "europe/denmark", "260923")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "denmark-260923.osm.pbf"
+
+
+def test_extract_name_rejects_a_malformed_snapshot() -> None:
+    for snapshot in ("2609", "26-09-23", "../x", "2609233", "latest"):
+        result = run("geofabrik_extract_name", "schleswig-holstein", snapshot)
+        assert result.returncode != 0, snapshot
+        assert result.stdout.strip() == "", snapshot
+        assert "invalid snapshot" in result.stderr, snapshot
+
+
+def test_extract_url_is_the_geofabrik_download_of_the_latest_file() -> None:
+    result = run("geofabrik_extract_url", "schleswig-holstein")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "https://download.geofabrik.de/europe/germany/schleswig-holstein-latest.osm.pbf"
+
+
+def test_extract_url_with_a_snapshot_names_the_dated_file() -> None:
+    result = run("geofabrik_extract_url", "europe/denmark", "260923")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "https://download.geofabrik.de/europe/denmark-260923.osm.pbf"
+
+
+def test_extract_url_rejects_a_malformed_snapshot() -> None:
+    result = run("geofabrik_extract_url", "schleswig-holstein", "../x")
+    assert result.returncode != 0
+    assert result.stdout.strip() == ""
+
+
+def test_pinned_fetch_creates_the_destination_directory(tmp_path: Path) -> None:
+    src = tmp_path / "src.zip"
+    src.write_bytes(b"natural earth\n")
+    dest = tmp_path / "data" / "sources" / "ne.zip"
+
+    result = run("fetch_pinned", src.as_uri(), str(dest), sha256_of(src.read_bytes()))
+
+    assert result.returncode == 0, result.stderr
+    assert dest.read_bytes() == b"natural earth\n"

@@ -50,5 +50,16 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
+      # The glyphs and the pinned tile archive (~225 MB), kept between runs
+      # under a key that changes with whatever pins them.
+      - uses: actions/cache@v6
+        with:
+          path: |
+            web/public/fonts
+            web/.cache/tiles
+          key: web-assets-${{ hashFiles('web/tiles.lock', 'web/scripts/fetch-fonts.sh') }}
+      - run: npm run fetch-assets
       - run: npm run build
       - run: npm run check:build
+      - run: npx playwright install --with-deps chromium-headless-shell
+      - run: npm run smoke

@@ -6,6 +6,7 @@
 #                        ├─ objects ─┐                    names/osm_objects.json
 #                        └─ areas ───┼─ index             web/public/data/names.json
 #                                    └─ tiles             tiles/data/<region>.pmtiles
+#                                         └─ publish-tiles  a release + web/tiles.lock
 #   dialects                                              web/src/generated/dialects.json
 #
 # `objects`, `areas`, `index` and `dialects` write committed files; `check`
@@ -34,9 +35,9 @@ extracts:
     source tiles/fetch.sh
     mkdir -p tiles/data
     for region in schleswig-holstein europe/denmark; do
-      dest="tiles/data/$(region_stem "$region")-latest.osm.pbf"
+      dest="tiles/data/$(geofabrik_extract_name "$region")"
       if [ "${REFRESH:-}" = "1" ] || [ ! -f "$dest" ]; then
-        fetch_geofabrik_verified "https://download.geofabrik.de/$(geofabrik_path "$region")-latest.osm.pbf" "$dest"
+        fetch_geofabrik_verified "$(geofabrik_extract_url "$region")" "$dest"
       fi
     done
 
@@ -64,9 +65,14 @@ dialects:
 index: dialects
     {{py}} names/export_search_index.py
 
+# SNAPSHOT=yymmdd builds from Geofabrik's extract of that day instead of the latest one
 # build the tiles of a region (tiles/data/<region>.pmtiles); extra args go to Planetiler
 tiles region=region *args:
     tiles/build.sh {{region}} {{args}}
+
+# publish the built tiles as a GitHub release and pin web/tiles.lock to them (needs gh)
+publish-tiles:
+    tiles/publish.sh {{region}}
 
 # prove the committed outputs match the committed inputs (no extract needed; runs in CI)
 check:

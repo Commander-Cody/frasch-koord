@@ -14,6 +14,9 @@
     "test": "vitest run",
     "check:build": "node scripts/check-build.mjs",
     "smoke": "node scripts/smoke.mjs",
+    "fetch-fonts": "bash scripts/fetch-fonts.sh",
+    "fetch-tiles": "bash scripts/fetch-tiles.sh",
+    "fetch-assets": "npm run fetch-fonts && npm run fetch-tiles",
     "preview": "vite preview"
   },
   "dependencies": {

@@ -10,9 +10,15 @@ context.
 ```sh
 source ~/.nvm/nvm.sh   # Node 24 via nvm; not on PATH in non-interactive shells
 nvm use                # picks up 24 from .nvmrc
-npm install
+npm ci
+npm run fetch-assets   # the glyphs and the pinned tile archive, not in git (~225 MB, once)
 npm run dev
 ```
+
+That is all a fresh clone needs, for the dev server and for `npm run build`:
+no Java, Python or OSM downloads. `npm run fetch-assets` runs
+`scripts/fetch-fonts.sh` and `scripts/fetch-tiles.sh` (see
+[Tile hosting](#tile-hosting)); both skip what is already there.
 
 Other scripts: `npm run build` (type-checks with `tsc -b` then builds with
 Vite), `npm run typecheck` (`tsc -b` only; `npx tsc --noEmit` checks nothing,
@@ -42,7 +48,9 @@ npm run check:build   # dist/ has the worker the bundle names; no dev tool, no d
 npm run smoke         # vite preview + headless Chromium: map loads, search, card
 ```
 
-`npm run smoke` needs the tiles and glyphs in `public/` (see below) and
+`npm run build` stops at its start, naming what is missing, when the glyphs
+or the pinned tile archive have not been fetched (`npm run fetch-assets`);
+the archive only when `VITE_TILES_URL` is not set. `npm run smoke` needs
 Playwright's headless Chromium, once: `npx playwright install
 chromium-headless-shell` (plus `sudo npx playwright install-deps` for the
 system libraries on a bare Linux).
@@ -54,10 +62,13 @@ domain root or under a sub-path, e.g. a GitHub Pages project site:
 `npx vite build --base /frasch-koord/`.
 
 **What `dist/` holds.** Vite copies `public/` as it is: the name list, the
-sprites, the ~100 MB of glyphs in `public/fonts/` (the style always loads them
-from the site) and the ~125 MB PMTiles archive. With `VITE_TILES_URL` set the
-tiles live elsewhere, and `vite-plugins/external-tiles.ts` leaves the archive
-out of `dist/`.
+sprites and the ~100 MB of glyphs in `public/fonts/` (the style always loads
+them from the site). The tiles are the exception (`vite-plugins/tiles.ts`):
+whatever `public/tiles/` links to is left out, and `dist/tiles/` gets the
+~125 MB archive `tiles.lock` pins, checked against its sha256 — or no archive
+at all with `VITE_TILES_URL` set, when the tiles live elsewhere. So a build
+always ships an archive that is named in git, even on a machine whose dev
+server shows a local tile build.
 
 **Load errors are shown, not just logged.** A `names.json` that fails to load
 (an HTTP error, or an SPA fallback's `index.html`) puts an error line under
@@ -102,15 +113,29 @@ pmtiles://<site>/tiles/schleswig-holstein.pmtiles
 
 i.e. `web/public/tiles/schleswig-holstein.pmtiles`, resolved against the page
 and the site's base path (`siteUrl()` in `src/config.ts`). That path is gitignored (`public/tiles/*.pmtiles`) — only
-`public/tiles/.gitkeep` is tracked. For local development, symlink or copy a
-built PMTiles archive there, e.g.:
+`public/tiles/.gitkeep` is tracked.
+
+**The published archive.** Finished archives are published as GitHub release
+assets of this repository (`tiles-<yyyymmdd>-<sha8>`), and `tiles.lock` pins
+the one the site uses: its URL and sha256. `npm run fetch-tiles` (part of
+`fetch-assets`) downloads it into `.cache/tiles/<sha256>.pmtiles`
+(gitignored), verifies it and links
+`public/tiles/schleswig-holstein.pmtiles` to it. It skips an archive that is
+already there, and drops those of earlier pins. A new archive is published
+from `tiles/` with `uv run just publish-tiles`, which rewrites `tiles.lock`
+(see `tiles/README.md`).
+
+**Your own tiles.** If you build tiles yourself (`tiles/README.md`), link the
+build there instead, for the dev server:
 
 ```sh
-ln -s ../../../tiles/data/schleswig-holstein.pmtiles \
+ln -sfn ../../../tiles/data/schleswig-holstein.pmtiles \
   web/public/tiles/schleswig-holstein.pmtiles
 ```
 
-A fresh clone does not have it: create it after building the tiles.
+`npm run fetch-tiles` leaves such a link alone (it only replaces links into
+`.cache/tiles/`), and `npm run build` still ships the pinned archive, never
+the linked one.
 
 The `pmtiles://` protocol is registered once with MapLibre in
 `src/components/Map.tsx` (`addProtocol('pmtiles', protocol.tile)`); MapLibre
@@ -329,7 +354,7 @@ single Warft (which in any case doesn't render before `place-warft`'s
 - `public/sprites/` — `sprite.json`, `sprite.png`, `sprite@2x.json`,
   `sprite@2x.png`, downloaded from
   https://openmaptiles.github.io/osm-bright-gl-style/. ~136 KB total.
-- `public/fonts/` — **not in git** (~100 MB); run `scripts/fetch-fonts.sh` once after cloning. PBF glyph ranges for the three fontstacks OSM Bright's
+- `public/fonts/` — **not in git** (~100 MB); `npm run fetch-assets` (or `npm run fetch-fonts`) fetches them once after cloning, pinned by the zip's sha256. PBF glyph ranges for the three fontstacks OSM Bright's
   style.json actually uses: `Noto Sans Regular`, `Noto Sans Italic`,
   `Noto Sans Bold`. Sourced pre-built from the `noto-sans.zip` asset of the
   [openmaptiles/fonts v2.0 release](https://github.com/openmaptiles/fonts/releases/tag/v2.0)

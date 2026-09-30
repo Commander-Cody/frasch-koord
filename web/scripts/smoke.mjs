@@ -2,8 +2,8 @@
 // Smoke check of the production build: serves dist/ with `vite preview`,
 // opens it in headless Chromium and checks that the map loads, search finds a
 // place and its card opens, and that the dev tools stay off. Run after a
-// build: `npm run smoke`. Needs the PMTiles archive in public/tiles/ at build
-// time (or VITE_TILES_URL) and the glyphs in public/fonts/, see README.md.
+// build: `npm run smoke`. The build needs the fetched assets (`npm run
+// fetch-assets`, or VITE_TILES_URL for the tiles), see README.md.
 //
 // Browser: Playwright's headless Chromium (`npx playwright install
 // chromium-headless-shell` once).
