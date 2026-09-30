@@ -56,8 +56,29 @@ SYLT = cand("r", 1576925, 8.418235, 54.888448, name="Sylt", name__de="Sylt",
 
 KAMPEN_SYLT = cand("n", 240063898, 8.344065, 54.95377, name="Kampen (Sylt)",
                    place="village")
+KAMPEN_SYLT_MUNICIPALITY = cand("r", 1147133, 8.356739, 54.967875, name="Kampen (Sylt)",
+                                boundary="administrative", admin_level="8",
+                                wikidata="Q27332")
 KAMPEN_STORMARN = cand("n", 6694657313, 9.937962, 53.857649, name="Kampen",
                        place="hamlet")
+
+DRAGE_STEINBURG = cand("n", 240054933, 9.51933, 54.004272, name="Drage", place="village")
+DRAGE_STEINBURG_MUNICIPALITY = cand("r", 450076, 9.533033, 54.016063, name="Drage",
+                                    boundary="administrative", admin_level="8",
+                                    wikidata="Q634156")
+DRAGE_ELBE_MUNICIPALITY = cand("r", 308488, 10.327176, 53.42993, name="Drage",
+                               boundary="administrative", admin_level="8",
+                               wikidata="Q665062")
+
+# the village node carries wikidata=Q551483 -- left out to test the fallback
+SCHAFFLUND_NO_QID = cand("n", 240090603, 9.183447, 54.759282, name="Schafflund",
+                         place="village")
+SCHAFFLUND_MUNICIPALITY = cand("r", 1156027, 9.137018, 54.771625, name="Schafflund",
+                               boundary="administrative", admin_level="8",
+                               wikidata="Q551483")
+AMT_SCHAFFLUND = cand("r", 1156150, 9.154304, 54.763147, name="Schafflund",
+                      name__prefix="Amt", boundary="administrative", admin_level="7",
+                      wikidata="Q479884")
 
 KIRCHWARFT_HOOGE = cand("n", 11711096159, 8.544362, 54.572982, name="Kirchwarft",
                         place="hamlet")
@@ -303,6 +324,46 @@ def test_the_place_node_wins_over_the_boundary_relation(tmp_path: Path) -> None:
               relation, HOLM_NF)
     assert out["status"] == "matched"
     assert (out["osm_type"], out["osm_id"]) == ("node", "240102263")
+
+
+def test_the_boundary_relation_lends_its_wikidata_to_the_place_node(tmp_path: Path) -> None:
+    """Kampen (Sylt): the village node has no `wikidata`, the municipality's
+    boundary relation 1.8 km away has.  The node wins, with the relation's QID."""
+    out = run(tmp_path, row(kind="settlement", solring="Kaamp", de="Kampen"),
+              KAMPEN_SYLT_MUNICIPALITY, KAMPEN_SYLT)
+    assert out["status"] == "matched"
+    assert (out["osm_type"], out["osm_id"], out["wikidata"]) == ("node", "240063898", "Q27332")
+
+
+def test_a_far_away_namesake_boundary_lends_no_wikidata(tmp_path: Path) -> None:
+    """Drage: the Drage (Elbe) municipality lies 83 km from the Drage
+    (Steinburg) village node -- another place, its QID is not the node's."""
+    out = run(tmp_path, row(kind="settlement", mooring="Draage", de="Drage"),
+              DRAGE_ELBE_MUNICIPALITY, DRAGE_STEINBURG)
+    assert out["status"] == "matched"
+    assert (out["osm_type"], out["osm_id"], out["wikidata"]) == ("node", "240054933", "")
+
+
+def test_of_two_municipalities_nearby_the_nearer_lends_its_wikidata(
+        tmp_path: Path) -> None:
+    # made up: a second Gemeinde "Drage" 8 km from the village node
+    neighbour = cand("r", 1, 9.64, 54.004272, name="Drage", boundary="administrative",
+                     admin_level="8", wikidata="Q1")
+    out = run(tmp_path, row(kind="settlement", mooring="Draage", de="Drage"),
+              neighbour, DRAGE_STEINBURG_MUNICIPALITY, DRAGE_STEINBURG)
+    assert out["status"] == "matched"
+    assert (out["osm_id"], out["wikidata"]) == ("240054933", "Q634156")
+
+
+def test_the_municipality_lends_its_wikidata_rather_than_the_nearer_amt(
+        tmp_path: Path) -> None:
+    """Schafflund: the Amt relation (admin_level 7) lies 1.9 km from the
+    village node, the Gemeinde relation (admin_level 8) 3.3 km.  The most
+    local boundary is the village's."""
+    out = run(tmp_path, row(kind="settlement", mooring="Schååflem", de="Schafflund"),
+              AMT_SCHAFFLUND, SCHAFFLUND_MUNICIPALITY, SCHAFFLUND_NO_QID)
+    assert out["status"] == "matched"
+    assert (out["osm_type"], out["osm_id"], out["wikidata"]) == ("node", "240090603", "Q551483")
 
 
 def test_all_pieces_of_a_river_are_matched(tmp_path: Path) -> None:

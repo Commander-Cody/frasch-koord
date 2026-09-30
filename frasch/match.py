@@ -103,6 +103,7 @@ MATCH_COLUMNS = ["id", "line", "kind", "name", "de", "osm", "wikidata", "status"
 
 CLUSTER_KM = 3.0        # objects this close describe the same feature
 SEPARATION_KM = 30.0    # a winner must be this far from every rival
+BOUNDARY_QID_KM = 10.0  # a boundary further from a place node is a namesake
 
 # `match_row`'s result for a row: its cells plus the MATCH_COLUMNS and
 # osm_type / osm_id -- a line of work/matches.csv
@@ -428,6 +429,25 @@ def absorb_boundaries(kind: str, cands: list[RankedCandidate]
     return (kept or cands), dropped
 
 
+def boundary_qid(rec: Candidate, boundaries: Iterable[Candidate]) -> str:
+    """The `wikidata` a place node without one borrows from its boundary: of
+    the relations within BOUNDARY_QID_KM that have one, the most local
+    (Gemeinde before Amt before Kreis), the nearest among equals.  `""` if
+    none is that close -- a namesake further away is another place."""
+    near: list[tuple[int, float, str]] = []
+    for b in boundaries:
+        d = haversine(rec["lon"], rec["lat"], b["lon"], b["lat"])
+        if d is not None and d <= BOUNDARY_QID_KM and b["tags"].get("wikidata"):
+            near.append((-admin_level(b), d, b["tags"]["wikidata"]))
+    return min(near)[2] if near else ""
+
+
+def admin_level(rec: Candidate) -> int:
+    """The `admin_level` of a boundary relation, 0 if it has none."""
+    level = rec["tags"].get("admin_level", "")
+    return int(level) if level.isdigit() else 0
+
+
 def cluster(cands: Iterable[Candidate]) -> list[Cluster]:
     """Group candidates that describe the same feature.
 
@@ -583,8 +603,10 @@ def match_row(row: Row, index: NameIndex, hints: HintResolver,
         out["note"] = _addnote(row, f"{len(cands)} name match(es), none "
                                     f"compatible with kind={kind}")
         return out
-    plaus_all = canonical(kind, plaus_all)
+    # set the boundaries aside first: canonical() would drop them, and their
+    # wikidata is the fallback for a place node without one
     plaus_all, boundaries = absorb_boundaries(kind, plaus_all)
+    plaus_all = canonical(kind, plaus_all)
     top = min(c["rank"] for c in plaus_all)
     plaus = [c for c in plaus_all if c["rank"] == top]
 
@@ -632,10 +654,8 @@ def match_row(row: Row, index: NameIndex, hints: HintResolver,
                               - ((haversine(r["lon"], r["lat"], *NF_CENTRE) or 500) / 200)))
     qid = best["tags"].get("wikidata", "")
     if not qid:      # fall back to a sibling's / the boundary relation's wikidata
-        for r in winner["members"] + boundaries:
-            if r["tags"].get("wikidata"):
-                qid = r["tags"]["wikidata"]
-                break
+        qid = next((r["tags"]["wikidata"] for r in winner["members"]
+                    if r["tags"].get("wikidata")), "") or boundary_qid(best, boundaries)
     # a linear feature (river, dyke, street) is split into many ways -- tag all
     # of them, otherwise only a fragment of the river gets the Frisian label
     ids = [str(best["id"])]

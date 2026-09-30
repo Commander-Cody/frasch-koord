@@ -397,7 +397,10 @@ the synthetic polygons it would add.
   hamlet/isolated dwelling, is left for review even when it is the only
   candidate.
 * For settlements the **place node** wins over the boundary relation (that is
-  what OpenMapTiles labels); the relation's `wikidata` is still recorded.
+  what OpenMapTiles labels); a node without `wikidata` gets the relation's.
+  Only a boundary within 10 km lends it (a namesake further away is another
+  place), and of several the most local one (the Gemeinde, not its Amt), the
+  nearest among equals.
 * A row is matched as soon as **any** dialect column (or `local`) has a name;
   which dialect it is does not matter for matching.
 * **Countries** are keyed by Wikidata QID only (via `wbsearchentities` +
