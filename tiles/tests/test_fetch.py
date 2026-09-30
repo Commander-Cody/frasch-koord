@@ -12,7 +12,7 @@ from pathlib import Path
 FETCH_SH = Path(__file__).resolve().parent.parent / "fetch.sh"
 
 
-def run(*args: str) -> subprocess.CompletedProcess:
+def run(*args: str) -> subprocess.CompletedProcess[str]:
     """Source fetch.sh, then call the named function with the given args --
     exactly what build.sh does after `source ./fetch.sh`."""
     return subprocess.run(
@@ -30,7 +30,7 @@ def md5_of(data: bytes) -> str:
 
 
 # ----------------------------------------------------------- fetch_verified ---
-def test_accepts_a_good_file_with_the_right_checksum(tmp_path):
+def test_accepts_a_good_file_with_the_right_checksum(tmp_path: Path) -> None:
     src = tmp_path / "src.bin"
     src.write_bytes(b"planetiler jar contents\n")
     dest = tmp_path / "out.bin"
@@ -43,7 +43,7 @@ def test_accepts_a_good_file_with_the_right_checksum(tmp_path):
 
 
 
-def test_a_binary_file_passes_without_a_word(tmp_path):
+def test_a_binary_file_passes_without_a_word(tmp_path: Path) -> None:
     # an OSM PBF starts with a zero byte (the length of its first block)
     src = tmp_path / "src.osm.pbf"
     src.write_bytes(b"\x00\x00\x00\x0d\x0a\x09OSMHeader\x18")
@@ -54,7 +54,7 @@ def test_a_binary_file_passes_without_a_word(tmp_path):
     assert result.returncode == 0, result.stderr
     assert result.stderr == ""
 
-def test_rejects_a_wrong_checksum(tmp_path):
+def test_rejects_a_wrong_checksum(tmp_path: Path) -> None:
     src = tmp_path / "src.bin"
     src.write_bytes(b"planetiler jar contents\n")
     dest = tmp_path / "out.bin"
@@ -67,7 +67,7 @@ def test_rejects_a_wrong_checksum(tmp_path):
     assert not Path(str(dest) + ".part").exists()
 
 
-def test_rejects_an_html_response(tmp_path):
+def test_rejects_an_html_response(tmp_path: Path) -> None:
     # Geofabrik's stand-in for "wrong path": 200/302 with an HTML body, which
     # curl --fail alone does not treat as an error.
     src = tmp_path / "notfound.html"
@@ -84,7 +84,7 @@ def test_rejects_an_html_response(tmp_path):
     assert not Path(str(dest) + ".part").exists()
 
 
-def test_leaves_no_part_file_when_the_url_does_not_resolve(tmp_path):
+def test_leaves_no_part_file_when_the_url_does_not_resolve(tmp_path: Path) -> None:
     dest = tmp_path / "out.bin"
 
     result = run("fetch_verified", (tmp_path / "missing.bin").as_uri(), str(dest), "sha256", "0" * 64)
@@ -95,7 +95,7 @@ def test_leaves_no_part_file_when_the_url_does_not_resolve(tmp_path):
 
 
 # ------------------------------------------------------- fetch_geofabrik_verified ---
-def test_geofabrik_variant_verifies_against_the_md5_sidecar(tmp_path):
+def test_geofabrik_variant_verifies_against_the_md5_sidecar(tmp_path: Path) -> None:
     pbf = tmp_path / "region-latest.osm.pbf"
     pbf.write_bytes(b"fake extract data\n")
     md5_file = tmp_path / "region-latest.osm.pbf.md5"
@@ -109,7 +109,7 @@ def test_geofabrik_variant_verifies_against_the_md5_sidecar(tmp_path):
     assert dest.read_bytes() == pbf.read_bytes()
 
 
-def test_geofabrik_variant_rejects_an_html_md5_file(tmp_path):
+def test_geofabrik_variant_rejects_an_html_md5_file(tmp_path: Path) -> None:
     pbf = tmp_path / "region-latest.osm.pbf"
     pbf.write_bytes(b"fake extract data\n")
     md5_file = tmp_path / "region-latest.osm.pbf.md5"
@@ -123,7 +123,7 @@ def test_geofabrik_variant_rejects_an_html_md5_file(tmp_path):
     assert not dest.exists()
 
 
-def test_geofabrik_variant_rejects_an_unparsable_md5_file(tmp_path):
+def test_geofabrik_variant_rejects_an_unparsable_md5_file(tmp_path: Path) -> None:
     pbf = tmp_path / "region-latest.osm.pbf"
     pbf.write_bytes(b"fake extract data\n")
     md5_file = tmp_path / "region-latest.osm.pbf.md5"
@@ -137,7 +137,7 @@ def test_geofabrik_variant_rejects_an_unparsable_md5_file(tmp_path):
     assert not dest.exists()
 
 
-def test_geofabrik_variant_rejects_a_wrong_md5(tmp_path):
+def test_geofabrik_variant_rejects_a_wrong_md5(tmp_path: Path) -> None:
     pbf = tmp_path / "region-latest.osm.pbf"
     pbf.write_bytes(b"fake extract data\n")
     md5_file = tmp_path / "region-latest.osm.pbf.md5"
@@ -152,47 +152,47 @@ def test_geofabrik_variant_rejects_a_wrong_md5(tmp_path):
 
 
 # --------------------------------------------------- geofabrik_path / region_stem ---
-def test_geofabrik_path_expands_a_bare_name_under_germany():
+def test_geofabrik_path_expands_a_bare_name_under_germany() -> None:
     result = run("geofabrik_path", "schleswig-holstein")
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "europe/germany/schleswig-holstein"
 
 
-def test_geofabrik_path_keeps_a_full_path_as_is():
+def test_geofabrik_path_keeps_a_full_path_as_is() -> None:
     result = run("geofabrik_path", "europe/denmark")
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "europe/denmark"
 
 
-def test_geofabrik_path_keeps_a_deeper_full_path_as_is():
+def test_geofabrik_path_keeps_a_deeper_full_path_as_is() -> None:
     result = run("geofabrik_path", "europe/germany/schleswig-holstein")
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "europe/germany/schleswig-holstein"
 
 
-def test_geofabrik_path_rejects_shell_metacharacters():
+def test_geofabrik_path_rejects_shell_metacharacters() -> None:
     result = run("geofabrik_path", "europe/denmark; rm -rf /")
     assert result.returncode != 0
     assert result.stdout.strip() == ""
 
 
-def test_geofabrik_path_rejects_path_traversal():
+def test_geofabrik_path_rejects_path_traversal() -> None:
     result = run("geofabrik_path", "../../etc/passwd")
     assert result.returncode != 0
 
 
-def test_region_stem_is_the_last_path_component():
+def test_region_stem_is_the_last_path_component() -> None:
     result = run("region_stem", "europe/germany/schleswig-holstein")
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "schleswig-holstein"
 
 
-def test_region_stem_of_a_bare_name_is_itself():
+def test_region_stem_of_a_bare_name_is_itself() -> None:
     result = run("region_stem", "schleswig-holstein")
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "schleswig-holstein"
 
 
-def test_region_stem_rejects_an_invalid_region():
+def test_region_stem_rejects_an_invalid_region() -> None:
     result = run("region_stem", "Europe/Denmark")
     assert result.returncode != 0

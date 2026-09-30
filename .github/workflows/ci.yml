@@ -13,6 +13,7 @@ jobs:
       - uses: astral-sh/setup-uv@v10.2.0
       - run: uv sync --locked
       - run: uv run ruff check .
+      - run: uv run mypy
       # Both also write a Markdown overview to the run's summary page (as
       # Vitest does by itself); the annotate-failures plugin marks failing
       # tests in the diff.

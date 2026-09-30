@@ -62,22 +62,33 @@ import json
 import os
 import sys
 import time
+from collections.abc import Iterable, Mapping, Sequence
+from typing import TYPE_CHECKING, TypedDict
 
 from frasch import candidates, cli, files, paths, placelist
-from frasch.candidates import ISLAND_PLACES, decisive_tags, osm_key
+from frasch.candidates import ISLAND_PLACES, Candidate, decisive_tags, osm_key
 from frasch.errors import PipelineError
 from frasch.geo import NF_CENTRE, haversine, in_north_frisia
-from frasch.hints import HintResolver
+from frasch.hints import Circle, HintResolver
 from frasch.nameindex import NameIndex, norm
 from frasch.placelist import (
+    OsmRef,
+    PlaceRow,
+    Ref,
+    Row,
     any_name,
     format_osm,
     local_ref,
+    osm_refs,
     owned_by_matcher,
     parse_osm,
     primary,
     variants,
 )
+from frasch.provenance import ExtractStamp
+
+if TYPE_CHECKING:
+    import requests
 
 CSV_PATH = placelist.DEFAULT_PATH
 CAND_PATH = paths.CANDIDATES
@@ -93,13 +104,40 @@ MATCH_COLUMNS = ["id", "line", "kind", "name", "de", "osm", "wikidata", "status"
 CLUSTER_KM = 3.0        # objects this close describe the same feature
 SEPARATION_KM = 30.0    # a winner must be this far from every rival
 
+# `match_row`'s result for a row: its cells plus the MATCH_COLUMNS and
+# osm_type / osm_id -- a line of work/matches.csv
+MatchResult = dict[str, str]
+
+
+class RankedCandidate(Candidate):
+    """A candidate record with the best name-field rank (`NameIndex.lookup`)
+    any of the row's names found it with."""
+    rank: int
+
+
+class Cluster(TypedDict):
+    """Candidates that describe one feature, and their mean position (None
+    when no member has a location)."""
+    members: list[Candidate]
+    lon: float | None
+    lat: float | None
+
+
+class PlacedCluster(Cluster):
+    """A cluster and where it lies: against the row's location hint, and
+    against North Frisia."""
+    hint_ok: bool
+    hint_d: float | None
+    nf_d: float | None
+    in_nf: bool
+
 # -------------------------------------------------------- kind / tag rules ---
 SETTLEMENT_PLACES = {"city", "town", "village", "hamlet", "isolated_dwelling",
                      "locality", "suburb", "neighbourhood", "borough",
                      "quarter", "farm", "municipality"}
 
 
-def kind_ok(kind, tags, cls):
+def kind_ok(kind: str, tags: Mapping[str, str], cls: Sequence[str]) -> bool:
     place = tags.get("place")
     nat = tags.get("natural")
     bnd = tags.get("boundary")
@@ -156,14 +194,14 @@ def kind_ok(kind, tags, cls):
     return True                                   # kind == other
 
 
-def is_waterway_relation(rec):
+def is_waterway_relation(rec: Candidate) -> bool:
     """A `type=waterway` relation: the whole river, grouping its ways.  It
     carries no `waterway` tag of its own, so `kind_ok` does not take it for
     water."""
     return rec["t"] == "r" and rec["tags"].get("type") == "waterway"
 
 
-def canonical(kind, cands):
+def canonical(kind: str, cands: list[RankedCandidate]) -> list[RankedCandidate]:
     """Narrow a candidate set to the object(s) that really *are* the feature.
 
     Rivers are split into dozens of `waterway=river` ways spread over more than
@@ -196,7 +234,7 @@ def canonical(kind, cands):
     return cands
 
 
-def type_bonus(kind, rec):
+def type_bonus(kind: str, rec: Candidate) -> int:
     t, tags = rec["t"], rec["tags"]
     place = tags.get("place")
     if kind in ("settlement", "warft", "koog"):
@@ -241,7 +279,7 @@ WD_USER_AGENT = ("frasch-maps name pipeline/0.1 (North Frisian map; "
 WD_COUNTRY_CLASSES = {"Q6256", "Q3624078", "Q1763527", "Q112099", "Q185441"}
 
 
-def read_wikidata_cache(cache_path=WD_CACHE):
+def read_wikidata_cache(cache_path: str = WD_CACHE) -> dict[str, str]:
     """The cached lookups, `{German name: QID or ""}` (`""` = the lookup worked
     and found no country item).  A damaged file stops the run: starting from
     an empty cache would look like "not found" for every country offline."""
@@ -261,19 +299,19 @@ def read_wikidata_cache(cache_path=WD_CACHE):
     return cache
 
 
-def _wikidata_country(session, name):
+def _wikidata_country(session: requests.Session, name: str) -> str:
     """The QID of the country item Wikidata finds for a German name, `""` when
     it finds none.  Raises when the lookup itself fails -- that is not the same
     as "no such country" and must not clear a row."""
     r = session.get(WD_API, params={"action": "wbsearchentities", "search": name,
                                     "language": "de", "uselang": "de",
-                                    "type": "item", "limit": 10,
+                                    "type": "item", "limit": "10",
                                     "format": "json"}, timeout=30)
     r.raise_for_status()
     data = r.json()
     if "error" in data or "search" not in data:
         raise RuntimeError(f"wbsearchentities: {data.get('error') or data}")
-    hits = [h["id"] for h in data["search"]]
+    hits: list[str] = [h["id"] for h in data["search"]]
     if not hits:
         return ""
     r2 = session.get(WD_API, params={"action": "wbgetentities",
@@ -288,7 +326,7 @@ def _wikidata_country(session, name):
     ents = data["entities"]
     for h in hits:
         e = ents.get(h) or {}
-        vals = set()
+        vals: set[str] = set()
         for c in e.get("claims", {}).get("P31", []):
             try:
                 vals.add(c["mainsnak"]["datavalue"]["value"]["id"])
@@ -299,7 +337,8 @@ def _wikidata_country(session, name):
     return ""
 
 
-def wikidata_countries(names, cache_path=WD_CACHE, offline=False):
+def wikidata_countries(names: Iterable[str], cache_path: str = WD_CACHE,
+                       offline: bool = False) -> tuple[dict[str, str], set[str]]:
     """German country name -> QID, via wbsearchentities + wbgetentities.
 
     -> (qids, failed): `qids[name]` is the QID, or `""` when Wikidata has no
@@ -308,7 +347,7 @@ def wikidata_countries(names, cache_path=WD_CACHE, offline=False):
     has."""
     cache = read_wikidata_cache(cache_path)
     todo = [n for n in dict.fromkeys(names) if n and n not in cache]
-    failed = set()
+    failed: set[str] = set()
     if todo and offline:
         failed.update(todo)
     elif todo:
@@ -330,7 +369,7 @@ def wikidata_countries(names, cache_path=WD_CACHE, offline=False):
 
 
 # ------------------------------------------------------------------ match ----
-def row_query_names(row):
+def row_query_names(row: Row) -> list[str]:
     """The German names of the row; the Danish ones for Danish-only rows."""
     return variants(row.get("de")) or variants(row.get("da"))
 
@@ -345,7 +384,7 @@ CORE_PLACES = {"city", "town", "village", "hamlet", "isolated_dwelling",
                "suburb", "neighbourhood", "locality", "farm", "polder"}
 
 
-def linear_radius(rec):
+def linear_radius(rec: Candidate) -> float | None:
     """How far apart two pieces of the same linear feature may be, or None."""
     if rec["t"] != "w":
         return None
@@ -357,17 +396,18 @@ def linear_radius(rec):
     return None
 
 
-def is_linear(rec):
+def is_linear(rec: Candidate) -> bool:
     return linear_radius(rec) is not None
 
 
-def is_core(rec):
+def is_core(rec: Candidate) -> bool:
     """A settlement node -- two of these more than CORE_MIN_KM apart are two
     different villages, however similar their names."""
     return rec["t"] == "n" and rec["tags"].get("place") in CORE_PLACES
 
 
-def absorb_boundaries(kind, cands):
+def absorb_boundaries(kind: str, cands: list[RankedCandidate]
+                      ) -> tuple[list[RankedCandidate], list[RankedCandidate]]:
     """Prefer the place NODE over its administrative boundary (that is what
     OpenMapTiles labels).  Returns (kept, dropped)."""
     if kind == "landscape":
@@ -378,7 +418,8 @@ def absorb_boundaries(kind, cands):
     elif kind not in ("settlement", "warft", "koog", "hallig", "island",
                       "sand", "helgoland"):
         return cands, []            # Harden: the historic boundary is it
-    kept, dropped = [], []
+    kept: list[RankedCandidate] = []
+    dropped: list[RankedCandidate] = []
     for c in cands:
         if c["tags"].get("boundary") == "administrative" and not c["tags"].get("place"):
             dropped.append(c)
@@ -387,7 +428,7 @@ def absorb_boundaries(kind, cands):
     return (kept or cands), dropped
 
 
-def cluster(cands):
+def cluster(cands: Iterable[Candidate]) -> list[Cluster]:
     """Group candidates that describe the same feature.
 
     Point features merge within CLUSTER_KM; pieces of a linear feature (a river
@@ -395,12 +436,12 @@ def cluster(cands):
     (two village nodes with the same name) never merge.
     Records without a location land in their own cluster.
     """
-    clusters = []
+    groups: list[list[Candidate]] = []
     for c in cands:
         r = linear_radius(c) or CLUSTER_KM
-        target = None
-        for cl in clusters:
-            for m in cl["members"]:
+        target: list[Candidate] | None = None
+        for members in groups:
+            for m in members:
                 d = haversine(c["lon"], c["lat"], m["lon"], m["lat"])
                 if d is None:
                     continue
@@ -409,22 +450,27 @@ def cluster(cands):
                 else:
                     rr = max(r, linear_radius(m) or CLUSTER_KM)
                 if d <= rr:
-                    target = cl
+                    target = members
                     break
             if target:
                 break
         if target is None:
-            clusters.append({"members": [c]})
+            groups.append([c])
         else:
-            target["members"].append(c)
-    for cl in clusters:
-        pts = [(m["lon"], m["lat"]) for m in cl["members"] if m["lon"] is not None]
-        cl["lon"] = sum(p[0] for p in pts) / len(pts) if pts else None
-        cl["lat"] = sum(p[1] for p in pts) / len(pts) if pts else None
-    return clusters
+            target.append(c)
+    return [_centred(members) for members in groups]
 
 
-def fmt_cand(rec, hint_pt=None):
+def _centred(members: list[Candidate]) -> Cluster:
+    """The cluster of `members`, at their mean position."""
+    pts = [(m["lon"], m["lat"]) for m in members
+           if m["lon"] is not None and m["lat"] is not None]
+    return {"members": members,
+            "lon": sum(p[0] for p in pts) / len(pts) if pts else None,
+            "lat": sum(p[1] for p in pts) / len(pts) if pts else None}
+
+
+def fmt_cand(rec: Candidate, hint_pt: Circle | None = None) -> str:
     tags = rec["tags"]
     place = tags.get("place") or tags.get("natural") or tags.get("boundary") \
         or tags.get("waterway") or tags.get("landuse") or tags.get("man_made") \
@@ -435,28 +481,20 @@ def fmt_cand(rec, hint_pt=None):
     return f'{rec["t"]}/{rec["id"]}:{nm}:{place}:{ds}'
 
 
-def fmt_cands(cands):
+def fmt_cands(cands: Iterable[RankedCandidate]) -> str:
     """The `candidates` cell: every candidate, best name hit first, then the
     nearest to North Frisia.  Not truncated -- the curation view needs all of
     them (a "Dorfstraße" has hundreds of ways); only REPORT.md shortens it."""
-    def key(c):
+    def key(c: RankedCandidate) -> tuple[int, float, str, int]:
         d = haversine(c["lon"], c["lat"], *NF_CENTRE)
         return (c.get("rank", 99), 1e9 if d is None else d, c["t"], c["id"])
     return ";".join(fmt_cand(c) for c in sorted(cands, key=key))
 
 
-def _decide(kind, plaus, hint_pt):
+def _decide(kind: str, plaus: Iterable[Candidate], hint_pt: Circle | None
+            ) -> tuple[PlacedCluster | None, str, list[PlacedCluster]]:
     """-> (winner cluster or None, reason, clusters)"""
-    clusters = cluster(plaus)
-    for cl in clusters:
-        cl["hint_ok"] = False
-        cl["hint_d"] = None
-        if hint_pt and cl["lon"] is not None:
-            d = haversine(cl["lon"], cl["lat"], hint_pt[0], hint_pt[1])
-            cl["hint_d"] = d
-            cl["hint_ok"] = d is not None and d <= hint_pt[2]
-        cl["nf_d"] = haversine(cl["lon"], cl["lat"], *NF_CENTRE)
-        cl["in_nf"] = in_north_frisia(cl["lon"], cl["lat"])
+    clusters = [_placed(cl, hint_pt) for cl in cluster(plaus)]
     if hint_pt:
         # the sheet says where the feature lies -- that is binding, also when
         # there is only one candidate (OSM's only "Morsum" is on Sylt, but the
@@ -474,7 +512,19 @@ def _decide(kind, plaus, hint_pt):
     return None, "", clusters
 
 
-def _suspicious(kind, winner):
+def _placed(cl: Cluster, hint_pt: Circle | None) -> PlacedCluster:
+    """`cl` with its distance to the location hint and to North Frisia."""
+    hint_d = None
+    hint_ok = False
+    if hint_pt and cl["lon"] is not None:
+        hint_d = haversine(cl["lon"], cl["lat"], hint_pt[0], hint_pt[1])
+        hint_ok = hint_d is not None and hint_d <= hint_pt[2]
+    return {**cl, "hint_ok": hint_ok, "hint_d": hint_d,
+            "nf_d": haversine(cl["lon"], cl["lat"], *NF_CENTRE),
+            "in_nf": in_north_frisia(cl["lon"], cl["lat"])}
+
+
+def _suspicious(kind: str, winner: PlacedCluster) -> bool:
     """True if an otherwise clear winner is implausible for a North Frisian
     name list: a Koog/Warft/Hallig outside North Frisia, or a far-away minor
     place (hamlet, isolated dwelling, ...)."""
@@ -486,7 +536,8 @@ def _suspicious(kind, winner):
     return minor and (winner["nf_d"] or 1e9) > 50
 
 
-def match_row(row, index: NameIndex, hints: HintResolver, claimed=None):
+def match_row(row: Row, index: NameIndex, hints: HintResolver,
+              claimed: Mapping[Ref, int] | None = None) -> MatchResult:
     """`claimed`: {(type, id): line} of the objects other rows hold that
     are not the matcher's to give away (see `claimed_objects`)."""
     claimed = claimed or {}
@@ -505,18 +556,16 @@ def match_row(row, index: NameIndex, hints: HintResolver, claimed=None):
         out["note"] = _addnote(row, "no German/Danish name to match on")
         return out
 
-    best_rank, recs = {}, {}
+    best_rank: dict[OsmRef, int] = {}
+    recs: dict[OsmRef, Candidate] = {}
     for q in queries:
         for rec, rank in index.lookup(q):
             key = osm_key(rec)
             recs[key] = rec
             if rank < best_rank.get(key, 99):
                 best_rank[key] = rank
-    cands = []
-    for key, rec in recs.items():
-        rec = dict(rec)
-        rec["rank"] = best_rank[key]
-        cands.append(rec)
+    cands: list[RankedCandidate] = [{**rec, "rank": best_rank[key]}
+                                    for key, rec in recs.items()]
     taken = [c for c in cands if osm_key(c) in claimed]
     cands = [c for c in cands if osm_key(c) not in claimed]
     if not cands:
@@ -612,7 +661,7 @@ def match_row(row, index: NameIndex, hints: HintResolver, claimed=None):
     return out
 
 
-def report_cands(cell, limit=20):
+def report_cands(cell: str, limit: int = 20) -> str:
     """A `candidates` cell shortened for REPORT.md (the full list is in
     work/matches.csv and the curation view)."""
     parts = [p for p in (cell or "").split(";") if p]
@@ -621,36 +670,36 @@ def report_cands(cell, limit=20):
     return ";".join(parts[:limit]) + f";... (+{len(parts) - limit} more)"
 
 
-def _addnote(row, txt):
+def _addnote(row: Row, txt: str) -> str:
     """Machine remarks go to work/matches.csv and the report, never into
     places.csv (whose `note` column belongs to the owner)."""
     return txt
 
 
-def taken_note(recs, claimed):
+def taken_note(recs: Iterable[Candidate], claimed: Mapping[Ref, int]) -> str:
     """`way/1 is taken by line 7; ...` for the candidates other rows hold."""
     return "; ".join(f"{format_osm([osm_key(c)])} is taken by line "
                      f"{claimed[osm_key(c)]}" for c in recs)
 
 
-def claimed_objects(rows):
+def claimed_objects(rows: Iterable[PlaceRow]) -> dict[Ref, int]:
     """{(type, id): line} of the OSM objects that rows the matcher does not
     own hold (checked or hand-filled).  It never gives them to another row:
     only one name per object can reach the map."""
-    out = {}
+    out: dict[Ref, int] = {}
     for r in rows:
         if owned_by_matcher(r):
             continue
         for key in placelist.claimed_refs(r):
-            out.setdefault(key, r["_line"])
+            out.setdefault(key, r.line)
     return out
 
 
-def find_duplicates(rows):
+def find_duplicates(rows: Iterable[PlaceRow]) -> dict[Ref, list[PlaceRow]]:
     """Two rows pointing at one OSM object -- usually the list has a place
     twice (two spellings, or two rows from different sheet sections).  Only one of the names can end
     up on the map."""
-    by_obj = collections.defaultdict(list)
+    by_obj: collections.defaultdict[Ref, list[PlaceRow]] = collections.defaultdict(list)
     for r in rows:
         for key in placelist.claimed_refs(r):
             by_obj[key].append(r)
@@ -658,21 +707,23 @@ def find_duplicates(rows):
 
 
 # --------------------------------------------------------------- extracts ----
-def read_used_extracts(path):
+def read_used_extracts(path: str) -> list[ExtractStamp] | None:
     """The extracts the last real run matched against, as the candidates
     header lists them; None before the first such run."""
     if not os.path.exists(path):
         return None
     with open(path, encoding="utf-8") as fh:
-        return json.load(fh)["extracts"]
+        extracts: list[ExtractStamp] = json.load(fh)["extracts"]
+    return extracts
 
 
-def record_used_extracts(path, extracts):
+def record_used_extracts(path: str, extracts: Sequence[ExtractStamp]) -> None:
     files.atomic_write(path, json.dumps({"extracts": extracts},
                                             ensure_ascii=False, indent=1) + "\n")
 
 
-def extract_set_warning(previous, current):
+def extract_set_warning(previous: Iterable[ExtractStamp],
+                        current: Iterable[ExtractStamp]) -> str | None:
     """The warning for a changed set of extract files, or None.  Only the
     file names count: a refreshed download of the same extract is expected."""
     before = {e["file"] for e in previous}
@@ -691,7 +742,7 @@ def extract_set_warning(previous, current):
               "unless that is intended.")
 
 
-def check_extracts(candidates_path, state_path):
+def check_extracts(candidates_path: str, state_path: str) -> list[ExtractStamp] | None:
     """Print the extracts behind the candidates, warn about a changed set, and
     return them (None for a file from before the header)."""
     extracts = candidates.read_header(candidates_path)
@@ -712,11 +763,12 @@ def check_extracts(candidates_path, state_path):
 
 
 # ----------------------------------------------------------------- report ----
-def write_report(rows, results, path=REPORT_PATH):
+def write_report(rows: Sequence[PlaceRow], results: Mapping[str, MatchResult],
+                 path: str = REPORT_PATH) -> None:
     """`results` maps a row's id to its match_row() output (only for the rows
     the matcher owns).  The report depends on these alone -- no date, no run
     time -- so a run on unchanged inputs leaves the tracked file as it was."""
-    def state(r):
+    def state(r: Row) -> str:
         if r["kind"] == "not_a_place":
             return "not a place"
         if r["status"] == "skip":
@@ -732,15 +784,16 @@ def write_report(rows, results, path=REPORT_PATH):
 
     states = ["auto", "by hand", "own point", "ambiguous", "not found", "skip",
               "no Frisian name", "not a place"]
-    by_kind = collections.defaultdict(collections.Counter)
-    total = collections.Counter()
+    by_kind: collections.defaultdict[str, collections.Counter[str]] = \
+        collections.defaultdict(collections.Counter)
+    total: collections.Counter[str] = collections.Counter()
     for r in rows:
         st = state(r)
         by_kind[r["kind"]][st] += 1
         total[st] += 1
 
-    def ref(r):
-        return f"{r['id']} | {r['_line']} | {r['kind']} | {any_name(r)} | {primary(r['de']) or primary(r['da'])}"
+    def ref(r: PlaceRow) -> str:
+        return f"{r['id']} | {r.line} | {r['kind']} | {any_name(r)} | {primary(r['de']) or primary(r['da'])}"
 
     L = []
     L.append("# Name matching report\n")
@@ -784,9 +837,9 @@ def write_report(rows, results, path=REPORT_PATH):
              "decide which, and `skip` the other.\n")
     L.append("| OSM object | rows (line) | Frisian names | German |")
     L.append("|---|---|---|---|")
-    for key, g in sorted(dups.items(), key=lambda kv: kv[1][0]["_line"]):
+    for key, g in sorted(dups.items(), key=lambda kv: kv[1][0].line):
         L.append(f"| `{format_osm([key])}` | "
-                 + ", ".join(f"{x['id']} ({x['_line']})" for x in g)
+                 + ", ".join(f"{x['id']} ({x.line})" for x in g)
                  + " | " + ", ".join(any_name(x) for x in g)
                  + f" | {primary(g[0]['de'])} |")
     L.append("")
@@ -808,7 +861,8 @@ def write_report(rows, results, path=REPORT_PATH):
         fh.write("\n".join(L))
 
 
-def write_matches(rows, results, index, path=MATCH_PATH):
+def write_matches(rows: Iterable[PlaceRow], results: Mapping[str, MatchResult],
+                  index: NameIndex, path: str = MATCH_PATH) -> None:
     """work/matches.csv: one line per places.csv row, with the match details
     (and lon/lat also for rows a human filled in, looked up by id)."""
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -817,9 +871,9 @@ def write_matches(rows, results, index, path=MATCH_PATH):
         w.writeheader()
         for r in rows:
             res = results.get(r["id"])
-            refs = parse_osm(r["osm"])
+            refs = osm_refs(r["osm"])
             hit = index.by_key.get(refs[0]) if refs else None
-            rec = {"id": r["id"], "line": r["_line"], "kind": r["kind"],
+            rec = {"id": r["id"], "line": str(r.line), "kind": r["kind"],
                    "name": any_name(r),
                    "de": primary(r["de"]), "osm": r["osm"],
                    "wikidata": r["wikidata"], "status": r["status"]}
@@ -842,7 +896,7 @@ def write_matches(rows, results, index, path=MATCH_PATH):
 
 
 @cli.command
-def main(argv=None):
+def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--names", default=CSV_PATH)
@@ -868,7 +922,7 @@ def main(argv=None):
         return run(args)
 
 
-def run(args):
+def run(args: argparse.Namespace) -> int:
     t0 = time.time()
     rows, fields = placelist.read(args.names)
     print(f"loaded {len(rows)} rows from {args.names}")
@@ -886,10 +940,10 @@ def run(args):
     qids, wd_failed = wikidata_countries([primary(r["de"]) for r in country_rows],
                                          cache_path=args.wikidata_cache,
                                          offline=args.offline)
-    unresolved = []
+    unresolved: list[PlaceRow] = []
 
-    results = {}
-    changed = collections.Counter()
+    results: dict[str, MatchResult] = {}
+    changed: collections.Counter[str] = collections.Counter()
     for r in todo:
         before = (r["osm"], r["wikidata"], r["status"])
         if r["kind"] == "country" and primary(r["de"]) in wd_failed:

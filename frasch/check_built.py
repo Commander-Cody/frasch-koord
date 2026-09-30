@@ -30,6 +30,7 @@ import io
 import json
 import os
 import tempfile
+from collections.abc import Sequence
 
 from frasch import (
     build_dialect_areas,
@@ -48,7 +49,7 @@ DEFAULT_PARTS = paths.DIALECT_AREA_PARTS
 DEFAULT_REGISTRY_JSON = paths.REGISTRY_JSON
 
 
-def regenerated_problems(a, tmp) -> list[str]:
+def regenerated_problems(a: argparse.Namespace, tmp: str) -> list[str]:
     """names.json and dialects.json, rebuilt into `tmp` and compared."""
     problems = []
     index = os.path.join(tmp, "names.json")
@@ -65,7 +66,7 @@ def regenerated_problems(a, tmp) -> list[str]:
     return problems
 
 
-def unlocated_problems(a) -> list[str]:
+def unlocated_problems(a: argparse.Namespace) -> list[str]:
     """Every OSM reference of a row on the map that the objects file lacks --
     the tile build stops on each of them, not only on a row's first one, the
     only one the search index needs."""
@@ -82,7 +83,7 @@ def unlocated_problems(a) -> list[str]:
     return problems
 
 
-def stamp_problems(a) -> list[str]:
+def stamp_problems(a: argparse.Namespace) -> list[str]:
     """The dialect areas, by the inputs their stamp names."""
     current = {"dialect_areas.csv": provenance.blob_hash(a.area_list),
                "dialects.csv": provenance.blob_hash(a.dialects)}
@@ -97,7 +98,7 @@ def stamp_problems(a) -> list[str]:
     return problems
 
 
-def extract_problems(a, tmp) -> list[str]:
+def extract_problems(a: argparse.Namespace, tmp: str) -> list[str]:
     """The objects file and the dialect areas, each rebuilt from the
     extracts its own stamp names (the areas need only Schleswig-Holstein)."""
     objects = os.path.join(tmp, "osm_objects.json")
@@ -121,7 +122,7 @@ def extract_problems(a, tmp) -> list[str]:
             + differs(a.parts, parts, "just areas"))
 
 
-def stamped_extracts(path, a) -> list[str]:
+def stamped_extracts(path: str, a: argparse.Namespace) -> list[str]:
     """The paths among `--extracts` of the extracts `path` was built from,
     in the stamp's order; a LookupError names one that was not given."""
     with open(path, encoding="utf-8") as fh:
@@ -136,14 +137,14 @@ def stamped_extracts(path, a) -> list[str]:
     return [given[n] for n in names]
 
 
-def differs(committed, regenerated, recipe) -> list[str]:
+def differs(committed: str, regenerated: str, recipe: str) -> list[str]:
     if os.path.exists(committed) and filecmp.cmp(committed, regenerated, shallow=False):
         return []
     return [f"{committed} is not what its inputs give -- rebuild it with `{recipe}`"]
 
 
 @cli.command
-def main(argv=None):
+def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--names", default=placelist.DEFAULT_PATH)

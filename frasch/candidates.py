@@ -10,19 +10,44 @@ export read it.
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable, Iterator
+from typing import TypedDict
 
-from frasch.provenance import extract_stamp
+from frasch.paths import StrPath
+from frasch.placelist import OsmRef
+from frasch.provenance import ExtractStamp, extract_stamp
 
 # the `place` / `natural` values of an island
 ISLAND_PLACES = {"island", "islet", "archipelago"}
 
 
-def header(pbfs) -> dict:
+class Candidate(TypedDict):
+    """One candidate record.  `lon`/`lat` are None for an object the scan
+    could not place; `cls` are the classes it was kept for (`place=village`,
+    `wikidata`, ...); `tags` only the ones the pipeline reads."""
+    src: str
+    t: str
+    id: int
+    lon: float | None
+    lat: float | None
+    cls: list[str]
+    tags: dict[str, str]
+
+
+class Header(TypedDict):
+    extracts: list[ExtractStamp]
+
+
+class HeaderLine(TypedDict):
+    header: Header
+
+
+def header(pbfs: Iterable[StrPath]) -> HeaderLine:
     """The first line of candidates.jsonl: the extracts, in the order read."""
     return {"header": {"extracts": [extract_stamp(p) for p in pbfs]}}
 
 
-def read_header(path) -> list[dict] | None:
+def read_header(path: StrPath) -> list[ExtractStamp] | None:
     """The extracts a candidates.jsonl was built from, as `extract_stamp`
     gives them; None for a file written before it had a header."""
     with open(path, encoding="utf-8") as fh:
@@ -30,10 +55,13 @@ def read_header(path) -> list[dict] | None:
     if not first.strip():
         return None
     line = json.loads(first)
-    return line["header"]["extracts"] if "header" in line else None
+    if "header" not in line:
+        return None
+    extracts: list[ExtractStamp] = line["header"]["extracts"]
+    return extracts
 
 
-def read_records(path):
+def read_records(path: StrPath) -> Iterator[Candidate]:
     """The candidate records of a candidates.jsonl, one at a time (the file
     is tens of megabytes), without its header."""
     with open(path, encoding="utf-8") as fh:
@@ -43,13 +71,13 @@ def read_records(path):
                 yield rec
 
 
-def osm_key(rec):
+def osm_key(rec: Candidate) -> OsmRef:
     """A candidate record's (type, id), as `placelist.parse_osm` spells a
     reference: `("w", 28330569)`."""
     return rec["t"], rec["id"]
 
 
-def decisive_tags(rec) -> str:
+def decisive_tags(rec: Candidate) -> str:
     """The tags that say what kind of thing a record is, `place=village;...`
     -- for the matcher's output and the curation view."""
     tags = rec["tags"]

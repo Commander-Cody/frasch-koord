@@ -49,7 +49,7 @@ Once the behaviour is complete, do a refactoring pass with the tests green: clea
 
 Before any review, every check in `.github/workflows/ci.yml` must pass locally. Read that file for the current list; at the time of writing:
 
-- Python (repo root): `uv sync --locked`, `uv run ruff check .`, `uv run pytest`, `uv run python names/check.py`
+- Python (repo root): `uv sync --locked`, `uv run ruff check .`, `uv run mypy`, `uv run pytest`, `uv run python names/check.py`
 - Web (`web/`, after `source ~/.nvm/nvm.sh && nvm use`): `npm ci`, `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`, `npm run check:build`
 
 Fix failures; never skip, delete or weaken a test to get green. A test may only be removed if removing that functionality is part of the task.

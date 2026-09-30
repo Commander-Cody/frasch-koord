@@ -89,6 +89,8 @@ import argparse
 import collections
 import os
 import time
+from collections.abc import Container, Iterable, Mapping, Sequence
+from typing import NotRequired, TypedDict
 
 import osmium
 
@@ -102,7 +104,12 @@ from frasch import (
     placelist,
     registry,
 )
+from frasch.curationlist import LocalPoint, Square, Tuning
 from frasch.errors import PipelineError, ValidationError
+from frasch.geo import LonLat
+from frasch.locate import LocatedObject
+from frasch.placelist import OsmRef, PlaceRow, Ref, Row
+from frasch.registry import Registry
 
 DEFAULT_NAMES = placelist.DEFAULT_PATH
 DEFAULT_DIALECTS = paths.DIALECTS
@@ -117,22 +124,31 @@ LOCAL_KEY = "frasch:local"
 VARIETY_KEY = "frasch:variety"
 REF_KEY = placelist.REF_KEY
 
+# an object of the extract the injector copies
+_OsmObject = osmium.osm.Node | osmium.osm.Way | osmium.osm.Relation
+# (object, column, kept name, its line, dropped name, its line), see `_conflicts`
+Conflict = tuple[Ref, str, str, int, str, int]
+
+
 # ------------------------------------------------------------ name list ----
-def load_names(path, reg):
+def load_names(path: str, reg: Registry) -> tuple[dict[Ref, list[PlaceRow]],
+                                                 dict[str, list[PlaceRow]], int,
+                                                 list[Conflict]]:
     """-> (by_id, by_qid, n_rows_used, conflicts)
 
     by_id maps ('w', 12) -> [row, ...] in file order (a local reference is
     the key ('l', slug)), by_qid 'Q42' -> [row].  The rows are kept whole
     because the tags of an object depend on where it lies (see `name_tags`),
     which is only known while the file streams past."""
-    by_id, by_qid = {}, {}
-    conflicts = []
+    by_id: dict[Ref, list[PlaceRow]] = {}
+    by_qid: dict[str, list[PlaceRow]] = {}
+    conflicts: list[Conflict] = []
     used = 0
     rows, _ = placelist.read(path, reg)
     for row in rows:
         if not placelist.on_map(row, reg):
             continue
-        refs = placelist.parse_osm(row["osm"], f"{path}:{row['_line']}")
+        refs = placelist.parse_osm(row["osm"], f"{path}:{row.line}")
         if refs:
             # a river or dyke is split into many OSM ways and all of them
             # need the label
@@ -153,32 +169,32 @@ def load_names(path, reg):
     return by_id, by_qid, used, conflicts
 
 
-def _conflicts(key, rows, reg):
+def _conflicts(key: Ref, rows: Sequence[PlaceRow], reg: Registry) -> list[Conflict]:
     """Which names a second row for the same object loses.  Reported, not
     fatal: the first row in file order wins, per tag."""
-    out = []
+    out: list[Conflict] = []
     if len(rows) < 2:
         return out
-    for column in reg.columns + [dialects.LOCAL_COLUMN]:
+    for column in reg.columns + [registry.LOCAL_COLUMN]:
         kept, kept_line = "", 0
         for row in rows:
             name = (dialects.dialect_name(row, reg.tag_of_column(column), None, reg)
-                    if column != dialects.LOCAL_COLUMN
+                    if column != registry.LOCAL_COLUMN
                     else placelist.primary(row[column]))
             if not name:
                 continue
             if not kept:
-                kept, kept_line = name, row["_line"]
+                kept, kept_line = name, row.line
             elif name != kept:
-                out.append((key, column, kept, kept_line, name, row["_line"]))
+                out.append((key, column, kept, kept_line, name, row.line))
     return out
 
 
-def name_tags(rows, area_tag, reg):
+def name_tags(rows: Sequence[Row], area_tag: str | None, reg: Registry) -> dict[str, str]:
     """The full tag dict for one object: a `name:<tag>` per dialect that has a
     name for it, plus the frasch:* attributes.  `rows` are the name-list rows
     claiming the object, in file order -- the first non-empty value wins."""
-    tags = {}
+    tags: dict[str, str] = {}
     for d in reg:
         for row in rows:
             name = dialects.dialect_name(row, d["tag"], area_tag, reg)
@@ -205,7 +221,8 @@ def name_tags(rows, area_tag, reg):
     return tags
 
 
-def point_tags(rows, area_tag, reg, curation_tags, where=""):
+def point_tags(rows: Sequence[PlaceRow], area_tag: str | None, reg: Registry,
+               curation_tags: Mapping[str, str], where: str = "") -> dict[str, str]:
     """The tag dict of the node added for a local reference: the `place=` its
     kind defaults to, a `name` (the German one -- the Frisian ones live in
     `name:<tag>` like everywhere else; without it OpenMapTiles would drop the
@@ -220,13 +237,14 @@ def point_tags(rows, area_tag, reg, curation_tags, where=""):
     tags.update(curation_tags)
     if "place" not in tags:
         raise ValidationError(f"{where}: kind {row['kind']!r} (places.csv line "
-                         f"{row['_line']}) has no default place= (POINT_TAGS in "
+                         f"{row.line}) has no default place= (POINT_TAGS in "
                          f"frasch/curationlist.py) -- give the curation row "
                          f"`place=...` in set_tags")
     return tags
 
 
-def check_local(by_id, points, reg):
+def check_local(by_id: Mapping[Ref, Sequence[PlaceRow]],
+                points: Mapping[Ref, LocalPoint], reg: Registry) -> None:
     """Validate every local reference before anything is written: the node
     needs a `place=` (see point_tags), and a square only labels as
     `place=island` -- OpenMapTiles takes hamlets, villages etc. from POINTS
@@ -244,7 +262,7 @@ def check_local(by_id, points, reg):
 
 
 # -------------------------------------------------------------- curation ----
-def load_curation(path, required=False) -> curationlist.Curation:
+def load_curation(path: str, required: bool = False) -> curationlist.Curation:
     """The curation (curationlist.read), or none when the file is absent --
     unless it was named explicitly (`required`)."""
     if not os.path.exists(path):
@@ -255,7 +273,7 @@ def load_curation(path, required=False) -> curationlist.Curation:
     return curationlist.read(path)
 
 
-def square_around(lon, lat, km2):
+def square_around(lon: float, lat: float, km2: float) -> list[LonLat]:
     """Corners of a square of `km2` km² centred on (lon, lat), as (lon, lat).
 
     Its interior point -- where Planetiler puts a polygon label -- is the
@@ -269,7 +287,7 @@ def square_around(lon, lat, km2):
 
 
 # ------------------------------------------------------------- waterways ----
-def scan_waterways(path, by_id):
+def scan_waterways(path: str, by_id: Iterable[Ref]) -> dict[OsmRef, tuple[OsmRef, str]]:
     """Which member ways the matched `type=waterway` relations have, in one
     id-filtered pass over the relations.  The OpenMapTiles waterway layer is
     built from the member WAYS, so the label has to go on them (the main pass
@@ -277,8 +295,10 @@ def scan_waterways(path, by_id):
     like "Alte Eider" keep theirs).
 
     -> {('w', id): (relation key, the relation's OSM name)}"""
-    members = {}
-    for rel_id, rel in osmscan.relations(path, {i for t, i in by_id if t == "r"}).items():
+    members: dict[OsmRef, tuple[OsmRef, str]] = {}
+    rel_ids = {osm[1] for key in by_id
+               if (osm := placelist.as_osm_ref(key)) and osm[0] == "r"}
+    for rel_id, rel in osmscan.relations(path, rel_ids).items():
         tags = rel["tags"]
         if not (tags.get("type") == "waterway" or "waterway" in tags):
             continue
@@ -287,7 +307,7 @@ def scan_waterways(path, by_id):
     return members
 
 
-def unlocated(by_id, objects):
+def unlocated(by_id: Iterable[Ref], objects: Container[OsmRef]) -> list[Ref]:
     """The OSM references of the name list that the objects file does not
     know -- without a position they would get no dialect, and the search
     index, which reads the same file, refuses them too."""
@@ -295,25 +315,47 @@ def unlocated(by_id, objects):
 
 
 # -------------------------------------------------------------- injector ----
+class _PendingSquare(TypedDict):
+    """A synthetic polygon waiting to be written (see `Injector.flush`);
+    `node_ids` once its corner nodes are."""
+    key: Ref
+    label: str
+    km2: float
+    lon: float
+    lat: float
+    tags: dict[str, str]
+    node_ids: NotRequired[list[int]]
+
+
 class Injector:
-    def __init__(self, writer, by_id, by_qid, reg, areas=None, objects=None,
-                 curation=None, dry_run=False, members=None, synthetic=None,
-                 points=None):
+    """`writer` None is a dry run: everything is counted, nothing written."""
+
+    def __init__(self, writer: osmium.SimpleWriter | None,
+                 by_id: Mapping[Ref, Sequence[PlaceRow]],
+                 by_qid: Mapping[str, Sequence[PlaceRow]], reg: Registry,
+                 areas: dialects.AreaIndex | None = None,
+                 objects: Mapping[OsmRef, LocatedObject] | None = None,
+                 curation: Mapping[Ref, Tuning] | None = None,
+                 members: Mapping[OsmRef, tuple[OsmRef, str]] | None = None,
+                 synthetic: Mapping[Ref, Square] | None = None,
+                 points: Mapping[Ref, LocalPoint] | None = None):
         self.members = members or {}
         # local references (places OSM has no object for): a node of their
         # own, or a synthetic polygon, written with the synthetic polygon
         # nodes (see `flush`)
         self.points = points or {}
-        self.added_points = []      # (node id, key, label, lon, lat, tags) for the report
+        # (node id, key, label, lon, lat, tags) for the report
+        self.added_points: list[tuple[int, Ref, str, float, float, dict[str, str]]] = []
         # synthetic polygons: collected while the nodes stream past, written as
         # new nodes before the first way and as new ways before the first
         # relation, so the file stays in node/way/relation order with ascending
         # ids (Planetiler and osmium both expect that)
         self.synthetic = synthetic or {}
-        self.pending = []           # [{'key', 'label', 'lon', 'lat', 'km2', 'tags'}]
+        self.pending: list[_PendingSquare] = []
         self.max_id = {"n": 0, "w": 0, "r": 0}
         self.flushed = {"n": False, "w": False}
-        self.created = []           # (way id, node ids, label, km2) for the report
+        # (way id, node ids, label, km2) for the report
+        self.created: list[tuple[int, list[int], str, float]] = []
         self.member_hits = 0
         self.w = writer
         self.by_id = by_id
@@ -322,30 +364,29 @@ class Injector:
         self.areas = areas
         self.objects = objects or {}
         self.curation = curation or {}
-        self.dry_run = dry_run
-        self.hits = collections.Counter()
-        self.tag_hits = collections.Counter()      # name:<tag> -> objects
-        self.area_hits = collections.Counter()     # frasch:dialect -> objects
+        self.hits: collections.Counter[str] = collections.Counter()
+        self.tag_hits: collections.Counter[str] = collections.Counter()   # name:<tag> -> objects
+        self.area_hits: collections.Counter[str] = collections.Counter()  # frasch:dialect -> objects
         self.local_hits = 0
-        self.seen_keys = set()
-        self.qid_hits = collections.Counter()
-        self.cur_hits = collections.Counter()
-        self.seen_cur = set()
+        self.seen_keys: set[Ref] = set()
+        self.qid_hits: collections.Counter[str] = collections.Counter()
+        self.cur_hits: collections.Counter[str] = collections.Counter()
+        self.seen_cur: set[Ref] = set()
         self.n_objects = 0
 
-    def area_of(self, key, o):
+    def area_of(self, key: OsmRef, o: _OsmObject) -> str | None:
         """The dialect spoken where this object lies, or None: from the
         objects file (names/locate.py), which the search index reads too.
         A node found only through its QID is asked at its own location; a
         way or relation found that way gets none."""
         if key in self.objects:
             return locate.dialect_at(self.objects[key], self.areas)
-        if key[0] == "n" and o.location.valid():
+        if isinstance(o, osmium.osm.Node) and o.location.valid():
             return locate.dialect_at({"lon": o.location.lon, "lat": o.location.lat},
                                      self.areas)
         return None
 
-    def flush(self, t):
+    def flush(self, t: str) -> None:
         """Write the synthetic nodes (t='w': before the first way) or ways
         (t='r': before the first relation)."""
         if t == "w" and not self.flushed["n"]:
@@ -372,44 +413,46 @@ class Injector:
                     continue
                 self.hits["n"] += 1
                 self.max_id["n"] += 1
-                if not self.dry_run:
+                if self.w is not None:
                     self.w.add_node(osmium.osm.mutable.Node(
                         id=self.max_id["n"], version=1, visible=True,
                         location=(lon, lat), tags=tags))
                 self.added_points.append((self.max_id["n"], key, p["label"], lon, lat, tags))
-            for p in self.pending:
-                ids = []
-                for lon, lat in square_around(p["lon"], p["lat"], p["km2"]):
+            for square in self.pending:
+                ids: list[int] = []
+                for lon, lat in square_around(square["lon"], square["lat"], square["km2"]):
                     self.max_id["n"] += 1
                     ids.append(self.max_id["n"])
-                    if not self.dry_run:
+                    if self.w is not None:
                         self.w.add_node(osmium.osm.mutable.Node(
                             id=ids[-1], version=1, visible=True, location=(lon, lat)))
-                p["node_ids"] = ids
+                square["node_ids"] = ids
         elif t == "r" and not self.flushed["w"]:
             self.flush("w")
             self.flushed["w"] = True
-            for p in self.pending:
+            for square in self.pending:
                 self.max_id["w"] += 1
-                if not self.dry_run:
+                if self.w is not None:
                     self.w.add_way(osmium.osm.mutable.Way(
                         id=self.max_id["w"], version=1, visible=True,
-                        nodes=p["node_ids"] + p["node_ids"][:1], tags=p["tags"]))
-                self.created.append((self.max_id["w"], p["node_ids"], p["label"], p["km2"]))
+                        nodes=square["node_ids"] + square["node_ids"][:1],
+                        tags=square["tags"]))
+                self.created.append((self.max_id["w"], square["node_ids"], square["label"],
+                                     square["km2"]))
 
-    def finish(self):
+    def finish(self) -> None:
         """For files that end before any way / relation."""
         self.flush("w")
         self.flush("r")
 
-    def handle(self, o, t):
+    def handle(self, o: _OsmObject, t: str) -> None:
         """`t` is the OSM type letter (n/w/r), not a name-list kind."""
         self.n_objects += 1
         key = (t, o.id)
         self.max_id[t] = max(self.max_id[t], o.id)
         if t != "n":
             self.flush(t)
-        synth = self.synthetic.get(key) if t == "n" else None
+        synth = self._synthetic_at(key, o)
         hit = self.by_id.get(key)            # [row, ...]
         area_key = key
         if hit is not None:
@@ -433,7 +476,7 @@ class Injector:
             self.seen_cur.add(key)
             self.cur_hits[t] += 1
         if hit is None and cur is None and synth is None:
-            if not self.dry_run:
+            if self.w is not None:
                 self.w.add(o)
             return
         tags = dict(o.tags)
@@ -454,20 +497,28 @@ class Injector:
         if synth is not None:
             # the polygon inherits the node's (curated) names and dialect, then
             # the row's tags
+            square, (lon, lat) = synth
             ptags = {k: v for k, v in tags.items()
                      if k == "name" or k.startswith("name:")
                      or k in (DIALECT_KEY, LOCAL_KEY, VARIETY_KEY, REF_KEY)}
-            ptags.update(synth["tags"])
-            self.pending.append({"key": key, "label": synth["label"], "km2": synth["km2"],
-                                 "lon": o.location.lon, "lat": o.location.lat, "tags": ptags})
-        if self.dry_run:
-            return
-        self.w.add(o.replace(tags=tags))
+            ptags.update(square["tags"])
+            self.pending.append({"key": key, "label": square["label"], "km2": square["km2"],
+                                 "lon": lon, "lat": lat, "tags": ptags})
+        if self.w is not None:
+            self.w.add(o.replace(tags=tags))
+
+    def _synthetic_at(self, key: OsmRef, o: _OsmObject) -> tuple[Square, LonLat] | None:
+        """The synthetic square curation puts around this node, and where the
+        node is; None for any other object."""
+        if not isinstance(o, osmium.osm.Node) or (square := self.synthetic.get(key)) is None:
+            return None
+        return square, (o.location.lon, o.location.lat)
 
 
-def run(inp, out, names_csv, dialects_csv, areas_geojson, dry_run=False,
-        curation_csv=None, curation_required=False, areas_required=False,
-        objects_json=DEFAULT_OBJECTS):
+def run(inp: str, out: str, names_csv: str, dialects_csv: str, areas_geojson: str | None,
+        dry_run: bool = False, curation_csv: str | None = None,
+        curation_required: bool = False, areas_required: bool = False,
+        objects_json: str = DEFAULT_OBJECTS) -> int:
     reg = registry.read(dialects_csv)
     by_id, by_qid, used, conflicts = load_names(names_csv, reg)
     local_keys = sorted(k for k in by_id if k[0] == placelist.LOCAL_TYPE)
@@ -482,7 +533,7 @@ def run(inp, out, names_csv, dialects_csv, areas_geojson, dry_run=False,
               f"keeping {kept!r} (line {kept_line}), ignoring {dropped!r} "
               f"(places.csv line {line})")
 
-    areas = None
+    areas: dialects.AreaIndex | None = None
     if areas_geojson and os.path.exists(areas_geojson):
         areas = dialects.AreaIndex.from_geojson(areas_geojson)
         print(f"areas     : {areas_geojson} -> {len(areas)} polygon(s): "
@@ -495,7 +546,7 @@ def run(inp, out, names_csv, dialects_csv, areas_geojson, dry_run=False,
               f"Build it with names/build_dialect_areas.py")
 
     curation, synthetic, points = (load_curation(curation_csv, curation_required)
-                                   if curation_csv else ({}, {}, {}))
+                                   if curation_csv else curationlist.Curation({}, {}, {}))
     if curation:
         print(f"curation  : {curation_csv} -> {len(curation)} OSM ids "
               f"({sum(1 for c in curation.values() if MINZOOM_KEY in c['tags'])} with "
@@ -513,7 +564,7 @@ def run(inp, out, names_csv, dialects_csv, areas_geojson, dry_run=False,
     if unplaced:
         lines = "\n".join(f"  {placelist.format_osm([k])}  "
                           f"{placelist.describe(by_id[k][0], reg)} "
-                          f"(places.csv line {by_id[k][0]['_line']})" for k in unplaced)
+                          f"(places.csv line {by_id[k][0].line})" for k in unplaced)
         raise ValidationError(f"{len(unplaced)} local reference(s) in {names_csv} have no "
                          f"row with lat/lon in {curation_csv or 'the curation file '
                          '(which is switched off)'}:\n{lines}")
@@ -524,7 +575,7 @@ def run(inp, out, names_csv, dialects_csv, areas_geojson, dry_run=False,
               f"positioned in {curation_csv} but no row of {names_csv} uses it "
               f"-- nothing added")
 
-    objects = {}
+    objects: dict[OsmRef, LocatedObject] = {}
     if areas:
         objects = locate.read_objects(objects_json).by_ref
         missing = unlocated(by_id, objects)
@@ -539,17 +590,18 @@ def run(inp, out, names_csv, dialects_csv, areas_geojson, dry_run=False,
     if members:
         print(f"waterways : {len(members)} member ways of matched waterway relations")
 
-    writer = None
+    writer: osmium.SimpleWriter | None = None
     if not dry_run:
         # copy the input header so the extract bounds survive (Planetiler uses
         # them; without bounds it renders low-zoom tiles for the whole world)
         writer = osmium.SimpleWriter(out, overwrite=True, header=osmium.io.Reader(inp).header())
-    inj = Injector(writer, by_id, by_qid, reg, areas, objects, curation, dry_run,
+    inj = Injector(writer, by_id, by_qid, reg, areas, objects, curation,
                    members, synthetic, points)
 
     t0 = time.time()
     for o in osmium.FileProcessor(inp):
-        inj.handle(o, o.type_str())
+        if isinstance(o, (osmium.osm.Node, osmium.osm.Way, osmium.osm.Relation)):
+            inj.handle(o, o.type_str())
     inj.finish()
     if writer is not None:
         writer.close()
@@ -625,7 +677,7 @@ def run(inp, out, names_csv, dialects_csv, areas_geojson, dry_run=False,
 
 
 @cli.command
-def main(argv=None):
+def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("infile")

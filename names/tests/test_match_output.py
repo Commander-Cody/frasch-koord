@@ -6,6 +6,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import re
+from pathlib import Path
 
 from frasch import match
 from conftest import cand, places_text, write_candidates
@@ -19,12 +20,12 @@ ROWS = [
 ]
 
 
-def write_inputs(world):
+def write_inputs(world: Path) -> None:
     (world / "places.csv").write_text(places_text(ROWS), encoding="utf-8")
     write_candidates(world / "work" / "candidates.jsonl", TOFTUM, *UPHUSUM)
 
 
-def match_main(world, *extra):
+def match_main(world: Path, *extra: str) -> None:
     code = match.main(["--names", str(world / "places.csv"),
                        "--candidates", str(world / "work" / "candidates.jsonl"),
                        "--matches", str(world / "work" / "matches.csv"),
@@ -33,31 +34,31 @@ def match_main(world, *extra):
     assert code == 0
 
 
-def run_match(world):
+def run_match(world: Path) -> None:
     write_inputs(world)
     match_main(world)
 
 
-def test_matches_csv_keys_each_row_by_its_id(world):
+def test_matches_csv_keys_each_row_by_its_id(world: Path) -> None:
     run_match(world)
     with open(world / "work" / "matches.csv", encoding="utf-8", newline="") as fh:
         got = [(m["id"], m["line"], m["result"]) for m in csv.DictReader(fh)]
     assert got == [("toftem", "2", "matched"), ("aphusem-2", "3", "ambiguous")]
 
 
-def test_the_report_names_a_row_by_id_and_line(world):
+def test_the_report_names_a_row_by_id_and_line(world: Path) -> None:
     run_match(world)
     report = (world / "REPORT.md").read_text(encoding="utf-8")
     assert "| aphusem-2 | 3 | settlement | Aphüsem | Uphusum |" in report
 
 
-def tracked_hashes(world):
+def tracked_hashes(world: Path) -> dict[str, str]:
     """sha256 of every file of the world outside the git-ignored work/."""
     return {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
             for p in world.iterdir() if p.is_file()}
 
 
-def test_a_dry_run_changes_no_tracked_file(world):
+def test_a_dry_run_changes_no_tracked_file(world: Path) -> None:
     write_inputs(world)
     (world / "REPORT.md").write_text("# an older report\n", encoding="utf-8")
     before = tracked_hashes(world)
@@ -66,7 +67,7 @@ def test_a_dry_run_changes_no_tracked_file(world):
     assert sorted(before) == ["REPORT.md", "curation.csv", "places.csv"]
 
 
-def test_the_report_carries_no_date_or_run_time(world):
+def test_the_report_carries_no_date_or_run_time(world: Path) -> None:
     # a real run on unchanged inputs must leave the tracked REPORT.md as it was
     run_match(world)
     report = (world / "REPORT.md").read_text(encoding="utf-8")

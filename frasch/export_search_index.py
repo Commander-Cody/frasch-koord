@@ -11,12 +11,13 @@ Usage: names/export_search_index.py [--names names/places.csv]
 """
 import argparse
 import os
+from collections.abc import Sequence
 
 from frasch import cli, paths, searchindex
 
 
 @cli.command
-def main(argv=None):
+def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--names", default=paths.PLACES)

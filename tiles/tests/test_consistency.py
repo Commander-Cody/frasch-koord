@@ -15,6 +15,7 @@ outline hits it (Oland), and a row with two objects in two areas
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import osmium
 import pytest
@@ -23,8 +24,14 @@ from frasch import check_tiles, paths
 from frasch import export_search_index
 from frasch import inject_names
 from frasch import locate
+from frasch.check_tiles import Label
+from frasch.geo import LonLat
+from frasch.searchindex import SearchEntry
 from conftest import places_text
 from osm_fixture import ring, write_extract
+
+# the search entries by id, and the injected extract's labelled features
+Built = tuple[dict[str, SearchEntry], list[Label]]
 
 # U-shaped Sylt: the mean of its corners lies in the bay, outside its area
 SYLT = [(8.0, 54.0), (9.0, 54.0), (9.0, 55.0), (8.8, 55.0), (8.8, 54.2), (8.2, 54.2),
@@ -61,7 +68,7 @@ ROWS = [
 ]
 
 
-def box(west, south, east, north):
+def box(west: float, south: float, east: float, north: float) -> list[LonLat]:
     return [(west, south), (east, south), (east, north), (west, north)]
 
 
@@ -75,22 +82,22 @@ AREAS = {"type": "FeatureCollection", "features": [
                          ("frr-x-hallig", box(9.45, 54.59, 9.55, 54.63))]]}
 
 
-def injected_features(pbf):
+def injected_features(pbf: Path) -> list[Label]:
     """The injected extract's labelled objects, as check_tiles reads tiles."""
-    out = []
+    out: list[Label] = []
     for o in osmium.FileProcessor(str(pbf)):
         if "frasch:ref" not in o.tags:
             continue
-        feature = {"osm": f"{ {'n': 'node', 'w': 'way', 'r': 'relation'}[o.type_str()]}/{o.id}",
-                   "props": dict(o.tags)}
-        if o.type_str() == "n":
+        feature: Label = {"osm": f"{ {'n': 'node', 'w': 'way', 'r': 'relation'}[o.type_str()]}/{o.id}",
+                            "props": dict(o.tags)}
+        if isinstance(o, osmium.osm.Node):
             feature |= {"lon": o.location.lon, "lat": o.location.lat}
         out.append(feature)
     return out
 
 
 @pytest.fixture(scope="module")
-def built(tmp_path_factory):
+def built(tmp_path_factory: pytest.TempPathFactory) -> Built:
     d = tmp_path_factory.mktemp("consistency")
     (d / "places.csv").write_text(places_text(ROWS), encoding="utf-8")
     (d / "curation.csv").write_text("osm,name,lat,lon,set_tags,minzoom,maxzoom,"
@@ -112,12 +119,12 @@ def built(tmp_path_factory):
     return {e["id"]: e for e in names["places"]}, injected_features(d / "out.osm.pbf")
 
 
-def test_tiles_and_search_index_agree_on_every_ref(built):
+def test_tiles_and_search_index_agree_on_every_ref(built: Built) -> None:
     entries, features = built
     assert check_tiles.compare(entries, features) == []
 
 
-def test_every_row_on_the_map_is_checked(built):
+def test_every_row_on_the_map_is_checked(built: Built) -> None:
     entries, features = built
     assert {f["props"]["frasch:ref"] for f in features} == {
         "sol", "stiardebel", "kris", "olun", "nordwarw", "hulm"}
@@ -132,6 +139,6 @@ def test_every_row_on_the_map_is_checked(built):
     ("olun", "frr-x-hallig", "Ualöönj"),
     ("nordwarw", "frr-x-nordgoes", "Noordweerw"),
 ])
-def test_the_search_entry_has_the_dialect_of_where_the_place_is(built, ref, dialect, local):
+def test_the_search_entry_has_the_dialect_of_where_the_place_is(built: Built, ref: str, dialect: str | None, local: str | None) -> None:
     entries, _ = built
     assert (entries[ref].get("dialect"), entries[ref].get("local")) == (dialect, local)

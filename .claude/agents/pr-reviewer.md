@@ -27,7 +27,7 @@ In this order: the issue(s) the caller named; `closingIssuesReferences` and `#N`
 
 `.github/workflows/ci.yml` is the source of truth for which checks exist; read it and run every lint, type-check and test step it lists, locally, in the reviewed checkout. At the time of writing that is:
 
-- Python (repo root): `uv sync --locked`, `uv run ruff check .`, `uv run pytest`, `uv run python names/check.py`
+- Python (repo root): `uv sync --locked`, `uv run ruff check .`, `uv run mypy`, `uv run pytest`, `uv run python names/check.py`
 - Web (`web/`): `source ~/.nvm/nvm.sh && nvm use`, `npm ci`, `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`, `npm run check:build`
 
 Also look at `gh pr checks <N>`. Any failing check, local or in CI, blocks approval. If a check cannot run for an environmental reason (not because of the PR), say which one and why, and fall back to the CI result for it. Do not run `npm run smoke`; it needs system libraries this machine lacks.

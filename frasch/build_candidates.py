@@ -41,10 +41,13 @@ import json
 import os
 import sys
 import time
+from collections.abc import Mapping, Sequence
+from typing import IO
 
 import osmium
 
 from frasch import candidates, cli, files, geo, paths
+from frasch.geo import LonLat
 
 DEFAULT_OUT = paths.CANDIDATES
 
@@ -66,7 +69,7 @@ CLASS_KEYS = ("place", "natural", "water", "waterway", "landuse", "boundary",
 EXTRA_KEYS = ("wikidata", "wikipedia", "population", "ref")
 
 
-def name_tags(tags: dict) -> dict:
+def name_tags(tags: Mapping[str, str]) -> dict[str, str]:
     out = {}
     for k, v in tags.items():
         if k == "name" or k.startswith("name:") or k in NAME_KEYS_EXTRA:
@@ -74,7 +77,7 @@ def name_tags(tags: dict) -> dict:
     return out
 
 
-def classify(tags: dict):
+def classify(tags: Mapping[str, str]) -> list[str] | None:
     """Return a sorted list of tag classes the object belongs to, or None."""
     cls = []
     if "place" in tags:
@@ -113,12 +116,12 @@ class WayCentroids:
     (Geofabrik's are).  Out-of-order input raises: the lookup would silently
     miss, and every relation would lose its position."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.ids = array.array("q")
         self.lon = array.array("f")
         self.lat = array.array("f")
 
-    def add(self, wid, lon, lat):
+    def add(self, wid: int, lon: float, lat: float) -> None:
         if self.ids and wid < self.ids[-1]:
             raise ValueError(f"way {wid} comes after way {self.ids[-1]}: the "
                              f"extract is not sorted by id -- sort it first "
@@ -127,14 +130,14 @@ class WayCentroids:
         self.lon.append(lon)
         self.lat.append(lat)
 
-    def get(self, wid):
+    def get(self, wid: int) -> LonLat | None:
         i = bisect.bisect_left(self.ids, wid)
         if i < len(self.ids) and self.ids[i] == wid:
             return self.lon[i], self.lat[i]
         return None
 
 
-def first_location(w):
+def first_location(w: osmium.osm.Way) -> LonLat | None:
     """Cheapest usable position of a way: its first resolvable node."""
     nodes = w.nodes
     for i in (0, len(nodes) // 2, -1):
@@ -147,7 +150,7 @@ def first_location(w):
     return None
 
 
-def way_centroid(w, sample=12):
+def way_centroid(w: osmium.osm.Way, sample: int = 12) -> LonLat | None:
     """Average of up to `sample` evenly spaced node locations (approximate)."""
     nodes = w.nodes
     ln = len(nodes)
@@ -171,18 +174,19 @@ def way_centroid(w, sample=12):
     return sx / n, sy / n
 
 
-def has_name(tags) -> bool:
+def has_name(tags: osmium.osm.TagList) -> bool:
     """Cheap-first test for any name-ish tag (works on the C++ TagList)."""
     for k in ("name", "alt_name", "old_name", "official_name"):
         if k in tags:
             return True
-    for k in tags:
-        if k.k.startswith("name:"):
+    for tag in tags:
+        if tag.k.startswith("name:"):
             return True
     return False
 
 
-def process(pbf: str, src: str, out, counts, idx="flex_mem"):
+def process(pbf: str, src: str, out: IO[str], counts: collections.Counter[str],
+            idx: str = "flex_mem") -> None:
     ways = WayCentroids()
     t0 = time.time()
     n_seen = 0
@@ -191,8 +195,10 @@ def process(pbf: str, src: str, out, counts, idx="flex_mem"):
         n_seen += 1
         typ = o.type_str()          # 'n' | 'w' | 'r'
         otags = o.tags
+        lon: float | None
+        lat: float | None
 
-        if typ == "w":
+        if isinstance(o, osmium.osm.Way):
             # every way gets a cheap position so that relation centroids can be
             # averaged from their member ways further down the file
             c = first_location(o)
@@ -201,12 +207,12 @@ def process(pbf: str, src: str, out, counts, idx="flex_mem"):
             if not otags or not has_name(otags):
                 continue
             lon, lat = (way_centroid(o) or c or (None, None))
-        elif typ == "n":
+        elif isinstance(o, osmium.osm.Node):
             if not otags or not has_name(otags):
                 continue
             loc = o.location
             lon, lat = (loc.lon, loc.lat) if loc.valid() else (None, None)
-        else:                        # relation
+        elif isinstance(o, osmium.osm.Relation):
             if not otags or not has_name(otags):
                 continue
             lon = lat = None
@@ -221,6 +227,8 @@ def process(pbf: str, src: str, out, counts, idx="flex_mem"):
                         n += 1
             if n:
                 lon, lat = sx / n, sy / n
+        else:                        # an area or a changeset: never a candidate
+            continue
 
         tags = dict(otags)
         cls = classify(tags) or []
@@ -235,10 +243,11 @@ def process(pbf: str, src: str, out, counts, idx="flex_mem"):
             continue
         keep = {k: tags[k] for k in CLASS_KEYS + EXTRA_KEYS if k in tags}
         keep.update(names)
-        rec = {"src": src, "t": typ, "id": o.id,
-               "lon": round(lon, 6) if lon is not None else None,
-               "lat": round(lat, 6) if lat is not None else None,
-               "cls": cls, "tags": keep}
+        rec: candidates.Candidate = {
+            "src": src, "t": typ, "id": o.id,
+            "lon": round(lon, 6) if lon is not None else None,
+            "lat": round(lat, 6) if lat is not None else None,
+            "cls": cls, "tags": keep}
         out.write(json.dumps(rec, ensure_ascii=False) + "\n")
         for cl in cls:
             counts[cl.split("=")[0]] += 1
@@ -250,7 +259,7 @@ def process(pbf: str, src: str, out, counts, idx="flex_mem"):
 
 
 @cli.command
-def main(argv=None):
+def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("pbf", nargs="+", help="OSM extracts to scan")
@@ -260,7 +269,7 @@ def main(argv=None):
     args = ap.parse_args(argv)
 
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
-    counts = collections.Counter()
+    counts: collections.Counter[str] = collections.Counter()
     t0 = time.time()
     with files.replacing(args.out, text=True) as fh:
         fh.write(json.dumps(candidates.header(args.pbf), ensure_ascii=False) + "\n")

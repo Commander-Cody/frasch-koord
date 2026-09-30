@@ -71,8 +71,11 @@ import json
 import math
 import os
 import time
+from collections.abc import Container, Mapping, Sequence
+from typing import NotRequired, TypedDict
 
 import osmium
+from shapely.geometry.base import BaseGeometry
 
 from frasch import (
     cli,
@@ -85,7 +88,12 @@ from frasch import (
     provenance,
     registry,
 )
+from frasch.dialects import AreaRow
 from frasch.errors import PipelineError, ValidationError
+from frasch.osmscan import Rings
+from frasch.placelist import OsmRef
+from frasch.provenance import BuiltFrom
+from frasch.registry import Registry
 
 DEFAULT_AREAS = dialects.AREA_LIST_PATH
 DEFAULT_OUT = dialects.DEFAULT_AREAS
@@ -109,7 +117,50 @@ AGS_KEYS = ("de:regionalschluessel", "de:amtlicher_gemeindeschluessel")
 DEFAULT_UNASSIGNED_AGS = "01054"
 
 
-def read_areas(path, reg):
+class DialectProperties(TypedDict):
+    """A feature of --out: one dialect."""
+    dialect: str
+    label: str
+
+
+class PartProperties(TypedDict):
+    """A feature of --parts-out: one municipality; one that no row assigns
+    (`assigned` false) has no dialect and no row."""
+    fid: int
+    assigned: bool
+    name: str
+    osm: str
+    km2: float
+    dialect: NotRequired[str]
+    label: NotRequired[str]
+    note: NotRequired[str]
+    line: NotRequired[int]
+
+
+class Feature[P](TypedDict):
+    """A GeoJSON Feature as written here, `properties` of the file's kind."""
+    type: str
+    properties: P
+    geometry: object
+
+
+class CollectionProperties(TypedDict):
+    """The file's own properties: what it was built from, and how."""
+    source: str
+    simplify_deg: float
+    built_from: BuiltFrom
+    unit: NotRequired[str]
+    unassigned_ags: NotRequired[str]
+
+
+class FeatureCollection[P](TypedDict):
+    type: str
+    properties: CollectionProperties
+    features: list[Feature[P]]
+
+
+def read_areas(path: str, reg: Registry) -> tuple[dict[OsmRef, str], dict[OsmRef, str],
+                                                  list[AreaRow]]:
     """-> ({(type, id): dialect_tag}, {(type, id): label}, [row]) in file order.
 
     The rows are those of `dialects.area_rows` -- {"line", "dialect", "name",
@@ -134,7 +185,8 @@ def read_areas(path, reg):
     return by_ref, labels, rows
 
 
-def read_admin_relations(path, ags_prefix, skip):
+def read_admin_relations(path: str, ags_prefix: str,
+                         skip: Container[int]) -> tuple[dict[int, Rings], dict[int, str]]:
     """Municipality relations of one district that no dialect claims.
 
     -> ({rel_id: {'outer': [...], 'inner': [...]}}, {rel_id: name})
@@ -146,9 +198,12 @@ def read_admin_relations(path, ags_prefix, skip):
     at all and would read as gaps in it.  `skip` holds the relation ids the
     CSV already assigns.
     """
-    rings, names = {}, {}
+    rings: dict[int, Rings] = {}
+    names: dict[int, str] = {}
     fp = osmium.FileProcessor(path, osmium.osm.RELATION)
     for r in fp:
+        if not isinstance(r, osmium.osm.Relation):
+            continue
         tags = r.tags
         if tags.get("boundary") != "administrative":
             continue
@@ -164,14 +219,14 @@ def read_admin_relations(path, ags_prefix, skip):
     return rings, names
 
 
-def km2(geom):
+def km2(geom: BaseGeometry) -> float:
     """Rough area in km² (equirectangular around the geometry's centre) --
     for the report only."""
     lat = geom.centroid.y
     return geom.area * (111.32 ** 2) * math.cos(math.radians(lat))
 
 
-def round_geojson(obj, nd=ROUND):
+def round_geojson(obj: object, nd: int = ROUND) -> object:
     if isinstance(obj, (list, tuple)):
         return [round_geojson(o, nd) for o in obj]
     if isinstance(obj, float):
@@ -180,7 +235,7 @@ def round_geojson(obj, nd=ROUND):
 
 
 @cli.command
-def main(argv=None):
+def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("pbf", nargs="+", help="OSM extract(s) holding the areas")
@@ -218,10 +273,10 @@ def main(argv=None):
     print(f"area list : {a.areas} -> {len(by_ref)} OSM objects, "
           f"{len(set(by_ref.values()))} dialects")
 
-    geoms = {}          # ref -> [shapely geometry]  (assigned by the CSV)
-    free = {}           # ref -> [shapely geometry]  (municipality, no dialect)
-    free_names = {}     # ref -> municipality name
-    problems = []
+    geoms: dict[OsmRef, list[BaseGeometry]] = {}   # assigned by the CSV
+    free: dict[OsmRef, list[BaseGeometry]] = {}    # municipality, no dialect
+    free_names: dict[OsmRef, str] = {}             # ref -> municipality name
+    problems: list[str] = []
     for path in a.pbf:
         t0 = time.time()
         want = {ref for ref in by_ref if ref not in geoms}
@@ -231,7 +286,8 @@ def main(argv=None):
         # The unclaimed municipalities ride along in the same way/node passes:
         # their member ways are mostly the *same* ways, since neighbours share
         # a boundary.
-        loose, loose_names = ({}, {})
+        loose: dict[int, Rings] = {}
+        loose_names: dict[int, str] = {}
         if want_unassigned:
             claimed = {i for t, i in by_ref if t == "r"}
             loose, loose_names = read_admin_relations(path, a.unassigned_ags,
@@ -261,7 +317,8 @@ def main(argv=None):
                 free_names[ref] = loose_names.get(rel_id, "")
 
     missing = [ref for ref in by_ref if ref not in geoms]
-    features, total = [], 0
+    features: list[Feature[DialectProperties]] = []
+    total = 0
     for d in reg:
         refs = [r for r in by_ref if by_ref[r] == d["tag"] and r in geoms]
         if not refs:
@@ -305,10 +362,11 @@ def main(argv=None):
 
     # Both files are computed in full before either is written, so a problem
     # building --parts-out cannot leave --out written on its own.
-    parts = None
+    parts: tuple[FeatureCollection[PartProperties], int] | None = None
     if a.parts_out:
         parts = build_parts_fc(a, reg, rows, geoms, free, free_names, built_from)
 
+    fc: FeatureCollection[DialectProperties]
     fc = {"type": "FeatureCollection",
           "properties": {"source": os.path.basename(a.areas),
                          "simplify_deg": a.simplify,
@@ -325,7 +383,7 @@ def main(argv=None):
     return 0
 
 
-def write_geojson(path, fc):
+def write_geojson(path: str, fc: Mapping[str, object]) -> None:
     """Write one GeoJSON FeatureCollection atomically (files.atomic_write):
     a crash or Ctrl-C half-way must leave either the old file or the new one,
     never a truncated one."""
@@ -334,7 +392,7 @@ def write_geojson(path, fc):
     files.atomic_write(path, data)
 
 
-def simplified(geom, tol):
+def simplified(geom: BaseGeometry, tol: float) -> BaseGeometry:
     """`geom` simplified to `tol`, kept valid."""
     if tol:
         geom = geom.simplify(tol, preserve_topology=True)
@@ -343,7 +401,11 @@ def simplified(geom, tol):
     return geom
 
 
-def build_parts_fc(a, reg, rows, geoms, free, free_names, built_from):
+def build_parts_fc(a: argparse.Namespace, reg: Registry, rows: Sequence[AreaRow],
+                   geoms: Mapping[OsmRef, Sequence[BaseGeometry]],
+                   free: Mapping[OsmRef, Sequence[BaseGeometry]],
+                   free_names: Mapping[OsmRef, str],
+                   built_from: BuiltFrom) -> tuple[FeatureCollection[PartProperties], int]:
     """-> (fc, skipped): the --parts-out FeatureCollection -- one Feature per
     municipality, see the module docstring for why this is a separate file
     from --out -- and the count of rows with no geometry (already in the
@@ -353,7 +415,8 @@ def build_parts_fc(a, reg, rows, geoms, free, free_names, built_from):
     from shapely.ops import unary_union
 
     labels_by_tag = {d["tag"]: d["label"] for d in reg}
-    features, skipped, fid = [], 0, 0
+    features: list[Feature[PartProperties]] = []
+    skipped, fid = 0, 0
 
     for row in rows:
         polys = [p for ref in row["refs"] for p in geoms.get(ref, [])]
@@ -395,6 +458,7 @@ def build_parts_fc(a, reg, rows, geoms, free, free_names, built_from):
             "geometry": round_geojson(mapping(geom)),
         })
 
+    fc: FeatureCollection[PartProperties]
     fc = {"type": "FeatureCollection",
           "properties": {"source": os.path.basename(a.areas),
                          "simplify_deg": a.parts_simplify,
@@ -405,7 +469,8 @@ def build_parts_fc(a, reg, rows, geoms, free, free_names, built_from):
     return fc, skipped
 
 
-def write_parts(a, parts_fc, skipped, free):
+def write_parts(a: argparse.Namespace, parts_fc: FeatureCollection[PartProperties],
+                skipped: int, free: Mapping[OsmRef, object]) -> None:
     """Write the --parts-out FeatureCollection `build_parts_fc` built, and
     report on it."""
     write_geojson(a.parts_out, parts_fc)

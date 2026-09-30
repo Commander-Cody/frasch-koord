@@ -1,10 +1,25 @@
 """A tiny OSM extract written with pyosmium, for the tests that read one."""
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
+from pathlib import Path
+
 import osmium
 
+from frasch.geo import LonLat
 
-def write_extract(path, nodes=None, ways=None, relations=None, timestamp=None):
+Tags = Mapping[str, str]
+Nodes = Mapping[int, tuple[LonLat, Tags]]
+Ways = Mapping[int, tuple[Sequence[int], Tags]]
+# a member is (type letter, ref, role)
+Relations = Mapping[int, tuple[Sequence[tuple[str, int, str]], Tags]]
+# `ring`'s nodes, a dict so tests can add to them
+RingNodes = dict[int, tuple[LonLat, dict[str, str]]]
+
+
+def write_extract(path: Path, nodes: Nodes | None = None, ways: Ways | None = None,
+                  relations: Relations | None = None,
+                  timestamp: str | None = None) -> Path:
     """Write an extract to `path` in node/way/relation order, ids ascending.
 
     nodes      {id: ((lon, lat), {tags})}
@@ -31,9 +46,9 @@ def write_extract(path, nodes=None, ways=None, relations=None, timestamp=None):
     return path
 
 
-def ring(first_id, *corners):
+def ring(first_id: int, *corners: LonLat) -> tuple[RingNodes, list[int]]:
     """Nodes {id: ((lon, lat), {})} and the closed way's node list for a ring
     through `corners`, ids counting up from `first_id`."""
-    nodes = {first_id + n: (c, {}) for n, c in enumerate(corners)}
+    nodes: RingNodes = {first_id + n: (c, {}) for n, c in enumerate(corners)}
     ids = list(nodes)
     return nodes, ids + ids[:1]

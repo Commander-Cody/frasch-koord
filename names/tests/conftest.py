@@ -6,12 +6,16 @@ from __future__ import annotations
 import csv
 import io
 import json
+from collections.abc import Iterable, Mapping
+from pathlib import Path
+
 import pytest
 
 from frasch import placelist
+from frasch.candidates import Candidate, HeaderLine
 
 
-def places_text(rows) -> str:
+def places_text(rows: Iterable[Mapping[str, str]]) -> str:
     """A places.csv with the real header; `rows` are dicts of the cells that
     are not empty.  A row without an `id` key gets `row-<n>` (n counting from
     1); pass `id` explicitly -- even empty -- to control it."""
@@ -29,7 +33,8 @@ TOFTUM = {"kind": "settlement", "mooring": "Toftem", "de": "Toftum",
           "osm": "node/240044107", "status": "ok"}
 
 
-def cand(t, id, lon, lat, src="schleswig-holstein", **tags):
+def cand(t: str, id: int, lon: float | None, lat: float | None,
+         src: str = "schleswig-holstein", **tags: str) -> Candidate:
     """One candidates.jsonl record (build_candidates.py's format).  Tag keys
     with a colon are passed with a double underscore (`name__de`)."""
     tags = {k.replace("__", ":"): v for k, v in tags.items()}
@@ -41,7 +46,7 @@ def cand(t, id, lon, lat, src="schleswig-holstein", **tags):
             "cls": cls, "tags": tags}
 
 
-def write_candidates(path, *recs):
+def write_candidates(path: Path, *recs: Candidate | HeaderLine) -> Path:
     """Write `recs` as a candidates.jsonl to `path` and return it."""
     path.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in recs),
                     encoding="utf-8")
@@ -51,7 +56,7 @@ def write_candidates(path, *recs):
 CURATION_HEADER = "osm,name,lat,lon,set_tags,minzoom,maxzoom,polygon_km2,note\n"
 
 
-def curation_file(directory, *rows):
+def curation_file(directory: Path, *rows: Mapping[str, str]) -> str:
     """Write a curation.csv of `rows` (dicts of the cells that are not empty)
     into `directory` and return its path."""
     columns = CURATION_HEADER.strip().split(",")
@@ -66,7 +71,7 @@ def curation_file(directory, *rows):
 
 
 @pytest.fixture
-def world(tmp_path):
+def world(tmp_path: Path) -> Path:
     """`tmp_path` laid out like names/: places.csv, curation.csv, work/."""
     (tmp_path / "work").mkdir()
     (tmp_path / "curation.csv").write_text(CURATION_HEADER, encoding="utf-8")

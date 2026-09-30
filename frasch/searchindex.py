@@ -32,8 +32,12 @@ it belongs to (web/src/names.ts).  Its `osm` is the row's `osm` cell, for the
 card's link to OpenStreetMap and for the share links and tiles from before the
 row ids, which name a place by its first OSM reference (or its QID).
 """
+from __future__ import annotations
+
 import json
 import os
+from collections.abc import Mapping
+from typing import NotRequired, TypedDict
 
 from frasch import (
     curationlist,
@@ -45,9 +49,36 @@ from frasch import (
     registry,
 )
 from frasch.errors import PipelineError, ValidationError
+from frasch.geo import LonLat
+from frasch.placelist import Row
+from frasch.registry import Registry
 
 
-def entry_object(row, objects, local_points, where):
+class SearchEntry(TypedDict):
+    """One place of the index (web/src/names.ts reads it); the optional
+    fields are left out when empty."""
+    id: str
+    names: dict[str, str]           # dialect tag -> name
+    name_de: str
+    lon: float
+    lat: float
+    kind: str
+    local: NotRequired[str]
+    dialect: NotRequired[str]
+    variety: NotRequired[str]
+    name_nds: NotRequired[str]
+    name_da: NotRequired[str]
+    osm: NotRequired[str]
+    wikidata: NotRequired[str]
+
+
+class SearchIndex(TypedDict):
+    built_from: provenance.BuiltFrom
+    places: list[SearchEntry]
+
+
+def entry_object(row: Row, objects: locate.Objects, local_points: Mapping[str, LonLat],
+                 where: str) -> locate.LocatedObject | None:
     """Where a row's entry lies: the object of the first reference in its
     `osm` cell, or the curation position of its local reference.  None for
     a row keyed by its QID alone; a KeyError for a reference nobody located."""
@@ -58,21 +89,22 @@ def entry_object(row, objects, local_points, where):
                              f"in the curation file")
         lon, lat = local_points[slug]
         return {"lon": lon, "lat": lat}
-    refs = placelist.parse_osm(row["osm"], where)
+    refs = placelist.osm_refs(row["osm"], where)
     if not refs:
         return None
     return objects.by_ref[refs[0]]
 
 
-def entry(row, obj, areas, reg) -> dict:
+def entry(row: Row, obj: locate.LocatedObject, areas: dialects.AreaIndex,
+          reg: Registry) -> SearchEntry:
     """The search-index entry of one row whose object is `obj`."""
     area_tag = locate.dialect_at(obj, areas)
-    names = {}
+    names: dict[str, str] = {}
     for d in reg:
         name = dialects.dialect_name(row, d["tag"], area_tag, reg)
         if name:
             names[d["tag"]] = name
-    out = {
+    out: SearchEntry = {
         "id": row["id"],
         "names": names,
         "name_de": placelist.primary(row["de"]),
@@ -80,19 +112,25 @@ def entry(row, obj, areas, reg) -> dict:
         "lat": round(float(obj["lat"]), 5),
         "kind": row["kind"],
     }
-    optional = {
-        "local": dialects.local_name(row, area_tag, reg),
-        "dialect": area_tag,
-        "variety": dialects.variety(row),
-        "name_nds": obj.get("name_nds"),
-        "name_da": placelist.primary(row["da"]),
-        "osm": row["osm"],
-        "wikidata": row["wikidata"],
-    }
-    return out | {k: v for k, v in optional.items() if v}
+    if local := dialects.local_name(row, area_tag, reg):
+        out["local"] = local
+    if area_tag:
+        out["dialect"] = area_tag
+    if variety := dialects.variety(row):
+        out["variety"] = variety
+    if name_nds := obj.get("name_nds"):
+        out["name_nds"] = name_nds
+    if name_da := placelist.primary(row["da"]):
+        out["name_da"] = name_da
+    if row["osm"]:
+        out["osm"] = row["osm"]
+    if row["wikidata"]:
+        out["wikidata"] = row["wikidata"]
+    return out
 
 
-def build(names, dialects_csv, curation, areas_path, objects_path) -> dict:
+def build(names: str, dialects_csv: str, curation: str, areas_path: str,
+          objects_path: str) -> SearchIndex:
     """The search index, `{"built_from", "places"}`, from its input files."""
     reg = registry.read(dialects_csv)
     if not os.path.exists(areas_path):
@@ -102,14 +140,15 @@ def build(names, dialects_csv, curation, areas_path, objects_path) -> dict:
     local_points = curationlist.local_points(curation)
     rows, _ = placelist.read(names, reg)
 
-    places, unlocated = [], []
+    places: list[SearchEntry] = []
+    unlocated: list[str] = []
     for r in rows:
         if not placelist.on_map(r, reg):
             continue
         try:
-            obj = entry_object(r, objects, local_points, f"{names}:{r['_line']}")
+            obj = entry_object(r, objects, local_points, f"{names}:{r.line}")
         except KeyError as missing:
-            unlocated.append(f"  {r['id']} (line {r['_line']}): "
+            unlocated.append(f"  {r['id']} (line {r.line}): "
                              f"{placelist.format_osm([missing.args[0]])}")
             continue
         if obj is not None:
@@ -122,7 +161,7 @@ def build(names, dialects_csv, curation, areas_path, objects_path) -> dict:
     return {"built_from": stamp, "places": places}
 
 
-def write(index: dict, out: str):
+def write(index: SearchIndex, out: str) -> None:
     os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
     files.atomic_write(out, json.dumps(index, ensure_ascii=False,
                                        separators=(",", ":")) + "\n")

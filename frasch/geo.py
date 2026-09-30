@@ -12,16 +12,19 @@ NF_CENTRE = (8.9, 54.7)                 # lon, lat
 
 EARTH_RADIUS_KM = 6371.0
 
+LonLat = tuple[float, float]
 
-def in_north_frisia(lon, lat) -> bool:
+
+def in_north_frisia(lon: float | None, lat: float | None) -> bool:
     """Whether a point lies in NF_BBOX; False for an unknown position."""
     return (lon is not None and lat is not None
             and NF_BBOX[0] <= lon <= NF_BBOX[2] and NF_BBOX[1] <= lat <= NF_BBOX[3])
 
 
-def haversine(lon1, lat1, lon2, lat2) -> float | None:
+def haversine(lon1: float | None, lat1: float | None,
+              lon2: float | None, lat2: float | None) -> float | None:
     """The great-circle distance in km, None when a position is unknown."""
-    if None in (lon1, lat1, lon2, lat2):
+    if lon1 is None or lat1 is None or lon2 is None or lat2 is None:
         return None
     p1, p2 = math.radians(lat1), math.radians(lat2)
     dp = p2 - p1

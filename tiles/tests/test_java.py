@@ -13,7 +13,7 @@ import pytest
 JAVA_SH = Path(__file__).resolve().parent.parent / "java.sh"
 
 
-def java_major(version_line: str) -> subprocess.CompletedProcess:
+def java_major(version_line: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(["bash", "-c", f'source "{JAVA_SH}" && java_major "$1"',
                            "bash", version_line], capture_output=True, text=True)
 
@@ -24,11 +24,11 @@ def java_major(version_line: str) -> subprocess.CompletedProcess:
     ('openjdk version "21.0.2" 2024-01-16', "21"),
     ('java version "1.8.0_392"', "1"),
 ])
-def test_the_major_version_is_read_from_both_forms(line, major):
+def test_the_major_version_is_read_from_both_forms(line: str, major: str) -> None:
     result = java_major(line)
     assert (result.returncode, result.stdout.strip()) == (0, major)
 
 
-def test_an_unreadable_version_line_fails():
+def test_an_unreadable_version_line_fails() -> None:
     result = java_major("Error: could not find libjava.so")
     assert result.returncode != 0 and result.stdout == ""

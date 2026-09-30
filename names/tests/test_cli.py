@@ -2,6 +2,8 @@
 `main` turns a broken input into its message and exit status 1."""
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from frasch import dialects, registry
@@ -10,7 +12,7 @@ from frasch.errors import ValidationError
 REGISTRY_HEADER = "tag,column,label,status,view,note\n"
 
 
-def test_a_broken_input_stops_the_library_with_a_validation_error(tmp_path):
+def test_a_broken_input_stops_the_library_with_a_validation_error(tmp_path: Path) -> None:
     path = tmp_path / "dialects.csv"
     path.write_text(REGISTRY_HEADER + "frr-y-mooring,mooring,Mooring,living,yes,\n",
                     encoding="utf-8")
@@ -18,7 +20,8 @@ def test_a_broken_input_stops_the_library_with_a_validation_error(tmp_path):
         registry.read(str(path))
 
 
-def test_the_command_reports_it_and_exits_1(tmp_path, capsys):
+def test_the_command_reports_it_and_exits_1(tmp_path: Path,
+                                            capsys: pytest.CaptureFixture[str]) -> None:
     path = tmp_path / "dialects.csv"
     path.write_text(REGISTRY_HEADER + "frr-y-mooring,mooring,Mooring,living,yes,\n",
                     encoding="utf-8")

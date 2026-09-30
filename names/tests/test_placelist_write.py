@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import csv
 import os
+from collections.abc import Mapping
+from pathlib import Path
 
 import pytest
 
@@ -17,56 +19,58 @@ ROWS = [
 
 
 @pytest.fixture
-def places(world):
+def places(world: Path) -> Path:
     path = world / "places.csv"
     path.write_text(places_text(ROWS), encoding="utf-8")
     return path
 
 
-def test_round_trip_is_byte_identical(places):
+def test_round_trip_is_byte_identical(places: Path) -> None:
     before = places.read_bytes()
     rows, fields = placelist.read(str(places))
     placelist.write(rows, str(places), fields)
     assert places.read_bytes() == before
 
 
-def test_interrupted_write_leaves_the_file_alone(places, monkeypatch):
+def test_interrupted_write_leaves_the_file_alone(places: Path,
+                                                 monkeypatch: pytest.MonkeyPatch) -> None:
     before = places.read_bytes()
     rows, fields = placelist.read(str(places))
     rows[0]["mooring"] = "changed"
 
-    class Crashing(csv.DictWriter):
+    class Crashing(csv.DictWriter[str]):
         written = 0
 
-        def writerow(self, row):
+        def writerow(self, row: Mapping[str, object]) -> object:
             Crashing.written += 1
             if Crashing.written > 5:
                 raise KeyboardInterrupt("Ctrl-C half-way")
             return super().writerow(row)
 
-    monkeypatch.setattr(placelist.csv, "DictWriter", Crashing)
+    monkeypatch.setattr("frasch.placelist.csv.DictWriter", Crashing)
     with pytest.raises(KeyboardInterrupt):
         placelist.write(rows, str(places), fields)
     assert places.read_bytes() == before
     assert sorted(os.listdir(places.parent)) == ["curation.csv", "places.csv", "work"]
 
 
-def test_crash_while_flushing_leaves_the_file_alone(places, monkeypatch):
+def test_crash_while_flushing_leaves_the_file_alone(places: Path,
+                                                    monkeypatch: pytest.MonkeyPatch) -> None:
     before = places.read_bytes()
     rows, fields = placelist.read(str(places))
     rows[0]["mooring"] = "changed"
 
-    def boom(fd):
+    def boom(fd: int) -> None:
         raise OSError("disk full")
 
-    monkeypatch.setattr(placelist.os, "fsync", boom)
+    monkeypatch.setattr("frasch.placelist.os.fsync", boom)
     with pytest.raises(OSError):
         placelist.write(rows, str(places), fields)
     assert places.read_bytes() == before
     assert sorted(os.listdir(places.parent)) == ["curation.csv", "places.csv", "work"]
 
 
-def test_refuses_to_overwrite_a_concurrent_change(places):
+def test_refuses_to_overwrite_a_concurrent_change(places: Path) -> None:
     rows, fields = placelist.read(str(places))
     rows[0]["mooring"] = "mine"
     # a spreadsheet saves the file while the script is busy
@@ -77,21 +81,21 @@ def test_refuses_to_overwrite_a_concurrent_change(places):
     assert places.read_text(encoding="utf-8") == theirs
 
 
-def test_write_without_read_is_an_error(world):
+def test_write_without_read_is_an_error(world: Path) -> None:
     path = world / "never-read.csv"
     with pytest.raises(RuntimeError):
         placelist.write([], str(path))
     assert not path.exists()
 
 
-def test_write_keeps_the_file_mode(places):
+def test_write_keeps_the_file_mode(places: Path) -> None:
     os.chmod(places, 0o640)
     rows, fields = placelist.read(str(places))
     placelist.write(rows, str(places), fields)
     assert os.stat(places).st_mode & 0o777 == 0o640
 
 
-def test_second_write_in_one_run_is_allowed(places):
+def test_second_write_in_one_run_is_allowed(places: Path) -> None:
     rows, fields = placelist.read(str(places))
     rows[0]["mooring"] = "one"
     placelist.write(rows, str(places), fields)
@@ -100,7 +104,7 @@ def test_second_write_in_one_run_is_allowed(places):
     assert placelist.read(str(places))[0][0]["mooring"] == "two"
 
 
-def test_lock_is_exclusive(places):
+def test_lock_is_exclusive(places: Path) -> None:
     with placelist.lock(str(places)):
         with pytest.raises(PipelineError, match="another match.py"):
             with placelist.lock(str(places)):

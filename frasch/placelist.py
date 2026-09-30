@@ -35,6 +35,7 @@ import io
 import os
 import re
 import unicodedata
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 
 from frasch import files, paths, registry
 from frasch.errors import Invalid, PipelineError, ValidationError
@@ -77,12 +78,33 @@ WIKIDATA_ID = re.compile(r"Q\d+")
 
 _REMARK = re.compile(r"\(([^()]*)\)")
 
+# A row's cells, column -> stripped text: what the functions that only read a
+# row take, so that a row built by hand (a test, a patch) will do as well.
+Row = Mapping[str, str]
+# One reference of an `osm` cell as `parse_osm` returns it: `("w", 12)` for
+# an OSM object, `("l", "westerheide-amrum")` for a local one.
+Ref = tuple[str, int | str]
+# one that names an OSM object: a node, way or relation id
+OsmRef = tuple[str, int]
+
+
+class PlaceRow(dict[str, str]):
+    """A row of the name list as `read` returns it: its cells, and `line`,
+    its physical line number in the file (header = 1) -- for the messages
+    that point an editor at it."""
+
+    def __init__(self, cells: Mapping[str, str], line: int):
+        super().__init__(cells)
+        self.line = line
+
 
 def split_variants(cell: str | None) -> list[str]:
     """Split a name cell on `;` -- but not inside brackets, because a remark
     may itself list several dialects: `Huađer; Huuger (Sölring; Wisinge)` is
     two variants, not three."""
-    out, buf, depth = [], [], 0
+    out: list[str] = []
+    buf: list[str] = []
+    depth = 0
     for ch in cell or "":
         if ch == "(":
             depth += 1
@@ -102,7 +124,7 @@ def parts(cell: str | None) -> list[tuple[str, str]]:
 
     The remark comes back without its brackets; several brackets on one
     variant are joined with `; `.  Variants without a name are dropped."""
-    out = []
+    out: list[tuple[str, str]] = []
     for part in split_variants(cell):
         remarks = [m.group(1).strip() for m in _REMARK.finditer(part)]
         name = _REMARK.sub("", part).strip().rstrip("?").strip()
@@ -113,7 +135,7 @@ def parts(cell: str | None) -> list[tuple[str, str]]:
 
 def variants(cell: str | None) -> list[str]:
     """`"Rübel; Rübbel (wisinge)"` -> `["Rübel", "Rübbel"]` (remarks stripped)."""
-    out = []
+    out: list[str] = []
     for name, _ in parts(cell):
         if name not in out:
             out.append(name)
@@ -131,12 +153,12 @@ def remark(cell: str | None) -> str:
     return p[0][1] if p else ""
 
 
-def label(row: dict, column: str = "mooring") -> str:
+def label(row: Row, column: str = "mooring") -> str:
     """The map label of a row for one dialect column (its primary variant)."""
     return primary(row.get(column))
 
 
-def any_name(row: dict, reg: Registry | None = None) -> str:
+def any_name(row: Row, reg: Registry | None = None) -> str:
     """The row's Frisian name in any dialect -- the answer to "does this row
     carry a Frisian name at all?".  Mooring first, then `local`, then the
     other dialects in registry order."""
@@ -147,7 +169,7 @@ def any_name(row: dict, reg: Registry | None = None) -> str:
     return ""
 
 
-def on_map(row: dict, reg: Registry | None = None) -> bool:
+def on_map(row: Row, reg: Registry | None = None) -> bool:
     """Whether a row puts names on the map: it has a Frisian name and is
     neither `skip` nor `not_a_place`.  The injector labels these rows'
     objects, and the search index lists them."""
@@ -155,7 +177,7 @@ def on_map(row: dict, reg: Registry | None = None) -> bool:
             and bool(any_name(row, reg)))
 
 
-def owned_by_matcher(row: dict) -> bool:
+def owned_by_matcher(row: Row) -> bool:
     """May match.py (and `curate.py apply`) (re)write this row's osm /
     wikidata / status?  Not a row a human decided -- `ok`/`skip`, a
     hand-filled reference, a local reference, `not_a_place` -- only one it
@@ -169,13 +191,13 @@ def owned_by_matcher(row: dict) -> bool:
     return not row["osm"] and not row["wikidata"]
 
 
-def parse_osm(cell: str | None, where: str = "") -> list[tuple[str, int | str]]:
+def parse_osm(cell: str | None, where: str = "") -> list[Ref]:
     """`"way/12; way/13"` -> `[("w", 12), ("w", 13)]`;
     `"local/westerheide-amrum"` -> `[("l", "westerheide-amrum")]`.
 
     A local reference stands alone: it is the whole cell, never one of
     several."""
-    out = []
+    out: list[Ref] = []
     for ref in (cell or "").split(";"):
         ref = ref.strip()
         if not ref:
@@ -195,7 +217,25 @@ def parse_osm(cell: str | None, where: str = "") -> list[tuple[str, int | str]]:
     return out
 
 
-def format_osm(refs) -> str:
+def as_osm_ref(ref: Ref) -> OsmRef | None:
+    """The reference as one to an OSM object; None for a local one."""
+    t, i = ref
+    return (t, i) if isinstance(i, int) else None
+
+
+def local_slug(ref: Ref) -> str | None:
+    """The slug of a local reference; None for one to an OSM object."""
+    _, i = ref
+    return i if isinstance(i, str) else None
+
+
+def osm_refs(cell: str | None, where: str = "") -> list[OsmRef]:
+    """The references to OSM objects of an `osm` cell -- none for a local
+    reference."""
+    return [osm for ref in parse_osm(cell, where) if (osm := as_osm_ref(ref))]
+
+
+def format_osm(refs: Iterable[Ref]) -> str:
     return "; ".join(f"{TYPE_NAME[t]}/{i}" for t, i in refs)
 
 
@@ -208,12 +248,10 @@ def local_ref(cell: str | None) -> str | None:
     the search index takes the position from there, and `match.py` leaves the
     row alone."""
     refs = parse_osm(cell)
-    if refs and refs[0][0] == LOCAL_TYPE:
-        return refs[0][1]
-    return None
+    return local_slug(refs[0]) if refs else None
 
 
-def claimed_refs(row: dict) -> list:
+def claimed_refs(row: Row) -> list[Ref]:
     """The objects a row puts on the map: the references in its `osm` cell,
     none for a `skip` row, which never reaches the map.  Only one row per
     object can: the injector labels an object once."""
@@ -222,7 +260,7 @@ def claimed_refs(row: dict) -> list:
     return parse_osm(row.get("osm"))
 
 
-def header_problem(fields, reg: Registry | None = None) -> str | None:
+def header_problem(fields: Sequence[str], reg: Registry | None = None) -> str | None:
     """What is wrong with the header of the name list, or None."""
     if "lat" in fields or "lon" in fields:
         return ("`lat`/`lon` moved to names/curation.csv (2026-09-18): reference "
@@ -235,10 +273,10 @@ def header_problem(fields, reg: Registry | None = None) -> str | None:
     return what
 
 
-def row_problems(row: dict) -> list[str]:
+def row_problems(row: Row) -> list[str]:
     """What is wrong with one row of the name list (its cells stripped), in
     the rules `read` enforces.  names/check.py adds the stricter ones."""
-    out = []
+    out: list[str] = []
     if row["kind"] not in KINDS:
         out.append(f"unknown kind {row['kind']!r}")
     if row["status"] not in STATUSES:
@@ -256,7 +294,7 @@ def row_problems(row: dict) -> list[str]:
     return out
 
 
-def id_problem(row: dict, seen: dict[str, int]) -> str | None:
+def id_problem(row: Row, seen: dict[str, int]) -> str | None:
     """What is wrong with a row's `id` -- missing, malformed, or used by an
     earlier row (`seen`: id -> line) -- or None."""
     ident = row["id"]
@@ -284,7 +322,7 @@ def slug(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", text).strip("-")
 
 
-def new_id(row: dict, taken: set[str], reg: Registry | None = None) -> str:
+def new_id(row: Row, taken: set[str], reg: Registry | None = None) -> str:
     """An id for a row that has none: the slug of its Frisian name (German,
     then Danish, when it has none), with `-2`, `-3`, ... when that is taken."""
     base = (slug(any_name(row, reg)) or slug(primary(row.get("de")))
@@ -313,7 +351,7 @@ def fill_ids(path: str = DEFAULT_PATH, reg: Registry | None = None) -> int:
     fields = header if "id" in header else header + ["id"]
     if (what := header_problem(fields, reg)):
         raise ValidationError(f"{path}: {what}")
-    rows = []
+    rows: list[dict[str, str]] = []
     for cells in reader:
         if not cells:
             continue
@@ -333,11 +371,10 @@ def fill_ids(path: str = DEFAULT_PATH, reg: Registry | None = None) -> int:
     return given
 
 
-def read(path: str = DEFAULT_PATH, reg: Registry | None = None):
-    """-> (rows, fieldnames).  A row is identified by its `id`; it also gets
-    `_line`, its physical line number in the file (header = 1), for the
-    messages that point an editor at it.  A ValidationError lists every row
-    that breaks the rules."""
+def read(path: str = DEFAULT_PATH,
+         reg: Registry | None = None) -> tuple[list[PlaceRow], list[str]]:
+    """-> (rows, fieldnames).  A row is identified by its `id` and knows its
+    `line`.  A ValidationError lists every row that breaks the rules."""
     with open(path, "rb") as fh:
         data = fh.read()
     # remembered so that `write` can tell whether someone else (match.py,
@@ -348,15 +385,16 @@ def read(path: str = DEFAULT_PATH, reg: Registry | None = None):
         fields = list(reader.fieldnames or [])
         if (what := header_problem(fields, reg)):
             raise ValidationError(f"{path}: {what}")
-        rows, problems, seen = [], [], {}
-        for row in reader:
+        rows: list[PlaceRow] = []
+        problems: list[str] = []
+        seen: dict[str, int] = {}
+        for raw in reader:
             n = reader.line_num                  # blank lines count too
-            what = _row_problem(row, seen)
+            what = _row_problem(raw, seen)
             if what:
                 problems.append(f"{path}:{n}: {what}")
                 continue
-            row = _stripped(row)
-            row["_line"] = n
+            row = PlaceRow(_stripped(raw), n)
             seen[row["id"]] = n
             rows.append(row)
     if problems:
@@ -364,20 +402,28 @@ def read(path: str = DEFAULT_PATH, reg: Registry | None = None):
     return rows, fields
 
 
-def _row_problem(row: dict, seen: dict[str, int]) -> str | None:
+# a row as `csv.DictReader` gives it: the cells beyond the header's columns
+# under None, a column the row has no cell for with None
+_RawRow = Mapping[str | None, str | list[str] | None]
+
+
+def _row_problem(raw: _RawRow, seen: dict[str, int]) -> str | None:
     """The first thing wrong with one raw row of `read`, or None."""
-    if None in row:                              # more cells than columns
-        return f"row has more cells than the header (a stray comma?): {row[None]}"
-    row = _stripped(row)
+    if None in raw:                              # more cells than columns
+        return f"row has more cells than the header (a stray comma?): {raw[None]}"
+    row = _stripped(raw)
     problems = row_problems(row) + [id_problem(row, seen)]
     return next((p for p in problems if p), None)
 
 
-def _stripped(row: dict) -> dict:
-    return {k: (v or "").strip() for k, v in row.items()}
+def _stripped(raw: _RawRow) -> dict[str, str]:
+    """The cells of a raw row that `_row_problem` let through, stripped."""
+    return {k: v.strip() if isinstance(v, str) else ""
+            for k, v in raw.items() if k is not None}
 
 
-def write(rows, path: str = DEFAULT_PATH, fields=None):
+def write(rows: Iterable[Row], path: str = DEFAULT_PATH,
+          fields: Sequence[str] | None = None) -> None:
     """Write the name list -- atomically, and only if nobody else changed the
     file since this process `read` it.
 
@@ -406,7 +452,7 @@ _read_digests: dict[str, str] = {}      # abspath -> sha256 of what `read` saw
 
 
 @contextlib.contextmanager
-def lock(names_path: str = DEFAULT_PATH):
+def lock(names_path: str = DEFAULT_PATH) -> Iterator[None]:
     """Hold `work/.lock` next to the name list for the duration of a
     read-modify-write run, so that match.py and curate.py apply never run at
     the same time.  Advisory (`flock`): a spreadsheet does not take it -- that
@@ -430,7 +476,7 @@ def lock(names_path: str = DEFAULT_PATH):
             fcntl.flock(fh, fcntl.LOCK_UN)
 
 
-def describe(row: dict, reg: Registry | None = None) -> str:
+def describe(row: Row, reg: Registry | None = None) -> str:
     """One-line human reference to a row for messages and the report."""
     name = any_name(row, reg) or "-"
     de = primary(row.get("de")) or primary(row.get("da")) or "-"

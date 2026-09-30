@@ -18,6 +18,7 @@ import csv
 import os
 import re
 import sys
+from collections.abc import Container, Sequence
 from dataclasses import dataclass
 
 from frasch import (
@@ -30,6 +31,7 @@ from frasch import (
     placelist,
     registry,
 )
+from frasch.paths import StrPath
 from frasch.registry import Registry
 
 
@@ -39,7 +41,7 @@ class Problem:
     line: int
     message: str
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.path}:{self.line}: {self.message}"
 
 
@@ -80,10 +82,10 @@ def cell_problem(cell: str) -> str | None:
     return None
 
 
-def _rows(path):
+def _rows(path: str) -> tuple[list[str], list[tuple[int, list[str]]]]:
     """-> (header, [(line, cells), ...]) of a CSV file.  Blank lines are left
     out, as the readers skip them, but still counted: `line` is the line an
-    editor sees the row on, as in placelist.read's `_line`."""
+    editor sees the row on, as a `placelist.PlaceRow`'s `line`."""
     with files.open_csv(path) as fh:
         reader = csv.reader(fh)
         header = next(reader, [])
@@ -91,7 +93,7 @@ def _rows(path):
     return header, rows
 
 
-def row_ids(path) -> set[str]:
+def row_ids(path: str) -> set[str]:
     """The `id` cells of the name list, whatever else is wrong with it."""
     header, rows = _rows(path)
     if "id" not in header:
@@ -100,7 +102,7 @@ def row_ids(path) -> set[str]:
     return {cells[column].strip() for _, cells in rows if len(cells) > column}
 
 
-def check_curation(path, ids) -> tuple[list[Problem], set[str]]:
+def check_curation(path: str, ids: Container[str]) -> tuple[list[Problem], set[str]]:
     """-> (the problems in names/curation.csv, the slugs of the local
     references it positions).  The rules are those the tile build enforces
     (`curationlist.rows`), plus: a `frasch:ref` set by hand must be the
@@ -117,7 +119,7 @@ def check_curation(path, ids) -> tuple[list[Problem], set[str]]:
     return [Problem(path, n, what) for n, what in problems], positioned
 
 
-def check_dialects(path) -> tuple[Registry | None, list[Problem]]:
+def check_dialects(path: str) -> tuple[Registry | None, list[Problem]]:
     """-> (the sound rows of the dialect registry, names/dialects.csv -- None
     when there are none --, the problems in it)."""
     found, problems = registry.rows(path)
@@ -125,24 +127,25 @@ def check_dialects(path) -> tuple[Registry | None, list[Problem]]:
             [Problem(path, n, what) for n, what in problems])
 
 
-def check_dialect_areas(path, reg) -> list[Problem]:
+def check_dialect_areas(path: str, reg: Registry) -> list[Problem]:
     """The problems in the dialect area list, names/dialect_areas.csv, by the
     rules the area build enforces (`dialects.area_rows`)."""
     _rows, problems = dialects.area_rows(path, reg)
     return [Problem(path, n, what) for n, what in problems]
 
 
-def check_places(path, curation, positioned, reg) -> list[Problem]:
+def check_places(path: str, curation: str, positioned: Container[str],
+                 reg: Registry) -> list[Problem]:
     """The problems in the name list, whose columns `reg` says; `positioned`
     are the local references `curation` has a position for."""
     header, rows = _rows(path)
     if (what := placelist.header_problem(header, reg)):
         return [Problem(path, 1, what)]   # without its columns no row can be read
-    problems = []
-    claimed = {}              # `way/1` or `Q1` -> line of the first row
-    ids = {}                  # id -> line of the first row
+    problems: list[Problem] = []
+    claimed: dict[str, int] = {}  # `way/1` or `Q1` -> line of the first row
+    ids: dict[str, int] = {}      # id -> line of the first row
     for n, cells in rows:
-        def problem(message, n=n):
+        def problem(message: str, n: int = n) -> None:
             problems.append(Problem(path, n, message))
 
         if (what := files.cell_count_problem(cells, header)):
@@ -177,31 +180,33 @@ def check_places(path, curation, positioned, reg) -> list[Problem]:
     return problems
 
 
-def variant_columns(reg) -> list[str]:
+def variant_columns(reg: Registry | None) -> list[str]:
     """The name columns: `;`-separated variants with `(…)` remarks, the
     conventions names/README.md sets for every name cell."""
     return placelist.name_columns(reg) + ["de", "da"]
 
 
-def check(places=placelist.DEFAULT_PATH,
-          curation=paths.CURATION,
-          dialects_csv=paths.DIALECTS,
-          areas=dialects.AREA_LIST_PATH) -> list[Problem]:
+def check(places: StrPath = placelist.DEFAULT_PATH,
+          curation: StrPath = paths.CURATION,
+          dialects_csv: StrPath = paths.DIALECTS,
+          areas: StrPath = dialects.AREA_LIST_PATH) -> list[Problem]:
     """Every problem in the name list `places`, the map curation `curation`,
     the dialect registry `dialects_csv` and the dialect area list `areas`,
     file by file, in file order.  The name list is checked against the sound
     rows of the registry (not at all when it has none, the registry's
     problems say why), the area list only against a sound registry."""
-    places, curation, dialects_csv, areas = map(os.fspath,
-                                                (places, curation, dialects_csv, areas))
-    curation_problems, positioned = check_curation(curation, row_ids(places))
-    reg, registry_problems = check_dialects(dialects_csv)
-    place_problems = check_places(places, curation, positioned, reg) if reg else []
-    area_problems = [] if registry_problems else check_dialect_areas(areas, reg)
+    places_path, curation_path, dialects_path, areas_path = (
+        os.fspath(path) for path in (places, curation, dialects_csv, areas))
+    curation_problems, positioned = check_curation(curation_path, row_ids(places_path))
+    reg, registry_problems = check_dialects(dialects_path)
+    place_problems = (check_places(places_path, curation_path, positioned, reg)
+                      if reg else [])
+    area_problems = (check_dialect_areas(areas_path, reg)
+                     if reg and not registry_problems else [])
     return place_problems + curation_problems + registry_problems + area_problems
 
 
-def markdown(problems) -> str:
+def markdown(problems: Sequence[Problem]) -> str:
     """The result as a Markdown table, for the summary page of a CI run."""
     out = ["### names/check.py", ""]
     if not problems:
@@ -217,7 +222,7 @@ def markdown(problems) -> str:
 
 
 @cli.command
-def main(argv=None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--names", default=placelist.DEFAULT_PATH)
     ap.add_argument("--curation", default=paths.CURATION)
