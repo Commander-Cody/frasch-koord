@@ -296,7 +296,8 @@ def scan_waterways(path: str, by_id: Iterable[Ref]) -> dict[OsmRef, tuple[OsmRef
 
     -> {('w', id): (relation key, the relation's OSM name)}"""
     members: dict[OsmRef, tuple[OsmRef, str]] = {}
-    rel_ids = {i for t, i in by_id if t == "r" and isinstance(i, int)}
+    rel_ids = {osm[1] for key in by_id
+               if (osm := placelist.as_osm_ref(key)) and osm[0] == "r"}
     for rel_id, rel in osmscan.relations(path, rel_ids).items():
         tags = rel["tags"]
         if not (tags.get("type") == "waterway" or "waterway" in tags):
@@ -451,7 +452,7 @@ class Injector:
         self.max_id[t] = max(self.max_id[t], o.id)
         if t != "n":
             self.flush(t)
-        synth = self.synthetic.get(key) if isinstance(o, osmium.osm.Node) else None
+        synth = self._synthetic_at(key, o)
         hit = self.by_id.get(key)            # [row, ...]
         area_key = key
         if hit is not None:
@@ -493,17 +494,25 @@ class Injector:
         if cur is not None:
             # curation runs last and wins: it may override frasch:kind or place
             tags.update(cur["tags"])
-        if synth is not None and isinstance(o, osmium.osm.Node):
+        if synth is not None:
             # the polygon inherits the node's (curated) names and dialect, then
             # the row's tags
+            square, (lon, lat) = synth
             ptags = {k: v for k, v in tags.items()
                      if k == "name" or k.startswith("name:")
                      or k in (DIALECT_KEY, LOCAL_KEY, VARIETY_KEY, REF_KEY)}
-            ptags.update(synth["tags"])
-            self.pending.append({"key": key, "label": synth["label"], "km2": synth["km2"],
-                                 "lon": o.location.lon, "lat": o.location.lat, "tags": ptags})
+            ptags.update(square["tags"])
+            self.pending.append({"key": key, "label": square["label"], "km2": square["km2"],
+                                 "lon": lon, "lat": lat, "tags": ptags})
         if self.w is not None:
             self.w.add(o.replace(tags=tags))
+
+    def _synthetic_at(self, key: OsmRef, o: _OsmObject) -> tuple[Square, LonLat] | None:
+        """The synthetic square curation puts around this node, and where the
+        node is; None for any other object."""
+        if not isinstance(o, osmium.osm.Node) or (square := self.synthetic.get(key)) is None:
+            return None
+        return square, (o.location.lon, o.location.lat)
 
 
 def run(inp: str, out: str, names_csv: str, dialects_csv: str, areas_geojson: str | None,

@@ -217,10 +217,22 @@ def parse_osm(cell: str | None, where: str = "") -> list[Ref]:
     return out
 
 
+def as_osm_ref(ref: Ref) -> OsmRef | None:
+    """The reference as one to an OSM object; None for a local one."""
+    t, i = ref
+    return (t, i) if isinstance(i, int) else None
+
+
+def local_slug(ref: Ref) -> str | None:
+    """The slug of a local reference; None for one to an OSM object."""
+    _, i = ref
+    return i if isinstance(i, str) else None
+
+
 def osm_refs(cell: str | None, where: str = "") -> list[OsmRef]:
     """The references to OSM objects of an `osm` cell -- none for a local
     reference."""
-    return [(t, i) for t, i in parse_osm(cell, where) if isinstance(i, int)]
+    return [osm for ref in parse_osm(cell, where) if (osm := as_osm_ref(ref))]
 
 
 def format_osm(refs: Iterable[Ref]) -> str:
@@ -236,9 +248,7 @@ def local_ref(cell: str | None) -> str | None:
     the search index takes the position from there, and `match.py` leaves the
     row alone."""
     refs = parse_osm(cell)
-    if refs and refs[0][0] == LOCAL_TYPE:
-        return str(refs[0][1])
-    return None
+    return local_slug(refs[0]) if refs else None
 
 
 def claimed_refs(row: Row) -> list[Ref]:

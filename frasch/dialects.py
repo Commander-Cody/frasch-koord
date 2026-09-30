@@ -82,7 +82,8 @@ def area_rows(path: str, reg: Registry) -> tuple[list[AreaRow], list[tuple[int, 
             if not refs:
                 problems.append((n, "no OSM reference"))
                 continue
-            area_refs = [(t, i) for t, i in refs if t in ("w", "r") and isinstance(i, int)]
+            area_refs = [osm for ref in refs
+                         if (osm := placelist.as_osm_ref(ref)) and osm[0] in ("w", "r")]
             if len(area_refs) < len(refs):
                 # a node can never be a polygon, and `local/` names an object
                 # of our own invention (curation.csv), not an OSM boundary

@@ -87,6 +87,16 @@ def test_parse_osm_reads_a_local_reference() -> None:
     assert placelist.parse_osm("local/westerheide-amrum") == [("l", "westerheide-amrum")]
 
 
+@pytest.mark.parametrize("ref, osm, slug", [
+    (("w", 12), ("w", 12), None),
+    (("l", "westerheide-amrum"), None, "westerheide-amrum"),
+])
+def test_a_reference_is_either_an_osm_object_or_a_local_slug(
+        ref: placelist.Ref, osm: placelist.OsmRef | None, slug: str | None) -> None:
+    assert placelist.as_osm_ref(ref) == osm
+    assert placelist.local_slug(ref) == slug
+
+
 @pytest.mark.parametrize("cell", [
     "way/abc",                        # not an id
     "Way/12",                         # types are lowercase

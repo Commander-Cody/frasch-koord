@@ -27,7 +27,7 @@ from typing import NamedTuple, TypedDict
 from frasch import files, paths
 from frasch.errors import Invalid, ValidationError
 from frasch.geo import LonLat
-from frasch.placelist import LOCAL_TYPE, Ref, format_osm, parse_osm
+from frasch.placelist import LOCAL_TYPE, Ref, format_osm, local_slug, parse_osm
 
 DEFAULT_PATH = paths.CURATION
 COLUMNS = ["osm", "name", "lat", "lon", "set_tags", "minzoom", "maxzoom",
@@ -142,7 +142,7 @@ def _entry(n: int, row: Mapping[str, str], seen: _Seen) -> tuple[Entry | None, l
     if not refs:
         return None, []
     found: list[str] = []
-    local = str(refs[0][1]) if refs[0][0] == LOCAL_TYPE else None
+    local = local_slug(refs[0])
     if pos and not local:
         found.append(f"lat/lon only go with a local reference "
                      f"(local/<slug>), not with {row['osm']!r}")
