@@ -31,3 +31,10 @@ it("names no language for OSM's generic name where the entry knows none it is th
   expect(screen.getByRole('heading').textContent).toBe('Tønder');
   expect(document.querySelector('.place-card-meta')?.textContent).toBe('');
 });
+
+it('names no kind for a place kind the UI has no word for', () => {
+  renderCard(place({ name_de: 'Niebüll', kind: 'spaceport' }));
+
+  expect(document.querySelector('.place-card-kind')).toBeNull();
+  expect(document.querySelector('.place-card-meta')?.textContent).not.toContain('kind.');
+});

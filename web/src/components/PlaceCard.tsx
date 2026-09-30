@@ -46,7 +46,7 @@ interface Line {
  * one, filled up from the clicked tile feature (see names.ts).
  */
 export default function PlaceCard({ selection, view, onClose, ref: cardRef }: PlaceCardProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const entry = useMemo(() => cardEntry(selection), [selection]);
   // Dialect names are translated like any other UI string; the registry
   // label covers a dialect the locale files do not know yet.
@@ -61,7 +61,10 @@ export default function PlaceCard({ selection, view, onClose, ref: cardRef }: Pl
   const { name: headline, source: shownAs } = resolveName(entry, view);
   const area = entry.dialect ? dialect(entry.dialect) : undefined;
   const shownDialect = dialect(shownAs);
-  const kind = entry.kind ? t(`kind.${entry.kind}`, { defaultValue: '' }) : '';
+  // A kind without a word in the locale files names no kind at all (an empty
+  // `defaultValue` would not do: returnEmptyString is off, see i18n.ts).
+  const kindKey = `kind.${entry.kind}`;
+  const kind = entry.kind && i18n.exists(kindKey) ? t(kindKey) : '';
   // The local form is named after the area's dialect only when it IS that
   // dialect's name. Where the place has a form of its own (Woiguurd, while
   // Mooring says Waiguurd), calling both "Mooring" would contradict itself.
