@@ -92,7 +92,8 @@ from frasch.dialects import AreaRow
 from frasch.errors import PipelineError, ValidationError
 from frasch.osmscan import Rings
 from frasch.placelist import OsmRef
-from frasch.provenance import BuiltFrom
+from frasch.paths import StrPath
+from frasch.provenance import BuiltFrom, ExtractStamp
 from frasch.registry import Registry
 
 DEFAULT_AREAS = dialects.AREA_LIST_PATH
@@ -234,6 +235,14 @@ def round_geojson(obj: object, nd: int = ROUND) -> object:
     return obj
 
 
+def stamp(area_list: StrPath, registry_csv: StrPath,
+          extracts: list[ExtractStamp]) -> BuiltFrom:
+    """What the dialect areas are built from: the area list, the dialect
+    registry and the extracts."""
+    return provenance.built_from(
+        {"dialect_areas.csv": area_list, "dialects.csv": registry_csv}, extracts)
+
+
 @cli.command
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
@@ -356,9 +365,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             raise PipelineError(f"{report}\n\nrun with --allow-missing to build "
                               f"anyway; nothing was written")
 
-    built_from = provenance.built_from(
-        {"dialect_areas.csv": a.areas, "dialects.csv": a.registry},
-        [provenance.extract_stamp(p) for p in a.pbf])
+    built_from = stamp(a.areas, a.registry, [provenance.extract_stamp(p) for p in a.pbf])
 
     # Both files are computed in full before either is written, so a problem
     # building --parts-out cannot leave --out written on its own.

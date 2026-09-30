@@ -27,7 +27,6 @@ import argparse
 import contextlib
 import filecmp
 import io
-import json
 import os
 import tempfile
 from collections.abc import Sequence
@@ -85,12 +84,11 @@ def unlocated_problems(a: argparse.Namespace) -> list[str]:
 
 def stamp_problems(a: argparse.Namespace) -> list[str]:
     """The dialect areas, by the inputs their stamp names."""
-    current = {"dialect_areas.csv": provenance.blob_hash(a.area_list),
-               "dialects.csv": provenance.blob_hash(a.dialects)}
+    current = build_dialect_areas.stamp(a.area_list, a.dialects, [])
+    del current["extracts"]                    # CI has none
     problems = []
     for path in (a.areas, a.parts):
-        with open(path, encoding="utf-8") as fh:
-            stamp = json.load(fh).get("properties", {}).get("built_from", {})
+        stamp = provenance.recorded(path)
         stale = [k for k, v in current.items() if stamp.get(k) != v]
         if stale:
             problems.append(f"{path} was built from another {' and '.join(stale)} "
@@ -125,11 +123,12 @@ def extract_problems(a: argparse.Namespace, tmp: str) -> list[str]:
 def stamped_extracts(path: str, a: argparse.Namespace) -> list[str]:
     """The paths among `--extracts` of the extracts `path` was built from,
     in the stamp's order; a LookupError names one that was not given."""
-    with open(path, encoding="utf-8") as fh:
-        data = json.load(fh)
-    stamp = (data.get("properties") or data)["built_from"]
+    stamp = provenance.recorded(path)
     given = {os.path.basename(p): p for p in a.extracts}
-    names = [e["file"] for e in stamp["extracts"]]
+    extracts = stamp.get("extracts")
+    if not isinstance(extracts, list):
+        raise LookupError(f"{path} names no extracts it was built from")
+    names = [e["file"] for e in extracts]
     absent = [n for n in names if n not in given]
     if absent:
         raise LookupError(f"{path} was built from {', '.join(absent)}, which "
