@@ -401,7 +401,8 @@ the synthetic polygons it would add.
   village, a town) is still left for review when a **weaker** hit lies inside
   North Frisia: the exact *Ostenfeld* is the village near Rendsburg, but OSM
   calls the one near Husum `Ostenfeld (Husum)`, and which one the list means
-  is for a human to decide.
+  is for a human to decide. A `hint` that picks the far-away place settles
+  it: the hint is binding.
 * For settlements the **place node** wins over the boundary relation (that is
   what OpenMapTiles labels); a node without `wikidata` gets the relation's.
   Only a boundary within 10 km lends it (a namesake further away is another

@@ -649,7 +649,8 @@ def match_row(row: Row, index: NameIndex, hints: HintResolver,
 
     weaker = [c for c in plaus_all if c["rank"] > top]
     if (winner is None or _suspicious(kind, winner)
-            or _outranks_a_hit_in_north_frisia(winner, weaker)):
+            or (not hint_pt                        # a hint's pick is binding
+                and _outranks_a_hit_in_north_frisia(winner, weaker))):
         out["status"] = "ambiguous"
         out["candidates"] = fmt_cands(plaus_all)
         out["note"] = _addnote(row, _ambiguous_reason(row, winner, hint_pt, clusters))

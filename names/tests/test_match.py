@@ -66,6 +66,7 @@ OSTENFELD_RENDSBURG = cand("n", 240062575, 9.780628, 54.316519, name="Ostenfeld"
                            place="village", wikidata="Q667300")
 OSTENFELD_HUSUM = cand("n", 240104163, 9.232751, 54.46359, name="Ostenfeld (Husum)",
                        name__da="Østerfjolde", place="village")
+RENDSBURG = cand("n", 43366937, 9.665008, 54.300292, name="Rendsburg", place="town")
 
 DRAGE_STEINBURG = cand("n", 240054933, 9.51933, 54.004272, name="Drage", place="village")
 DRAGE_STEINBURG_MUNICIPALITY = cand("r", 450076, 9.533033, 54.016063, name="Drage",
@@ -296,6 +297,17 @@ def test_a_far_away_village_with_a_weaker_hit_in_north_frisia_is_ambiguous(
     assert "n/240104163:Ostenfeld (Husum):village:" in out["candidates"]
     assert out["note"] == ("best name hit is 71 km from North Frisia, a weaker "
                            "one lies inside -- verify by hand")
+
+
+def test_a_hint_confirms_a_far_away_village_over_a_weaker_hit_in_north_frisia(
+        tmp_path: Path) -> None:
+    # the hint is binding: it says the list means the Ostenfeld near Rendsburg
+    out = run(tmp_path, row(kind="settlement", mooring="Ååstenfälj", de="Ostenfeld",
+                            hint="Rendsburg"),
+              OSTENFELD_RENDSBURG, OSTENFELD_HUSUM, RENDSBURG)
+    assert out["status"] == "matched"
+    assert out["osm_id"] == "240062575"
+    assert out["note"] == "auto: location hint"
 
 
 def test_a_far_away_hamlet_alone_is_left_for_review(tmp_path: Path) -> None:
