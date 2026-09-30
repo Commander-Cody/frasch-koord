@@ -229,8 +229,7 @@ def point_tags(rows: Sequence[PlaceRow], area_tag: str | None, reg: Registry,
     node), the name tags, and last the curation row's own tags, which win."""
     row = rows[0]
     tags = dict(curationlist.POINT_TAGS.get(row["kind"], {}))
-    name = (placelist.primary(row["de"]) or placelist.primary(row["da"])
-            or placelist.any_name(row, reg))
+    name = placelist.point_name(row, reg)
     if name:
         tags["name"] = name
     tags.update(name_tags(rows, area_tag, reg))

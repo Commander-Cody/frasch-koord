@@ -169,6 +169,14 @@ def any_name(row: Row, reg: Registry | None = None) -> str:
     return ""
 
 
+def point_name(row: Row, reg: Registry | None = None) -> str:
+    """The generic `name` of the node the injector adds for a row OSM does
+    not have (a local reference): its German name, else its Danish one, else
+    any Frisian one.  The search index gives the row the same, so the card
+    names such a place as its map label does."""
+    return primary(row.get("de")) or primary(row.get("da")) or any_name(row, reg)
+
+
 def on_map(row: Row, reg: Registry | None = None) -> bool:
     """Whether a row puts names on the map: it has a Frisian name and is
     neither `skip` nor `not_a_place`.  The injector labels these rows'

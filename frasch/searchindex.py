@@ -15,7 +15,10 @@ OSM does not have (`osm` = `local/<slug>`) takes its position from the
 curation row with the same reference (names/curation.csv).  The Low Saxon
 name (`name_nds`) is the object's OSM `name:nds`: the name list has no Low
 Saxon column, but the map labels with it before German, and the card and
-search results have to agree with it.
+search results have to agree with it.  The generic name (`name_osm`) is the
+object's OSM `name`, for the same reason: the label chain ends in it, and
+north of the border it is the Danish name, not the list's German one.  A
+local reference gets the `name` the injector gives its point.
 
 A row with an OSM reference the objects file does not know stops the export
 -- it is on the map, and would be missing from search.  Re-run
@@ -67,6 +70,7 @@ class SearchEntry(TypedDict):
     dialect: NotRequired[str]
     variety: NotRequired[str]
     name_nds: NotRequired[str]
+    name_osm: NotRequired[str]
     name_da: NotRequired[str]
     osm: NotRequired[str]
     wikidata: NotRequired[str]
@@ -78,9 +82,10 @@ class SearchIndex(TypedDict):
 
 
 def entry_object(row: Row, objects: locate.Objects, local_points: Mapping[str, LonLat],
-                 where: str) -> locate.LocatedObject | None:
-    """Where a row's entry lies: the object of the first reference in its
-    `osm` cell, or the curation position of its local reference.  None for
+                 reg: Registry, where: str) -> locate.LocatedObject | None:
+    """The object a row's entry stands for: the object of the first reference
+    in its `osm` cell, or for a local reference the point the injector adds --
+    at its curation position, with the name the injector gives it.  None for
     a row keyed by its QID alone; a KeyError for a reference nobody located."""
     slug = placelist.local_ref(row["osm"])
     if slug:
@@ -88,7 +93,10 @@ def entry_object(row: Row, objects: locate.Objects, local_points: Mapping[str, L
             raise ValidationError(f"{where}: local/{slug} has no row with lat/lon "
                              f"in the curation file")
         lon, lat = local_points[slug]
-        return {"lon": lon, "lat": lat}
+        point: locate.LocatedObject = {"lon": lon, "lat": lat}
+        if name := placelist.point_name(row, reg):
+            point["name"] = name
+        return point
     refs = placelist.osm_refs(row["osm"], where)
     if not refs:
         return None
@@ -120,6 +128,8 @@ def entry(row: Row, obj: locate.LocatedObject, areas: dialects.AreaIndex,
         out["variety"] = variety
     if name_nds := obj.get("name_nds"):
         out["name_nds"] = name_nds
+    if name_osm := obj.get("name"):
+        out["name_osm"] = name_osm
     if name_da := placelist.primary(row["da"]):
         out["name_da"] = name_da
     if row["osm"]:
@@ -146,7 +156,7 @@ def build(names: str, dialects_csv: str, curation: str, areas_path: str,
         if not placelist.on_map(r, reg):
             continue
         try:
-            obj = entry_object(r, objects, local_points, f"{names}:{r.line}")
+            obj = entry_object(r, objects, local_points, reg, f"{names}:{r.line}")
         except KeyError as missing:
             unlocated.append(f"  {r['id']} (line {r.line}): "
                              f"{placelist.format_osm([missing.args[0]])}")
