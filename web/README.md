@@ -441,8 +441,8 @@ Where the data comes from (`src/names.ts`):
 
 - `App` loads `public/data/names.json` once (`useNames`) and looks entries up
   with `find` (`entryLookup`): by `id`, else by an old-style OSM reference.
-- `Map` hit-tests a 13 px box around the click against the label layers of the
-  current style (`placeLayerIds` in `style/localize.ts` reads them off the
+- `Map` hit-tests a 12 px box around the click (24 px on a touch screen,
+  `TOUCH_MEDIA` in `layout.ts`) against the label layers of the current style (`placeLayerIds` in `style/localize.ts` reads them off the
   style, so a new label class is clickable without touching the map) and hands
   the topmost feature up.
 - The feature's `frasch:ref` looks the row up with `find`. `cardEntry` then
@@ -484,7 +484,10 @@ Two details worth knowing:
   the selected dialect.
 
 Escape, the × button and a click on the map (that hits no label) close the
-card. The open card is in the URL (`?place=`, see above); the "report a wrong
+card; Escape in the search field only closes the result list. A search pick
+moves focus to the card's headline, so screen readers announce it, and a card
+closed from the keyboard hands focus back to the search field
+(`hooks/useCardFocus.ts`). The open card is in the URL (`?place=`, see above); the "report a wrong
 or missing name" link is issue #8.
 
 ## Curation view (dev only)
@@ -570,19 +573,18 @@ The checklist of rows to confirm is `docs/dialect-area-review.md`.
 follows the selected label option (see "Dialect registry and the selector").
 One JSON file per dialect in `src/locales/`, same keys in each:
 
-- `de.json` — German UI strings (the page title `app.title`, search
-  placeholder, dialect label, "no results", the place card's row labels under
+- `de.json` — German UI strings (the page title `app.title`, the search
+  field's label and placeholder, dialect label, "no results", the place card's row labels under
   `card.*`, the kind names under `kind.*` — both our own `frasch:kind` values
   and the OpenMapTiles `class` values a place outside the name list has). This
   is the fallback language (`fallbackLng: 'de'`). The map's attribution is not
   among them: it is a fixed licence notice (`src/style/localize.ts`).
 - `frr-x-mooring.json` — Mooring UI strings. Strings nobody has written yet
-  (`app.title`, `search.loading`, `search.error`, `errors.*`) are left as
-  **empty strings — never invented** — so the UI falls back to German rather
-  than showing blank text
-  (`returnEmptyString: false` makes i18next treat an empty string as
-  "missing" for fallback purposes). Fill them in once real Mooring wording
-  exists.
+  (`app.title`, `search.label`, `search.loading`, `search.error`, `errors.*`)
+  are left as **empty strings — never invented** — so the UI falls back to
+  German rather than showing blank text (`returnEmptyString: false` makes
+  i18next treat an empty string as "missing" for fallback purposes). Fill them
+  in once real Mooring wording exists.
 
 ## Not done / left as-is
 
