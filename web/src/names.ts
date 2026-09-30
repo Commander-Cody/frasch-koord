@@ -44,9 +44,9 @@ export interface NameEntry {
   /** German name, shown as a hint next to a Frisian one. */
   name_de: string;
   /**
-   * The place's generic name — OSM's plain `name`, what the label chain
-   * ends in (`name:latin`, `name`) and therefore what the local view labels a
-   * place with that has neither a local nor a Low Saxon name. In this region
+   * The place's generic name — OSM's plain `name`, the chain's generic
+   * steps near its end (`name:latin`, `name`) and therefore what the local
+   * view labels a place with that has neither a local nor a Low Saxon name. In this region
    * that is usually the German name, but north of the border it is the Danish
    * one (Ribe, where German says Ripen). names/export_search_index.py takes it
    * from names/osm_objects.json, a tile feature carries it itself.
@@ -74,7 +74,10 @@ export interface PlaceSelection {
   featureId?: string | number;
 }
 
-/** A name together with where it came from: a dialect tag, or `local`, `frr`, `nds`, `de`, `da`. */
+/**
+ * A name together with where it came from: a dialect tag, or `local`, `frr`,
+ * `nds`, `de`, `da`, or `osm` for OSM's generic name in no known language.
+ */
 export interface ShownName {
   name: string;
   source: string;

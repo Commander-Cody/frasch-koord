@@ -463,8 +463,8 @@ Where the data comes from (`src/names.ts`):
   (`export_search_index.py` takes it from the object's entry in
   `names/osm_objects.json`). It gets its own line (`card.lowSaxon`) only where
   it differs from both the headline and the German name.
-- The generic name (`name_osm`), the `name:latin`/`name` at the end of both
-  chains, comes from the same places: a clicked card takes it from the tile,
+- The generic name (`name_osm`), the `name:latin`/`name` steps near the end
+  of both chains, comes from the same places: a clicked card takes it from the tile,
   one opened from search from `names.json`. A place OSM does not have gets
   the name the injector gives its point. The card never treats it as German:
   in the local view Ribe is labelled Ribe, and the list's German Ripen gets a

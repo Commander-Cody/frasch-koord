@@ -238,6 +238,20 @@ describe('cardEntry', () => {
     expect(cardEntry({ entry: e, props }).name_nds).toBe('TileNDS');
   });
 
+  it('takes name_osm from the tile even when the entry has one, since the tile is what the clicked label showed', () => {
+    const e = entry({ name_osm: 'EntryOSM' });
+    expect(cardEntry({ entry: e, props: { name: 'TileOSM' } }).name_osm).toBe('TileOSM');
+  });
+
+  it("falls back to the entry's name_osm when the tile has none", () => {
+    const e = entry({ name_osm: 'EntryOSM' });
+    expect(cardEntry({ entry: e, props: { 'name:de': 'TileDE' } }).name_osm).toBe('EntryOSM');
+  });
+
+  it("fills name_osm from the tile when the entry has none", () => {
+    expect(cardEntry({ entry: entry(), props: { name: 'TileOSM' } }).name_osm).toBe('TileOSM');
+  });
+
   it('falls back to the entry\'s name_nds when the tile has none', () => {
     const e = entry({ name_nds: 'EntryNDS' });
     const props = { 'name:de': 'TileDE' }; // no name:nds on this tile

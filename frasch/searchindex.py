@@ -16,9 +16,9 @@ curation row with the same reference (names/curation.csv).  The Low Saxon
 name (`name_nds`) is the object's OSM `name:nds`: the name list has no Low
 Saxon column, but the map labels with it before German, and the card and
 search results have to agree with it.  The generic name (`name_osm`) is the
-object's OSM `name`, for the same reason: the label chain ends in it, and
-north of the border it is the Danish name, not the list's German one.  A
-local reference gets the `name` the injector gives its point.
+object's OSM `name`, for the same reason: it is the chain's generic step
+near its end, and north of the border it is the Danish name, not the list's
+German one.  A local reference gets the `name` the injector gives its point.
 
 A row with an OSM reference the objects file does not know stops the export
 -- it is on the map, and would be missing from search.  Re-run
