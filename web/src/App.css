@@ -2,6 +2,28 @@
   position: relative;
   width: 100%;
   height: 100%;
+  /* What a notch, rounded corners or a home indicator take from each edge
+     (index.html asks for the whole screen, viewport-fit=cover): the map runs
+     under them, the panels and controls stay clear of them. */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+}
+
+.app .maplibregl-ctrl-top-right {
+  top: var(--safe-top);
+  right: var(--safe-right);
+}
+
+.app .maplibregl-ctrl-bottom-right {
+  right: var(--safe-right);
+  bottom: var(--safe-bottom);
+}
+
+.app .maplibregl-ctrl-bottom-left {
+  left: var(--safe-left);
+  bottom: var(--safe-bottom);
 }
 
 .map-container {
@@ -17,11 +39,11 @@
    card never has to know how tall the search panel is. */
 .side-panel {
   position: absolute;
-  top: 12px;
-  left: 12px;
-  bottom: 12px;
+  top: calc(12px + var(--safe-top));
+  left: calc(12px + var(--safe-left));
+  bottom: calc(12px + var(--safe-bottom));
   z-index: 1;
-  width: min(320px, calc(100vw - 24px));
+  width: min(320px, calc(100vw - 24px - var(--safe-left) - var(--safe-right)));
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -174,7 +196,7 @@
 }
 
 .search-result-de {
-  color: #777;
+  color: #6b6b6b;
   font-size: 12px;
 }
 
@@ -188,7 +210,7 @@
 
 .search-empty {
   padding: 6px 4px;
-  color: #777;
+  color: #6b6b6b;
   font-size: 13px;
 }
 
@@ -203,9 +225,9 @@
   }
 
   .side-panel {
-    top: var(--bar-inset);
-    left: var(--bar-inset);
-    right: var(--bar-inset);
+    top: calc(var(--bar-inset) + var(--safe-top));
+    left: calc(var(--bar-inset) + var(--safe-left));
+    right: calc(var(--bar-inset) + var(--safe-right));
     bottom: auto;
     width: auto;
   }
@@ -265,14 +287,15 @@
 
   /* MapLibre's zoom/compass buttons, from under the bar to below it. */
   .app .maplibregl-ctrl-top-right {
-    top: calc(var(--bar-inset) + var(--bar-height));
+    top: calc(var(--bar-inset) + var(--bar-height) + var(--safe-top));
   }
 
   /* The attribution rides on top of the open sheet; hooks/useSheetHeight.ts
-     keeps --sheet-height at the sheet's height while there is one. */
+     keeps --sheet-height at the sheet's height while there is one, which
+     covers the bottom's unsafe strip itself. */
   .app .maplibregl-ctrl-bottom-right,
   .app .maplibregl-ctrl-bottom-left {
-    bottom: var(--sheet-height, 0px);
+    bottom: var(--sheet-height, var(--safe-bottom));
   }
 }
 
@@ -280,7 +303,7 @@
    map but below the side panel, which it must not hide. */
 .map-error {
   position: absolute;
-  top: 12px;
+  top: calc(12px + var(--safe-top));
   left: 50%;
   transform: translateX(-50%);
   z-index: 1;
