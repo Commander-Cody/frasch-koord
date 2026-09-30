@@ -87,10 +87,13 @@ describe('a vite build with the plugin', () => {
   });
 
   it("ships the pinned archive in place of public/tiles' own", async () => {
+    put('public/tiles/.gitkeep', '');
     put('public/tiles/schleswig-holstein.pmtiles', 'a local build');
+    put('public/tiles/denmark.pmtiles', 'another local build');
 
     await viteBuild();
 
+    expect(readdirSync(join(outDir, 'tiles')).sort()).toEqual(['.gitkeep', 'schleswig-holstein.pmtiles']);
     expect(readFileSync(join(outDir, 'tiles/schleswig-holstein.pmtiles'), 'utf8')).toBe(PINNED);
   });
 

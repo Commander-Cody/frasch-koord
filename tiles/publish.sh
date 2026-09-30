@@ -24,7 +24,7 @@ URL="https://github.com/${REPO}/releases/download/${TAG}/${STEM}.pmtiles"
 
 gh release create "$TAG" --repo "$REPO" --latest=false --title "Tiles ${TAG#tiles-}" --notes "\
 The tile archive the website is built with, pinned in web/tiles.lock.
-Built by tiles/build.sh from commit $(git rev-parse --short HEAD); the inputs it was built from are stamped into the archive's metadata (\`built_from\`, see web/README.md).
+Built by tiles/build.sh and published from commit $(git rev-parse --short HEAD). What it was built from is stamped into the archive's metadata: the name files' git blob hashes (\`built_from\`, see web/README.md) and the extract's replication time.
 
 sha256 ${SHA256}
 
