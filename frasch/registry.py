@@ -120,7 +120,8 @@ def row_problem(row: Mapping[str, str], seen_tags: Collection[str] = (),
 
 def rows(path: str) -> tuple[list[Dialect], list[tuple[int, str]]]:
     """-> (dialects, problems): the rows of the registry that follow its
-    rules, and `(line, reason)` for every one that does not."""
+    rules, and `(line, reason)` for every one that does not.  A registry
+    without a dialect is one problem."""
     if not os.path.exists(path):
         raise PipelineError(f"dialect registry not found: {path}")
     with files.open_csv(path) as fh:
@@ -148,6 +149,8 @@ def rows(path: str) -> tuple[list[Dialect], list[tuple[int, str]]]:
                 found.append(_dialect(row))
             seen_tags.add(row["tag"])
             seen_cols.add(row["column"])
+    if not found and not problems:
+        problems.append((1, "no dialects"))
     return found, problems
 
 
@@ -159,8 +162,6 @@ def _dialect(row: Mapping[str, str]) -> Dialect:
 def read(path: str = paths.DIALECTS) -> Registry:
     """The registry, validated; a ValidationError lists every problem."""
     found, problems = rows(path)
-    if not problems and not found:
-        problems = [(1, "no dialects")]
     if problems:
         raise ValidationError([f"{path}:{n}: {what}" for n, what in problems])
     return Registry(found)

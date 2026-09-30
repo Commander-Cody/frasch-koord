@@ -121,11 +121,8 @@ def check_curation(path: str, ids: Container[str]) -> tuple[list[Problem], set[s
 
 def check_dialects(path: str) -> tuple[Registry | None, list[Problem]]:
     """-> (the sound rows of the dialect registry, names/dialects.csv -- None
-    when there are none --, the problems in it).  A registry without a
-    dialect is one, as `registry.read` has it."""
+    when there are none --, the problems in it)."""
     found, problems = registry.rows(path)
-    if not found and not problems:
-        problems = [(1, "no dialects")]
     return (Registry(found) if found else None,
             [Problem(path, n, what) for n, what in problems])
 
