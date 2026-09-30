@@ -31,7 +31,9 @@ uv run shellcheck tiles/*.sh web/scripts/*.sh
 
 The whole pipeline — extracts, matching, locating, dialect areas, search
 index, tiles — runs through the recipes of the `justfile`
-(`uv run just --list`; `just` comes with `uv sync`). See
+(`uv run just --list`; `just` comes with `uv sync`). After editing the name
+list or curating in the map's `?curate` view, `uv run just update` brings
+every file it feeds up to date in one go. See
 [`names/README.md`](names/README.md#workflow).
 
 Node 24 (see `web/.nvmrc`), for the frontend:
