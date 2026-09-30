@@ -52,6 +52,7 @@ export default function CurateLookup({ lookup, isChecked, onToggle, onShow, onPi
             color={COLOR_LOOKUP}
             name={result.name || '(unnamed)'}
             meta={result.what || result.tags}
+            wikidataTag={result.wikidata}
             checked={isChecked(result.ref)}
             onToggle={() => onToggle(result.ref, result.wikidata)}
             onShow={() => onShow(result)}

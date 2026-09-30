@@ -31,6 +31,17 @@ const WORKLIST: CurateWorklist = {
     curateRow('naibel', 'Naibel', 'Niebüll'),
     curateRow('rischsbel', 'Rischsbel', 'Risum'),
     curateRow('deesbel', 'Deesbel', 'Dagebüll'),
+    {
+      ...curateRow('taning', 'Taning', 'Tönning'),
+      candidates: [{ ref: 'node/7', name: 'Tönning', class: 'town', km: 1, wikidata: 'Q1717813;Q20729612' }],
+    },
+    {
+      ...curateRow('hoosem', 'Hoosem', 'Husum'),
+      candidates: [
+        { ref: 'node/9', name: 'Husum', class: 'town', km: 1, wikidata: 'Q21159' },
+        { ref: 'way/10', name: 'Husum', class: 'boundary', km: 1, wikidata: 'Q21159;Q20729612' },
+      ],
+    },
   ],
 };
 
@@ -49,8 +60,8 @@ function json(body: unknown): Response {
 
 /** The dev server's patch endpoint as a stub: every POST waits until the test answers it. */
 let posts: { entry: PatchEntry; reply: ReturnType<typeof deferred> }[];
-/** Every request to an OSM service, with its init. */
-let lookups: { url: string; init?: RequestInit }[];
+/** Every request to an OSM service, with its init; each waits until the test answers it. */
+let lookups: { url: string; init?: RequestInit; reply: ReturnType<typeof deferred> }[];
 
 function answerPost(i: number) {
   const { entry, reply } = posts[i];
@@ -75,8 +86,9 @@ beforeEach(() => {
         return reply.promise;
       }
       if (input === '/__curate/patch') return Promise.resolve(json({ entries: [] }));
-      lookups.push({ url: input, init });
-      return new Promise<Response>(() => {});
+      const reply = deferred();
+      lookups.push({ url: input, init, reply });
+      return reply.promise;
     }),
   );
 });
@@ -95,6 +107,24 @@ async function openRow(name: string) {
 async function renderPanel() {
   render(<CuratePanel mapRef={{ current: null }} />);
   await screen.findByText('Naibel');
+}
+
+/** Runs an Overpass lookup that finds one way, `way/<id>`, tagged with `wikidata`. */
+async function findOverpassResult(osmRef: string, wikidata: string) {
+  const [type, id] = osmRef.split('/');
+  fireEvent.click(screen.getByRole('button', { name: 'Overpass' }));
+  const { reply } = lookups[lookups.length - 1];
+  await act(async () => {
+    reply.resolve(
+      json({ elements: [{ type, id: Number(id), center: { lat: 54.8, lon: 8.8 }, tags: { name: 'Niebüll', wikidata } }] }),
+    );
+    await reply.promise;
+  });
+}
+
+/** The lookup result or candidate listed with `osmRef`. */
+async function listedItem(osmRef: string): Promise<HTMLElement> {
+  return (await screen.findByText(osmRef)).closest('li') as HTMLElement;
 }
 
 function selectedHeading(): string {
@@ -179,5 +209,53 @@ describe('CuratePanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Overpass' }));
 
     expect(String(lookups[0].init?.body)).toContain('nwr["name"~"Söl \\"Ring\\"",i]');
+  });
+
+  it('saves a candidate whose wikidata tag names several ids without one', async () => {
+    await renderPanel();
+    await openRow('Taning');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pick' }));
+
+    expect(posts[0].entry).toMatchObject({ action: 'osm', osm: 'node/7' });
+    expect(posts[0].entry).not.toHaveProperty('wikidata');
+  });
+
+  it('saves an Overpass result whose wikidata tag names several ids without one', async () => {
+    await renderPanel();
+    await openRow('Naibel');
+    await findOverpassResult('way/8', 'Q1;Q2');
+
+    fireEvent.click(within(await listedItem('way/8')).getByRole('button', { name: 'Pick' }));
+
+    expect(posts[0].entry).toMatchObject({ action: 'osm', osm: 'way/8' });
+    expect(posts[0].entry).not.toHaveProperty('wikidata');
+  });
+
+  it('saves the one well-formed id of a multi-pick, leaving out a tag with several', async () => {
+    await renderPanel();
+    await openRow('Hoosem');
+    fireEvent.click(screen.getByLabelText('select node/9'));
+    fireEvent.click(screen.getByLabelText('select way/10'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pick 2 selected' }));
+
+    expect(posts[0].entry).toMatchObject({ action: 'osm', osm: 'node/9; way/10', wikidata: 'Q21159' });
+  });
+
+  it('says on a candidate that its wikidata tag with several ids is not saved', async () => {
+    await renderPanel();
+    await openRow('Taning');
+
+    within(await listedItem('node/7')).getByText('wikidata Q1717813;Q20729612: not one id, not saved');
+  });
+
+  it('says on an Overpass result that its wikidata tag with several ids is not saved', async () => {
+    await renderPanel();
+    await openRow('Naibel');
+
+    await findOverpassResult('way/8', 'Q1;Q2');
+
+    within(await listedItem('way/8')).getByText('wikidata Q1;Q2: not one id, not saved');
   });
 });
