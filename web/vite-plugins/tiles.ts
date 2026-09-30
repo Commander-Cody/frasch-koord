@@ -90,7 +90,7 @@ async function dropCopiedArchives(tilesDir: string): Promise<void> {
 }
 
 /** Replaces the archives Vite copied into `outDir` with the pinned one, or none. */
-export async function shipTiles({ root, outDir, external }: TilesBuild): Promise<void> {
+async function shipTiles({ root, outDir, external }: TilesBuild): Promise<void> {
   await dropCopiedArchives(join(outDir, 'tiles'));
   if (external) return;
   const sha256 = await lockValue(root, 'ARCHIVE_SHA256');
@@ -114,8 +114,9 @@ export default function tiles(): Plugin {
       const problems = await assetProblems(build);
       if (problems.length > 0) this.error(problems.join('\n'));
     },
-    // After Vite has copied public/ into the output.
-    async closeBundle() {
+    // After Vite has copied public/ into the output. Not closeBundle, which
+    // also runs after a failed build and would bury buildStart's message.
+    async writeBundle() {
       await shipTiles(build);
     },
   };

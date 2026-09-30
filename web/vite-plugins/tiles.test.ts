@@ -1,20 +1,21 @@
 // @vitest-environment node
 /**
- * The build step of vite-plugins/tiles.ts on a temp web/ root: what it lets
+ * vite-plugins/tiles.ts on a temp web/ root: what a build lets
  * into dist/tiles/, and what makes it refuse to build.
  */
 import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { build } from 'vite';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { assetProblems, shipTiles } from './tiles.ts';
+import tiles, { assetProblems } from './tiles.ts';
 
 const PINNED = 'the published archive';
 const PINNED_SHA256 = createHash('sha256').update(PINNED).digest('hex');
 
-/** A web/ checkout: the lock, the fetched archive in the cache. */
+/** A web/ checkout: the lock, the fetched archive in the cache, the glyphs. */
 let root: string;
 let outDir: string;
 
@@ -30,27 +31,11 @@ beforeEach(() => {
   put('tiles.lock', `ARCHIVE_URL=https://example.org/schleswig-holstein.pmtiles\nARCHIVE_SHA256=${PINNED_SHA256}\n`);
   put(`.cache/tiles/${PINNED_SHA256}.pmtiles`, PINNED);
   for (const font of ['Noto Sans Regular', 'Noto Sans Italic', 'Noto Sans Bold']) put(`public/fonts/${font}/0-255.pbf`, '');
-  // What Vite copied from public/tiles/: a local build behind the dev symlink.
-  put('dist/tiles/schleswig-holstein.pmtiles', 'a local build');
-  put('dist/tiles/.gitkeep', '');
 });
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   rmSync(root, { recursive: true, force: true });
-});
-
-describe('shipTiles', () => {
-  it('ships the pinned archive, not what public/tiles held', async () => {
-    await shipTiles({ root, outDir, external: false });
-
-    expect(readFileSync(join(outDir, 'tiles/schleswig-holstein.pmtiles'), 'utf8')).toBe(PINNED);
-  });
-
-  it('ships no archive when the tiles are hosted elsewhere', async () => {
-    await shipTiles({ root, outDir, external: true });
-
-    expect(readdirSync(join(outDir, 'tiles'))).toEqual(['.gitkeep']);
-  });
 });
 
 describe('assetProblems', () => {
@@ -86,5 +71,35 @@ describe('assetProblems', () => {
     put('tiles.lock', 'ARCHIVE_URL=https://example.org/schleswig-holstein.pmtiles\n');
 
     expect(await assetProblems({ root, external: false })).toEqual(['tiles.lock pins no sha256 (ARCHIVE_SHA256=)']);
+  });
+});
+
+describe('a vite build with the plugin', () => {
+  function viteBuild() {
+    put('index.html', '<!doctype html><title>Frasch Maps</title>');
+    return build({ root, logLevel: 'silent', configFile: false, plugins: [tiles()] });
+  }
+
+  it('stops with what is missing, not with what it could not copy', async () => {
+    rmSync(join(root, '.cache'), { recursive: true });
+
+    await expect(viteBuild()).rejects.toThrow('npm run fetch-assets');
+  });
+
+  it("ships the pinned archive in place of public/tiles' own", async () => {
+    put('public/tiles/schleswig-holstein.pmtiles', 'a local build');
+
+    await viteBuild();
+
+    expect(readFileSync(join(outDir, 'tiles/schleswig-holstein.pmtiles'), 'utf8')).toBe(PINNED);
+  });
+
+  it('ships no archive with VITE_TILES_URL', async () => {
+    put('public/tiles/schleswig-holstein.pmtiles', 'a local build');
+    vi.stubEnv('VITE_TILES_URL', 'pmtiles://https://example.org/schleswig-holstein.pmtiles');
+
+    await viteBuild();
+
+    expect(readdirSync(join(outDir, 'tiles'))).toEqual([]);
   });
 });

@@ -39,3 +39,4 @@ else
 fi
 # Earlier pins' archives: ~125 MB each, and nothing uses them any more.
 find .cache/tiles -name '*.pmtiles' ! -name "$ARCHIVE_SHA256.pmtiles" -delete
+echo "tile archive: $CACHED (pinned in tiles.lock)"
