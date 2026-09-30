@@ -395,7 +395,13 @@ the synthetic polygons it would add.
   row goes to review instead of matching.
 * A Koog/Warft/Hallig/street matched outside North Frisia, or a far-away
   hamlet/isolated dwelling, is left for review even when it is the only
-  candidate.
+  candidate. Then the weaker name hits are tried: `Kampen (Sylt)` wins over
+  the exact hit *Kampen*, a hamlet near Hamburg.
+* A best name hit outside North Frisia that is not implausible in itself (a
+  village, a town) is still left for review when a **weaker** hit lies inside
+  North Frisia: the exact *Ostenfeld* is the village near Rendsburg, but OSM
+  calls the one near Husum `Ostenfeld (Husum)`, and which one the list means
+  is for a human to decide.
 * For settlements the **place node** wins over the boundary relation (that is
   what OpenMapTiles labels); a node without `wikidata` gets the relation's.
   Only a boundary within 10 km lends it (a namesake further away is another

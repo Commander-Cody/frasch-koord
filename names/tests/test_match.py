@@ -62,6 +62,11 @@ KAMPEN_SYLT_MUNICIPALITY = cand("r", 1147133, 8.356739, 54.967875, name="Kampen 
 KAMPEN_STORMARN = cand("n", 6694657313, 9.937962, 53.857649, name="Kampen",
                        place="hamlet")
 
+OSTENFELD_RENDSBURG = cand("n", 240062575, 9.780628, 54.316519, name="Ostenfeld",
+                           place="village", wikidata="Q667300")
+OSTENFELD_HUSUM = cand("n", 240104163, 9.232751, 54.46359, name="Ostenfeld (Husum)",
+                       name__da="Østerfjolde", place="village")
+
 DRAGE_STEINBURG = cand("n", 240054933, 9.51933, 54.004272, name="Drage", place="village")
 DRAGE_STEINBURG_MUNICIPALITY = cand("r", 450076, 9.533033, 54.016063, name="Drage",
                                     boundary="administrative", admin_level="8",
@@ -275,6 +280,22 @@ def test_a_weaker_osm_annotation_hit_beats_a_far_away_hamlet(tmp_path: Path) -> 
     assert out["osm_id"] == "240063898"
     assert out["match_name"] == "Kampen (Sylt)"
     assert out["note"] == "auto: only candidate in North Frisia (weaker name hit)"
+
+
+def test_a_far_away_village_with_a_weaker_hit_in_north_frisia_is_ambiguous(
+        tmp_path: Path) -> None:
+    """Ostenfeld: the exact hit is the village near Rendsburg, outside North
+    Frisia; OSM calls the one near Husum `Ostenfeld (Husum)`, only a weaker
+    hit.  A far-away village is no implausible winner the way a hamlet is, so
+    neither is taken -- the row goes to review with both."""
+    out = run(tmp_path, row(kind="settlement", mooring="Ååstenfälj", de="Ostenfeld"),
+              OSTENFELD_RENDSBURG, OSTENFELD_HUSUM)
+    assert out["status"] == "ambiguous"
+    assert (out["osm_id"], out["wikidata"]) == ("", "")
+    assert "n/240062575:Ostenfeld:village:" in out["candidates"]
+    assert "n/240104163:Ostenfeld (Husum):village:" in out["candidates"]
+    assert out["note"] == ("best name hit is 71 km from North Frisia, a weaker "
+                           "one lies inside -- verify by hand")
 
 
 def test_a_far_away_hamlet_alone_is_left_for_review(tmp_path: Path) -> None:
