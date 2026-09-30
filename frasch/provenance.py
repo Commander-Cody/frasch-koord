@@ -74,10 +74,11 @@ def built_from(inputs: Mapping[str, StrPath], extracts: list[ExtractStamp]) -> B
 
 def recorded(path: StrPath) -> BuiltFrom:
     """The stamp a generated JSON file carries: `built_from` at its top
-    level, or in the `properties` of a GeoJSON FeatureCollection."""
+    level, or in the `properties` of a GeoJSON FeatureCollection; `{}` for a
+    file without one, which then matches no inputs at all."""
     with open(path, encoding="utf-8") as fh:
         data = json.load(fh)
-    found: BuiltFrom = (data.get("properties") or data)["built_from"]
+    found: BuiltFrom = (data.get("properties") or data).get("built_from", {})
     return found
 
 

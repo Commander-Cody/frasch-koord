@@ -12,9 +12,9 @@ this runs the pipeline's commands in their order:
   match               fill the empty `osm` cells of places.csv, REPORT.md
   objects             `locate.py`, osm_objects.json   -- only when stale
   areas               `build_dialect_areas.py`        -- only when stale
-  curation worklist   `curate.py export`: what is left for the view
   dialect registry    web/src/generated/dialects.json
   search index        web/public/data/names.json
+  curation worklist   `curate.py export`: what is left for the view
   check               the committed outputs match their inputs (`just check`)
 
 and ends with the files it changed and the rows left to curate.  The slow
@@ -32,6 +32,7 @@ import argparse
 import enum
 import json
 import os
+import sys
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
 
@@ -85,8 +86,13 @@ def command(main: cli.Command, *argv: str) -> Callable[[], Outcome]:
 def apply_decisions(names: str, curation: str, patch: str) -> Outcome:
     """`curate.py apply`: a decision it refuses stays in the patch, for the
     browser to show and the curator to fix -- no reason to hold back the rest
-    of the run."""
-    return Outcome.WARNED if curate.apply(names, curation, patch) else Outcome.DONE
+    of the run.  A problem that stops the apply itself stops the run."""
+    try:
+        refused = curate.apply(names, curation, patch)
+    except PipelineError as stop:
+        print(stop, file=sys.stderr)
+        return Outcome.FAILED
+    return Outcome.WARNED if refused else Outcome.DONE
 
 
 def candidates_stale(path: StrPath, extracts: list[ExtractStamp]) -> bool:
@@ -148,12 +154,12 @@ def steps(a: argparse.Namespace) -> list[Step]:
             "--registry", a.dialects, "--out", a.areas, "--parts-out", a.parts),
              needed=lambda: areas_stale([a.areas, a.parts], a.area_list, a.dialects,
                                         [area_extract])),
-        Step("curation worklist", command(
-            curate.main, "export", "--names", a.names, "--matches", a.matches,
-            "--candidates", a.candidates, "--out", a.worklist)),
         Step("dialect registry", command(
             dialects.main, "--registry", a.dialects, "--export", a.registry_json)),
         Step("search index", command(export_search_index.main, *inputs, "--out", a.index)),
+        Step("curation worklist", command(
+            curate.main, "export", "--names", a.names, "--matches", a.matches,
+            "--candidates", a.candidates, "--out", a.worklist)),
         Step("check", command(
             check_built.main, *inputs, "--index", a.index,
             "--registry-json", a.registry_json, "--area-list", a.area_list,

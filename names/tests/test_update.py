@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from frasch import locate, paths, provenance, update
+from frasch import locate, paths, placelist, provenance, update
 from frasch.provenance import ExtractStamp
 from conftest import cand, places_text, write_candidates
 from osm_fixture import ring, write_extract
@@ -125,6 +125,18 @@ def test_a_refused_curation_decision_does_not_stop_the_run(
     assert "refused" in capsys.readouterr().out
 
 
+def test_a_curation_apply_that_cannot_run_stops_the_run(
+        workspace: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    write_places(workspace, TOFTEM)
+    (workspace / "work" / "curate-patch.jsonl").write_text(
+        json.dumps({"id": "toftem", "action": "skip"}) + "\n", encoding="utf-8")
+    with placelist.lock(str(workspace / "places.csv")):    # match.py is running
+        assert run(workspace) == 1
+    out = capsys.readouterr().out
+    assert "update stopped: curation decisions failed" in out
+    assert not (workspace / "names.json").exists()
+
+
 def test_a_second_run_on_the_same_extracts_skips_the_slow_steps(
         workspace: Path, capsys: pytest.CaptureFixture[str]) -> None:
     write_places(workspace, TOFTEM)
@@ -227,4 +239,13 @@ def test_dialect_areas_are_stale_when_one_of_the_two_files_is(workspace: Path) -
     area_list, registry = workspace / "dialect_areas.csv", workspace / "dialects.csv"
     outputs = [workspace / "dialect_areas.geojson", workspace / "dialect_areas_parts.geojson"]
     write_area_files(outputs[:1], area_list, registry, SH)
+    assert update.areas_stale(outputs, area_list, registry, [SH])
+
+
+def test_dialect_areas_without_a_stamp_are_stale(workspace: Path) -> None:
+    area_list, registry = workspace / "dialect_areas.csv", workspace / "dialects.csv"
+    outputs = [workspace / "dialect_areas.geojson", workspace / "dialect_areas_parts.geojson"]
+    for path in outputs:
+        path.write_text(json.dumps({"type": "FeatureCollection", "features": []}),
+                        encoding="utf-8")
     assert update.areas_stale(outputs, area_list, registry, [SH])
