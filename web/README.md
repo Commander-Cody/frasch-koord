@@ -214,12 +214,14 @@ dropping to German.
 Local view (`tag = LOCAL_TAG`):
 
 ```
-coalesce(frasch:local, name:nds, name:latin, name)
+coalesce(frasch:local, name:nds, name:latin, name, name:de)
 ```
 
-Deliberately **no `name:frr`** — that is some other dialect's name, which is
-exactly what this view avoids — and **no `name:de`**: German still arrives
-via `name:latin`/`name`, but only after Low Saxon has had its turn.
+Deliberately **no `name:frr`**, because that is some other dialect's name,
+which is exactly what this view avoids. `name:de` comes **only at the very
+end**, for a feature without a generic `name`. German usually arrives
+through `name:latin`/`name` anyway, but only after Low Saxon has had its turn.
+North of the border that generic name is the Danish one (Ribe, not Ripen).
 
 Both chains assume Low Saxon is the local majority language wherever there is
 no Frisian name, which holds for Phase 1 (Schleswig-Holstein tiles only) and
@@ -381,6 +383,7 @@ per place):
   "dialect": "frr-x-fering",      // omitted outside the Frisian dialect areas
   "variety": "Foortuftinge",      // omitted: sub-dialect of the local name
   "name_nds": "string",           // omitted: OSM's Low Saxon name of the place's object
+  "name_osm": "string",           // omitted: OSM's generic `name` of the place's object
   "name_de": "string",            // German name, shown alongside as a hint
   "name_da": "string",            // omitted: Danish name, where the list has one
   "wikidata": "Q3127",            // omitted: QID of the place, where the row has one
@@ -460,6 +463,13 @@ Where the data comes from (`src/names.ts`):
   (`export_search_index.py` takes it from the object's entry in
   `names/osm_objects.json`). It gets its own line (`card.lowSaxon`) only where
   it differs from both the headline and the German name.
+- The generic name (`name_osm`), the `name:latin`/`name` steps near the end
+  of both chains, comes from the same places: a clicked card takes it from the tile,
+  one opened from search from `names.json`. A place OSM does not have gets
+  the name the injector gives its point. The card never treats it as German:
+  in the local view Ribe is labelled Ribe, and the list's German Ripen gets a
+  line of its own. The headline says which language it is only where that is
+  known, i.e. where the name equals the German or the Danish one.
 
 Two details worth knowing:
 

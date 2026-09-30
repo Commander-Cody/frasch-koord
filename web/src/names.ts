@@ -43,6 +43,15 @@ export interface NameEntry {
   name_nds?: string;
   /** German name, shown as a hint next to a Frisian one. */
   name_de: string;
+  /**
+   * The place's generic name — OSM's plain `name`, the chain's generic
+   * steps near its end (`name:latin`, `name`) and therefore what the local
+   * view labels a place with that has neither a local nor a Low Saxon name. In this region
+   * that is usually the German name, but north of the border it is the Danish
+   * one (Ribe, where German says Ripen). names/export_search_index.py takes it
+   * from names/osm_objects.json, a tile feature carries it itself.
+   */
+  name_osm?: string;
   /** Danish name, where the list has one. */
   name_da?: string;
   /** Wikidata QID of the place, where the row has one. */
@@ -65,10 +74,25 @@ export interface PlaceSelection {
   featureId?: string | number;
 }
 
-/** A name together with where it came from: a dialect tag, or `local`, `frr`, `nds`, `de`, `da`. */
+/**
+ * A name together with where it came from: a dialect tag, or `local`, `frr`,
+ * `nds`, `de`, `da`, or `osm` for OSM's generic name in no known language.
+ */
 export interface ShownName {
   name: string;
   source: string;
+}
+
+/**
+ * The source to report for OSM's generic name: the language whose name it
+ * is, where the entry knows one (Ribe is the Danish name, Niebüll the German
+ * one), else `osm` — the card then names no language rather than a wrong one.
+ */
+function osmNameSource({ name_osm, name_de, name_da }: NameEntry): string {
+  if (!name_osm) return 'osm';
+  if (name_osm === name_de) return 'de';
+  if (name_osm === name_da) return 'da';
+  return 'osm';
 }
 
 /** The entry's value for one tile property of the label chain, and its source. */
@@ -80,12 +104,13 @@ function chainStep(entry: NameEntry, key: string): { name?: string; source: stri
       return { name: entry.name_frr, source: 'frr' };
     case 'name:nds':
       return { name: entry.name_nds, source: 'nds' };
-    // `name_de` already is the tile's `name:de`, else its plain `name` (see
-    // entryFromTile), so the generic tail of the chain lands here too.
     case 'name:de':
+      return { name: entry.name_de, source: 'de' };
+    // Both are OSM's generic name: `name:latin` is OpenMapTiles' Latin-script
+    // copy of `name`, the same string in this part of the world.
     case 'name:latin':
     case 'name':
-      return { name: entry.name_de, source: 'de' };
+      return { name: entry.name_osm, source: osmNameSource(entry) };
   }
   const tag = key.replace(/^name:/, '');
   // `?.` because names.json is fetched, not type-checked: an archive built
@@ -265,9 +290,10 @@ export function entryFromTile(props: TileProps): NameEntry {
     variety: str(props, 'frasch:variety'),
     name_frr: str(props, 'name:frr'),
     name_nds: str(props, 'name:nds'),
-    // `name_de` is OpenMapTiles' own German field; `name` is whatever OSM
-    // calls the place, which in this region is the German name.
-    name_de: str(props, 'name:de') ?? str(props, 'name_de') ?? str(props, 'name') ?? '',
+    // `name_de` is OpenMapTiles' own German field. The plain `name` is not a
+    // German one north of the border, so it only goes into `name_osm`.
+    name_de: str(props, 'name:de') ?? str(props, 'name_de') ?? '',
+    name_osm: str(props, 'name:latin') ?? str(props, 'name'),
     name_da: str(props, 'name:da'),
     lon: 0,
     lat: 0,
@@ -296,6 +322,8 @@ export function cardEntry(selection: PlaceSelection): NameEntry {
     // shows, while the entry's comes from the OSM extract the name list was
     // matched against, which may be older.
     name_nds: tile.name_nds ?? entry.name_nds,
+    // Likewise: the label may be the tile's generic name.
+    name_osm: tile.name_osm ?? entry.name_osm,
     name_de: entry.name_de || tile.name_de,
     name_da: entry.name_da ?? tile.name_da,
     kind: entry.kind || tile.kind,

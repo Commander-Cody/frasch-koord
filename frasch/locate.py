@@ -23,6 +23,7 @@ file records
   outline      the second point for the dialect lookup, see `dialect_at`
   admin_level  of an administrative boundary (see `object_facts`)
   name_nds     OSM's Low Saxon name (see `object_facts`)
+  name         OSM's generic name (see `object_facts`)
 
 and, as `built_from`, the extracts it was read from (names/provenance.py).
 
@@ -55,6 +56,7 @@ class Facts(TypedDict, total=False):
     """See `object_facts`."""
     admin_level: int
     name_nds: str
+    name: str
 
 
 class Point(TypedDict):
@@ -130,13 +132,18 @@ def object_facts(tags: Mapping[str, str]) -> Facts:
                  (a Kreis, an Amt) spans several dialects, see `dialect_at`
     name_nds     its Low Saxon name: the name list has no Low Saxon column,
                  but the map labels with OSM's `name:nds` before German, and
-                 the place card must name the place as its label does"""
+                 the place card must name the place as its label does
+    name         its generic name, for the same reason: the local view labels
+                 a place without a local or Low Saxon name with it, and north
+                 of the border it is the Danish name, not the list's German"""
     facts: Facts = {}
     level = tags.get("admin_level", "")
     if tags.get("boundary") == "administrative" and level.isdigit():
         facts["admin_level"] = int(level)
     if tags.get("name:nds"):
         facts["name_nds"] = tags["name:nds"]
+    if tags.get("name"):
+        facts["name"] = tags["name"]
     return facts
 
 

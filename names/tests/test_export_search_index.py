@@ -19,7 +19,7 @@ from frasch.paths import StrPath
 from frasch.placelist import OsmRef
 from frasch.provenance import ExtractStamp
 from frasch.searchindex import SearchEntry, SearchIndex
-from conftest import places_text
+from conftest import curation_file, places_text
 
 Rows = Iterable[Mapping[str, str]]
 # the `export` fixture: `rows` exported -> {id: entry}
@@ -39,6 +39,8 @@ KRIS = {"id": "kris-nordfraschlonj", "kind": "landscape", "mooring": "Kris Nordf
 STIARDEBEL = {"id": "stiardebel", "kind": "settlement", "mooring": "Stiirdebel",
               "nordgoes": "Steerdebel", "suedgoes": "Stiardebel", "de": "Stadum",
               "osm": "node/2974350732", "status": "ok"}
+RIPEN = {"id": "ripen", "kind": "settlement", "mooring": "Ripen", "de": "Ripen", "da": "Ribe",
+         "osm": "node/597643755", "status": "auto"}
 OBJECTS: dict[OsmRef, locate.LocatedObject] = {
     ("n", 240042766): {"lon": 8.83, "lat": 54.79, "name_nds": "Niböl"},
     ("w", 28330569): {"lon": 8.86, "lat": 54.47},
@@ -47,6 +49,7 @@ OBJECTS: dict[OsmRef, locate.LocatedObject] = {
     ("r", 27019): {"lon": 8.84, "lat": 54.67, "admin_level": 6},
     # in the Südergoesharde strip of AREAS
     ("n", 2974350732): {"lon": 9.05, "lat": 54.72},
+    ("n", 597643755): {"lon": 8.76, "lat": 55.33, "name": "Ribe"},
 }
 EXTRACTS: list[ExtractStamp] = [{"file": "schleswig-holstein-latest.osm.pbf",
              "replication_timestamp": "2026-09-22T20:22:59Z"}]
@@ -138,6 +141,20 @@ def test_a_district_gets_no_dialect(export: Export) -> None:
 
 def test_the_low_saxon_name_comes_from_the_object(export: Export) -> None:
     assert export([NAIBEL])["naibel"]["name_nds"] == "Niböl"
+
+
+def test_the_generic_name_comes_from_the_object(export: Export) -> None:
+    assert export([RIPEN])["ripen"]["name_osm"] == "Ribe"
+
+
+def test_a_place_osm_does_not_have_gets_the_generic_name_of_its_map_point(
+        paths: Path, export: Export) -> None:
+    curation_file(paths, {"osm": "local/westerheide-amrum", "name": "Westerheide (Amrum)",
+                          "lat": "54.65097", "lon": "8.34019"})
+    waasterhias = {"id": "waasterhias", "kind": "settlement", "oomrang": "Waasterhias",
+                   "de": "Westerheide", "osm": "local/westerheide-amrum", "status": "ok"}
+    # the German name, as the injector names the point it adds (inject_names.point_tags)
+    assert export([waasterhias])["waasterhias"]["name_osm"] == "Westerheide"
 
 
 def test_a_row_whose_object_was_never_located_stops_the_export(

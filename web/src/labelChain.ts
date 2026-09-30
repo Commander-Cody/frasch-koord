@@ -23,9 +23,10 @@ import { DIALECTS, LOCAL_TAG } from './config';
  *    a transliterated Latin name, and finally the generic OSM `name`.
  *  - local view: ONLY the name the people of the place use themselves, then
  *    the local majority language. Deliberately no `name:frr` (that is some
- *    other dialect's name, which is exactly what this view avoids) and no
- *    `name:de` — German comes in via `name:latin`/`name` anyway, but only
- *    after Low Saxon has had its turn.
+ *    other dialect's name, which is exactly what this view avoids), and
+ *    `name:de` only as the very last resort, for a feature without a generic
+ *    `name` (issue #32): German comes in via `name:latin`/`name` anyway, but
+ *    only after Low Saxon has had its turn.
  *
  * Phase 1 covers Schleswig-Holstein only, so `name:nds` (Low Saxon) is always
  * the local majority language outside the Frisian areas. That assumption
@@ -35,7 +36,7 @@ import { DIALECTS, LOCAL_TAG } from './config';
  */
 export function labelChain(tag: string): string[] {
   if (tag === LOCAL_TAG) {
-    return ['frasch:local', 'name:nds', 'name:latin', 'name'];
+    return ['frasch:local', 'name:nds', 'name:latin', 'name', 'name:de'];
   }
   return [
     `name:${tag}`,

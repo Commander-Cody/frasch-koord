@@ -42,7 +42,7 @@ const MAX_RESULTS = 8;
 
 /** Flattens all of an entry's names into the indexed `text` field, deduplicated. */
 function toIndexed(entry: NameEntry): IndexedEntry {
-  const all = [...Object.values(entry.names ?? {}), entry.local, entry.name_nds, entry.name_de];
+  const all = [...Object.values(entry.names ?? {}), entry.local, entry.name_nds, entry.name_osm, entry.name_de];
   return { id: entry.id, text: [...new Set(all.filter(Boolean))].join(' ') };
 }
 

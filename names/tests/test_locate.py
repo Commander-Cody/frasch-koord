@@ -92,6 +92,15 @@ def test_an_objects_low_saxon_name_is_recorded(run_locate: RunLocate, tmp_path: 
     assert objects["objects"][f"node/{NAIBEL}"]["name_nds"] == "Niböl"
 
 
+def test_an_objects_generic_name_is_recorded(run_locate: RunLocate, tmp_path: Path) -> None:
+    ribe = 597643755
+    pbf = write_extract(tmp_path / "in.osm.pbf", nodes={
+        ribe: ((8.7632, 55.3281), {"name": "Ribe", "name:de": "Ripen"})})
+    objects = run_locate([{"kind": "settlement", "mooring": "Ripen", "de": "Ripen",
+                           "osm": f"node/{ribe}"}], pbf)
+    assert objects["objects"][f"node/{ribe}"]["name"] == "Ribe"
+
+
 # --------------------------------------------------------------- dialect_at ---
 def box(west: float, south: float, east: float, north: float) -> list[list[list[float]]]:
     return [[[west, south], [east, south], [east, north], [west, north], [west, south]]]
@@ -144,7 +153,7 @@ def test_an_object_only_in_the_second_extract_is_found(run_locate: RunLocate,
                        nodes={7: ((8.4, 55.4), {"name": "Fanø"})})
     objects = run_locate([{"kind": "settlement", "mooring": "Naibel", "osm": f"node/{NAIBEL}"},
                           {"kind": "island", "mooring": "Fanø", "osm": "node/7"}], sh, dk)
-    assert objects["objects"]["node/7"] == {"lon": 8.4, "lat": 55.4}
+    assert objects["objects"]["node/7"] == {"lon": 8.4, "lat": 55.4, "name": "Fanø"}
 
 
 def test_the_file_records_the_extracts_it_was_read_from(run_locate: RunLocate,

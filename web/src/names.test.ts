@@ -118,9 +118,24 @@ describe('resolveName', () => {
     expect(resolveName(e, 'frr-x-mooring')).toEqual({ name: 'Niböl', source: 'nds' });
   });
 
-  it('reports the German name (and the name:latin/name tail) as source "de"', () => {
+  it('reports the German name as source "de"', () => {
     const e = entry({ name_de: 'Niebüll' });
     expect(resolveName(e, 'frr-x-mooring')).toEqual({ name: 'Niebüll', source: 'de' });
+  });
+
+  it("reports OSM's generic name as Danish where it is the Danish name", () => {
+    const e = entry({ name_osm: 'Ribe', name_da: 'Ribe', name_de: 'Ripen' });
+    expect(resolveName(e, 'frr-x-local')).toEqual({ name: 'Ribe', source: 'da' });
+  });
+
+  it("reports OSM's generic name as German where it is the German name", () => {
+    const e = entry({ name_osm: 'Niebüll', name_de: 'Niebüll' });
+    expect(resolveName(e, 'frr-x-local')).toEqual({ name: 'Niebüll', source: 'de' });
+  });
+
+  it("reports OSM's generic name as source \"osm\" where it is no name the entry knows a language of", () => {
+    const e = entry({ name_osm: 'Tønder', name_de: 'Tondern' });
+    expect(resolveName(e, 'frr-x-local')).toEqual({ name: 'Tønder', source: 'osm' });
   });
 
   it('falls back to Danish only as a last resort, after German has had its turn', () => {
@@ -132,11 +147,20 @@ describe('resolveName', () => {
     expect(resolveName(entry(), 'frr-x-mooring')).toEqual({ name: '', source: 'de' });
   });
 
-  it('the local view never shows name:frr or name:de, only frasch:local then Low Saxon then German', () => {
+  it('the local view never shows name:frr, only frasch:local then Low Saxon then German', () => {
     // name_frr is deliberately ignored by the local view (see labelChain.ts);
-    // Low Saxon still wins over the German name that comes in via name_de.
-    const e = entry({ name_frr: 'Rüms', name_nds: 'Sölerloch', name_de: 'Sylt' });
+    // Low Saxon still wins over OSM's generic name and the German one.
+    const e = entry({ name_frr: 'Rüms', name_nds: 'Sölerloch', name_osm: 'Sylt', name_de: 'Sylt' });
     expect(resolveName(e, 'frr-x-local')).toEqual({ name: 'Sölerloch', source: 'nds' });
+  });
+
+  it("the local view prefers OSM's generic name over the German one", () => {
+    const e = entry({ name_osm: 'Tønder', name_de: 'Tondern' });
+    expect(resolveName(e, 'frr-x-local').name).toBe('Tønder');
+  });
+
+  it('the local view falls back to German where there is no generic name', () => {
+    expect(resolveName(entry({ name_de: 'Tondern' }), 'frr-x-local')).toEqual({ name: 'Tondern', source: 'de' });
   });
 });
 
@@ -151,6 +175,13 @@ describe('cardEntry', () => {
     const result = cardEntry({ props });
     expect(result.id).toBe('node/1');
     expect(result.name_de).toBe('Niebüll');
+  });
+
+  it("does not take a tile's generic name for its German one", () => {
+    // North of the border OSM's `name` is Danish; the card must not list it as German.
+    const result = cardEntry({ props: { name: 'Ribe' } });
+    expect(result.name_osm).toBe('Ribe');
+    expect(result.name_de).toBe('');
   });
 
   it('lets the entry win field by field over the tile', () => {
@@ -205,6 +236,20 @@ describe('cardEntry', () => {
     const e = entry({ name_nds: 'EntryNDS' });
     const props = { 'name:nds': 'TileNDS' };
     expect(cardEntry({ entry: e, props }).name_nds).toBe('TileNDS');
+  });
+
+  it('takes name_osm from the tile even when the entry has one, since the tile is what the clicked label showed', () => {
+    const e = entry({ name_osm: 'EntryOSM' });
+    expect(cardEntry({ entry: e, props: { name: 'TileOSM' } }).name_osm).toBe('TileOSM');
+  });
+
+  it("falls back to the entry's name_osm when the tile has none", () => {
+    const e = entry({ name_osm: 'EntryOSM' });
+    expect(cardEntry({ entry: e, props: { 'name:de': 'TileDE' } }).name_osm).toBe('EntryOSM');
+  });
+
+  it("fills name_osm from the tile when the entry has none", () => {
+    expect(cardEntry({ entry: entry(), props: { name: 'TileOSM' } }).name_osm).toBe('TileOSM');
   });
 
   it('falls back to the entry\'s name_nds when the tile has none', () => {

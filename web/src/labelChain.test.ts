@@ -54,10 +54,9 @@ describe('labelChain', () => {
     ]);
   });
 
-  it('the local view is only frasch:local, then the local majority language, never name:frr or name:de', () => {
+  it('the local view is only frasch:local, then the local majority language, never name:frr, and German only last', () => {
     const chain = labelChain(LOCAL_TAG);
-    expect(chain).toEqual(['frasch:local', 'name:nds', 'name:latin', 'name']);
+    expect(chain).toEqual(['frasch:local', 'name:nds', 'name:latin', 'name', 'name:de']);
     expect(chain).not.toContain('name:frr');
-    expect(chain).not.toContain('name:de');
   });
 });
