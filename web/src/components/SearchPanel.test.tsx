@@ -46,3 +46,21 @@ it('hands a picked result on as the whole name-list entry', () => {
 
   expect(onSelect).toHaveBeenCalledWith(entry, 'Naibel');
 });
+
+it("finds a place by OSM's generic name, which the local view labels it with", () => {
+  const entry: NameEntry = {
+    id: 'ribe',
+    names: {},
+    name_de: 'Ripen',
+    name_da: 'Ribe',
+    name_osm: 'Ribe',
+    lon: 8.76,
+    lat: 55.33,
+    kind: 'settlement',
+  };
+  render(<SearchPanel entries={[entry]} status="ready" view="frr-x-local" onViewChange={() => {}} onSelect={() => {}} />);
+
+  fireEvent.change(screen.getByPlaceholderText(/./), { target: { value: 'Ribe' } });
+
+  expect(within(screen.getByRole('listbox')).getByText('Ribe')).toBeDefined();
+});

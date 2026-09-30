@@ -101,7 +101,7 @@ Sölring, Öömrang, Halunder and Hålifrasch names. They are now first-class.
    the local majority language; a northern-Germany `within` polygon comes with
    the planet build):
    - dialect view for tag T: `coalesce(name:T, frasch:local, name:frr, name:nds, name:de, name:latin, name)`
-   - local view (`frr-x-local`): `coalesce(frasch:local, name:nds, name:latin, name)` — deliberately **no** `name:frr` and **no** `name:de`: where the Frisian name is unknown the honest local label is the Low Saxon one, not a Hochdeutsch one or another dialect's name.
+   - local view (`frr-x-local`): `coalesce(frasch:local, name:nds, name:latin, name, name:de)` — deliberately **no** `name:frr` and `name:de` only as the very last resort: where the Frisian name is unknown the honest local label is the Low Saxon one, not a Hochdeutsch one or another dialect's name. (Revised 2026-10-01, #32: `name:de` was not in the chain at all, which left a feature with only a German name unlabelled. It now comes after OSM's own `name`, so it only matters where a feature has no `name`. The card and search take the generic `name` from OSM too, as `name_osm` in names.json, and no longer treat it as German. North of the border it is Danish.)
 7. **UI**: one dropdown. Every option carries a UI language; only registry
    entries with `view=yes` are selectable (today only Mooring — a dialect
    becomes selectable when its UI translation exists). The local view uses

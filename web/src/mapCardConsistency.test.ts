@@ -43,9 +43,8 @@ function cardLabel(tag: string, props: TileProps): string {
 // Realistic tile-property sets a clicked feature could carry, named after
 // what makes each interesting. OpenMapTiles always carries the plain `name`
 // on a labelled point (it is the primary field; name:xx are translations
-// added alongside it), so every scenario that sets name:de also sets `name`
-// — in this German-speaking region the two are normally the same string
-// (see entryFromTile's comment in names.ts).
+// added alongside it). South of the border it is normally the same string as
+// name:de, north of it the Danish name.
 const SCENARIOS: Record<string, TileProps> = {
   'only a German name': { 'name:de': 'Niebüll', name: 'Niebüll' },
   'Low Saxon and German': { 'name:nds': 'Niböl', 'name:de': 'Niebüll', name: 'Niebüll' },
@@ -59,6 +58,12 @@ const SCENARIOS: Record<string, TileProps> = {
   },
   'name:frr only, no dialect-specific or German name': { 'name:frr': 'Rüms' },
   'only the generic OSM name': { name: 'Sylt' },
+  // Issue #32: not what OpenMapTiles writes today, but a names.json entry
+  // whose object has no `name` looks like this to the card.
+  'a German name and no generic OSM name': { 'name:de': 'Niebüll' },
+  // Issue #32: north of the border OSM's own name is the Danish one, and the
+  // local view labels with it rather than with German.
+  'a Danish place with a German exonym': { 'name:de': 'Ripen', 'name:da': 'Ribe', name: 'Ribe' },
 };
 
 describe('map label vs. place card (issue #16 regression)', () => {
