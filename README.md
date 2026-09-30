@@ -39,15 +39,18 @@ Node 24 (see `web/.nvmrc`), for the frontend:
 ```sh
 cd web
 npm ci
+npm run fetch-assets                # the glyphs and the published tile archive (not in git)
 npm run dev                         # also: npm test, npm run lint, npm run typecheck
 ```
 
-The map needs a tile archive and the glyphs, which are not in git. See
-[`web/README.md`](web/README.md) for how to get them, and
-[`tiles/README.md`](tiles/README.md) for building tiles (JDK 21).
+The map needs a tile archive and the glyphs, which are not in git:
+`npm run fetch-assets` fetches both, the archive as pinned in `web/tiles.lock`
+(see [`web/README.md`](web/README.md#tile-hosting)). Building tiles yourself
+is only needed to change them, see [`tiles/README.md`](tiles/README.md) (JDK 21).
 
 CI (`.github/workflows/ci.yml`) runs all of the above checks on every push,
-plus `npm run build` and `npm run check:build`.
+plus `npm run build`, `npm run check:build` and `npm run smoke` against the
+fetched assets.
 
 ## License
 

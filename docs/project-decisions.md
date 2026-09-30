@@ -42,7 +42,7 @@ A Google-Maps-like web map with all labels and UI in **North Frisian**, based on
 ### Tile build tool: Planetiler (verified)
 - Stock Planetiler jar, **no fork**. The Mooring names are merged by a pre-processing step (`tiles/inject_names.py`, pyosmium) that adds `name:frr-x-mooring` tags to the OSM extract; Planetiler is then run with `--languages=de,da,nds,frr,frr-x-mooring`. Verified: the hyphenated tag appears in the output tiles on nodes and relations (Niebüll → Naibel, Föhr → Fäär, Flensburg → Flansborj).
 - Because the merge happens in the PBF, the name list is independent of the tile tool (would also work with imposm/PostGIS).
-- Timings on the dev machine (12 cores, 3 GB heap): Schleswig-Holstein 2.5 min (plus ~5 min one-time download of Natural Earth/water polygons, 1.4 GB); output 129 MB PMTiles.
+- Timings on the dev machine (12 cores, 3 GB heap): Schleswig-Holstein 2.5 min (plus ~5 min one-time download of Natural Earth/water polygons, 1.4 GB; pinned since issue #28); output 129 MB PMTiles.
 - Finding: OSM already has ~510 objects with `name:frr` in Schleswig-Holstein, but they mix dialects (Sölring "Kairem", Mooring "Doogebel-Huuwen", even Kiel → "Kil"). This confirms: dialect tag first, `name:frr` only as fallback.
 - Build entry point: `tiles/build.sh <region>`.
 
@@ -418,8 +418,40 @@ patch has a JSON Schema (`names/curate-patch.schema.json`) that `curate.py
 apply` (with the `jsonschema` package) and the web side both take from. See
 `names/README.md#code`.
 
+## Decided 2026-09-30: the website is built from published tiles (issue #28)
+
+**Tiles are published, not built, for the website.** Each finished archive
+becomes the asset of its own GitHub release of this repository
+(`tiles-<yyyymmdd>-<sha8>`, owner's choice over R2, which has not been set up yet), and `web/tiles.lock`
+pins the one the site uses (URL + sha256). `uv run just publish-tiles`
+uploads a build and rewrites the lock. `npm run fetch-assets` fetches the
+glyphs and that archive, so a fresh clone builds a working site with no Java,
+Python or OSM downloads. CI does the same and runs `npm run smoke` on the result.
+
+**A build ships the pinned archive or none** (owner's choice).
+`public/tiles/` is only for the dev server: the fetch links it to the cached
+archive (`web/.cache/tiles/<sha256>.pmtiles`) unless a tile builder has linked
+their own build there. `vite-plugins/tiles.ts` drops whatever Vite copied from
+it, and puts the verified pinned archive into `dist/`, or none with
+`VITE_TILES_URL`. It also stops the build at its start when the glyphs or the
+archive are missing (owner's choice over a warning).
+
+**Planetiler's own inputs are pinned.** `build.sh` no longer uses
+`--download`. Natural Earth 5.1.2 and the water polygons (2026-09-14) have no
+versioned URL upstream, so they are mirrored as assets of the
+`tile-sources-2026-09-30` release (owner's choice over pinning the upstream
+URLs by hash, which would break with every upstream update). The lake
+centerlines are the `v12` release Planetiler itself pins. All three are
+verified by sha256. `SNAPSHOT=yymmdd` builds from Geofabrik's dated extract of
+that day; the name pipeline stays on `-latest`.
+
+**Why**: a frontend contributor or CI could not get a map without running the
+whole tile pipeline, and two builds from the same commit could differ in their
+inputs. A build also shipped whichever archive happened to be linked, with no
+record of which one.
+
 ## Remaining open questions
-1. Hosting provider (R2 + Pages proposed, nothing set up yet).
+1. Hosting provider for the site (R2 + Pages proposed, nothing set up yet); the tiles are GitHub release assets for now (issue #28).
 2. When to do the planet build (needs the VM; only after the North Frisia build looks right).
 3. Whether to also push confirmed names to OSM `name:frr` (separate track; import guidelines).
 
