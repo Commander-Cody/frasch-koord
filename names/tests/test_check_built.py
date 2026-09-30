@@ -164,6 +164,15 @@ def test_an_extract_a_stamp_names_must_be_given(
     assert "in.osm.pbf" in capsys.readouterr().out
 
 
+def test_an_unstamped_file_names_no_extracts_to_rebuild_it_from(
+        extract: Extract, world: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    argv, _ = extract
+    (world / "dialect_areas.geojson").write_text(
+        json.dumps({"type": "FeatureCollection", "features": []}), encoding="utf-8")
+    assert check_built.main(argv) == 1
+    assert "dialect_areas.geojson names no extracts" in capsys.readouterr().out
+
+
 def test_a_rows_second_object_never_located_fails(
         repo: list[str], world: Path, capsys: pytest.CaptureFixture[str]) -> None:
     # the search entry lies at the first object, but the tile build needs both
