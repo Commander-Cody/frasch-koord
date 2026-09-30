@@ -450,6 +450,32 @@ whole tile pipeline, and two builds from the same commit could differ in their
 inputs. A build also shipped whichever archive happened to be linked, with no
 record of which one.
 
+## Decided 2026-09-30: one command after an edit, `just update` (issue #57)
+
+Adding a place meant knowing which of `check.py --fix`, `curate.py apply`,
+`just candidates`, `match.py`, `just objects`, `just areas`, `just index`
+(with `just dialects`), `curate.py export` and `just check` to run, and in
+which order. `uv run just update`
+(`frasch/update.py`) now runs all of them in that order and ends with the
+files it changed and the rows left to curate. Owner's choices:
+
+- **A Python command behind a `just` recipe**, not a recipe chaining the
+  others: just has no timestamps, so a pure recipe would rescan the extracts
+  (~8 min) on every run, and it could not be tested.
+- **Slow steps are skipped when their inputs did not change**: the candidate
+  scan when `candidates.jsonl`'s header names the current extracts,
+  `locate.py` when `osm_objects.json` holds exactly the references of the
+  rows on the map and comes from the current extracts, the dialect areas when
+  their stamp names the current area list, registry and extract. The rest
+  runs every time; it takes seconds.
+- **No tiles**: they need Java and minutes of Planetiler, and are not
+  committed. The summary points to `just tiles`.
+
+A failing step stops the run. The exception is a decision that `curate.py
+apply` refuses: it stays in the patch as before, and the rest of the run
+goes on (the command exits 1). Otherwise one stale decision in the browser
+would block every update. Nothing is committed automatically.
+
 ## Remaining open questions
 1. Hosting provider for the site (R2 + Pages proposed, nothing set up yet); the tiles are GitHub release assets for now (issue #28).
 2. When to do the planet build (needs the VM; only after the North Frisia build looks right).

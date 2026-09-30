@@ -227,6 +227,40 @@ know the object (open it on openstreetmap.org and read the URL:
 `openstreetmap.org/way/177387348` → `way/177387348`), otherwise leave it empty
 and let the matcher try.
 
+**Then bring everything up to date with one command**:
+
+```bash
+uv run just update
+```
+
+It downloads the extracts if they are missing, then runs `names/update.py`:
+new rows get their `id`, the hand-edited files are checked (a problem stops
+the run before anything else is written), the decisions of the curation view
+are applied (`work/curate-patch.jsonl`, if there is one), the matcher runs,
+the objects are located, the dialect areas and the search index are rebuilt,
+the rows left for review are exported for the view (`work/curate.json`), and
+`just check` proves the result. It ends with the files it changed and how
+many rows are left to curate. Then curate those (`npm run dev` in `web/`,
+open `/?curate`), edit more, and run it again, or review with `git diff` and
+commit.
+
+The slow steps run only when needed: the candidate scan when
+`work/candidates.jsonl` is missing or was built from other extracts (another
+download, `REFRESH=1`), `locate.py` when the rows on the map name other OSM
+objects than `osm_objects.json` holds or the extracts changed, the dialect
+areas when their stamp names another `dialect_areas.csv`, `dialects.csv` or
+extract. (`locate.py` writes only the objects it finds, so while a row names
+an object no extract holds, it runs every time, and the run stops at the
+search index step — or at the check step, when the missing reference is not
+the row's first. Their advice to run `just objects` does not help here: the
+objects step's `N not in <extract>: <ref>` line names the reference, and the
+fix is that row's `osm` cell.) A step that fails stops the run; a decision
+`curate.py apply` refuses does not — it stays in the patch, and the run
+exits 1 at its end.
+The tiles are not built (`just tiles`), and nothing is committed.
+
+What the steps do, and how to run each one alone:
+
 **Let the matcher fill the blanks**:
 
 ```bash
@@ -569,6 +603,7 @@ references: coordinates and tag fixes belong in `curation.csv` and the build.
 | `dialects.csv` | the dialect registry — edit this |
 | `dialect_areas.csv` | which OSM object belongs to which dialect — edit this |
 | `curation.csv` | per-object map tuning, and the position for places OSM does not have — edit this |
+| `update.py` | `just update`: runs the commands below in the pipeline's order (see [Workflow](#workflow)), skipping the slow steps whose inputs did not change |
 | `check.py` | checks the hand-edited files, every problem with its line (`--fix` gives new rows an id) |
 | `dialects.py` | prints the registry; `--tags` for Planetiler, `--export` writes `web/src/generated/dialects.json` |
 | `locate.py` | OSM extract(s) → `osm_objects.json`: where each object of the name list is |

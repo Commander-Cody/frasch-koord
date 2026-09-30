@@ -85,6 +85,15 @@ def test_dialect_areas_built_from_another_area_list_fail(
     assert "just areas" in out
 
 
+def test_dialect_areas_without_a_stamp_fail(
+        repo: list[str], world: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    (world / "dialect_areas_parts.geojson").write_text(
+        json.dumps({"type": "FeatureCollection", "features": []}), encoding="utf-8")
+    assert check_built.main(repo) == 1
+    out = capsys.readouterr().out
+    assert "dialect_areas_parts.geojson" in out and "just areas" in out
+
+
 def test_a_row_whose_object_was_never_located_fails(
         repo: list[str], world: Path, capsys: pytest.CaptureFixture[str]) -> None:
     (world / "places.csv").write_text(places_text([NAIBEL | {"osm": "node/99"}]),
@@ -153,6 +162,15 @@ def test_an_extract_a_stamp_names_must_be_given(
     argv, _ = extract
     assert check_built.main(argv[:-1] + ["other.osm.pbf"]) == 1
     assert "in.osm.pbf" in capsys.readouterr().out
+
+
+def test_an_unstamped_file_names_no_extracts_to_rebuild_it_from(
+        extract: Extract, world: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    argv, _ = extract
+    (world / "dialect_areas.geojson").write_text(
+        json.dumps({"type": "FeatureCollection", "features": []}), encoding="utf-8")
+    assert check_built.main(argv) == 1
+    assert "dialect_areas.geojson names no extracts" in capsys.readouterr().out
 
 
 def test_a_rows_second_object_never_located_fails(

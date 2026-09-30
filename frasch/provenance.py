@@ -72,6 +72,16 @@ def built_from(inputs: Mapping[str, StrPath], extracts: list[ExtractStamp]) -> B
     return hashes | {"extracts": extracts}
 
 
+def recorded(path: StrPath) -> BuiltFrom:
+    """The stamp a generated JSON file carries: `built_from` at its top
+    level, or in the `properties` of a GeoJSON FeatureCollection; `{}` for a
+    file without one, which then matches no inputs at all."""
+    with open(path, encoding="utf-8") as fh:
+        data = json.load(fh)
+    found: BuiltFrom = (data.get("properties") or data).get("built_from", {})
+    return found
+
+
 def stamp(places: StrPath, dialects: StrPath, curation: StrPath, areas: StrPath,
           objects: StrPath) -> BuiltFrom:
     """What the search index and the tiles are built from: the name list,

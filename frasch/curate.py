@@ -516,38 +516,48 @@ def fmt_deg(v: float) -> str:
 
 
 def cmd_apply(args: argparse.Namespace) -> int:
-    with placelist.lock(args.names):
-        return _apply(args)
+    refused = apply(args.names, args.curation, args.patch,
+                    dry_run=args.dry_run, keep=args.keep)
+    return 1 if refused else 0
 
 
-def _apply(args: argparse.Namespace) -> int:
+def apply(names: str, curation: str, patch: str, *, dry_run: bool = False,
+          keep: bool = False) -> int:
+    """Write the decisions of `patch` into `names` and `curation` (see the
+    module docstring); -> how many it refused.  Those stay in the patch; a
+    problem that stops the whole apply raises."""
+    with placelist.lock(names):
+        return _apply(names, curation, patch, dry_run, keep)
+
+
+def _apply(names: str, curation: str, patch: str, dry_run: bool, keep: bool) -> int:
     # Everything that can refuse the whole run is checked before the patch is
     # touched: the name list, and curation.csv (read once, kept as bytes, so
     # the rows appended to it land after exactly what was checked).
-    rows, fields = placelist.read(args.names)
+    rows, fields = placelist.read(names)
     by_id = {r["id"]: r for r in rows}
-    used_slugs = set(curationlist.local_points(args.curation))
-    cur_data, cur_fields = curationlist.read_bytes(args.curation)
+    used_slugs = set(curationlist.local_points(curation))
+    cur_data, cur_fields = curationlist.read_bytes(curation)
     cur_digest = files.digest(cur_data) if cur_data is not None else files.MISSING
     for r in rows:
         slug = placelist.local_ref(r["osm"])
         if slug:
             used_slugs.add(slug)
 
-    if not os.path.exists(args.patch):
-        raise PipelineError(f"{args.patch} not found -- decide some rows in the "
+    if not os.path.exists(patch):
+        raise PipelineError(f"{patch} not found -- decide some rows in the "
                          f"browser first (web/, `?curate`)")
     snapshot = None
-    if args.dry_run or args.keep:
-        source = args.patch
+    if dry_run or keep:
+        source = patch
     else:
         # Take the patch out of the browser's way first, then read it: the dev
         # server appends with O_APPEND, so a decision made from now on starts
         # a fresh patch file instead of landing in one that is being archived.
         stamp = time.strftime("%Y%m%d-%H%M%S")
-        root, ext = os.path.splitext(args.patch)
+        root, ext = os.path.splitext(patch)
         snapshot = source = f"{root}.{stamp}.applied{ext}"
-        os.rename(args.patch, snapshot)
+        os.rename(patch, snapshot)
 
     cur_written: str | None = None       # digest of the curation.csv apply wrote
     new_curation: list[dict[str, str]] = []
@@ -570,10 +580,10 @@ def _apply(args: argparse.Namespace) -> int:
                 continue                     # withdrawn in the browser
             row = by_id.get(e["id"])
             if row is None:
-                refuse(e, f"no row with id {e['id']!r} in {args.names} "
+                refuse(e, f"no row with id {e['id']!r} in {names} "
                           f"(deleted since the export?)")
                 continue
-            why = owner_problem(row, args.names)
+            why = owner_problem(row, names)
             if why is None and e["action"] == "local":
                 why, cur = decide_local(e, row, used_slugs)
                 if cur:
@@ -584,15 +594,15 @@ def _apply(args: argparse.Namespace) -> int:
             if why:
                 refuse(e, why)
                 continue
-            print(f"  {args.names}:{row.line} {placelist.describe(row)}: "
-                  f"{decision_text(e, row, args.curation)}")
+            print(f"  {names}:{row.line} {placelist.describe(row)}: "
+                  f"{decision_text(e, row, curation)}")
             applied += 1
 
-        if args.dry_run:
+        if dry_run:
             print(f"dry run: {applied} row(s) would change, "
                   f"{len(new_curation)} curation row(s) would be appended, "
                   f"{refused} refused -- nothing written")
-            return 1 if refused else 0
+            return refused
 
         if applied:
             # curation.csv first, places.csv last: when the places.csv write
@@ -601,16 +611,16 @@ def _apply(args: argparse.Namespace) -> int:
             # position and a failed apply leaves both files as they were
             if new_curation:
                 cur_text = curationlist.appended(cur_data, cur_fields, new_curation)
-                files.atomic_write(args.curation, cur_text, expect=cur_digest)
+                files.atomic_write(curation, cur_text, expect=cur_digest)
                 cur_written = files.digest(cur_text)
-            placelist.write(rows, args.names, fields)
+            placelist.write(rows, names, fields)
     except BaseException:
         if cur_written:
-            unwrite_curation(args.curation, cur_data, cur_written,
+            unwrite_curation(curation, cur_data, cur_written,
                              [c["osm"] for c in new_curation])
         if snapshot:
-            restore_patch(snapshot, args.patch)
-            print(f"nothing applied -- {args.patch} restored", file=sys.stderr)
+            restore_patch(snapshot, patch)
+            print(f"nothing applied -- {patch} restored", file=sys.stderr)
         raise
 
     if snapshot:
@@ -618,13 +628,13 @@ def _apply(args: argparse.Namespace) -> int:
         if kept_back:
             # a refused decision is not lost: it goes back into the patch (and
             # so stays "done" in the browser) until fixed or cleared
-            n = append_back(args.patch, kept_back)
-            print(f"{n} refused entr{'y' if n == 1 else 'ies'} kept in {args.patch}"
+            n = append_back(patch, kept_back)
+            print(f"{n} refused entr{'y' if n == 1 else 'ies'} kept in {patch}"
                   + (f" ({len(kept_back) - n} decided again in the browser meanwhile)"
                      if n < len(kept_back) else ""))
-    print(f"{applied} row(s) written to {args.names}, "
-          f"{len(new_curation)} appended to {args.curation}, {refused} refused")
-    return 1 if refused else 0
+    print(f"{applied} row(s) written to {names}, "
+          f"{len(new_curation)} appended to {curation}, {refused} refused")
+    return refused
 
 
 def append_back(path: str, entries: Iterable[PatchLine]) -> int:
