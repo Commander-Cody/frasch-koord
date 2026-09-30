@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import patchSchema from '../../../names/curate-patch.schema.json';
-import { decidedRows, type PatchEntry } from './curatePatch';
+import { decidedRows, singleWikidataId, type PatchEntry } from './curatePatch';
 
 function decision(id: string, line: number, action: PatchEntry['action'], osm?: string): PatchEntry {
   return { id, line, kind: 'warft', name: 'Schörkewärw', de: 'Kirchwarft', action, osm };
@@ -22,6 +22,29 @@ describe('decidedRows', () => {
     // a row was added above between the two: the same row, another line
     const done = decidedRows([decision('schorkewarw', 11, 'osm', 'node/1'), decision('schorkewarw', 12, 'clear')]);
     expect(done.has('schorkewarw')).toBe(false);
+  });
+});
+
+describe('singleWikidataId', () => {
+  it('is the id of a tag with a single one', () => {
+    expect(singleWikidataId('Q1717813')).toBe('Q1717813');
+  });
+
+  it('ignores whitespace around the id', () => {
+    expect(singleWikidataId(' Q1717813 ')).toBe('Q1717813');
+  });
+
+  it('is nothing for a tag with several ids', () => {
+    expect(singleWikidataId('Q1717813;Q20729612')).toBeUndefined();
+  });
+
+  it('is nothing for a tag that is no id', () => {
+    expect(singleWikidataId('q1717813')).toBeUndefined();
+  });
+
+  it('is nothing for an empty or missing tag', () => {
+    expect(singleWikidataId('')).toBeUndefined();
+    expect(singleWikidataId(undefined)).toBeUndefined();
   });
 });
 

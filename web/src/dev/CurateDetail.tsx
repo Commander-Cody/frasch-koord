@@ -12,7 +12,7 @@ import type { RefObject } from 'react';
 import type { MapViewHandle } from '../components/Map';
 import { primary } from '../names';
 import { candidateColor, hasPoint, type Position, usePositionPin, useRowPins } from './curateMapLayers';
-import { isValidSlug, type Decision, type PatchEntry } from './curatePatch';
+import { isValidSlug, singleWikidataId, type Decision, type PatchEntry } from './curatePatch';
 import { parseRefs, slugify, type Bbox, type CurateCandidate, type CurateRow } from './curateWorklist';
 import CurateLookup from './CurateLookup';
 import { useOsmLookup } from './osmLookup';
@@ -45,7 +45,9 @@ function checkedRef(ref: string, wikidata?: string): CheckedRef {
   return { ref, ...(wikidata ? { wikidata } : {}) };
 }
 
-function osmDecision(ref: string, wikidata?: string): Decision {
+/** An `osm` decision, with the object's wikidata id if its tag names exactly one. */
+function osmDecision(ref: string, wikidataTag?: string): Decision {
+  const wikidata = singleWikidataId(wikidataTag);
   return { action: 'osm', osm: ref, ...(wikidata ? { wikidata } : {}) };
 }
 
@@ -241,6 +243,7 @@ function Candidates({ candidates, activeRef, isChecked, onToggle, onCheckAll, on
             color={candidateColor(candidate)}
             name={candidate.name}
             meta={candidateMeta(candidate)}
+            wikidataTag={candidate.wikidata}
             active={candidate.ref === activeRef}
             checked={isChecked(candidate.ref)}
             onToggle={() => onToggle(candidate.ref, candidate.wikidata)}
@@ -254,11 +257,12 @@ function Candidates({ candidates, activeRef, isChecked, onToggle, onCheckAll, on
 }
 
 function candidateMeta(candidate: CurateCandidate): string {
+  const wikidata = singleWikidataId(candidate.wikidata);
   return [
     candidate.class,
     typeof candidate.km === 'number' ? ` · ${candidate.km} km` : '',
     candidate.tags ? ` · ${candidate.tags}` : '',
-    candidate.wikidata ? ` · ${candidate.wikidata}` : '',
+    wikidata ? ` · ${wikidata}` : '',
   ].join('');
 }
 
@@ -271,7 +275,7 @@ interface CheckedPickProps {
 /** The ticked objects, picked together as one `osm` cell. */
 function CheckedPick({ checked, onClear, decide }: CheckedPickProps) {
   // Only an unambiguous wikidata id goes along; `apply` cannot choose between two.
-  const qids = [...new Set(checked.flatMap((item) => (item.wikidata ? [item.wikidata] : [])))];
+  const qids = [...new Set(checked.flatMap((item) => singleWikidataId(item.wikidata) ?? []))];
   const refs = checked.map((item) => item.ref);
   const pick = () => decide(osmDecision(refs.join('; '), qids.length === 1 ? qids[0] : undefined));
   return (

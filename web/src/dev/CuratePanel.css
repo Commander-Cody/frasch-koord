@@ -250,6 +250,13 @@
   overflow-wrap: anywhere;
 }
 
+/* What the panel will not save of the object, e.g. a wikidata tag with several ids. */
+.curate-candidate-warning {
+  font-size: 11px;
+  color: #b3261e;
+  overflow-wrap: anywhere;
+}
+
 .curate-pick {
   align-self: center;
   margin-right: 4px;
