@@ -118,6 +118,10 @@ export default function SearchPanel({
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    // Escape in the field is the field's: it closes the result list (and the
+    // browser clears a search field on it), never the place card too, which
+    // listens for Escape on the window (useCloseOnEscape).
+    if (e.key === 'Escape') e.stopPropagation();
     if (!showList) {
       // Enter on a closed list re-runs the search for the current text.
       if (e.key === 'Enter' && query.trim().length > 0) {

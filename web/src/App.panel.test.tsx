@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { LngLat, MapGeoJSONFeature } from 'maplibre-gl';
 
 import './i18n';
@@ -77,4 +77,23 @@ it('gives a card opened before the name list loads its curated data once the lis
   expect(screen.getByText('Nibøl')).toBeDefined();
   expect(screen.getByRole('link', { name: 'Wikidata' })).toBeDefined();
   expect(new URLSearchParams(window.location.search).get('place')).toBe('naibel');
+});
+
+it('leaves the card open on Escape in the search field, and closes it on Escape elsewhere', async () => {
+  const serveNames = holdNames([naibel]);
+  render(<App />);
+  await serveNames();
+  clickLabel('naibel', { 'name:frr-x-mooring': 'Naibel' });
+  const field = screen.getByRole('combobox', { name: 'Ort suchen' });
+  fireEvent.change(field, { target: { value: 'Nai' } });
+
+  // The first Escape closes the result list, a second one finds nothing
+  // left to close in the field; neither is meant for the card.
+  fireEvent.keyDown(field, { key: 'Escape' });
+  expect(screen.queryByRole('listbox')).toBeNull();
+  fireEvent.keyDown(field, { key: 'Escape' });
+  expect(screen.getByRole('heading', { name: 'Naibel' })).toBeDefined();
+
+  fireEvent.keyDown(document.body, { key: 'Escape' });
+  expect(screen.queryByRole('heading', { name: 'Naibel' })).toBeNull();
 });
