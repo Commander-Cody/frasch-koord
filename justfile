@@ -9,6 +9,11 @@
 #                                         └─ publish-tiles  a release + web/tiles.lock
 #   dialects                                              web/src/generated/dialects.json
 #
+# `update` runs the name part of it in one go -- after an edit to places.csv
+# or a session in the curation view: ids and checks, the view's decisions,
+# candidates, match, objects, areas, the worklist for the view, index, check.
+# It skips the slow steps whose inputs did not change (names/update.py).
+#
 # `objects`, `areas`, `index` and `dialects` write committed files; `check`
 # (CI) proves they match their inputs.  just has no file timestamps: a
 # recipe runs when you ask for it, not when its inputs changed.  What a recipe
@@ -40,6 +45,10 @@ extracts:
         fetch_geofabrik_verified "$(geofabrik_extract_url "$region")" "$dest"
       fi
     done
+
+# after editing places.csv or curating in /?curate: bring every name file up to date
+update: extracts
+    {{py}} names/update.py {{extracts}}
 
 # scan the extracts for every object that could be a place (names/work/candidates.jsonl)
 candidates: extracts
