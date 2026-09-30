@@ -137,23 +137,40 @@ it('returns focus to the search field when Escape closes the card it was in', as
 
   expect(screen.queryByRole('heading', { name: 'Naibel' })).toBeNull();
   expect(document.activeElement).toBe(field);
+  // Back in the field, the pick's results stay closed until the next input.
+  expect(field.getAttribute('aria-expanded')).toBe('false');
+  expect(screen.queryByRole('listbox')).toBeNull();
 });
 
-it('returns focus to the search field when × is pressed from the keyboard, not when it is clicked', async () => {
+/** The card's ×. */
+function closeButton(): HTMLElement {
+  return screen.getByRole('button', { name: 'Tumååge' });
+}
+
+it('returns focus to the search field when × is pressed from the keyboard', async () => {
   const serveNames = holdNames([naibel]);
   render(<App />);
   await serveNames();
   const field = pickNaibel();
-  const closeButton = () => screen.getByRole('button', { name: 'Tumååge' });
 
   // Enter or Space on a button clicks it without a pointer: `detail` 0.
   closeButton().focus();
   fireEvent.click(closeButton(), { detail: 0 });
-  expect(document.activeElement).toBe(field);
 
-  pickNaibel();
+  expect(screen.queryByRole('heading', { name: 'Naibel' })).toBeNull();
+  expect(document.activeElement).toBe(field);
+  expect(screen.queryByRole('listbox')).toBeNull();
+});
+
+it('leaves focus alone when × is clicked or tapped', async () => {
+  const serveNames = holdNames([naibel]);
+  render(<App />);
+  await serveNames();
+  const field = pickNaibel();
+
   closeButton().focus();
   fireEvent.click(closeButton(), { detail: 1 });
+
   expect(screen.queryByRole('heading', { name: 'Naibel' })).toBeNull();
   expect(document.activeElement).not.toBe(field);
 });

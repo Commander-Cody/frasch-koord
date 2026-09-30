@@ -95,8 +95,11 @@ export default function SearchPanel({
   const { t } = useTranslation();
   const listId = useId();
   const [query, setQuery] = useState('');
-  // Results are hidden after a selection until the user types again.
+  // Results are hidden after a selection until the user types again (or
+  // asks for them with Enter): focus coming back to the field, as it does
+  // when the card closes from the keyboard, does not bring them back.
   const [open, setOpen] = useState(false);
+  const [picked, setPicked] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
 
   const searchIndex = useMemo(() => createSearchIndex(entries), [entries]);
@@ -115,6 +118,7 @@ export default function SearchPanel({
     const name = displayName(entry, view);
     setQuery(name);
     setOpen(false);
+    setPicked(true);
     // The card this opens takes focus (see useCardFocus).
     onSelect(entry, name);
   };
@@ -176,10 +180,11 @@ export default function SearchPanel({
         autoComplete="off"
         onChange={(e) => {
           setQuery(e.target.value);
+          setPicked(false);
           setOpen(true);
           setActiveIdx(0);
         }}
-        onFocus={() => setOpen(true)}
+        onFocus={() => setOpen(!picked)}
         onBlur={() => setOpen(false)}
         onKeyDown={handleKeyDown}
       />
