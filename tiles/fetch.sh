@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Download helper for tiles/build.sh: fetch a file to a `.part` sibling,
+# Download helper for tiles/build.sh, tiles/publish.sh and
+# web/scripts/fetch-{tiles,fonts}.sh: fetch a file to a `.part` sibling,
 # reject it if it looks like an HTML error page, verify its checksum, and
 # only then move it into place. On any failure: non-zero exit, a message on
 # stderr, and neither the destination nor the `.part` file left behind.
@@ -13,12 +14,22 @@
 #   fetch_geofabrik_verified <url> <dest>
 #     Geofabrik-specific: fetches "<url>.md5" (format "<md5>  <filename>")
 #     and verifies the download against it.
+#   fetch_pinned <url> <dest> <sha256>
+#     A download pinned by checksum: does nothing when <dest> exists and
+#     matches, else (missing, or a wrong checksum) downloads it again with
+#     fetch_verified. Creates <dest>'s directory.
 #   geofabrik_path <region>
 #     Expands a bare name to europe/germany/<region>; keeps a full Geofabrik
 #     path (e.g. europe/denmark) as given. Validates either form and prints
 #     the result, or fails on an invalid $REGION.
 #   region_stem <region>
 #     The file stem (last path component) of geofabrik_path's result.
+#   geofabrik_extract_name <region> [snapshot]
+#     The Geofabrik file of a region: <stem>-latest.osm.pbf, or with a
+#     snapshot (yymmdd, e.g. 260923) <stem>-<yymmdd>.osm.pbf. Fails on a
+#     malformed snapshot; an empty one means none.
+#   geofabrik_extract_url <region> [snapshot]
+#     Its download URL, e.g. https://download.geofabrik.de/europe/denmark-latest.osm.pbf
 set -euo pipefail
 
 # 200/302-with-an-HTML-body is how Geofabrik answers a wrong path; `curl
@@ -122,4 +133,35 @@ region_stem() {
   local path
   path=$(geofabrik_path "$1") || return 1
   printf '%s\n' "${path##*/}"
+}
+
+# A download pinned by checksum: what is already at <dest> and matches is
+# kept, whatever is missing or does not match is fetched again.
+fetch_pinned() {
+  local url=$1 dest=$2 sha256=$3
+  if [ -f "$dest" ] && [ "$(_fetch_checksum sha256 "$dest")" = "$sha256" ]; then
+    return 0
+  fi
+  mkdir -p "$(dirname "$dest")"
+  fetch_verified "$url" "$dest" sha256 "$sha256"
+}
+
+# The Geofabrik file of a region: the `-latest` one, or with a snapshot
+# (yymmdd, e.g. 260923) the one Geofabrik dated that day. Named by the
+# region's stem, so it is also the file's name in tiles/data.
+geofabrik_extract_name() {
+  local stem snapshot=${2:-}
+  stem=$(region_stem "$1") || return 1
+  if [ -n "$snapshot" ] && [[ ! $snapshot =~ ^[0-9]{6}$ ]]; then
+    echo "fetch: invalid snapshot: $snapshot (expected yymmdd, e.g. 260923)" >&2
+    return 1
+  fi
+  printf '%s\n' "${stem}-${snapshot:-latest}.osm.pbf"
+}
+
+geofabrik_extract_url() {
+  local path name
+  path=$(geofabrik_path "$1") || return 1
+  name=$(geofabrik_extract_name "$1" "${2:-}") || return 1
+  printf '%s\n' "https://download.geofabrik.de/${path%/*}/${name}"
 }
