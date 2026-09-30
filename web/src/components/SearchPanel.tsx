@@ -1,5 +1,5 @@
-import { useId, useMemo, useRef, useState } from 'react';
-import type { KeyboardEvent } from 'react';
+import { useId, useMemo, useState } from 'react';
+import type { KeyboardEvent, Ref } from 'react';
 import { useTranslation } from 'react-i18next';
 import MiniSearch from 'minisearch';
 
@@ -36,6 +36,8 @@ export interface SearchPanelProps {
   onViewChange: (view: string) => void;
   /** `name` is the entry's display name in the current view (for the map marker). */
   onSelect: (entry: NameEntry, name: string) => void;
+  /** The search field: App returns focus there when the card closes (see useCardFocus). */
+  ref?: Ref<HTMLInputElement>;
 }
 
 const MAX_RESULTS = 8;
@@ -88,10 +90,10 @@ export default function SearchPanel({
   view,
   onViewChange,
   onSelect,
+  ref,
 }: SearchPanelProps) {
   const { t } = useTranslation();
   const listId = useId();
-  const inputRef = useRef<HTMLInputElement | null>(null);
   const [query, setQuery] = useState('');
   // Results are hidden after a selection until the user types again.
   const [open, setOpen] = useState(false);
@@ -113,8 +115,8 @@ export default function SearchPanel({
     const name = displayName(entry, view);
     setQuery(name);
     setOpen(false);
+    // The card this opens takes focus (see useCardFocus).
     onSelect(entry, name);
-    inputRef.current?.blur();
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -159,7 +161,7 @@ export default function SearchPanel({
     // The field comes first, the thing a phone visitor is there for.
     <div className="search-panel">
       <input
-        ref={inputRef}
+        ref={ref}
         type="search"
         className="search-input"
         aria-label={t('search.label')}

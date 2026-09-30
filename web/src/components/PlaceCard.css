@@ -43,6 +43,12 @@
   line-height: 1.2;
 }
 
+/* The headline takes focus only so that a card a search opens is announced
+   (hooks/useCardFocus.ts); it is nothing to operate, so it gets no ring. */
+.place-card-name:focus {
+  outline: none;
+}
+
 .place-card-meta {
   margin: 3px 0 10px;
   font-size: 12px;

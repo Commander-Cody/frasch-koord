@@ -13,9 +13,12 @@ export interface PlaceCardProps {
   selection: PlaceSelection;
   /** Selected label option tag (a dialect, or LOCAL_TAG) — the view the headline is in. */
   view: string;
-  onClose: () => void;
+  /** `byKeyboard`: closed with Enter or Space on ×, rather than by a click or tap. */
+  onClose: (byKeyboard: boolean) => void;
   /** The card element: App measures it, where it is the phone bottom sheet. */
   ref?: Ref<HTMLElement>;
+  /** The headline: App moves focus there (see useCardFocus). */
+  headingRef?: Ref<HTMLHeadingElement>;
 }
 
 /** Locale keys of the labels of the names in no dialect of the registry, by `resolveName`'s source. */
@@ -45,7 +48,7 @@ interface Line {
  * Its data is `cardEntry(selection)` — the name-list entry where the place has
  * one, filled up from the clicked tile feature (see names.ts).
  */
-export default function PlaceCard({ selection, view, onClose, ref: cardRef }: PlaceCardProps) {
+export default function PlaceCard({ selection, view, onClose, ref: cardRef, headingRef }: PlaceCardProps) {
   const { t, i18n } = useTranslation();
   const entry = useMemo(() => cardEntry(selection), [selection]);
   // Dialect names are translated like any other UI string; the registry
@@ -119,8 +122,11 @@ export default function PlaceCard({ selection, view, onClose, ref: cardRef }: Pl
 
   return (
     <aside ref={cardRef} className="place-card" aria-label={t('card.title')}>
-      <CloseButton className="place-card-close" label={t('card.close')} onClick={onClose} />
-      <h2 className="place-card-name">{headline}</h2>
+      {/* A click from Enter or Space has no pointer clicks to count. */}
+      <CloseButton className="place-card-close" label={t('card.close')} onClick={(e) => onClose(e.detail === 0)} />
+      <h2 ref={headingRef} className="place-card-name" tabIndex={-1}>
+        {headline}
+      </h2>
       <p className="place-card-meta">
         {headlineLabel}
         {/* Where the headline IS the local form, its variety remark belongs

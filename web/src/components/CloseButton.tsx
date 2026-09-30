@@ -1,10 +1,12 @@
+import type { MouseEvent } from 'react';
+
 /**
  * The × that closes or dismisses something. The glyph is not a word, so it
  * is the same in every UI language; `label` says what it does.
  */
 export interface CloseButtonProps {
   label: string;
-  onClick: () => void;
+  onClick: (e: MouseEvent<HTMLButtonElement>) => void;
   className?: string;
 }
 

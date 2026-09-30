@@ -97,3 +97,63 @@ it('leaves the card open on Escape in the search field, and closes it on Escape 
   fireEvent.keyDown(document.body, { key: 'Escape' });
   expect(screen.queryByRole('heading', { name: 'Naibel' })).toBeNull();
 });
+
+/** Picks Naibel in the search field from the keyboard; returns the field. */
+function pickNaibel(): HTMLElement {
+  const field = screen.getByRole('combobox', { name: 'Ort suchen' });
+  field.focus();
+  fireEvent.change(field, { target: { value: 'Naibel' } });
+  fireEvent.keyDown(field, { key: 'Enter' });
+  return field;
+}
+
+it('moves focus to the card a search pick opens, so it is announced', async () => {
+  const serveNames = holdNames([naibel]);
+  render(<App />);
+  await serveNames();
+
+  pickNaibel();
+
+  expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Naibel' }));
+});
+
+it('leaves focus where it is when a map click opens the card', async () => {
+  const serveNames = holdNames([naibel]);
+  render(<App />);
+  await serveNames();
+
+  clickLabel('naibel', { 'name:frr-x-mooring': 'Naibel' });
+
+  expect(screen.getByRole('heading', { name: 'Naibel' })).not.toBe(document.activeElement);
+});
+
+it('returns focus to the search field when Escape closes the card it was in', async () => {
+  const serveNames = holdNames([naibel]);
+  render(<App />);
+  await serveNames();
+  const field = pickNaibel();
+
+  fireEvent.keyDown(screen.getByRole('heading', { name: 'Naibel' }), { key: 'Escape' });
+
+  expect(screen.queryByRole('heading', { name: 'Naibel' })).toBeNull();
+  expect(document.activeElement).toBe(field);
+});
+
+it('returns focus to the search field when × is pressed from the keyboard, not when it is clicked', async () => {
+  const serveNames = holdNames([naibel]);
+  render(<App />);
+  await serveNames();
+  const field = pickNaibel();
+  const closeButton = () => screen.getByRole('button', { name: 'Tumååge' });
+
+  // Enter or Space on a button clicks it without a pointer: `detail` 0.
+  closeButton().focus();
+  fireEvent.click(closeButton(), { detail: 0 });
+  expect(document.activeElement).toBe(field);
+
+  pickNaibel();
+  closeButton().focus();
+  fireEvent.click(closeButton(), { detail: 1 });
+  expect(screen.queryByRole('heading', { name: 'Naibel' })).toBeNull();
+  expect(document.activeElement).not.toBe(field);
+});
