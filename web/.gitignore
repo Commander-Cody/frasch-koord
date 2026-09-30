@@ -27,8 +27,11 @@ dist-ssr
 .env
 .env.local
 
-# Tile archives are hosted separately; only .gitkeep is tracked here
+# Tile archives are hosted separately (tiles.lock); only .gitkeep is tracked here
 public/tiles/*.pmtiles
 
 # Glyphs are ~100 MB; fetch with scripts/fetch-fonts.sh
 public/fonts
+
+# The pinned tile archive, fetched by scripts/fetch-tiles.sh
+.cache
