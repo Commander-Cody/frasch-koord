@@ -3,6 +3,7 @@
     "title": ""
   },
   "search": {
+    "label": "",
     "placeholder": "Stää säke…",
     "noResults": "Niinj riseltoote",
     "loading": "",

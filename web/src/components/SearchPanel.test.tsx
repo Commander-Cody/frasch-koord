@@ -64,3 +64,10 @@ it("finds a place by OSM's generic name, which the local view labels it with", (
 
   expect(within(screen.getByRole('listbox')).getByText('Ribe')).toBeDefined();
 });
+
+it('names the search field for screen readers, not only by its placeholder', () => {
+  render(<SearchPanel entries={[]} status="ready" view="frr-x-mooring" onViewChange={() => {}} onSelect={() => {}} />);
+
+  // Mooring has no word for it yet, so it is the German one.
+  expect(screen.getByRole('combobox', { name: 'Ort suchen' })).toBeDefined();
+});

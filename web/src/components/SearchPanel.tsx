@@ -158,6 +158,7 @@ export default function SearchPanel({
         ref={inputRef}
         type="search"
         className="search-input"
+        aria-label={t('search.label')}
         placeholder={t('search.placeholder')}
         disabled={failed}
         value={query}
