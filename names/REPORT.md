@@ -8,7 +8,7 @@ Hand-review worklist: for every **ambiguous** row below pick the right object an
 
 | kind | auto | by hand | own point | ambiguous | not found | skip | no Frisian name | not a place | total |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| settlement | 246 | 23 | 21 | 7 | 59 | 0 | 0 | 0 | 356 |
+| settlement | 245 | 23 | 21 | 8 | 59 | 0 | 0 | 0 | 356 |
 | koog | 28 | 0 | 0 | 2 | 59 | 0 | 0 | 0 | 89 |
 | harde | 0 | 0 | 0 | 0 | 8 | 0 | 0 | 0 | 8 |
 | island | 7 | 3 | 0 | 0 | 0 | 0 | 0 | 0 | 10 |
@@ -20,9 +20,9 @@ Hand-review worklist: for every **ambiguous** row below pick the right object an
 | country | 18 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 18 |
 | road | 10 | 0 | 0 | 11 | 2 | 0 | 0 | 0 | 23 |
 | helgoland | 5 | 0 | 0 | 0 | 1 | 0 | 0 | 0 | 6 |
-| **total** | **480** | **99** | **58** | **24** | **222** | **0** | **0** | **0** | **883** |
+| **total** | **479** | **99** | **58** | **25** | **222** | **0** | **0** | **0** | **883** |
 
-## Ambiguous (24)
+## Ambiguous (25)
 
 `candidates` format: `type/id:name:class:km-from-NF-centre`
 
@@ -33,6 +33,7 @@ Hand-review worklist: for every **ambiguous** row below pick the right object an
 | hoonebel | 135 | settlement | Hoonebel | Hunnebüll |  | only match is 72 km from North Frisia (settlement) -- verify by hand | `n/11425323820:Hundebøl:hamlet:72` |
 | walsbel | 174 | settlement | Wålsbel | Wallsbüll | Bredstedt | location hint 'Bredstedt' matched no cluster | `n/240041455:Wallsbüll:village:23` |
 | heme | 237 | settlement | Heme | Hemme |  | 2 plausible candidates | `n/3057803316:Hemme:hamlet:35;n/240041863:Hemme:village:47` |
+| aastenfalj | 239 | settlement | Ååstenfälj | Ostenfeld |  | best name hit is 71 km from North Frisia, a weaker one lies inside -- verify by hand | `n/240062575:Ostenfeld:village:71;n/240104163:Ostenfeld (Husum):village:34` |
 | mursem | 279 | settlement | Mursem | Morsum | Nordstrand | location hint 'Nordstrand' matched no cluster | `n/310191124:Morsum:village:36` |
 | hamborj | 348 | settlement | Hamborj | Hamburg |  | only match is 87 km from North Frisia (settlement) -- verify by hand | `n/10202530820:Hamburg:isolated_dwelling:87` |
 | soodergutskuuch | 360 | koog | Söödergutskuuch | Südergotteskoog |  | 2 plausible candidates | `n/10158150188:Südergotteskoog:hamlet:14;n/10158150148:Südergotteskoog:hamlet:15` |

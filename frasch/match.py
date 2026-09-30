@@ -31,8 +31,10 @@ Ranking / decision
   3. `matched`   - one cluster, or exactly one cluster satisfies the row's
                    location hint, or exactly one cluster is inside North Frisia
                    while every other cluster is far away
-     `ambiguous` - several plausible clusters (all candidates are listed in the
-                   `candidates` column: type/id:name:place:dist_km)
+     `ambiguous` - several plausible clusters, or the best name hit lies
+                   outside North Frisia while a weaker one lies inside (all
+                   candidates are listed in the `candidates` column:
+                   type/id:name:place:dist_km)
      `not_found` - no name match at all
   Countries are resolved through the Wikidata API instead of OSM (cached in
   names/work/wikidata-countries.json).  When a lookup fails -- or `--offline`
@@ -556,6 +558,31 @@ def _suspicious(kind: str, winner: PlacedCluster) -> bool:
     return minor and (winner["nf_d"] or 1e9) > 50
 
 
+def _outranks_a_hit_in_north_frisia(winner: PlacedCluster,
+                                    weaker: Iterable[Candidate]) -> bool:
+    """True if a winner outside North Frisia beat a weaker name hit inside it:
+    the exact *Ostenfeld* is the village near Rendsburg, while OSM calls the
+    one near Husum `Ostenfeld (Husum)`.  Which one the list means is for a
+    human to decide."""
+    if winner["in_nf"]:
+        return False
+    return any(in_north_frisia(c["lon"], c["lat"])
+               for c in weaker if c not in winner["members"])
+
+
+def _ambiguous_reason(row: Row, winner: PlacedCluster | None, hint_pt: Circle | None,
+                      clusters: Sequence[PlacedCluster]) -> str:
+    """Why `match_row` leaves a row for review."""
+    if winner is None:
+        if hint_pt:
+            return f"location hint '{row['hint']}' matched no cluster"
+        return f"{len(clusters)} plausible candidates"
+    distance = f"{(winner['nf_d'] or 0):.0f} km from North Frisia"
+    if _suspicious(row["kind"], winner):
+        return f"only match is {distance} ({row['kind']}) -- verify by hand"
+    return f"best name hit is {distance}, a weaker one lies inside -- verify by hand"
+
+
 def match_row(row: Row, index: NameIndex, hints: HintResolver,
               claimed: Mapping[Ref, int] | None = None) -> MatchResult:
     """`claimed`: {(type, id): line} of the objects other rows hold that
@@ -620,18 +647,13 @@ def match_row(row: Row, index: NameIndex, hints: HintResolver,
         if w2 is not None and not _suspicious(kind, w2):
             winner, reason, clusters, plaus = w2, r2 + " (weaker name hit)", c2, plaus_all
 
-    if winner is None or _suspicious(kind, winner):
+    weaker = [c for c in plaus_all if c["rank"] > top]
+    if (winner is None or _suspicious(kind, winner)
+            or (not hint_pt                        # a hint's pick is binding
+                and _outranks_a_hit_in_north_frisia(winner, weaker))):
         out["status"] = "ambiguous"
         out["candidates"] = fmt_cands(plaus_all)
-        if winner is not None:
-            out["note"] = _addnote(
-                row, f"only match is {(winner['nf_d'] or 0):.0f} km from North "
-                     f"Frisia ({kind}) -- verify by hand")
-        elif hint_pt:
-            out["note"] = _addnote(row, f"location hint "
-                                        f"'{row['hint']}' matched no cluster")
-        else:
-            out["note"] = _addnote(row, f"{len(clusters)} plausible candidates")
+        out["note"] = _addnote(row, _ambiguous_reason(row, winner, hint_pt, clusters))
         return out
 
     held = [c for c in taken
