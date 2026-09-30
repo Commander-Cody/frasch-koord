@@ -35,6 +35,7 @@ from pmtiles.reader import MmapSource, Reader
 
 from frasch import cli
 from frasch.geo import LonLat
+from frasch.searchindex import SearchEntry
 
 DEFAULT_NAMES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "web",
                              "public", "data", "names.json")
@@ -48,17 +49,7 @@ TOLERANCE_DEG = 1e-4                      # ~10 m, far above tile precision at z
 PropValue = str | int | float | bool
 
 
-class Entry(TypedDict):
-    """What the check reads of a search entry (searchindex.SearchEntry)."""
-    id: str
-    lon: float
-    lat: float
-    osm: NotRequired[str]
-    dialect: NotRequired[str]
-    local: NotRequired[str]
-
-
-class Feature(TypedDict):
+class Label(TypedDict):
     """A labelled feature of the tiles: its OSM object (`node/1`, None for
     one the injector added), its properties and, for a point, its position."""
     osm: str | None
@@ -67,7 +58,7 @@ class Feature(TypedDict):
     lat: NotRequired[float]
 
 
-def compare(entries: Mapping[str, Entry], features: Sequence[Feature]) -> list[str]:
+def compare(entries: Mapping[str, SearchEntry], features: Sequence[Label]) -> list[str]:
     """The disagreements between the search entries (`{id: entry}`) and the
     labelled features (`{"osm": "node/1" or None, "props": {...}}`, with
     `lon`/`lat` for a point feature), as readable lines."""
@@ -89,7 +80,8 @@ def compare(entries: Mapping[str, Entry], features: Sequence[Feature]) -> list[s
     return problems
 
 
-def checked_entries(entries: Mapping[str, Entry], features: Sequence[Feature]) -> set[str]:
+def checked_entries(entries: Mapping[str, SearchEntry],
+                    features: Sequence[Label]) -> set[str]:
     """The ids of the entries `compare` holds to a feature: those whose own
     object is among the features, not merely another object of the row."""
     return {ref for f in features
@@ -97,14 +89,14 @@ def checked_entries(entries: Mapping[str, Entry], features: Sequence[Feature]) -
             and _is_entry_object(entries[ref], f)}
 
 
-def _is_point_object(feature: Feature) -> bool:
+def _is_point_object(feature: Label) -> bool:
     """Whether a point feature is where the object is: a node, or a node the
     injector added (no OSM id).  A way or relation labelled as a point sits
     where Planetiler put its label, which is its business, not ours."""
     return "lon" in feature and (feature["osm"] is None or feature["osm"].startswith("node/"))
 
 
-def _is_entry_object(entry: Entry, feature: Feature) -> bool:
+def _is_entry_object(entry: SearchEntry, feature: Label) -> bool:
     """Whether the feature is the object the entry was placed by."""
     osm = entry.get("osm", "")
     if osm.startswith("local/"):
@@ -160,16 +152,16 @@ def osm_ref(feature_id: int | None) -> str | None:
     return f"{kind}/{feature_id // 10}" if kind else None
 
 
-def tile_features(data: bytes, zoom: int, x: int, y: int) -> list[Feature]:
+def tile_features(data: bytes, zoom: int, x: int, y: int) -> list[Label]:
     """The features of one (gzip-compressed) tile that carry a frasch:ref."""
     layers: dict[str, _TileLayer] = mapbox_vector_tile.decode(
         gzip.decompress(data), default_options={"y_coord_down": True})
-    out: list[Feature] = []
+    out: list[Label] = []
     for layer in layers.values():
         for f in layer["features"]:
             if "frasch:ref" not in f["properties"]:
                 continue
-            feature: Feature = {"osm": osm_ref(f.get("id")), "props": f["properties"]}
+            feature: Label = {"osm": osm_ref(f.get("id")), "props": f["properties"]}
             geom = f["geometry"]
             if geom["type"] == "Point":
                 px, py = geom["coordinates"]
@@ -179,10 +171,11 @@ def tile_features(data: bytes, zoom: int, x: int, y: int) -> list[Feature]:
     return out
 
 
-def archive_features(path: str, entries: Mapping[str, Entry], zoom: int) -> list[Feature]:
+def archive_features(path: str, entries: Mapping[str, SearchEntry],
+                     zoom: int) -> list[Label]:
     """The labelled features of the tiles the entries lie in, each once."""
     seen: set[tuple[str | None, PropValue, float | None, float | None]] = set()
-    out: list[Feature] = []
+    out: list[Label] = []
     with open(path, "rb") as fh:
         reader = Reader(MmapSource(fh))
         for x, y in sorted({tile_of(e["lon"], e["lat"], zoom) for e in entries.values()}):
@@ -204,7 +197,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--zoom", type=int, default=14)
     a = ap.parse_args(argv)
     with open(a.names, encoding="utf-8") as fh:
-        entries: dict[str, Entry] = {e["id"]: e for e in json.load(fh)["places"]}
+        entries: dict[str, SearchEntry] = {e["id"]: e for e in json.load(fh)["places"]}
     features = archive_features(a.archive, entries, a.zoom)
     problems = compare(entries, features)
     print(f"{len(features)} labelled features in the z{a.zoom} tiles of "

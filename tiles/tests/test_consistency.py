@@ -24,14 +24,14 @@ from frasch import check_tiles, paths
 from frasch import export_search_index
 from frasch import inject_names
 from frasch import locate
-from frasch.check_tiles import Feature
+from frasch.check_tiles import Label
 from frasch.geo import LonLat
 from frasch.searchindex import SearchEntry
 from conftest import places_text
 from osm_fixture import ring, write_extract
 
 # the search entries by id, and the injected extract's labelled features
-Built = tuple[dict[str, SearchEntry], list[Feature]]
+Built = tuple[dict[str, SearchEntry], list[Label]]
 
 # U-shaped Sylt: the mean of its corners lies in the bay, outside its area
 SYLT = [(8.0, 54.0), (9.0, 54.0), (9.0, 55.0), (8.8, 55.0), (8.8, 54.2), (8.2, 54.2),
@@ -82,13 +82,13 @@ AREAS = {"type": "FeatureCollection", "features": [
                          ("frr-x-hallig", box(9.45, 54.59, 9.55, 54.63))]]}
 
 
-def injected_features(pbf: Path) -> list[Feature]:
+def injected_features(pbf: Path) -> list[Label]:
     """The injected extract's labelled objects, as check_tiles reads tiles."""
-    out: list[Feature] = []
+    out: list[Label] = []
     for o in osmium.FileProcessor(str(pbf)):
         if "frasch:ref" not in o.tags:
             continue
-        feature: Feature = {"osm": f"{ {'n': 'node', 'w': 'way', 'r': 'relation'}[o.type_str()]}/{o.id}",
+        feature: Label = {"osm": f"{ {'n': 'node', 'w': 'way', 'r': 'relation'}[o.type_str()]}/{o.id}",
                             "props": dict(o.tags)}
         if isinstance(o, osmium.osm.Node):
             feature |= {"lon": o.location.lon, "lat": o.location.lat}

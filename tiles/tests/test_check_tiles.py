@@ -3,16 +3,24 @@ disagreeing."""
 from __future__ import annotations
 
 from frasch import check_tiles
-from frasch.check_tiles import Entry, Feature
+from frasch.check_tiles import Label
+from frasch.searchindex import SearchEntry
 
-STIARDEBEL: Entry = {"id": "stiardebel", "osm": "node/1; way/2", "lon": 9.25, "lat": 54.5,
-              "dialect": "frr-x-suedgoes", "local": "Stiardebel"}
+
+def entry(ident: str, osm: str, lon: float, lat: float) -> SearchEntry:
+    """A search entry with the fields the check does not read left empty."""
+    return {"id": ident, "names": {}, "name_de": "", "lon": lon, "lat": lat,
+            "kind": "settlement", "osm": osm}
+
+
+STIARDEBEL = entry("stiardebel", "node/1; way/2", 9.25, 54.5) | {
+    "dialect": "frr-x-suedgoes", "local": "Stiardebel"}
 
 
 def feature(osm: str | None, lon: float | None = None, lat: float | None = None,
-            **props: str) -> Feature:
+            **props: str) -> Label:
     props = {k.replace("_", ":"): v for k, v in props.items()}
-    f: Feature = {"osm": osm, "props": {"frasch:ref": "stiardebel", **props}}
+    f: Label = {"osm": osm, "props": {"frasch:ref": "stiardebel", **props}}
     if lon is not None and lat is not None:
         f |= {"lon": lon, "lat": lat}
     return f
@@ -53,17 +61,16 @@ def test_a_place_osm_does_not_have_is_compared_on_its_added_node() -> None:
 
 def test_a_polygons_label_point_is_planetilers_own() -> None:
     # Pellworm: a way whose label Planetiler places itself, a few metres off
-    pellworm: Entry = {"id": "pelweerm", "osm": "way/1472528448", "lon": 8.64127,
-                       "lat": 54.52347}
-    label: Feature = {"osm": "way/1472528448", "props": {"frasch:ref": "pelweerm"},
+    pellworm = entry("pelweerm", "way/1472528448", 8.64127, 54.52347)
+    label: Label = {"osm": "way/1472528448", "props": {"frasch:ref": "pelweerm"},
                       "lon": 8.64149, "lat": 54.52356}
     assert check_tiles.compare({"pelweerm": pellworm}, [label]) == []
 
 
 def test_only_entries_whose_own_object_is_labelled_count_as_checked() -> None:
     # Stiardebel's second object is labelled, its own is not; Pellworm's is
-    pellworm: Entry = {"id": "pelweerm", "osm": "way/1472528448", "lon": 8.64, "lat": 54.52}
-    features: list[Feature] = [feature("way/2"),
+    pellworm = entry("pelweerm", "way/1472528448", 8.64, 54.52)
+    features: list[Label] = [feature("way/2"),
                                {"osm": "way/1472528448", "props": {"frasch:ref": "pelweerm"}}]
     entries = {"stiardebel": STIARDEBEL, "pelweerm": pellworm}
     assert check_tiles.checked_entries(entries, features) == {"pelweerm"}
