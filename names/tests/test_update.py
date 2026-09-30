@@ -13,7 +13,7 @@ import pytest
 from frasch import locate, paths, placelist, provenance, update
 from frasch.provenance import ExtractStamp
 from conftest import cand, places_text, write_candidates
-from osm_fixture import ring, write_extract
+from osm_fixture import Nodes, ring, write_extract
 
 AREA_LIST = "dialect,name,osm,note\nfrr-x-mooring,Niebüll,relation/1,\n"
 # a village inside the Mooring area of the fixture extract
@@ -33,9 +33,10 @@ def workspace(world: Path) -> Path:
     return world
 
 
-def write_sh_extract(world: Path, timestamp: str = "2026-09-20T20:21:02Z") -> Path:
-    nodes, way = ring(10, (8.7, 54.6), (8.9, 54.6), (8.9, 54.8), (8.7, 54.8))
-    nodes[240044107] = TOFTUM_NODE
+def write_sh_extract(world: Path, timestamp: str = "2026-09-20T20:21:02Z",
+                     more_nodes: Nodes | None = None) -> Path:
+    area, way = ring(10, (8.7, 54.6), (8.9, 54.6), (8.9, 54.8), (8.7, 54.8))
+    nodes: Nodes = {**area, 240044107: TOFTUM_NODE, **(more_nodes or {})}
     return write_extract(world / "schleswig-holstein-latest.osm.pbf", nodes,
                          {5: (way, {})},
                          {1: ([("w", 5, "outer")], {"boundary": "administrative"})},
@@ -98,6 +99,18 @@ def test_rows_left_for_review_go_to_the_curation_worklist(workspace: Path) -> No
     assert run(workspace) == 0
     worklist = json.loads((workspace / "work" / "curate.json").read_text(encoding="utf-8"))
     assert [r["id"] for r in worklist["rows"]] == ["hesbel"]
+
+
+def test_an_ambiguous_row_goes_to_the_curation_worklist_with_its_candidates(
+        workspace: Path) -> None:
+    # a second Toftum in North Frisia, 25 km from the first
+    write_sh_extract(workspace, more_nodes={1: ((8.6, 54.5), TOFTUM_NODE[1])})
+    write_places(workspace, TOFTEM)
+    assert run(workspace) == 0
+    worklist = json.loads((workspace / "work" / "curate.json").read_text(encoding="utf-8"))
+    [row] = worklist["rows"]
+    assert (row["id"], row["result"]) == ("toftem", "ambiguous")
+    assert len(row["candidates"]) == 2
 
 
 def test_a_problem_in_the_name_list_stops_the_run_before_anything_is_built(

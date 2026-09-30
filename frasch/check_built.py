@@ -84,8 +84,8 @@ def unlocated_problems(a: argparse.Namespace) -> list[str]:
 
 def stamp_problems(a: argparse.Namespace) -> list[str]:
     """The dialect areas, by the inputs their stamp names."""
-    current = build_dialect_areas.stamp(a.area_list, a.dialects, [])
-    del current["extracts"]                    # CI has none
+    current = {label: provenance.blob_hash(path) for label, path
+               in build_dialect_areas.stamp_inputs(a.area_list, a.dialects).items()}
     problems = []
     for path in (a.areas, a.parts):
         stamp = provenance.recorded(path)

@@ -235,12 +235,17 @@ def round_geojson(obj: object, nd: int = ROUND) -> object:
     return obj
 
 
+def stamp_inputs(area_list: StrPath, registry_csv: StrPath) -> dict[str, StrPath]:
+    """The committed files the dialect areas are built from, by the label
+    their stamp gives them."""
+    return {"dialect_areas.csv": area_list, "dialects.csv": registry_csv}
+
+
 def stamp(area_list: StrPath, registry_csv: StrPath,
           extracts: list[ExtractStamp]) -> BuiltFrom:
     """What the dialect areas are built from: the area list, the dialect
     registry and the extracts."""
-    return provenance.built_from(
-        {"dialect_areas.csv": area_list, "dialects.csv": registry_csv}, extracts)
+    return provenance.built_from(stamp_inputs(area_list, registry_csv), extracts)
 
 
 @cli.command
