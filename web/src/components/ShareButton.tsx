@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { TOUCH_MEDIA } from '../layout';
+
 /** How long the "link copied" confirmation stays up. */
 const CONFIRM_MS = 2000;
 
@@ -10,7 +12,7 @@ const CONFIRM_MS = 2000;
  * (Safari, Chrome on Windows), but their sheet is clumsier than a copied link.
  */
 function hasShareSheet(): boolean {
-  return typeof navigator.share === 'function' && window.matchMedia('(pointer: coarse)').matches;
+  return typeof navigator.share === 'function' && window.matchMedia(TOUCH_MEDIA).matches;
 }
 
 /**

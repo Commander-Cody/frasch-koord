@@ -23,6 +23,7 @@ import { useTranslation } from 'react-i18next';
 import fraschBright from '../style/frasch-bright.json';
 import { buildStyle, placeLayerIds } from '../style/localize';
 import { TILES_URL } from '../config';
+import { TOUCH_MEDIA } from '../layout';
 import { oncePerFrame } from '../oncePerFrame';
 import CloseButton from './CloseButton';
 
@@ -47,7 +48,7 @@ const CLICK_SLOP = 6;
 const TOUCH_CLICK_SLOP = 12;
 
 function clickSlop(): number {
-  return window.matchMedia('(pointer: coarse)').matches ? TOUCH_CLICK_SLOP : CLICK_SLOP;
+  return window.matchMedia(TOUCH_MEDIA).matches ? TOUCH_CLICK_SLOP : CLICK_SLOP;
 }
 
 /** How close (px) to the edge of a bottom inset a place may sit before `reveal` pans. */
