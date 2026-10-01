@@ -19,7 +19,7 @@ that is not `skip` tags the object(s) in its `osm` column with
     name:de          the first variant of the row's `de`, in place of OSM's
                      (the card's German name comes from the list, #61);
                      OSM's stays where the list has none
-    frasch:kind     the row's kind (island, hallig, sand, settlement, ...)
+    frasch:kind      the row's kind (island, hallig, sand, settlement, ...)
     frasch:dialect   the dialect spoken where the object lies
     frasch:local     what the people of the place themselves call it
     frasch:variety   the name of that local variety, e.g. `Foortuftinge`
