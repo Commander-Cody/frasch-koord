@@ -11,6 +11,7 @@ import pytest
 from frasch import curate
 from frasch import match
 from frasch.candidates import Candidate
+from conftest import places_text
 
 
 def rec(t: str, id: int, lon: float | None, lat: float | None, **tags: str) -> Candidate:
@@ -133,3 +134,25 @@ def test_each_entry_knows_its_line_in_the_patch(tmp_path: Path) -> None:
     write_patch(p, entry(2, "Mursem", "Morsum", action="skip"), "",
                 entry(4, "Hoonebel", "Hunnebüll", action="skip"))
     assert [e["_patch_line"] for e in curate.read_patch(p)] == [1, 3]
+
+
+# ------------------------------------------------------------------- main ---
+@pytest.mark.parametrize("argv,hint", [
+    (["--dry-run"], "curate.py apply --dry-run"),
+    (["--names", "places.csv", "--keep"], "curate.py apply --names places.csv --keep"),
+])
+def test_an_apply_option_without_a_subcommand_points_at_apply(
+        argv: list[str], hint: str, capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as exc:
+        curate.main(argv)
+    assert exc.value.code == 2
+    assert f"did you mean `{hint}`?" in capsys.readouterr().err
+
+
+def test_options_without_a_subcommand_mean_export(
+        tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    places = tmp_path / "places.csv"
+    places.write_text(places_text([]), encoding="utf-8")
+    assert curate.main(["--names", str(places),
+                        "--matches", str(tmp_path / "matches.csv")]) == 1
+    assert "run names/match.py first" in capsys.readouterr().err

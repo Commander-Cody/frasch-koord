@@ -710,9 +710,35 @@ def unwrite_curation(path: str, old: bytes | None, written: str,
 # ------------------------------------------------------------------- main ---
 @cli.command
 def main(argv: Sequence[str] | None = None) -> int:
-    argv = list(sys.argv[1:] if argv is None else argv)
-    if not argv or (argv[0] not in ("export", "apply", "-h", "--help")):
-        argv.insert(0, "export")         # export is what one runs every time
+    ap, ex, ap_ = parser()
+    args = ap.parse_args(with_subcommand(sys.argv[1:] if argv is None else argv,
+                                         ap, ex, ap_))
+    run: Callable[[argparse.Namespace], int] = args.func
+    return run(args)
+
+
+def with_subcommand(argv: Sequence[str], ap: argparse.ArgumentParser,
+                    ex: argparse.ArgumentParser,
+                    ap_: argparse.ArgumentParser) -> list[str]:
+    """`argv`, with `export` in front when it names no subcommand: export is
+    what one runs every time.  An option only `apply` takes stops it then
+    (`curate.py --dry-run` meant `apply --dry-run`)."""
+    if argv and argv[0] in ("export", "apply", "-h", "--help"):
+        return list(argv)
+    apply_only = options_of(ap_) - options_of(ex)
+    if (option := next((a for a in argv if a.split("=")[0] in apply_only), None)):
+        ap.error(f"{option} belongs to `apply`: did you mean "
+                 f"`curate.py apply {' '.join(argv)}`?")
+    return ["export", *argv]
+
+
+def options_of(parser: argparse.ArgumentParser) -> set[str]:
+    return {o for action in parser._actions for o in action.option_strings}
+
+
+def parser() -> tuple[argparse.ArgumentParser, argparse.ArgumentParser,
+                      argparse.ArgumentParser]:
+    """-> (the parser, its `export` and its `apply` subparser)."""
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -733,8 +759,5 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap_.add_argument("--keep", action="store_true",
                      help="do not rename the patch file after applying it")
     ap_.set_defaults(func=cmd_apply)
-
-    args = ap.parse_args(argv)
-    run: Callable[[argparse.Namespace], int] = args.func
-    return run(args)
+    return ap, ex, ap_
 
