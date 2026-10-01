@@ -73,7 +73,8 @@ import math
 import os
 import time
 from collections.abc import Container, Mapping, Sequence
-from typing import NotRequired, TypedDict
+from dataclasses import dataclass, field
+from typing import NamedTuple, NotRequired, TypedDict
 
 import osmium
 from shapely.geometry.base import BaseGeometry
@@ -91,11 +92,12 @@ from frasch import (
 )
 from frasch.dialects import AreaRow
 from frasch.errors import PipelineError, ValidationError
+from frasch.geo import LonLat
 from frasch.osmscan import Rings
 from frasch.placelist import OsmRef
 from frasch.paths import StrPath
 from frasch.provenance import BuiltFrom, ExtractStamp
-from frasch.registry import Registry
+from frasch.registry import Dialect, Registry
 
 DEFAULT_AREAS = dialects.AREA_LIST_PATH
 DEFAULT_OUT = dialects.DEFAULT_AREAS
@@ -256,6 +258,44 @@ def stamp(area_list: StrPath, registry_csv: StrPath, extracts: list[ExtractStamp
 
 @cli.command
 def main(argv: Sequence[str] | None = None) -> int:
+    a = _parse_args(argv)
+    reg = registry.read(a.registry)
+    by_ref, labels, rows = read_areas(a.areas, reg)
+    want_unassigned = bool(a.parts_out) and not a.no_unassigned
+    print(
+        f"area list : {a.areas} -> {len(by_ref)} OSM objects, {len(set(by_ref.values()))} dialects"
+    )
+
+    scan = _Scan()
+    for path in a.pbf:
+        _scan_extract(path, by_ref, a.unassigned_ags if want_unassigned else None, scan)
+
+    features, total = _dialect_features(reg, by_ref, scan.geoms, a.simplify)
+    if not features:
+        raise PipelineError("no geometry found -- is the extract the right region?")
+
+    for p in scan.problems:
+        print(f"  ! {p}")
+    missing = [ref for ref in by_ref if ref not in scan.geoms]
+    if missing:
+        _report_missing(missing, by_ref, labels, a.allow_missing)
+
+    built_from = stamp(a.areas, a.registry, [provenance.extract_stamp(p) for p in a.pbf])
+
+    # Both files are computed in full before either is written, so a problem
+    # building --parts-out cannot leave --out written on its own.
+    parts: tuple[FeatureCollection[PartProperties], int] | None = None
+    if a.parts_out:
+        parts = build_parts_fc(a, reg, rows, scan.geoms, scan.free, scan.free_names, built_from)
+    fc = _dialect_fc(a, features, built_from)
+
+    _write_dialects(a.out, fc, total)
+    if parts is not None:
+        write_parts(a, *parts, scan.free)
+    return 0
+
+
+def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -304,117 +344,168 @@ def main(argv: Sequence[str] | None = None) -> int:
         "produced no geometry at all (default: stop and "
         "write nothing)",
     )
-    a = ap.parse_args(argv)
-    from shapely.geometry import mapping
-    from shapely.ops import unary_union
+    return ap.parse_args(argv)
 
-    reg = registry.read(a.registry)
-    by_ref, labels, rows = read_areas(a.areas, reg)
-    want_unassigned = bool(a.parts_out) and not a.no_unassigned
+
+@dataclass
+class _Scan:
+    """The polygons found so far, over every extract read."""
+
+    geoms: dict[OsmRef, list[BaseGeometry]] = field(default_factory=dict)  # assigned by the CSV
+    free: dict[OsmRef, list[BaseGeometry]] = field(default_factory=dict)  # municipality, no dialect
+    free_names: dict[OsmRef, str] = field(default_factory=dict)  # ref -> municipality name
+    problems: list[str] = field(default_factory=list)
+
+
+class _Geometry(NamedTuple):
+    """What one extract holds of the objects asked for: relation rings,
+    way node lists and node locations."""
+
+    rel: dict[int, Rings]
+    ways: dict[int, list[int]]
+    nodes: dict[int, LonLat]
+
+
+def _scan_extract(
+    path: str, by_ref: Mapping[OsmRef, str], unassigned_ags: str | None, scan: _Scan
+) -> None:
+    """Add to `scan` the polygons of the references not found yet, and --
+    unless `unassigned_ags` is None -- those of the district's unclaimed
+    municipalities."""
+    t0 = time.time()
+    want = {ref for ref in by_ref if ref not in scan.geoms}
+    rel_ids = {i for t, i in want if t == "r"}
+    way_ids = {i for t, i in want if t == "w"}
+    rel = {i: r["rings"] for i, r in osmscan.relations(path, rel_ids).items()}
+    # The unclaimed municipalities ride along in the same way/node passes:
+    # their member ways are mostly the *same* ways, since neighbours share
+    # a boundary.
+    loose: dict[int, Rings] = {}
+    loose_names: dict[int, str] = {}
+    if unassigned_ags is not None:
+        loose, loose_names = _unclaimed_relations(path, unassigned_ags, by_ref, scan.free)
+        rel.update(loose)
+    geometry = _read_geometry(path, rel, way_ids)
     print(
-        f"area list : {a.areas} -> {len(by_ref)} OSM objects, {len(set(by_ref.values()))} dialects"
+        f"{os.path.basename(path)}: {len(rel) - len(loose)}/{len(rel_ids)} "
+        f"relations, {len(geometry.ways):,} ways, {len(geometry.nodes):,} nodes"
+        f"{f', {len(loose)} unclaimed municipalities' if loose else ''} "
+        f"({time.time() - t0:.0f}s)"
     )
+    for ref in sorted(want):
+        polys = osmgeom.polygons_for(ref, *geometry, scan.problems)
+        if polys:
+            scan.geoms[ref] = polys
+    for rel_id in sorted(loose):
+        ref = ("r", rel_id)
+        # Their own problems are noise: nobody has claimed these, so a
+        # broken ring means "not reviewable", not "the data is wrong".
+        polys = osmgeom.polygons_for(ref, *geometry, [])
+        if polys:
+            scan.free[ref] = polys
+            scan.free_names[ref] = loose_names.get(rel_id, "")
 
-    geoms: dict[OsmRef, list[BaseGeometry]] = {}  # assigned by the CSV
-    free: dict[OsmRef, list[BaseGeometry]] = {}  # municipality, no dialect
-    free_names: dict[OsmRef, str] = {}  # ref -> municipality name
-    problems: list[str] = []
-    for path in a.pbf:
-        t0 = time.time()
-        want = {ref for ref in by_ref if ref not in geoms}
-        rel_ids = {i for t, i in want if t == "r"}
-        way_ids = {i for t, i in want if t == "w"}
-        rel = {i: r["rings"] for i, r in osmscan.relations(path, rel_ids).items()}
-        # The unclaimed municipalities ride along in the same way/node passes:
-        # their member ways are mostly the *same* ways, since neighbours share
-        # a boundary.
-        loose: dict[int, Rings] = {}
-        loose_names: dict[int, str] = {}
-        if want_unassigned:
-            claimed = {i for t, i in by_ref if t == "r"}
-            loose, loose_names = read_admin_relations(path, a.unassigned_ags, claimed)
-            loose = {i: r for i, r in loose.items() if ("r", i) not in free}
-            rel.update(loose)
-        member_ids = {w for r in rel.values() for w in r["outer"] + r["inner"]}
-        ways = {i: w["nodes"] for i, w in osmscan.ways(path, way_ids | member_ids).items()}
-        node_ids = {n for w in ways.values() for n in w}
-        nodes = {i: n["loc"] for i, n in osmscan.nodes(path, node_ids).items()}
-        print(
-            f"{os.path.basename(path)}: {len(rel) - len(loose)}/{len(rel_ids)} "
-            f"relations, {len(ways):,} ways, {len(nodes):,} nodes"
-            f"{f', {len(loose)} unclaimed municipalities' if loose else ''} "
-            f"({time.time() - t0:.0f}s)"
-        )
-        for ref in sorted(want):
-            polys = osmgeom.polygons_for(ref, rel, ways, nodes, problems)
-            if polys:
-                geoms[ref] = polys
-        for rel_id in sorted(loose):
-            ref = ("r", rel_id)
-            # Their own problems are noise: nobody has claimed these, so a
-            # broken ring means "not reviewable", not "the data is wrong".
-            polys = osmgeom.polygons_for(ref, rel, ways, nodes, [])
-            if polys:
-                free[ref] = polys
-                free_names[ref] = loose_names.get(rel_id, "")
 
-    missing = [ref for ref in by_ref if ref not in geoms]
+def _unclaimed_relations(
+    path: str, ags_prefix: str, by_ref: Mapping[OsmRef, str], free: Container[OsmRef]
+) -> tuple[dict[int, Rings], dict[int, str]]:
+    """`read_admin_relations` without the municipalities an earlier extract
+    already yielded."""
+    claimed = {i for t, i in by_ref if t == "r"}
+    loose, loose_names = read_admin_relations(path, ags_prefix, claimed)
+    loose = {i: r for i, r in loose.items() if ("r", i) not in free}
+    return loose, loose_names
+
+
+def _read_geometry(path: str, rel: dict[int, Rings], way_ids: set[int]) -> _Geometry:
+    """The relations `rel`, plus the ways `way_ids` and every member way of
+    `rel`, with the locations of all their nodes."""
+    member_ids = {w for r in rel.values() for w in r["outer"] + r["inner"]}
+    ways = {i: w["nodes"] for i, w in osmscan.ways(path, way_ids | member_ids).items()}
+    node_ids = {n for w in ways.values() for n in w}
+    nodes = {i: n["loc"] for i, n in osmscan.nodes(path, node_ids).items()}
+    return _Geometry(rel, ways, nodes)
+
+
+def _dialect_features(
+    reg: Registry,
+    by_ref: Mapping[OsmRef, str],
+    geoms: Mapping[OsmRef, Sequence[BaseGeometry]],
+    tol: float,
+) -> tuple[list[Feature[DialectProperties]], int]:
+    """-> (features, polygon count): one Feature per dialect that has any
+    geometry, in registry order, each reported as it is built."""
     features: list[Feature[DialectProperties]] = []
     total = 0
     for d in reg:
         refs = [r for r in by_ref if by_ref[r] == d["tag"] and r in geoms]
         if not refs:
             continue
-        geom = unary_union([p for ref in refs for p in geoms[ref]])
-        geom = geom.simplify(a.simplify, preserve_topology=True)
-        if not geom.is_valid:
-            geom = geom.buffer(0)
-        n_poly = len(getattr(geom, "geoms", [geom]))
-        n_pts = len(json.dumps(mapping(geom)).split(","))
+        feature, n_poly = _dialect_feature(d, refs, geoms, tol)
+        features.append(feature)
         total += n_poly
-        print(
-            f"  {d['tag']:<15} {len(refs):>2} object(s) -> {n_poly:>2} polygon(s), "
-            f"{km2(geom):8.1f} km², valid={geom.is_valid}, ~{n_pts} coords"
+    return features, total
+
+
+def _dialect_feature(
+    d: Dialect,
+    refs: Sequence[OsmRef],
+    geoms: Mapping[OsmRef, Sequence[BaseGeometry]],
+    tol: float,
+) -> tuple[Feature[DialectProperties], int]:
+    """-> (feature, polygon count): the polygons of `refs` dissolved into
+    dialect `d`'s Feature, simplified to `tol`."""
+    from shapely.geometry import mapping
+    from shapely.ops import unary_union
+
+    geom = unary_union([p for ref in refs for p in geoms[ref]])
+    geom = geom.simplify(tol, preserve_topology=True)
+    if not geom.is_valid:
+        geom = geom.buffer(0)
+    n_poly = len(getattr(geom, "geoms", [geom]))
+    n_pts = len(json.dumps(mapping(geom)).split(","))
+    print(
+        f"  {d['tag']:<15} {len(refs):>2} object(s) -> {n_poly:>2} polygon(s), "
+        f"{km2(geom):8.1f} km², valid={geom.is_valid}, ~{n_pts} coords"
+    )
+    feature: Feature[DialectProperties] = {
+        "type": "Feature",
+        "properties": {"dialect": d["tag"], "label": d["label"]},
+        "geometry": round_geojson(mapping(geom)),
+    }
+    return feature, n_poly
+
+
+def _report_missing(
+    missing: Sequence[OsmRef],
+    by_ref: Mapping[OsmRef, str],
+    labels: Mapping[OsmRef, str],
+    allow_missing: bool,
+) -> None:
+    """Print the references that produced no geometry; stop the build
+    unless `allow_missing`."""
+    lines = [f"{len(missing)} object(s) not found in the extract(s):"]
+    lines += [
+        f"  {placelist.format_osm([ref])}  {labels.get(ref) or '?'} ({by_ref[ref]})"
+        for ref in sorted(missing)
+    ]
+    report = "\n".join(lines)
+    print(f"\n{report}")
+    if not allow_missing:
+        # A dialect area silently missing a reference is worse than a
+        # stopped build -- nothing downstream would ever notice the gap.
+        # Nothing may be written past this point (see the module
+        # docstring): both --out and --parts-out are still untouched.
+        raise PipelineError(
+            f"{report}\n\nrun with --allow-missing to build anyway; nothing was written"
         )
-        features.append(
-            {
-                "type": "Feature",
-                "properties": {"dialect": d["tag"], "label": d["label"]},
-                "geometry": round_geojson(mapping(geom)),
-            }
-        )
-    if not features:
-        raise PipelineError("no geometry found -- is the extract the right region?")
 
-    for p in problems:
-        print(f"  ! {p}")
-    if missing:
-        lines = [f"{len(missing)} object(s) not found in the extract(s):"]
-        lines += [
-            f"  {placelist.format_osm([ref])}  {labels.get(ref) or '?'} ({by_ref[ref]})"
-            for ref in sorted(missing)
-        ]
-        report = "\n".join(lines)
-        print(f"\n{report}")
-        if not a.allow_missing:
-            # A dialect area silently missing a reference is worse than a
-            # stopped build -- nothing downstream would ever notice the gap.
-            # Nothing may be written past this point (see the module
-            # docstring): both --out and --parts-out are still untouched.
-            raise PipelineError(
-                f"{report}\n\nrun with --allow-missing to build anyway; nothing was written"
-            )
 
-    built_from = stamp(a.areas, a.registry, [provenance.extract_stamp(p) for p in a.pbf])
-
-    # Both files are computed in full before either is written, so a problem
-    # building --parts-out cannot leave --out written on its own.
-    parts: tuple[FeatureCollection[PartProperties], int] | None = None
-    if a.parts_out:
-        parts = build_parts_fc(a, reg, rows, geoms, free, free_names, built_from)
-
-    fc: FeatureCollection[DialectProperties]
-    fc = {
+def _dialect_fc(
+    a: argparse.Namespace, features: list[Feature[DialectProperties]], built_from: BuiltFrom
+) -> FeatureCollection[DialectProperties]:
+    """The --out FeatureCollection: one Feature per dialect."""
+    return {
         "type": "FeatureCollection",
         "properties": {
             "source": os.path.basename(a.areas),
@@ -423,17 +514,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         },
         "features": features,
     }
-    write_geojson(a.out, fc)
-    print(
-        f"\nwrote {a.out} ({len(features)} features, {total} polygons, "
-        f"{os.path.getsize(a.out) / 1e3:.0f} kB)"
-    )
-    idx = dialects.AreaIndex.from_geojson(a.out)
-    print(f"reads back as {len(idx)} polygon(s): {idx.summary()}")
 
-    if parts is not None:
-        write_parts(a, *parts, free)
-    return 0
+
+def _write_dialects(path: str, fc: FeatureCollection[DialectProperties], total: int) -> None:
+    """Write --out, report on it and check that AreaIndex reads it back."""
+    write_geojson(path, fc)
+    print(
+        f"\nwrote {path} ({len(fc['features'])} features, {total} polygons, "
+        f"{os.path.getsize(path) / 1e3:.0f} kB)"
+    )
+    idx = dialects.AreaIndex.from_geojson(path)
+    print(f"reads back as {len(idx)} polygon(s): {idx.summary()}")
 
 
 def write_geojson(path: str, fc: Mapping[str, object]) -> None:

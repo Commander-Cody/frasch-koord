@@ -242,7 +242,6 @@ def process(
     fp = osmium.FileProcessor(pbf).with_locations(idx)
     for o in fp:
         n_seen += 1
-        typ = o.type_str()  # 'n' | 'w' | 'r'
         otags = o.tags
         lon: float | None
         lat: float | None
@@ -264,53 +263,71 @@ def process(
         elif isinstance(o, osmium.osm.Relation):
             if not otags or not has_name(otags):
                 continue
-            lon = lat = None
-            sx = sy = 0.0
-            n = 0
-            for m in o.members:
-                if m.type == "w":
-                    cc = ways.get(m.ref)
-                    if cc:
-                        sx += cc[0]
-                        sy += cc[1]
-                        n += 1
-            if n:
-                lon, lat = sx / n, sy / n
+            lon, lat = _relation_centroid(o, ways) or (None, None)
         else:  # an area or a changeset: never a candidate
             continue
 
-        tags = dict(otags)
-        cls = classify(tags) or []
-        # named roads: only inside North Frisia
-        if "highway" in tags and geo.in_north_frisia(lon, lat):
-            cls.append("highway=" + tags["highway"])
-        if not cls:
+        rec = _record(o, src, lon, lat)
+        if rec is None:
             continue
-
-        names = name_tags(tags)
-        if not names:
-            continue
-        keep = {k: tags[k] for k in CLASS_KEYS + EXTRA_KEYS if k in tags}
-        keep.update(names)
-        rec: candidates.Candidate = {
-            "src": src,
-            "t": typ,
-            "id": o.id,
-            "lon": round(lon, 6) if lon is not None else None,
-            "lat": round(lat, 6) if lat is not None else None,
-            "cls": cls,
-            "tags": keep,
-        }
         out.write(json.dumps(rec, ensure_ascii=False) + "\n")
-        for cl in cls:
+        for cl in rec["cls"]:
             counts[cl.split("=")[0]] += 1
         counts["_total"] += 1
-        counts["_total_" + typ] += 1
+        counts["_total_" + rec["t"]] += 1
     print(
         f"  {src}: {n_seen:,} objects scanned, "
         f"{len(ways.ids):,} way centroids cached, {time.time() - t0:.0f}s",
         file=sys.stderr,
     )
+
+
+def _relation_centroid(r: osmium.osm.Relation, ways: WayCentroids) -> LonLat | None:
+    """Average of the cached positions of a relation's member ways."""
+    sx = sy = 0.0
+    n = 0
+    for m in r.members:
+        if m.type == "w":
+            cc = ways.get(m.ref)
+            if cc:
+                sx += cc[0]
+                sy += cc[1]
+                n += 1
+    if not n:
+        return None
+    return sx / n, sy / n
+
+
+def _record(
+    o: osmium.osm.Node | osmium.osm.Way | osmium.osm.Relation,
+    src: str,
+    lon: float | None,
+    lat: float | None,
+) -> candidates.Candidate | None:
+    """The record of a named object at (lon, lat), or None if it has no class
+    worth keeping."""
+    tags = dict(o.tags)
+    cls = classify(tags) or []
+    # named roads: only inside North Frisia
+    if "highway" in tags and geo.in_north_frisia(lon, lat):
+        cls.append("highway=" + tags["highway"])
+    if not cls:
+        return None
+
+    names = name_tags(tags)
+    if not names:
+        return None
+    keep = {k: tags[k] for k in CLASS_KEYS + EXTRA_KEYS if k in tags}
+    keep.update(names)
+    return {
+        "src": src,
+        "t": o.type_str(),  # 'n' | 'w' | 'r'
+        "id": o.id,
+        "lon": round(lon, 6) if lon is not None else None,
+        "lat": round(lat, 6) if lat is not None else None,
+        "cls": cls,
+        "tags": keep,
+    }
 
 
 @cli.command

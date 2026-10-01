@@ -3,6 +3,7 @@ header naming the extracts it was built from, and the one-step write (#24)."""
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import osmium
@@ -113,3 +114,116 @@ def test_a_failed_build_leaves_the_old_file_and_no_temp_file(tmp_path: Path) -> 
         build_candidates.main([str(sh), str(unsorted), "--out", str(old)])
     assert old.read_bytes() == before
     assert [p.name for p in old.parent.iterdir()] == ["candidates.jsonl"]
+
+
+# ------------------------------------------------------- what is kept ---
+def write_mixed_extract(path: Path) -> Path:
+    """Named and unnamed nodes, ways and relations, some worth keeping."""
+    return write_extract(
+        path,
+        nodes={
+            1: ((8.83, 54.71), {"name": "Toftum", "place": "village", "population": "40"}),
+            2: ((8.84, 54.72), {"name": "Kiosk", "shop": "kiosk"}),
+            3: ((8.85, 54.73), {"place": "hamlet"}),
+            4: ((8.86, 54.74), {"name:frr": "Hoorbel", "place": "hamlet"}),
+            5: ((10.0, 54.3), {"name": "Kiel Hbf", "highway": "bus_stop"}),
+            10: ((8.80, 54.60), {}),
+            11: ((8.82, 54.60), {}),
+            12: ((8.82, 54.62), {}),
+            13: ((8.90, 54.70), {}),
+            14: ((8.92, 54.72), {}),
+        },
+        ways={
+            20: ([10, 11, 12], {"name": "Dorfstraße", "highway": "residential"}),
+            21: ([13, 14], {}),
+            22: ([12, 13], {"name": "Koogweg", "landuse": "farmland"}),
+        },
+        relations={
+            30: (
+                [("w", 21, "outer"), ("w", 22, "outer"), ("n", 1, "label")],
+                {"name": "Neuer Koog", "place": "polder", "wikidata": "Q1"},
+            ),
+            31: ([("w", 99, "outer")], {"name": "Verloren", "boundary": "historic"}),
+        },
+    )
+
+
+def test_main_keeps_named_classified_objects_with_their_positions(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    pbf = write_mixed_extract(tmp_path / "mixed.osm.pbf")
+    out = build(tmp_path, pbf)
+
+    # not kept: the kiosk (no class), the unnamed hamlet, the bus stop
+    # (a road outside North Frisia) and the unnamed way; a relation's
+    # position is the mean of its member ways' first nodes, or none at all
+    assert list(candidates.read_records(out)) == [
+        {
+            "src": "mixed",
+            "t": "n",
+            "id": 1,
+            "lon": 8.83,
+            "lat": 54.71,
+            "cls": ["place=village"],
+            "tags": {"place": "village", "population": "40", "name": "Toftum"},
+        },
+        {
+            "src": "mixed",
+            "t": "n",
+            "id": 4,
+            "lon": 8.86,
+            "lat": 54.74,
+            "cls": ["place=hamlet"],
+            "tags": {"place": "hamlet", "name:frr": "Hoorbel"},
+        },
+        {
+            "src": "mixed",
+            "t": "w",
+            "id": 20,
+            "lon": 8.813333,
+            "lat": 54.606667,
+            "cls": ["highway=residential"],
+            "tags": {"highway": "residential", "name": "Dorfstraße"},
+        },
+        {
+            "src": "mixed",
+            "t": "w",
+            "id": 22,
+            "lon": 8.86,
+            "lat": 54.66,
+            "cls": ["landuse=farmland"],
+            "tags": {"landuse": "farmland", "name": "Koogweg"},
+        },
+        {
+            "src": "mixed",
+            "t": "r",
+            "id": 30,
+            "lon": 8.86,
+            "lat": 54.66,
+            "cls": ["place=polder", "wikidata"],
+            "tags": {"place": "polder", "wikidata": "Q1", "name": "Neuer Koog"},
+        },
+        {
+            "src": "mixed",
+            "t": "r",
+            "id": 31,
+            "lon": None,
+            "lat": None,
+            "cls": ["boundary=historic"],
+            "tags": {"boundary": "historic", "name": "Verloren"},
+        },
+    ]
+    stdout, stderr = (re.sub(r" \d+s$", " Ns", text, flags=re.M) for text in capsys.readouterr())
+    assert (
+        stderr == f"scanning {pbf} ...\n  mixed: 15 objects scanned, 3 way centroids cached, Ns\n"
+    )
+    assert stdout == (
+        f"\nwrote 6 candidates to {out} in Ns\n"
+        "  nodes 2  ways 2  relations 2\n"
+        "counts by tag class (an object can count in several):\n"
+        "         1  boundary\n"
+        "         1  highway\n"
+        "         1  landuse\n"
+        "         3  place\n"
+        "         1  wikidata\n"
+    )
