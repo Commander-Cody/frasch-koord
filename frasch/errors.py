@@ -21,7 +21,7 @@ class ValidationError(PipelineError, ValueError):
 
 class Invalid(ValidationError):
     """One cell that breaks the rules.  `reason` is the bare reason, for
-    names/check.py, which says where itself."""
+    frasch.check, which says where itself."""
 
     def __init__(self, where: str, reason: str):
         super().__init__(f"{where}: {reason}" if where else reason)

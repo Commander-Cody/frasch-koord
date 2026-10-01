@@ -35,7 +35,7 @@ from collections.abc import Sequence
 from frasch import (
     build_dialect_areas,
     cli,
-    dialects,
+    export_dialects,
     locate,
     paths,
     placelist,
@@ -44,9 +44,7 @@ from frasch import (
     searchindex,
 )
 from frasch.errors import PipelineError
-
-DEFAULT_PARTS = paths.DIALECT_AREA_PARTS
-DEFAULT_REGISTRY_JSON = paths.REGISTRY_JSON
+from frasch.objects import read_objects
 
 
 def regenerated_problems(a: argparse.Namespace, tmp: str) -> list[str]:
@@ -62,7 +60,7 @@ def regenerated_problems(a: argparse.Namespace, tmp: str) -> list[str]:
     else:
         problems += differs(a.index, index, "just index")
     exported = os.path.join(tmp, "dialects.json")
-    dialects.export_json(registry.read(a.dialects), exported)
+    export_dialects.export_json(registry.read(a.dialects), exported)
     problems += differs(a.registry_json, exported, "just dialects")
     return problems
 
@@ -73,7 +71,7 @@ def unlocated_problems(a: argparse.Namespace) -> list[str]:
     only one the search index needs."""
     reg = registry.read(a.dialects)
     rows, _ = placelist.read(a.names, reg)
-    objects = locate.read_objects(a.objects).by_ref
+    objects = read_objects(a.objects).by_ref
     problems = []
     for row in (r for r in rows if placelist.on_map(r, reg)):
         missing = [
@@ -120,7 +118,9 @@ def extract_problems(a: argparse.Namespace, tmp: str) -> list[str]:
     # the two commands themselves, as `just objects` and `just areas` run
     # them; a failure is on stderr already
     with contextlib.redirect_stdout(io.StringIO()):
-        if locate.main(objects_from + ["--names", a.names, "--out", objects]):
+        if locate.main(
+            objects_from + ["--names", a.names, "--dialects", a.dialects, "--out", objects]
+        ):
             return [f"{a.objects} cannot be rebuilt (see above)"]
         if build_dialect_areas.main(
             areas_from
@@ -171,15 +171,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    ap.add_argument("--names", default=placelist.DEFAULT_PATH)
+    ap.add_argument("--names", default=paths.PLACES)
     ap.add_argument("--dialects", default=paths.DIALECTS)
     ap.add_argument("--curation", default=paths.CURATION)
-    ap.add_argument("--area-list", default=dialects.AREA_LIST_PATH)
-    ap.add_argument("--areas", default=dialects.DEFAULT_AREAS)
-    ap.add_argument("--parts", default=DEFAULT_PARTS)
-    ap.add_argument("--objects", default=locate.DEFAULT_OUT)
+    ap.add_argument("--area-list", default=paths.DIALECT_AREA_LIST)
+    ap.add_argument("--areas", default=paths.DIALECT_AREAS)
+    ap.add_argument("--parts", default=paths.DIALECT_AREA_PARTS)
+    ap.add_argument("--objects", default=paths.OBJECTS)
     ap.add_argument("--index", default=paths.SEARCH_INDEX)
-    ap.add_argument("--registry-json", default=DEFAULT_REGISTRY_JSON)
+    ap.add_argument("--registry-json", default=paths.REGISTRY_JSON)
     ap.add_argument(
         "--extracts",
         nargs="+",

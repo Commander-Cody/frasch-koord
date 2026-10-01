@@ -31,15 +31,25 @@ def extract(tmp_path: Path) -> str:
                     {"boundary": "administrative"},
                 ),
                 21: ([("w", 11, "")], {}),
+                22: (
+                    [
+                        ("w", 11, "side_stream"),
+                        ("n", 4, "spring"),
+                        ("w", 10, "main_stream"),
+                        ("w", 12, ""),
+                    ],
+                    {"type": "waterway"},
+                ),
             },
         )
     )
 
 
-def test_relations_come_with_their_rings_label_and_tags(tmp_path: Path) -> None:
+def test_relations_come_with_their_rings_member_ways_label_and_tags(tmp_path: Path) -> None:
     assert osmscan.relations(extract(tmp_path), {20}) == {
         20: {
             "rings": {"outer": [10], "inner": [11]},
+            "member_ways": [10, 11],
             "label": 4,
             "tags": {"boundary": "administrative"},
         }
@@ -48,6 +58,10 @@ def test_relations_come_with_their_rings_label_and_tags(tmp_path: Path) -> None:
 
 def test_a_member_without_a_role_is_an_outer_ring(tmp_path: Path) -> None:
     assert osmscan.relations(extract(tmp_path), {21})[21]["rings"] == {"outer": [11], "inner": []}
+
+
+def test_member_ways_are_those_of_every_role_in_member_order(tmp_path: Path) -> None:
+    assert osmscan.relations(extract(tmp_path), {22})[22]["member_ways"] == [11, 10, 12]
 
 
 def test_ways_come_with_their_nodes_and_tags(tmp_path: Path) -> None:

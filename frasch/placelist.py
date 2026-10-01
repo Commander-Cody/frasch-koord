@@ -42,8 +42,6 @@ from frasch import files, paths, registry
 from frasch.errors import Invalid, PipelineError, ValidationError
 from frasch.registry import LOCAL_COLUMN, Registry
 
-DEFAULT_PATH = paths.PLACES
-
 
 def name_columns(reg: Registry | None = None) -> list[str]:
     """The name columns in the order `any_name` tries them: the first
@@ -80,7 +78,7 @@ KINDS = {
 STATUSES = {"", "auto", "ok", "skip"}
 
 # The tile attribute naming the row a label comes from: its `id`.  The
-# injector writes it; a curation.csv row may set it by hand (names/check.py
+# injector writes it; a curation.csv row may set it by hand (frasch.check
 # makes sure it names a row).
 REF_KEY = "frasch:ref"
 
@@ -307,7 +305,7 @@ def header_problem(fields: Sequence[str], reg: Registry | None = None) -> str | 
 
 def row_problems(row: Row) -> list[str]:
     """What is wrong with one row of the name list (its cells stripped), in
-    the rules `read` enforces.  names/check.py adds the stricter ones."""
+    the rules `read` enforces.  frasch.check adds the stricter ones."""
     out: list[str] = []
     if row["kind"] not in KINDS:
         out.append(f"unknown kind {row['kind']!r}")
@@ -374,7 +372,7 @@ def new_id(row: Row, taken: set[str], reg: Registry | None = None) -> str:
     return ident
 
 
-def fill_ids(path: str = DEFAULT_PATH, reg: Registry | None = None) -> int:
+def fill_ids(path: str = paths.PLACES, reg: Registry | None = None) -> int:
     """Give every row of the name list without an `id` one (`new_id`), and
     the file the `id` column when it has none -- the one step that both
     introduced the ids and keeps new rows keyed.  An id, once written, never
@@ -411,9 +409,11 @@ def fill_ids(path: str = DEFAULT_PATH, reg: Registry | None = None) -> int:
     return given
 
 
-def read(path: str = DEFAULT_PATH, reg: Registry | None = None) -> tuple[list[PlaceRow], list[str]]:
+def read(path: str = paths.PLACES, reg: Registry | None = None) -> tuple[list[PlaceRow], list[str]]:
     """-> (rows, fieldnames).  A row is identified by its `id` and knows its
     `line`.  A ValidationError lists every row that breaks the rules."""
+    if not os.path.exists(path):
+        raise PipelineError(f"name list not found: {path}")
     with open(path, "rb") as fh:
         data = fh.read()
     # remembered so that `write` can tell whether someone else (match.py,
@@ -461,7 +461,7 @@ def _stripped(raw: _RawRow) -> dict[str, str]:
 
 
 def write(
-    rows: Iterable[Row], path: str = DEFAULT_PATH, fields: Sequence[str] | None = None
+    rows: Iterable[Row], path: str = paths.PLACES, fields: Sequence[str] | None = None
 ) -> None:
     """Write the name list -- atomically, and only if nobody else changed the
     file since this process `read` it.
@@ -492,7 +492,7 @@ _read_digests: dict[str, str] = {}  # abspath -> sha256 of what `read` saw
 
 
 @contextlib.contextmanager
-def lock(names_path: str = DEFAULT_PATH) -> Iterator[None]:
+def lock(names_path: str = paths.PLACES) -> Iterator[None]:
     """Hold `work/.lock` next to the name list for the duration of a
     read-modify-write run, so that match.py and curate.py apply never run at
     the same time.  Advisory (`flock`): a spreadsheet does not take it -- that

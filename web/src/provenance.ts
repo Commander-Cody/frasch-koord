@@ -1,5 +1,5 @@
 // What the search index and the tiles were built from (#24). Both record the
-// hashes of the files they were built from as `built_from` (names/provenance.py):
+// hashes of the files they were built from as `built_from` (frasch/provenance.py):
 // names.json at its top level, the PMTiles archive in its metadata's
 // `description` (tiles/build.sh). Built from different states of those files,
 // a place can sit in one dialect on the map and in another on its card, so

@@ -9,22 +9,26 @@ not in the name list), and Westerheide on Amrum, a place OSM does not have."""
 
 from __future__ import annotations
 
+import contextlib
 import csv
 import io
 import json
 import math
+import re
 from collections.abc import Iterable, Mapping
 from pathlib import Path
+from typing import Any
 
 import osmium
 import pytest
 
 from frasch import paths, registry
-from frasch.errors import PipelineError
+from frasch.errors import PipelineError, ValidationError
 from frasch import inject_names
 from frasch import locate
 from frasch import placelist
 from frasch.geo import LonLat
+from frasch.objects import Objects, objects_json
 from frasch.registry import Registry
 from conftest import curation_file
 from osm_fixture import Nodes, write_extract as write_osm
@@ -406,8 +410,14 @@ def places_csv(rows: Iterable[Mapping[str, str]]) -> str:
     return buf.getvalue()
 
 
+def normalized(report: str, directory: Path) -> str:
+    """`report` with the run's directory as `<dir>` and its time as `0s`."""
+    return re.sub(r" in \d+s\n", " in 0s\n", report.replace(str(directory), "<dir>"))
+
+
 @pytest.fixture(scope="module")
-def injected(tmp_path_factory: pytest.TempPathFactory) -> Injected:
+def injected_run(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, str]:
+    """-> (the run's directory, the report it printed)"""
     d = tmp_path_factory.mktemp("inject")
     (d / "places.csv").write_text(places_csv(PLACES), encoding="utf-8")
     curation = curation_file(d, *CURATION)
@@ -422,17 +432,74 @@ def injected(tmp_path_factory: pytest.TempPathFactory) -> Injected:
             str(d / "osm_objects.json"),
         ]
     )
-    inject_names.run(
-        str(d / "in.osm.pbf"),
-        str(d / "out.osm.pbf"),
-        str(d / "places.csv"),
-        paths.DIALECTS,
-        str(d / "areas.geojson"),
-        curation_csv=curation,
-        objects_json=str(d / "osm_objects.json"),
-    )
+    report = io.StringIO()
+    with contextlib.redirect_stdout(report):
+        inject_names.run(
+            str(d / "in.osm.pbf"),
+            str(d / "out.osm.pbf"),
+            str(d / "places.csv"),
+            paths.DIALECTS,
+            str(d / "areas.geojson"),
+            curation_csv=curation,
+            objects_json=str(d / "osm_objects.json"),
+        )
+    return d, normalized(report.getvalue(), d)
+
+
+@pytest.fixture(scope="module")
+def injected(injected_run: tuple[Path, str]) -> Injected:
+    d, _ = injected_run
     objs = read_extract(d / "out.osm.pbf")
     return objs, {(t, i): (tags, extra) for t, i, tags, extra in objs}
+
+
+def test_report_of_a_run(injected_run: tuple[Path, str]) -> None:
+    _, report = injected_run
+    lines = report.splitlines()
+    assert lines[1].startswith(f"dialects  : {paths.DIALECTS} -> ")
+    assert lines[:1] + lines[2:] == [
+        "name list : <dir>/places.csv",
+        "usable    : 5 rows -> 4 OSM ids + 1 wikidata QIDs + 1 local reference(s)",
+        "areas     : <dir>/areas.geojson -> 4 polygon(s): frr-x-hallig (1), frr-x-mooring (1), "
+        "frr-x-nordgoes (1), frr-x-oomrang (1)",
+        "curation  : <dir>/curation.csv -> 3 OSM ids (3 with frasch:minzoom, 0 with frasch:maxzoom)",
+        "synthetic : 1 polygon(s) to add around nodes",
+        "local     : 1 local reference(s) positioned in <dir>/curation.csv",
+        "objects   : <dir>/osm_objects.json -> 4 located object(s)",
+        "",
+        "scanned 17 objects in 0s",
+        "tagged  5 objects: 2 nodes, 1 ways, 2 relations "
+        "(of these 0 matched by wikidata: 0 of 1 QIDs present)",
+        "names written per dialect:",
+        "  name:frr-x-mooring       4  Mooring",
+        "  name:frr-x-nordgoes      2  Nordergoesharder",
+        "  name:frr-x-oomrang       1  Öömrang",
+        "  frasch:local             2  local form",
+        "objects per dialect area:",
+        "  frasch:dialect=frr-x-oomrang       1",
+        "  frasch:dialect=frr-x-nordgoes      1",
+        "  frasch:dialect=frr-x-hallig        1",
+        "",
+        "added 1 node(s) for places that are not in OSM:",
+        f"  node/{MAX_NODE + 1}  local/westerheide-amrum Waasterhias (Westerheide) "
+        "at 54.65097, 8.34019: frasch:dialect=frr-x-oomrang, frasch:kind=settlement, "
+        "frasch:local=Waasterhias, frasch:ref=waasterhias, place=hamlet",
+        "",
+        # Holm carries the QID, but it was matched by its id first
+        "1 wikidata QIDs not present in the file: Q559369 (Hulm)",
+        "",
+        "curated 3 objects: 2 nodes, 0 ways, 1 relations",
+        f"  n/{NORDSTRAND}  Nordstrand (village node): frasch:minzoom=12, "
+        "frasch:ref=relation/1420555, name:frr-x-mooring=e Strönj",
+        f"  n/{TAMMENSIEL}  Tammensiel: frasch:minzoom=10",
+        f"  r/{HAMBURGER_HALLIG}  Hamburger Hallig: frasch:minzoom=12, place=island",
+        "",
+        "added 1 synthetic polygon(s):",
+        f"  way/{MAX_WAY + 1} (nodes {MAX_NODE + 2}..{MAX_NODE + 5})  "
+        "Nordstrand (synthetic island polygon): 50 km²",
+        "",
+        "wrote <dir>/out.osm.pbf (0.0 MB)",
+    ]
 
 
 def test_output_is_nodes_then_ways_then_relations(injected: Injected) -> None:
@@ -529,7 +596,7 @@ def test_an_object_nobody_located_stops_the_build(tmp_path: Path) -> None:
     (tmp_path / "places.csv").write_text(places_csv([PLACES[0]]), encoding="utf-8")
     (tmp_path / "areas.geojson").write_text(json.dumps(AREAS), encoding="utf-8")
     (tmp_path / "osm_objects.json").write_text(
-        locate.objects_json(locate.Objects({}, {"extracts": []})), encoding="utf-8"
+        objects_json(Objects({}, {"extracts": []})), encoding="utf-8"
     )
     write_extract(tmp_path / "in.osm.pbf")
     with pytest.raises(PipelineError, match=f"node/{HOLM}"):
@@ -638,6 +705,199 @@ def test_synthetic_square_carries_the_nodes_names_and_its_own_tags(injected: Inj
         "frasch:kind": "island",
         "frasch:maxzoom": "11",
     }
+
+
+# ------------------------------------------------------------ the report ---
+# a dry run over a second extract, for what the report says about rows and
+# curation rows that do not fit: two rows on Holm, a QID-only row (the North
+# Sea), the Arlau with one same-named and one renamed member way, ids and
+# local references nobody can place
+REPORT_PLACES = [
+    dict(
+        id="hulm",
+        kind="settlement",
+        mooring="Hulm",
+        de="Holm",
+        osm="node/1",
+        wikidata="Q559369",
+        status="ok",
+    ),
+    dict(
+        id="hoolm",
+        kind="settlement",
+        mooring="Hoolm",
+        de="Holm",
+        osm="node/1",
+        wikidata="Q559369",
+        status="ok",
+    ),
+    dict(id="nordsiie", kind="water", mooring="Nordsiie", de="Nordsee", wikidata="Q1693"),
+    dict(id="arlau", kind="water", mooring="Arlau", de="Arlau", osm="relation/20"),
+    dict(id="braist", kind="settlement", mooring="Bräist", de="Bredstedt", osm="node/99"),
+    dict(
+        id="sofiinkuuch",
+        kind="koog",
+        mooring="Sofiinkuuch",
+        de="Sophien-Koog",
+        osm="local/sophien-koog",
+    ),
+]
+
+REPORT_CURATION = [
+    {"osm": "node/1", "name": "Holm", "minzoom": "11"},
+    {"osm": "node/98", "name": "Gone", "minzoom": "10"},
+    {"osm": "node/97", "name": "Gone island", "set_tags": "place=island", "polygon_km2": "5"},
+    {
+        "osm": "local/sophien-koog",
+        "name": "Sophien-Koog",
+        "lat": "54.6",
+        "lon": "8.9",
+        "set_tags": "place=island",
+        "polygon_km2": "2",
+    },
+    {"osm": "local/nowhere", "name": "Nowhere", "lat": "54.7", "lon": "8.8"},
+]
+
+
+def write_report_extract(path: Path) -> None:
+    write_osm(
+        path,
+        nodes={
+            1: ((8.9, 54.6), {"place": "village", "name": "Holm"}),
+            2: ((7.5, 54.5), {"place": "sea", "name": "Nordsee", "wikidata": "Q1693"}),
+            3: ((8.91, 54.61), {}),
+            4: ((8.92, 54.61), {}),
+            5: ((8.93, 54.61), {}),
+        },
+        ways={
+            10: ([3, 4], {"waterway": "river", "name": "Arlau"}),
+            11: ([4, 5], {"waterway": "river", "name": "Alte Arlau"}),
+        },
+        relations={
+            20: (
+                [("w", 10, "main_stream"), ("w", 11, "side_stream")],
+                {"type": "waterway", "name": "Arlau"},
+            )
+        },
+    )
+
+
+def report_run(
+    d: Path, places: Iterable[Mapping[str, str]], curation: Iterable[Mapping[str, str]], **kw: Any
+) -> None:
+    """A dry run over the report extract, without dialect areas unless `kw` says so."""
+    (d / "places.csv").write_text(places_csv(places), encoding="utf-8")
+    write_report_extract(d / "in.osm.pbf")
+    inject_names.run(
+        str(d / "in.osm.pbf"),
+        str(d / "out.osm.pbf"),
+        str(d / "places.csv"),
+        paths.DIALECTS,
+        kw.pop("areas_geojson", None),
+        dry_run=True,
+        curation_csv=curation_file(d, *curation),
+        **kw,
+    )
+
+
+def test_report_of_rows_and_curation_rows_that_do_not_fit(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    report_run(tmp_path, REPORT_PLACES, REPORT_CURATION)
+    lines = normalized(capsys.readouterr().out, tmp_path).splitlines()
+    assert lines[1].startswith(f"dialects  : {paths.DIALECTS} -> ")
+    assert lines[:1] + lines[2:] == [
+        "name list : <dir>/places.csv",
+        "usable    : 6 rows -> 3 OSM ids + 2 wikidata QIDs + 1 local reference(s)",
+        "  ! node/1 claimed twice in `mooring`: keeping 'Hulm' (line 2), "
+        "ignoring 'Hoolm' (places.csv line 3)",
+        "  ! Q559369 claimed twice: keeping line 2, ignoring places.csv line 3",
+        "areas     : off (no frasch:dialect; frasch:local only from the `local` column). "
+        "Build it with names/build_dialect_areas.py",
+        "curation  : <dir>/curation.csv -> 2 OSM ids (2 with frasch:minzoom, 0 with frasch:maxzoom)",
+        "synthetic : 1 polygon(s) to add around nodes",
+        "local     : 2 local reference(s) positioned in <dir>/curation.csv",
+        "  ! local/nowhere (Nowhere) is positioned in <dir>/curation.csv but no row of "
+        "<dir>/places.csv uses it -- nothing added",
+        "waterways : 2 member ways of matched waterway relations",
+        "",
+        "scanned 8 objects in 0s",
+        "tagged  4 objects: 2 nodes, 1 ways, 1 relations (of these 1 matched by wikidata: "
+        "1 of 2 QIDs present); 1 same-named member ways of waterway relations",
+        "names written per dialect:",
+        "  name:frr-x-mooring       5  Mooring",
+        "  frasch:local             0  local form",
+        "",
+        "1 rows reference ids that are not in in.osm.pbf:",
+        "  node/99  Bräist",
+        "",
+        "1 wikidata QIDs not present in the file: Q559369 (Hulm)",
+        "",
+        "curated 1 objects: 1 nodes, 0 ways, 0 relations",
+        "  n/1  Holm: frasch:minzoom=11",
+        "",
+        "1 curation rows reference ids that are not in in.osm.pbf:",
+        "  n/98  Gone",
+        "",
+        "added 1 synthetic polygon(s):",
+        "  way/12 (nodes 6..9)  Sophien-Koog: 2 km²",
+        "  ! n/97 Gone island: node not in in.osm.pbf, no polygon added",
+        "",
+        "(dry run -- nothing written)",
+    ]
+
+
+def test_dry_run_writes_nothing(tmp_path: Path) -> None:
+    report_run(tmp_path, REPORT_PLACES[:1], [])
+    assert not (tmp_path / "out.osm.pbf").exists()
+
+
+def test_a_local_reference_without_a_position_stops_the_build(tmp_path: Path) -> None:
+    with pytest.raises(ValidationError) as exc:
+        report_run(tmp_path, REPORT_PLACES, REPORT_CURATION[:3])
+    assert normalized(str(exc.value), tmp_path) == (
+        "1 local reference(s) in <dir>/places.csv have no row with lat/lon in "
+        "<dir>/curation.csv:\n"
+        "  local/sophien-koog  Sofiinkuuch (Sophien-Koog) (places.csv line 7)"
+    )
+
+
+def test_a_named_dialect_area_file_must_exist(tmp_path: Path) -> None:
+    with pytest.raises(PipelineError) as exc:
+        report_run(
+            tmp_path,
+            REPORT_PLACES[:1],
+            [],
+            areas_geojson=str(tmp_path / "absent.geojson"),
+            areas_required=True,
+        )
+    assert normalized(str(exc.value), tmp_path) == (
+        "dialect area file not found: <dir>/absent.geojson"
+    )
+
+
+def test_report_when_no_object_lies_in_a_dialect_area(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "areas.geojson").write_text(json.dumps(AREAS), encoding="utf-8")
+    (tmp_path / "osm_objects.json").write_text(
+        objects_json(Objects({}, {"extracts": []})), encoding="utf-8"
+    )
+    # only the North Sea, found through its QID, far out of every area
+    report_run(
+        tmp_path,
+        REPORT_PLACES[2:3],
+        [],
+        areas_geojson=str(tmp_path / "areas.geojson"),
+        objects_json=str(tmp_path / "osm_objects.json"),
+    )
+    out = capsys.readouterr().out
+    assert out.endswith(
+        "objects per dialect area:\n"
+        "  (none -- no tagged object lies in a dialect area)\n"
+        "\n"
+        "(dry run -- nothing written)\n"
+    )
 
 
 # ------------------------------------------------------------- waterways ---

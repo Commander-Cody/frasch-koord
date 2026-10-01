@@ -84,11 +84,6 @@ class Registry:
     def tag_of_column(self, column: str) -> str:
         return self._find("column", column)["tag"]
 
-    def label_of(self, tag: str) -> str:
-        """The dialect's UI label; the tag itself for one the registry does
-        not know."""
-        return next((d["label"] for d in self.dialects if d["tag"] == tag), tag)
-
     def _find(self, field: Literal["tag", "column"], value: str) -> Dialect:
         for d in self.dialects:
             if d[field] == value:

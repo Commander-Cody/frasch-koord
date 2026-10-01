@@ -1,6 +1,6 @@
 """The client-side search index of web/ (web/public/data/names.json): the
 rows of names/places.csv that are on the map, built by `build` and written
-by `write` (names/export_search_index.py runs the two).
+by `write` (frasch.export_search_index runs the two).
 
 Every dialect name of a place is searchable, not only the one the map
 currently labels with: somebody who knows a Hallig as *Hansweerf* must find it
@@ -8,7 +8,7 @@ while the map shows Mooring.
 
 Where a place is, and so which dialect is the *local* one there, comes from
 names/osm_objects.json (names/locate.py) and names/dialect_areas.geojson --
-the same files, read through the same `locate.dialect_at`, as the injector
+the same files, read through the same `objects.dialect_at`, as the injector
 uses for the tiles, so a search result and the map label agree.  An entry
 lies where the first object of its row's `osm` cell lies.  A row for a place
 OSM does not have (`osm` = `local/<slug>`) takes its position from the
@@ -26,7 +26,7 @@ A row with an OSM reference the objects file does not know stops the export
 QID alone (the countries) have no position and are left out.
 
 The output records what it was built from (`built_from`, see
-names/provenance.py); the tiles carry the same stamp, and the frontend warns
+frasch.provenance); the tiles carry the same stamp, and the frontend warns
 when the two differ.
 
 An entry's `id` is its row's `id` -- the same string the injector writes into
@@ -47,13 +47,13 @@ from frasch import (
     curationlist,
     dialects,
     files,
-    locate,
     placelist,
     provenance,
     registry,
 )
 from frasch.errors import PipelineError, ValidationError
 from frasch.geo import LonLat
+from frasch.objects import LocatedObject, Objects, dialect_at, read_objects
 from frasch.placelist import Row
 from frasch.registry import Registry
 
@@ -84,8 +84,8 @@ class SearchIndex(TypedDict):
 
 
 def entry_object(
-    row: Row, objects: locate.Objects, local_points: Mapping[str, LonLat], reg: Registry, where: str
-) -> locate.LocatedObject | None:
+    row: Row, objects: Objects, local_points: Mapping[str, LonLat], reg: Registry, where: str
+) -> LocatedObject | None:
     """The object a row's entry stands for: the object of the first reference
     in its `osm` cell, or for a local reference the point the injector adds --
     at its curation position, with the name the injector gives it.  None for
@@ -97,7 +97,7 @@ def entry_object(
                 f"{where}: local/{slug} has no row with lat/lon in the curation file"
             )
         lon, lat = local_points[slug]
-        point: locate.LocatedObject = {"lon": lon, "lat": lat}
+        point: LocatedObject = {"lon": lon, "lat": lat}
         if name := placelist.point_name(row, reg):
             point["name"] = name
         return point
@@ -107,11 +107,9 @@ def entry_object(
     return objects.by_ref[refs[0]]
 
 
-def entry(
-    row: Row, obj: locate.LocatedObject, areas: dialects.AreaIndex, reg: Registry
-) -> SearchEntry:
+def entry(row: Row, obj: LocatedObject, areas: dialects.AreaIndex, reg: Registry) -> SearchEntry:
     """The search-index entry of one row whose object is `obj`."""
-    area_tag = locate.dialect_at(obj, areas)
+    area_tag = dialect_at(obj, areas)
     names: dict[str, str] = {}
     for d in reg:
         name = dialects.dialect_name(row, d["tag"], area_tag, reg)
@@ -152,7 +150,7 @@ def build(
     if not os.path.exists(areas_path):
         raise PipelineError(f"{areas_path} not found -- build it with `just areas`")
     areas = dialects.AreaIndex.from_geojson(areas_path)
-    objects = locate.read_objects(objects_path)
+    objects = read_objects(objects_path)
     local_points = curationlist.local_points(curation)
     rows, _ = placelist.read(names, reg)
 

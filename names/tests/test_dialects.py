@@ -177,18 +177,3 @@ def test_area_rows_still_accepts_way_and_relation_references(
     rows, problems = dialects.area_rows(str(areas), reg)
     assert problems == []
     assert rows[0]["refs"] == [("w", 1), ("r", 2)]
-
-
-# ------------------------------------------------------------- --export ---
-def test_the_frontend_gets_the_registry_without_the_notes(tmp_path: Path) -> None:
-    registry = tmp_path / "dialects.csv"
-    registry.write_text(
-        "tag,column,label,status,view,note\nfrr-x-mooring,mooring,Mooring,living,yes,Bökingharde\n",
-        encoding="utf-8",
-    )
-    out = tmp_path / "generated" / "dialects.json"
-    dialects.main(["--registry", str(registry), "--export", str(out)])
-    assert out.read_text(encoding="utf-8") == (
-        '[{"tag":"frr-x-mooring","column":"mooring","label":"Mooring",'
-        '"status":"living","view":"yes"}]\n'
-    )

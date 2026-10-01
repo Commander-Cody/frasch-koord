@@ -12,10 +12,11 @@ import pytest
 
 from frasch import build_dialect_areas, paths
 from frasch import check_built
-from frasch import dialects
+from frasch import export_dialects
 from frasch import export_search_index
 from frasch import locate
 from frasch import provenance
+from frasch.objects import Objects, objects_json
 from conftest import places_text
 from osm_fixture import Relations, RingNodes, ring, write_extract
 
@@ -53,9 +54,7 @@ def repo(world: Path) -> list[str]:
             encoding="utf-8",
         )
     (world / "osm_objects.json").write_text(
-        locate.objects_json(
-            locate.Objects({("n", 240042766): {"lon": 8.83, "lat": 54.79}}, {"extracts": []})
-        ),
+        objects_json(Objects({("n", 240042766): {"lon": 8.83, "lat": 54.79}}, {"extracts": []})),
         encoding="utf-8",
     )
     inputs = [
@@ -71,7 +70,7 @@ def repo(world: Path) -> list[str]:
         str(world / "osm_objects.json"),
     ]
     export_search_index.main(inputs + ["--out", str(world / "names.json")])
-    dialects.main(
+    export_dialects.main(
         ["--registry", str(world / "dialects.csv"), "--export", str(world / "dialects.json")]
     )
     return inputs + [
@@ -150,8 +149,22 @@ def extract(world: Path, repo: list[str]) -> Extract:
     nodes[240042766] = ((8.83, 54.79), {})
     relations = {1: ([("w", 5, "outer")], {"boundary": "administrative"})}
     pbf = write_extract(world / "in.osm.pbf", nodes, {5: (way, {})}, relations)
+    build_from_extract(world, repo, pbf)
+    return repo + ["--extracts", str(pbf)], (nodes, way, relations)
+
+
+def build_from_extract(world: Path, repo: list[str], pbf: Path) -> None:
+    """Rebuild every output of `world` from `pbf`, as the recipes would."""
     locate.main(
-        [str(pbf), "--names", str(world / "places.csv"), "--out", str(world / "osm_objects.json")]
+        [
+            str(pbf),
+            "--names",
+            str(world / "places.csv"),
+            "--dialects",
+            str(world / "dialects.csv"),
+            "--out",
+            str(world / "osm_objects.json"),
+        ]
     )
     build_dialect_areas.main(
         [
@@ -167,11 +180,28 @@ def extract(world: Path, repo: list[str]) -> Extract:
         ]
     )
     export_search_index.main(repo[:10] + ["--out", str(world / "names.json")])
-    return repo + ["--extracts", str(pbf)], (nodes, way, relations)
+    export_dialects.main(
+        ["--registry", str(world / "dialects.csv"), "--export", str(world / "dialects.json")]
+    )
 
 
 def test_outputs_the_extract_really_gives_pass(extract: Extract) -> None:
     argv, _ = extract
+    assert check_built.main(argv) == 0
+
+
+def test_the_objects_are_rebuilt_with_the_registry_passed_in(extract: Extract, world: Path) -> None:
+    # Naibel is named only in a dialect of world's own registry, so only a
+    # rebuild that reads places.csv with that registry puts it on the map
+    argv, _ = extract
+    registry = world / "dialects.csv"
+    registry.write_text(
+        registry.read_text(encoding="utf-8") + "frr-x-strand,strand,Strander,extinct,no,\n",
+        encoding="utf-8",
+    )
+    header, row, _ = places_text([NAIBEL | {"mooring": ""}]).split("\n")
+    (world / "places.csv").write_text(f"{header},strand\n{row},Naibel\n", encoding="utf-8")
+    build_from_extract(world, argv[:-2], world / "in.osm.pbf")
     assert check_built.main(argv) == 0
 
 

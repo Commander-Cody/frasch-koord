@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from frasch import dialects, registry
+from frasch import export_dialects, registry
 from frasch.errors import ValidationError
 
 REGISTRY_HEADER = "tag,column,label,status,view,note\n"
@@ -29,5 +29,5 @@ def test_the_command_reports_it_and_exits_1(
     path.write_text(
         REGISTRY_HEADER + "frr-y-mooring,mooring,Mooring,living,yes,\n", encoding="utf-8"
     )
-    assert dialects.main(["--registry", str(path)]) == 1
+    assert export_dialects.main(["--registry", str(path)]) == 1
     assert "dialects.csv:2: bad tag" in capsys.readouterr().err

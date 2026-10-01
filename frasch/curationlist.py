@@ -13,7 +13,7 @@ curation"):
   local reference, forbidden on any other
 
 This module is the one reading of the file's rules: the injector, the search
-export (for the positions), names/check.py and `curate.py apply` (which
+export (for the positions), frasch.check and frasch.curate's `apply` (which
 appends rows) all go through it.
 """
 
@@ -31,7 +31,6 @@ from frasch.errors import Invalid, ValidationError
 from frasch.geo import LonLat
 from frasch.placelist import LOCAL_TYPE, Ref, format_osm, local_slug, parse_osm
 
-DEFAULT_PATH = paths.CURATION
 COLUMNS = ["osm", "name", "lat", "lon", "set_tags", "minzoom", "maxzoom", "polygon_km2", "note"]
 MINZOOM_KEY = "frasch:minzoom"
 MAXZOOM_KEY = "frasch:maxzoom"
@@ -215,7 +214,7 @@ def _entry(n: int, row: Mapping[str, str], seen: _Seen) -> tuple[Entry | None, l
     }, []
 
 
-def rows(path: str = DEFAULT_PATH) -> tuple[list[Entry], list[tuple[int, str]]]:
+def rows(path: str = paths.CURATION) -> tuple[list[Entry], list[tuple[int, str]]]:
     """-> (entries, problems): the rows that follow the file's rules, and
     `(line, reason)` for every one that does not.
 
@@ -274,7 +273,7 @@ class LocalPoint(Tuning):
 
 
 class Curation(NamedTuple):
-    """The curation as the injector applies it (see tiles/inject_names.py):
+    """The curation as the injector applies it (see frasch.inject_names):
 
     objects  {('r', 1420555): {'tags': {...}, 'label': 'Nordstrand'}} -- the
              tags to set on an OSM object, the zooms among them
@@ -290,7 +289,7 @@ class Curation(NamedTuple):
     points: dict[Ref, LocalPoint]
 
 
-def read(path: str = DEFAULT_PATH) -> Curation:
+def read(path: str = paths.CURATION) -> Curation:
     """The curation; a ValidationError lists every row that breaks the
     rules."""
     curation = Curation({}, {}, {})
@@ -317,7 +316,7 @@ def read(path: str = DEFAULT_PATH) -> Curation:
     return curation
 
 
-def local_points(path: str = DEFAULT_PATH) -> dict[str, LonLat]:
+def local_points(path: str = paths.CURATION) -> dict[str, LonLat]:
     """`{slug: (lon, lat)}` for every local reference -- the positions of the
     places OSM does not have; `{}` without the file."""
     if not os.path.exists(path):

@@ -199,7 +199,7 @@ OCKHOLM = cand(
     ],
 )
 def test_kind_ok(kind: str, tags: dict[str, str], ok: bool) -> None:
-    assert match.kind_ok(kind, tags, []) is ok
+    assert match.kind_ok(kind, tags) is ok
 
 
 # ---------------------------------------------------------------- cluster ---
@@ -422,6 +422,32 @@ def test_a_hint_confirms_a_far_away_village_over_a_weaker_hit_in_north_frisia(
     assert out["status"] == "matched"
     assert out["osm_id"] == "240062575"
     assert out["note"] == "auto: location hint"
+
+
+def test_a_candidate_two_names_find_keeps_its_best_hit(tmp_path: Path) -> None:
+    """`Holme; Holm`: the Danish hamlet Holme is a `name` hit for the first
+    name and only a `name:de` hit for the second -- it keeps the `name` hit
+    and is the village Holm's equal: two clusters inside North Frisia."""
+    out = run(tmp_path, row(kind="settlement", mooring="Hulm", de="Holme; Holm"), HOLME_DK, HOLM_NF)
+    assert out["status"] == "ambiguous"
+    assert out["note"] == "2 plausible candidates"
+
+
+def test_a_far_away_hamlet_stays_for_review_when_the_weaker_hits_are_far_too(
+    tmp_path: Path,
+) -> None:
+    # made up: a second Kampen hamlet, further still from North Frisia, as a weaker hit
+    kampen_lippe = cand("n", 1, 8.9, 51.9, name="Kampen (Lippe)", place="hamlet")
+    out = run(
+        tmp_path,
+        row(kind="settlement", solring="Kaamp", de="Kampen"),
+        KAMPEN_STORMARN,
+        kampen_lippe,
+    )
+    assert out["status"] == "ambiguous"
+    assert out["note"] == "only match is 115 km from North Frisia (settlement) -- verify by hand"
+    assert out["candidates"].startswith("n/6694657313:Kampen:hamlet:")
+    assert "n/1:Kampen (Lippe):hamlet:" in out["candidates"]
 
 
 def test_a_far_away_hamlet_alone_is_left_for_review(tmp_path: Path) -> None:

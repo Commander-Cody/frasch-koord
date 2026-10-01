@@ -16,7 +16,7 @@
 #           frasch:maxzoom of names/curation.csv into the PBF
 #        2. run Planetiler (stock OpenMapTiles profile, no fork) on the result,
 #           stamping the archive with what it was built from (the same
-#           `built_from` names.json carries, see names/provenance.py)
+#           `built_from` names.json carries, see frasch/provenance.py)
 #
 # Env: JAVA_HOME (default ~/.local/opt/jdk-21*, else `java` on PATH),
 #      XMX (default 3g), NAMES, DIALECTS, AREAS, OBJECTS, CURATION,

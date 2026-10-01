@@ -4,7 +4,7 @@ The dev machine has no memory for a location cache of a whole extract (let
 alone for pyosmium to build every area of it), so whatever needs geometry
 reads it in three passes that each keep only the objects asked for: the
 relations, then their and the referenced ways, then all of those ways'
-nodes.  names/locate.py and names/build_dialect_areas.py both do.  And the
+nodes.  frasch.locate and frasch.build_dialect_areas both do.  And the
 extract's header, without a pass at all."""
 
 from __future__ import annotations
@@ -29,6 +29,7 @@ class Rings(TypedDict):
 
 class Relation(TypedDict):
     rings: Rings
+    member_ways: list[int]  # every member way, whatever its role, in member order
     label: int | None
     tags: dict[str, str]
 
@@ -54,9 +55,9 @@ def rings_of(relation: osmium.osm.Relation) -> Rings:
 
 
 def relations(pbf: StrPath, ids: Collection[int]) -> dict[int, Relation]:
-    """-> {id: {"rings": rings_of(...), "label": node id or None,
-               "tags": {...}}}; `label` is the first `label` or
-    `admin_centre` member node."""
+    """-> {id: {"rings": rings_of(...), "member_ways": [way ids],
+               "label": node id or None, "tags": {...}}}; `label` is the
+    first `label` or `admin_centre` member node."""
     out: dict[int, Relation] = {}
     for r in _filtered(pbf, osmium.osm.RELATION, ids):
         if not isinstance(r, osmium.osm.Relation):
@@ -65,7 +66,12 @@ def relations(pbf: StrPath, ids: Collection[int]) -> dict[int, Relation]:
             (m.ref for m in r.members if m.type == "n" and m.role in ("label", "admin_centre")),
             None,
         )
-        out[r.id] = {"rings": rings_of(r), "label": label, "tags": dict(r.tags)}
+        out[r.id] = {
+            "rings": rings_of(r),
+            "member_ways": [m.ref for m in r.members if m.type == "w"],
+            "label": label,
+            "tags": dict(r.tags),
+        }
     return out
 
 

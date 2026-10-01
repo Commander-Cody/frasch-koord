@@ -44,7 +44,8 @@ target-version = "py312"
 line-length = 100
 
 [tool.ruff.lint]
-select = ["F", "E9", "B"]
+# PLR0915: at most 50 statements per function (#43)
+select = ["F", "E9", "B", "PLR0915"]
 
 # Strict everywhere, tests included (#44).  names/tests is on the path for the
 # fixture helpers the tile tests import too (`conftest`, `osm_fixture`).

@@ -3,10 +3,8 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
-import pytest
 
 from frasch import provenance
 from osm_fixture import write_extract
@@ -34,43 +32,3 @@ def test_an_extract_is_named_by_its_file_and_replication_timestamp(tmp_path: Pat
 def test_an_extract_without_a_timestamp_says_so(tmp_path: Path) -> None:
     pbf = write_extract(tmp_path / "x.osm.pbf", nodes={1: ((8.5, 55.0), {})})
     assert provenance.extract_stamp(pbf)["replication_timestamp"] == ""
-
-
-def test_the_tile_build_gets_the_same_stamp_as_the_search_index(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    inputs = {}
-    for label in ("places.csv", "dialects.csv", "curation.csv", "dialect_areas.geojson"):
-        inputs[label] = tmp_path / label
-        inputs[label].write_text(label, encoding="utf-8")
-    extracts = [{"file": "x.osm.pbf", "replication_timestamp": "2026-09-22T20:22:59Z"}]
-    objects = tmp_path / "osm_objects.json"
-    objects.write_text(
-        json.dumps({"built_from": {"extracts": extracts}, "objects": {}}), encoding="utf-8"
-    )
-    provenance.main(
-        [
-            "--names",
-            str(inputs["places.csv"]),
-            "--dialects",
-            str(inputs["dialects.csv"]),
-            "--curation",
-            str(inputs["curation.csv"]),
-            "--areas",
-            str(inputs["dialect_areas.geojson"]),
-            "--objects",
-            str(objects),
-        ]
-    )
-    printed = json.loads(capsys.readouterr().out)
-    assert printed == {
-        "built_from": provenance.stamp(
-            str(inputs["places.csv"]),
-            str(inputs["dialects.csv"]),
-            str(inputs["curation.csv"]),
-            str(inputs["dialect_areas.geojson"]),
-            str(objects),
-        )
-    }
-    assert printed["built_from"]["extracts"] == extracts
-    assert printed["built_from"]["places.csv"] == provenance.blob_hash(inputs["places.csv"])

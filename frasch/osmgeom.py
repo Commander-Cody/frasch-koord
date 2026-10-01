@@ -3,7 +3,7 @@
 pyosmium could assemble the areas itself, but only with a location cache for
 the whole extract (see osmscan); so the rings are joined here, from the
 member ways and node locations of the objects asked for.  The dialect areas
-and a place's point inside its own polygon (names/locate.py) both use this,
+and a place's point inside its own polygon (frasch.locate) both use this,
 so a place and the areas it is compared against are read out of OSM the
 same way."""
 

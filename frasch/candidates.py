@@ -1,6 +1,6 @@
 """names/work/candidates.jsonl -- every OSM object that could be a place,
-as names/build_candidates.py writes it and names/match.py and the curation
-export read it.
+as frasch.build_candidates writes it and frasch.match and the curation
+export (frasch.curate) read it.
 
   first line  {"header": {"extracts": [{"file", "replication_timestamp"}, ...]}}
               -- the extracts it was built from (`read_header`)

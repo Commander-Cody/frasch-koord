@@ -45,7 +45,7 @@ import './AreaPanel.css';
 
 /* ------------------------------------------------------------------ data */
 
-/** One municipality, as names/build_dialect_areas.py writes it. */
+/** One municipality, as frasch/build_dialect_areas.py writes it. */
 export interface AreaProps {
   /** Stable within one build; the selection key. */
   fid: number;
@@ -280,7 +280,7 @@ export default function AreaPanel({ mapRef }: AreaPanelProps) {
   // `?areas&area=relation/1147134` opens the municipality with that OSM
   // reference — a link from the checklist, or just resuming where the last
   // session stopped. A reference belongs to one dialect_areas.csv row only
-  // (names/check.py enforces it), and unlike a line number it stays put when
+  // (frasch/check.py enforces it), and unlike a line number it stays put when
   // rows are added. An unknown one is ignored.
   const openLinkedArea = useCallback(
     (ref: string) => {

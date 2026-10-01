@@ -45,15 +45,17 @@ from frasch import (
     check_built,
     cli,
     curate,
-    dialects,
+    export_dialects,
     export_search_index,
     locate,
     match,
     paths,
     placelist,
     provenance,
+    registry,
 )
 from frasch.errors import PipelineError
+from frasch.objects import read_objects
 from frasch.paths import StrPath
 from frasch.placelist import OsmRef
 from frasch.provenance import ExtractStamp
@@ -110,7 +112,7 @@ def objects_stale(path: StrPath, refs: Collection[OsmRef], extracts: list[Extrac
     only moves when the extract does."""
     if not os.path.exists(path):
         return True
-    objects = locate.read_objects(os.fspath(path))
+    objects = read_objects(os.fspath(path))
     return set(objects.by_ref) != set(refs) or objects.built_from["extracts"] != extracts
 
 
@@ -126,10 +128,11 @@ def areas_stale(
     return any(not os.path.exists(path) or provenance.recorded(path) != current for path in outputs)
 
 
-def mapped_refs(names: str) -> set[OsmRef]:
+def mapped_refs(names: str, dialects: str) -> set[OsmRef]:
     """The OSM references of the rows on the map, as the name list has them now."""
-    rows, _ = placelist.read(names)
-    return locate.mapped_refs(rows)
+    reg = registry.read(dialects)
+    rows, _ = placelist.read(names, reg)
+    return locate.mapped_refs(rows, reg)
 
 
 def steps(a: argparse.Namespace) -> list[Step]:
@@ -193,8 +196,17 @@ def steps(a: argparse.Namespace) -> list[Step]:
         ),
         Step(
             "objects",
-            command(locate.main, *a.extracts, "--names", a.names, "--out", a.objects),
-            needed=lambda: objects_stale(a.objects, mapped_refs(a.names), extracts),
+            command(
+                locate.main,
+                *a.extracts,
+                "--names",
+                a.names,
+                "--dialects",
+                a.dialects,
+                "--out",
+                a.objects,
+            ),
+            needed=lambda: objects_stale(a.objects, mapped_refs(a.names, a.dialects), extracts),
         ),
         Step(
             "areas",
@@ -214,7 +226,7 @@ def steps(a: argparse.Namespace) -> list[Step]:
         ),
         Step(
             "dialect registry",
-            command(dialects.main, "--registry", a.dialects, "--export", a.registry_json),
+            command(export_dialects.main, "--registry", a.dialects, "--export", a.registry_json),
         ),
         Step("search index", command(export_search_index.main, *inputs, "--out", a.index)),
         Step(

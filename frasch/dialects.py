@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """The name logic built on the dialect registry (frasch.registry), and
 the dialect areas.
 
@@ -10,33 +9,21 @@ One name belongs to a place beyond its dialect columns:
   and `local_name` below implement those two fallbacks; the area a place lies
   in comes from `AreaIndex` (names/dialect_areas.geojson).
 
-CLI:  `names/dialects.py`          prints the registry
-      `names/dialects.py --tags`   prints `frr-x-mooring,frr-x-wieding,...`
-                                   (tiles/build.sh feeds it to Planetiler)
-      `names/dialects.py --export web/src/generated/dialects.json`
-                                   writes the registry the frontend compiles
-                                   in (every column but `note`)
+The command that prints and exports the registry is frasch.export_dialects.
 """
 
 from __future__ import annotations
 
-import argparse
 import csv
 import json
-import os
-from collections.abc import Sequence
 from typing import TypedDict
 
 from shapely.geometry.base import BaseGeometry
 
-from frasch import cli, files, paths, placelist, registry
+from frasch import files, paths, placelist
 from frasch.errors import Invalid, ValidationError
 from frasch.placelist import OsmRef, Row
-from frasch.registry import EXPORT_FIELDS, LOCAL_COLUMN, Registry
-
-DEFAULT_AREAS = paths.DIALECT_AREAS
-# what DEFAULT_AREAS is built from (names/build_dialect_areas.py)
-AREA_LIST_PATH = paths.DIALECT_AREA_LIST
+from frasch.registry import LOCAL_COLUMN, Registry
 
 
 class AreaRow(TypedDict):
@@ -55,8 +42,8 @@ def area_rows(path: str, reg: Registry) -> tuple[list[AreaRow], list[tuple[int, 
     one dict per row that follows its rules -- `line`, `dialect`, `name`,
     `note`, `osm` (normalised) and `refs` (parsed) -- and `(line, reason)` for
     every one that does not.  The one reading of the file's rules, shared by
-    names/build_dialect_areas.py (which stops at the first problem) and
-    names/check.py (which lists them).
+    frasch.build_dialect_areas (which stops at the first problem) and
+    frasch.check (which lists them).
 
     An OSM reference belongs to one row only: the review overlay's
     `?areas&area=` links name a row by it."""
@@ -173,7 +160,7 @@ class AreaIndex:
         self.tree = STRtree(self.geoms) if self.geoms else None
 
     @classmethod
-    def from_geojson(cls, path: str = DEFAULT_AREAS) -> AreaIndex:
+    def from_geojson(cls, path: str = paths.DIALECT_AREAS) -> AreaIndex:
         from shapely.geometry import shape
 
         with open(path, encoding="utf-8") as fh:
@@ -215,52 +202,3 @@ class AreaIndex:
         for tag, _ in self.polygons:
             n[tag] = n.get(tag, 0) + 1
         return ", ".join(f"{t} ({c})" for t, c in sorted(n.items()))
-
-
-@cli.command
-def main(argv: Sequence[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-    ap.add_argument("--registry", default=paths.DIALECTS)
-    ap.add_argument(
-        "--tags",
-        action="store_true",
-        help="print the language tags as a comma-separated list "
-        "(tiles/build.sh feeds them to Planetiler)",
-    )
-    ap.add_argument("--columns", action="store_true", help="print the places.csv columns instead")
-    ap.add_argument(
-        "--export",
-        metavar="PATH",
-        help="write the registry as JSON for the frontend (web/src/generated/dialects.json)",
-    )
-    a = ap.parse_args(argv)
-    reg = registry.read(a.registry)
-    if a.export:
-        export_json(reg, a.export)
-    elif a.tags:
-        print(",".join(reg.tags))
-    elif a.columns:
-        print(",".join(reg.columns))
-    else:
-        for d in reg:
-            print(
-                f"{d['tag']:<16} {d['column']:<10} {d['label']:<18} "
-                f"{d['status']:<7} view={d['view']:<4} {d['note']}"
-            )
-    return 0
-
-
-def export_json(reg: Registry, path: str) -> None:
-    """Write the registry the frontend compiles in: every column but `note`."""
-    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-    files.atomic_write(
-        path,
-        json.dumps(
-            [{k: v for k, v in d.items() if k in EXPORT_FIELDS} for d in reg],
-            ensure_ascii=False,
-            separators=(",", ":"),
-        )
-        + "\n",
-    )
