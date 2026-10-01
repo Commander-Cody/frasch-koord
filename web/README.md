@@ -268,7 +268,9 @@ OpenMapTiles schema plus our extras, injected by the `tiles/` build
   card"). Absent on everything the name list does not cover.
 - Names: `name:<tag>` for every dialect of the registry that has a name for
   the feature (`name:frr-x-mooring`, `name:frr-x-fering`, …), plus
-  `name:frr`, `name:nds`, `name:de`, `name:da`, `name:latin`, `name`.
+  `name:frr`, `name:nds`, `name:de`, `name:da`, `name:latin`, `name`. On a
+  feature from our name list, `name:de` is the list's German name where it
+  has one (issue #61), the same one as the entry's `name_de`.
 
 The style degrades gracefully when `frasch:*` is absent (an archive built
 before the name-list merge): every `frasch:kind`-based filter has a

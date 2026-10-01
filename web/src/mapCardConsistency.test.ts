@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { createPropertyExpression, latest } from '@maplibre/maplibre-gl-style-spec';
 
 import { DIALECTS, LOCAL_TAG } from './config';
-import { cardEntry, resolveName, type TileProps } from './names';
+import {
+  cardEntry,
+  resolveName,
+  type NameEntry,
+  type PlaceSelection,
+  type TileProps,
+} from './names';
 import { nameExpression } from './style/localize';
 
 // Issue #16: the place card once showed German while the map label showed
@@ -35,9 +41,12 @@ function mapLabel(tag: string, props: TileProps): string {
   return value.toString();
 }
 
+/** A click on a map label: the tile properties, and the entry when the place is listed. */
+type ClickedLabel = PlaceSelection & { props: TileProps };
+
 /** What the card would show, using the real card-building path. */
-function cardLabel(tag: string, props: TileProps): string {
-  return resolveName(cardEntry({ props }), tag).name;
+function cardLabel(tag: string, selection: PlaceSelection): string {
+  return resolveName(cardEntry(selection), tag).name;
 }
 
 // Realistic tile-property sets a clicked feature could carry, named after
@@ -66,11 +75,69 @@ const SCENARIOS: Record<string, TileProps> = {
   'a Danish place with a German exonym': { 'name:de': 'Ripen', 'name:da': 'Ribe', name: 'Ribe' },
 };
 
+/** A names.json entry with the fields no scenario here is about filled in. */
+function listed(
+  entry: Pick<NameEntry, 'id' | 'names' | 'name_de'> & Partial<NameEntry>,
+): NameEntry {
+  return { lon: 0, lat: 0, kind: 'settlement', ...entry };
+}
+
+// A clicked label of a place in the name list: its names.json entry together
+// with the tile properties of its object, as tiles/inject_names.py writes
+// them. The card then reads the entry first, so these exercise cardEntry's
+// merge as well. Since issue #61 the injector writes the list's `de` as
+// `name:de`, the step where the card's German name comes from the list.
+const LISTED_SCENARIOS: Record<string, ClickedLabel & { entry: NameEntry }> = {
+  'a listed Danish place whose German name only the list has': {
+    entry: listed({
+      id: 'tingle',
+      names: { 'frr-x-wieding': 'Tingle' },
+      name_de: 'Tingleff',
+      name_osm: 'Tinglev',
+      name_da: 'Tinglev',
+    }),
+    props: {
+      'frasch:ref': 'tingle',
+      'name:frr-x-wieding': 'Tingle',
+      'name:de': 'Tingleff',
+      'name:da': 'Tinglev',
+      name: 'Tinglev',
+    },
+  },
+  // the local view falls through to `name:de`, its last step
+  'a listed place whose object has no generic OSM name': {
+    entry: listed({ id: 'listlai', names: { 'frr-x-solring': 'Listlai' }, name_de: 'Lister Ley' }),
+    props: { 'frasch:ref': 'listlai', 'name:frr-x-solring': 'Listlai', 'name:de': 'Lister Ley' },
+  },
+  // the list has no German name, so the tile keeps OSM's
+  'a listed place with only OSM’s German name and no generic OSM name': {
+    entry: listed({
+      id: 'satj',
+      names: { 'frr-x-mooring': 'Sätj', 'frr-x-wieding': 'Säit' },
+      name_de: '',
+    }),
+    props: {
+      'frasch:ref': 'satj',
+      'name:frr-x-mooring': 'Sätj',
+      'name:frr-x-wieding': 'Säit',
+      'name:de': 'Seth',
+    },
+  },
+};
+
+const CASES: [string, ClickedLabel][] = [
+  ...Object.entries(SCENARIOS).map(([scenario, props]): [string, ClickedLabel] => [
+    scenario,
+    { props },
+  ]),
+  ...Object.entries(LISTED_SCENARIOS),
+];
+
 describe('map label vs. place card (issue #16 regression)', () => {
-  for (const [scenario, props] of Object.entries(SCENARIOS)) {
+  for (const [scenario, selection] of CASES) {
     for (const tag of VIEWS) {
       it(`${scenario} — ${tag} view`, () => {
-        expect(cardLabel(tag, props)).toBe(mapLabel(tag, props));
+        expect(cardLabel(tag, selection)).toBe(mapLabel(tag, selection.props));
       });
     }
   }
