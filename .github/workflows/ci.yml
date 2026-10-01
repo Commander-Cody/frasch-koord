@@ -13,6 +13,7 @@ jobs:
       - uses: astral-sh/setup-uv@v10.2.0
       - run: uv sync --locked
       - run: uv run ruff check .
+      - run: uv run ruff format --check .
       - run: uv run mypy
       # Both also write a Markdown overview to the run's summary page (as
       # Vitest does by itself); the annotate-failures plugin marks failing
@@ -48,6 +49,7 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci
       - run: npm run lint
+      - run: npm run format:check
       - run: npm run typecheck
       - run: npm test
       # The glyphs and the pinned tile archive (~225 MB), kept between runs

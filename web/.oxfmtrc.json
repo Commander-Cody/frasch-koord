@@ -1,0 +1,14 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "printWidth": 100,
+  "singleQuote": true,
+  "sortPackageJson": false,
+  "ignorePatterns": [
+    "package-lock.json",
+    "public/data/",
+    "public/sprites/",
+    "src/generated/",
+    "src/style/*.json",
+    "src/style/LICENSE-osm-bright.md"
+  ]
+}

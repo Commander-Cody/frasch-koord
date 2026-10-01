@@ -22,7 +22,9 @@ no Java, Python or OSM downloads. `npm run fetch-assets` runs
 
 Other scripts: `npm run build` (type-checks with `tsc -b` then builds with
 Vite), `npm run typecheck` (`tsc -b` only; `npx tsc --noEmit` checks nothing,
-the root tsconfig has `files: []`), `npm run lint` (oxlint), `npm test`
+the root tsconfig has `files: []`), `npm run lint` (oxlint), `npm run format`
+(oxfmt, `format:check` only checks; generated and vendored files are in
+`ignorePatterns` of `.oxfmtrc.json`), `npm test`
 (Vitest, `src/**/*.test.ts(x)`), and the two checks of a production build
 below.
 
