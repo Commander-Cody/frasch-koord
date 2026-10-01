@@ -132,8 +132,8 @@ export default function AreaPanel({ mapRef }: AreaPanelProps) {
   /** A dialect tag, '' for everything, or 'unassigned'. */
   const [filterDialect, setFilterDialect] = useState('');
 
-  // The click handler and the style-rebuild guard both need the current
-  // selection without being rebuilt every time it changes.
+  // The click handler, the style-rebuild guard and the deep link all need the
+  // current selection without being rebuilt every time it changes.
   const selectedRef = useRef<number | null>(null);
   const itemRefs = useRef(new Map<number, HTMLLIElement>());
 
@@ -289,7 +289,8 @@ export default function AreaPanel({ mapRef }: AreaPanelProps) {
     },
     [features, selectAndFly],
   );
-  useDeepLinkParam('area', features.length > 0, openLinkedArea);
+  const hasSelection = useCallback(() => selectedRef.current !== null, []);
+  useDeepLinkParam('area', features.length > 0, openLinkedArea, hasSelection);
 
   /* ------------------------------------------------------------- overlay */
 
