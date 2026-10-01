@@ -175,7 +175,7 @@ def test_real_name_list_round_trips_byte_identical(tmp_path: Path) -> None:
     guarantee that match.py and curate.py apply only ever touch the cells
     they mean to (a copy: the real file is never written)."""
     copy = tmp_path / "places.csv"
-    shutil.copyfile(placelist.DEFAULT_PATH, copy)
+    shutil.copyfile(paths.PLACES, copy)
     before = copy.read_bytes()
     rows, fields = placelist.read(str(copy))
     placelist.write(rows, str(copy), fields)

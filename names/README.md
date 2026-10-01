@@ -364,7 +364,7 @@ a way or relation that closes into one; else the relation's `label` /
 point as a second try for the dialect lookup, the `admin_level` of an
 administrative boundary, and OSM's `name:nds`. It is stamped with the
 extracts it was read from. The injector and `export_search_index.py` both read
-it, and both ask `locate.dialect_at` which dialect an object lies in — so a
+it, and both ask `objects.dialect_at` which dialect an object lies in — so a
 label and its search entry cannot disagree. An administrative area above
 municipality level (Kreis Nordfriesland, an Amt) gets no dialect: it spans
 several. A search entry lies where the first object of its row's `osm` cell
@@ -613,7 +613,7 @@ references: coordinates and tag fixes belong in `curation.csv` and the build.
 | `dialects.py` | prints the registry; `--tags` for Planetiler, `--export` writes `web/src/generated/dialects.json` |
 | `locate.py` | OSM extract(s) → `osm_objects.json`: where each object of the name list is |
 | `osm_objects.json` | generated, **committed**: the located objects (see "Where the objects are") |
-| `provenance.py` | the `built_from` stamps; prints the tiles' |
+| `provenance.py` | prints the tiles' `built_from` stamp |
 | `check_built.py` | `just check`: the committed outputs match their inputs |
 | `build_candidates.py` | OSM extract(s) → `work/candidates.jsonl` |
 | `match.py` | fills `osm`/`wikidata` in `places.csv`; writes `work/matches.csv` and `REPORT.md` (`--dry-run`: only `work/matches.csv`) |
@@ -629,7 +629,9 @@ references: coordinates and tag fixes belong in `curation.csv` and the build.
 
 The `.py` files here (and `tiles/inject_names.py`, `tiles/check_tiles.py`)
 are launchers: each runs the `main()` of the module of the same name in
-`frasch/`.
+`frasch/` — except `dialects.py` (`frasch/export_dialects.py`) and
+`provenance.py` (`frasch/print_provenance.py`), whose namesakes are the
+libraries under them.
 
 ## Code
 
@@ -642,7 +644,7 @@ default `names/dialects.csv` is read on first use.
 
 Everything is typed and checked by `mypy --strict` in CI (tests included).
 A record with fixed keys is a `TypedDict` in the module that produces it
-(`candidates.Candidate`, `locate.LocatedObject`, `searchindex.SearchEntry`,
+(`candidates.Candidate`, `objects.LocatedObject`, `searchindex.SearchEntry`,
 …); a row of `places.csv` is a plain `dict[str, str]` of its cells, and
 `placelist.read` returns them as `PlaceRow`s, which also know their `line`.
 
@@ -655,7 +657,7 @@ A record with fixed keys is a `TypedDict` in the module that produces it
 | `placelist` | reads/writes/validates `places.csv`: cells, references, ids, the lock |
 | `curationlist` | the one reader of `curation.csv`, and appending to it |
 | `dialects` | the dialect name logic (`dialect_name`, `local_name`) and the area lookup (`AreaIndex`) |
-| `locate` | the objects file, and `dialect_at`, the one dialect lookup of injector and exporter |
+| `objects` | reads and writes the objects file `osm_objects.json`; `dialect_at`, the one dialect lookup of injector and exporter |
 | `geo` | the North Frisia box, its centre, haversine |
 | `osmscan`, `osmgeom` | the id-filtered passes over an extract; ring assembly and polygons |
 | `candidates`, `nameindex`, `hints` | the candidates file, the name index of the matcher and the curation export, location hints |

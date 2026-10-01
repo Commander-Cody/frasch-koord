@@ -1,6 +1,6 @@
 """names/locate.py: where each object of the name list is, worked out once
-from the extract(s) into names/osm_objects.json, and which dialect is spoken
-there -- the one answer the injector (tiles) and the search index share (#24)."""
+from the extract(s) into names/osm_objects.json -- the one answer the
+injector (tiles) and the search index share (#24)."""
 
 from __future__ import annotations
 
@@ -11,8 +11,8 @@ from typing import Any, Protocol
 
 import pytest
 
-from frasch import dialects
-from frasch import locate
+from frasch import locate, paths
+from frasch.objects import read_objects
 from conftest import places_text
 from osm_fixture import ring, write_extract
 from shapely.geometry import Point, Polygon
@@ -124,58 +124,6 @@ def test_an_objects_generic_name_is_recorded(run_locate: RunLocate, tmp_path: Pa
     assert objects["objects"][f"node/{ribe}"]["name"] == "Ribe"
 
 
-# --------------------------------------------------------------- dialect_at ---
-def box(west: float, south: float, east: float, north: float) -> list[list[list[float]]]:
-    return [[[west, south], [east, south], [east, north], [west, north], [west, south]]]
-
-
-@pytest.fixture
-def areas(tmp_path: Path) -> dialects.AreaIndex:
-    """Reußenköge (Mooring) with the Hamburger Hallig (Halligfriesisch)
-    inside it, and a strip of Langeneß covering only part of Oland."""
-    fc = {
-        "type": "FeatureCollection",
-        "features": [
-            {
-                "type": "Feature",
-                "properties": {"dialect": tag},
-                "geometry": {"type": "Polygon", "coordinates": box(*bounds)},
-            }
-            for tag, bounds in [
-                ("frr-x-mooring", (8.80, 54.55, 8.95, 54.63)),
-                ("frr-x-hallig", (8.82, 54.58, 8.86, 54.605)),
-                ("frr-x-hallig", (8.60, 54.60, 8.62, 54.62)),
-            ]
-        ],
-    }
-    path = tmp_path / "areas.geojson"
-    path.write_text(json.dumps(fc), encoding="utf-8")
-    return dialects.AreaIndex.from_geojson(str(path))
-
-
-def test_the_smallest_area_around_an_object_wins(areas: dialects.AreaIndex) -> None:
-    assert locate.dialect_at({"lon": 8.84, "lat": 54.59}, areas) == "frr-x-hallig"
-
-
-def test_outside_every_area_there_is_no_dialect(areas: dialects.AreaIndex) -> None:
-    assert locate.dialect_at({"lon": 8.0, "lat": 54.0}, areas) is None
-
-
-def test_the_outline_point_answers_when_the_inside_point_misses(areas: dialects.AreaIndex) -> None:
-    oland: locate.LocatedObject = {"lon": 8.65, "lat": 54.61, "outline": [8.61, 54.61]}
-    assert locate.dialect_at(oland, areas) == "frr-x-hallig"
-
-
-def test_a_district_spans_dialects_and_gets_none(areas: dialects.AreaIndex) -> None:
-    kreis: locate.LocatedObject = {"lon": 8.84, "lat": 54.59, "admin_level": 6}
-    assert locate.dialect_at(kreis, areas) is None
-
-
-def test_a_municipality_gets_its_dialect(areas: dialects.AreaIndex) -> None:
-    gemeinde: locate.LocatedObject = {"lon": 8.84, "lat": 54.59, "admin_level": 8}
-    assert locate.dialect_at(gemeinde, areas) == "frr-x-hallig"
-
-
 # ------------------------------------------------------------ several files ---
 def test_an_object_only_in_the_second_extract_is_found(
     run_locate: RunLocate, tmp_path: Path
@@ -219,10 +167,39 @@ def test_the_file_records_the_extracts_it_was_read_from(
 def test_the_file_reads_back_by_reference(run_locate: RunLocate, tmp_path: Path) -> None:
     pbf = write_extract(tmp_path / "in.osm.pbf", nodes={NAIBEL: ((8.8285, 54.7868), {})})
     run_locate([{"kind": "settlement", "mooring": "Naibel", "osm": f"node/{NAIBEL}"}], pbf)
-    objects = locate.read_objects(str(tmp_path / "osm_objects.json"))
+    objects = read_objects(str(tmp_path / "osm_objects.json"))
     assert objects.by_ref == {("n", NAIBEL): {"lon": 8.8285, "lat": 54.7868}}
     extracts = objects.built_from["extracts"]
     assert isinstance(extracts, list) and extracts[0]["file"] == "in.osm.pbf"
+
+
+def test_the_registry_passed_in_decides_which_rows_are_on_the_map(
+    world: Path, tmp_path: Path
+) -> None:
+    # `--dialects`: a row named only in a dialect of that registry is located
+    registry = world / "dialects.csv"
+    registry.write_text(
+        Path(paths.DIALECTS).read_text(encoding="utf-8")
+        + "frr-x-strand,strand,Strander,extinct,no,\n",
+        encoding="utf-8",
+    )
+    header, row, _ = places_text([{"kind": "island", "osm": f"node/{NAIBEL}"}]).split("\n")
+    (world / "places.csv").write_text(f"{header},strand\n{row},Strand\n", encoding="utf-8")
+    pbf = write_extract(tmp_path / "in.osm.pbf", nodes={NAIBEL: ((8.8285, 54.7868), {})})
+    out = world / "osm_objects.json"
+    locate.main(
+        [
+            str(pbf),
+            "--names",
+            str(world / "places.csv"),
+            "--dialects",
+            str(registry),
+            "--out",
+            str(out),
+        ]
+    )
+    objects = json.loads(out.read_text(encoding="utf-8"))
+    assert objects["objects"] == {f"node/{NAIBEL}": {"lon": 8.8285, "lat": 54.7868}}
 
 
 def test_a_relation_whose_label_node_the_extract_lacks_is_at_a_member_it_has(

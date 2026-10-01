@@ -9,72 +9,32 @@ apart -- and disagreed on Sylt, Amrum, Stiardebel and more (#24).  Now it is
 worked out once, here, and both read the result:
 
     locate.py <in.osm.pbf> [<in.osm.pbf> ...]
-              [--names names/places.csv] [--out names/osm_objects.json]
+              [--names names/places.csv] [--dialects names/dialects.csv]
+              [--out names/osm_objects.json]
 
-For every OSM reference in the `osm` column of a row that is on the map, the
-file records
-
-  lon, lat     where the object is: a node's own location; for a way or
-               relation that closes into a polygon, a point *inside* that
-               polygon (shapely's `representative_point`) -- an island is not
-               where its coastline starts, and a vertex average can lie in the
-               sea; for anything else, the relation's `label` / `admin_centre`
-               member, else the first vertex
-  outline      the second point for the dialect lookup, see `dialect_at`
-  admin_level  of an administrative boundary (see `object_facts`)
-  name_nds     OSM's Low Saxon name (see `object_facts`)
-  name         OSM's generic name (see `object_facts`)
-
-and, as `built_from`, the extracts it was read from (names/provenance.py).
-
-The file is **committed**, like names/dialect_areas.geojson: it is small, and
-the search index can then be rebuilt -- and checked in CI -- without an
-extract.  Re-run it (`just objects`) when a row gets a new `osm` reference;
-the search export and the injector stop on a reference it does not know.
+What the file records, and why it is committed: frasch.objects.
 """
 
 from __future__ import annotations
 
 import argparse
-import json
 import os
 from collections.abc import Collection, Iterable, Mapping, Sequence
-from typing import NamedTuple, NotRequired, TypedDict
 
-from frasch import cli, files, osmgeom, osmscan, paths, placelist, provenance
-from frasch.dialects import AreaIndex
-from frasch.errors import PipelineError
+from frasch import cli, files, osmgeom, osmscan, paths, placelist, provenance, registry
 from frasch.geo import LonLat
+from frasch.objects import Facts, LocatedObject, Objects, Point, objects_json
 from frasch.osmscan import Rings
 from frasch.paths import StrPath
 from frasch.placelist import OsmRef, Row
-
-DEFAULT_OUT = paths.OBJECTS
-ROUND = 6
+from frasch.registry import Registry
 
 
-class Facts(TypedDict, total=False):
-    """See `object_facts`."""
-
-    admin_level: int
-    name_nds: str
-    name: str
-
-
-class Point(TypedDict):
-    lon: float
-    lat: float
-    outline: NotRequired[list[float]]
-
-
-class LocatedObject(Point, Facts):
-    """One object of the objects file: where it is (`lon`, `lat`, and for
-    an area the `outline` point too) and its `object_facts`."""
-
-
-def mapped_refs(rows: Iterable[Row]) -> set[OsmRef]:
+def mapped_refs(rows: Iterable[Row], reg: Registry) -> set[OsmRef]:
     """The OSM references (not the local ones) of the rows on the map."""
-    return {ref for row in rows if placelist.on_map(row) for ref in placelist.osm_refs(row["osm"])}
+    return {
+        ref for row in rows if placelist.on_map(row, reg) for ref in placelist.osm_refs(row["osm"])
+    }
 
 
 def locate(pbfs: Iterable[StrPath], refs: Collection[OsmRef]) -> dict[OsmRef, LocatedObject]:
@@ -218,101 +178,19 @@ def _outline_point(
     return locs.get(first[0]) if first else None
 
 
-# -------------------------------------------------------------- dialects ----
-# OSM's admin_level of a German municipality; anything lower is a Kreis or an
-# Amt, which spans several dialects
-MUNICIPALITY_LEVEL = 8
-
-
-def dialect_at(obj: LocatedObject, areas: AreaIndex | None) -> str | None:
-    """The dialect spoken where an object of the objects file lies, or None:
-    the area around its point, else the area around its outline point.
-
-    The two points miss in opposite directions: an island's coastline runs
-    outside the municipality boundaries the areas are cut from (Amrum), while
-    an area may cover only part of an island (the Langeneß municipality holds
-    only the south-west third of Oland), so the point inside the island falls
-    outside it and a vertex still lands in it.  The first point that is in an
-    area at all wins, so nothing that had a dialect can lose it.
-
-    An administrative area above municipality level gets none: Kreis
-    Nordfriesland would otherwise be "Nordergoesharde" because its interior
-    point happens to lie there."""
-    if areas is None or obj.get("admin_level", MUNICIPALITY_LEVEL) < MUNICIPALITY_LEVEL:
-        return None
-    points = [(obj["lon"], obj["lat"])]
-    if "outline" in obj:
-        points.append((obj["outline"][0], obj["outline"][1]))
-    for lon, lat in points:
-        tag = areas.lookup(lon, lat)
-        if tag:
-            return tag
-    return None
-
-
-class Objects(NamedTuple):
-    """The objects file, read back: `by_ref` maps ('w', 12) to its object."""
-
-    by_ref: dict[OsmRef, LocatedObject]
-    built_from: provenance.BuiltFrom
-
-
-def read_objects(path: str = DEFAULT_OUT) -> Objects:
-    if not os.path.exists(path):
-        raise PipelineError(f"{path} not found -- build it with `just objects` (names/locate.py)")
-    with open(path, encoding="utf-8") as fh:
-        data = json.load(fh)
-    by_ref = {placelist.osm_refs(ref)[0]: obj for ref, obj in data["objects"].items()}
-    return Objects(by_ref, data["built_from"])
-
-
-def objects_json(objects: Objects) -> str:
-    """The file's text: one object per line, in reference order, so a re-run
-    on a moved object is a one-line diff."""
-    lines = [
-        f"{json.dumps(placelist.format_osm([ref]))}:{_compact(_rounded(obj))}"
-        for ref, obj in sorted(objects.by_ref.items(), key=_ref_order)
-    ]
-    return (
-        f'{{"built_from":{_compact(objects.built_from)},\n"objects":{{\n'
-        + ",\n".join(lines)
-        + "\n}}\n"
-    )
-
-
-def _compact(data: object) -> str:
-    return json.dumps(data, ensure_ascii=False, separators=(",", ":"))
-
-
-def _ref_order(item: tuple[OsmRef, LocatedObject]) -> tuple[int, int]:
-    (t, i), _ = item
-    return "nwr".index(t), i
-
-
-def _rounded(obj: LocatedObject) -> dict[str, object]:
-    return {
-        k: (
-            round(v, ROUND)
-            if isinstance(v, float)
-            else [round(x, ROUND) for x in v]
-            if isinstance(v, list)
-            else v
-        )
-        for k, v in obj.items()
-    }
-
-
 @cli.command
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     ap.add_argument("pbf", nargs="+", help="OSM extract(s) holding the objects")
-    ap.add_argument("--names", default=placelist.DEFAULT_PATH)
-    ap.add_argument("--out", default=DEFAULT_OUT)
+    ap.add_argument("--names", default=paths.PLACES)
+    ap.add_argument("--dialects", default=paths.DIALECTS)
+    ap.add_argument("--out", default=paths.OBJECTS)
     a = ap.parse_args(argv)
-    rows, _ = placelist.read(a.names)
-    refs = mapped_refs(rows)
+    reg = registry.read(a.dialects)
+    rows, _ = placelist.read(a.names, reg)
+    refs = mapped_refs(rows, reg)
     objects = Objects(
         locate(a.pbf, refs), {"extracts": [provenance.extract_stamp(p) for p in a.pbf]}
     )

@@ -13,25 +13,19 @@ names/dialect_areas.geojson -- records its inputs in a `built_from` object:
 
 The search index and the tiles share one stamp (`stamp`): the files both
 are built from.  tiles/build.sh writes it into the archive's metadata
-(`provenance.py` prints it), and the frontend warns when the stamp of
-names.json differs from the tiles'.
-
-CLI:  `names/provenance.py [--names ...] [--dialects ...] [--curation ...]
-                           [--areas ...] [--objects ...]`
-      prints `{"built_from": {...}}` for those files (default: the committed
-      ones)
+(names/provenance.py prints it, see frasch.print_provenance), and the
+frontend warns when the stamp of names.json differs from the tiles'.
 """
 
 from __future__ import annotations
 
-import argparse
 import hashlib
 import json
 import os
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from typing import TypedDict
 
-from frasch import cli, osmscan, paths
+from frasch import osmscan
 from frasch.paths import StrPath
 
 
@@ -97,23 +91,3 @@ def stamp(
         },
         extracts,
     )
-
-
-@cli.command
-def main(argv: Sequence[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-    ap.add_argument("--names", default=paths.PLACES)
-    ap.add_argument("--dialects", default=paths.DIALECTS)
-    ap.add_argument("--curation", default=paths.CURATION)
-    ap.add_argument("--areas", default=paths.DIALECT_AREAS)
-    ap.add_argument("--objects", default=paths.OBJECTS)
-    a = ap.parse_args(argv)
-    print(
-        json.dumps(
-            {"built_from": stamp(a.names, a.dialects, a.curation, a.areas, a.objects)},
-            separators=(",", ":"),
-        )
-    )
-    return 0

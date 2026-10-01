@@ -50,8 +50,6 @@ import osmium
 from frasch import candidates, cli, files, geo, paths
 from frasch.geo import LonLat
 
-DEFAULT_OUT = paths.CANDIDATES
-
 
 NATURAL_KEEP = {
     "water",
@@ -336,7 +334,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     ap.add_argument("pbf", nargs="+", help="OSM extracts to scan")
-    ap.add_argument("--out", default=DEFAULT_OUT)
+    ap.add_argument("--out", default=paths.CANDIDATES)
     ap.add_argument(
         "--index", default="flex_mem", help="pyosmium node-location index (default flex_mem)"
     )

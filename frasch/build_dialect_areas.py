@@ -99,15 +99,12 @@ from frasch.paths import StrPath
 from frasch.provenance import BuiltFrom, ExtractStamp
 from frasch.registry import Dialect, Registry
 
-DEFAULT_AREAS = dialects.AREA_LIST_PATH
-DEFAULT_OUT = dialects.DEFAULT_AREAS
 SIMPLIFY_DEG = 0.0005  # ~50 m
 # Neighbouring municipalities are simplified independently, so a shared
 # boundary drifts by up to the tolerance in *each* of them.  At 0.0005 that is
 # a ~50 m crack between two areas that actually touch -- 2-3 px at the zoom the
 # review happens at.  0.0001 is sub-pixel below z16.
 PARTS_SIMPLIFY_DEG = 0.0001  # ~11 m
-DEFAULT_PARTS_OUT = paths.DIALECT_AREA_PARTS
 ROUND = 5
 
 # German municipality key, used to scope the "not assigned to any dialect"
@@ -300,9 +297,9 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     ap.add_argument("pbf", nargs="+", help="OSM extract(s) holding the areas")
-    ap.add_argument("--areas", default=DEFAULT_AREAS)
+    ap.add_argument("--areas", default=paths.DIALECT_AREA_LIST)
     ap.add_argument("--registry", default=paths.DIALECTS)
-    ap.add_argument("--out", default=DEFAULT_OUT)
+    ap.add_argument("--out", default=paths.DIALECT_AREAS)
     ap.add_argument(
         "--simplify",
         type=float,
@@ -311,7 +308,7 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     )
     ap.add_argument(
         "--parts-out",
-        default=DEFAULT_PARTS_OUT,
+        default=paths.DIALECT_AREA_PARTS,
         help="per-municipality areas for the review overlay "
         "(web ?areas); '' skips the file entirely",
     )

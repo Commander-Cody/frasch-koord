@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from frasch import placelist, registry
-from frasch.errors import ValidationError
+from frasch.errors import PipelineError, ValidationError
 from conftest import TOFTUM, places_text
 
 
@@ -18,6 +18,12 @@ def test_reads_a_list_saved_with_a_byte_order_mark(tmp_path: Path) -> None:
     rows, fields = placelist.read(str(path))
     assert fields[0] == "kind"
     assert rows[0]["mooring"] == "Toftem"
+
+
+def test_a_missing_list_is_a_pipeline_error_not_a_traceback(tmp_path: Path) -> None:
+    path = tmp_path / "places.csv"
+    with pytest.raises(PipelineError, match=f"^name list not found: {path}$"):
+        placelist.read(str(path))
 
 
 def test_refuses_a_semicolon_separated_list_with_a_clear_message(tmp_path: Path) -> None:

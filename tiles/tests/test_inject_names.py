@@ -28,6 +28,7 @@ from frasch import inject_names
 from frasch import locate
 from frasch import placelist
 from frasch.geo import LonLat
+from frasch.objects import Objects, objects_json
 from frasch.registry import Registry
 from conftest import curation_file
 from osm_fixture import Nodes, write_extract as write_osm
@@ -595,7 +596,7 @@ def test_an_object_nobody_located_stops_the_build(tmp_path: Path) -> None:
     (tmp_path / "places.csv").write_text(places_csv([PLACES[0]]), encoding="utf-8")
     (tmp_path / "areas.geojson").write_text(json.dumps(AREAS), encoding="utf-8")
     (tmp_path / "osm_objects.json").write_text(
-        locate.objects_json(locate.Objects({}, {"extracts": []})), encoding="utf-8"
+        objects_json(Objects({}, {"extracts": []})), encoding="utf-8"
     )
     write_extract(tmp_path / "in.osm.pbf")
     with pytest.raises(PipelineError, match=f"node/{HOLM}"):
@@ -880,7 +881,7 @@ def test_report_when_no_object_lies_in_a_dialect_area(
 ) -> None:
     (tmp_path / "areas.geojson").write_text(json.dumps(AREAS), encoding="utf-8")
     (tmp_path / "osm_objects.json").write_text(
-        locate.objects_json(locate.Objects({}, {"extracts": []})), encoding="utf-8"
+        objects_json(Objects({}, {"extracts": []})), encoding="utf-8"
     )
     # only the North Sea, found through its QID, far out of every area
     report_run(

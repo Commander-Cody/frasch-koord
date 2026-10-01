@@ -15,8 +15,8 @@ import pytest
 
 from frasch import export_search_index
 from frasch import paths as default_paths
-from frasch import locate
 from frasch.paths import StrPath
+from frasch.objects import LocatedObject, Objects, objects_json
 from frasch.placelist import OsmRef
 from frasch.provenance import ExtractStamp
 from frasch.searchindex import SearchEntry, SearchIndex
@@ -81,7 +81,7 @@ RIPEN = {
     "osm": "node/597643755",
     "status": "auto",
 }
-OBJECTS: dict[OsmRef, locate.LocatedObject] = {
+OBJECTS: dict[OsmRef, LocatedObject] = {
     ("n", 240042766): {"lon": 8.83, "lat": 54.79, "name_nds": "Niböl"},
     ("w", 28330569): {"lon": 8.86, "lat": 54.47},
     ("w", 1347936331): {"lon": 8.84, "lat": 54.67},
@@ -120,7 +120,7 @@ AREAS = {
 def paths(world: Path) -> Path:
     """The export's input files in `world`; `run(rows)` exports them."""
     (world / "osm_objects.json").write_text(
-        locate.objects_json(locate.Objects(OBJECTS, {"extracts": EXTRACTS})), encoding="utf-8"
+        objects_json(Objects(OBJECTS, {"extracts": EXTRACTS})), encoding="utf-8"
     )
     (world / "areas.geojson").write_text(json.dumps(AREAS), encoding="utf-8")
     return world

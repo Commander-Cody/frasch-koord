@@ -196,10 +196,10 @@ def variant_columns(reg: Registry | None) -> list[str]:
 
 
 def check(
-    places: StrPath = placelist.DEFAULT_PATH,
+    places: StrPath = paths.PLACES,
     curation: StrPath = paths.CURATION,
     dialects_csv: StrPath = paths.DIALECTS,
-    areas: StrPath = dialects.AREA_LIST_PATH,
+    areas: StrPath = paths.DIALECT_AREA_LIST,
 ) -> list[Problem]:
     """Every problem in the name list `places`, the map curation `curation`,
     the dialect registry `dialects_csv` and the dialect area list `areas`,
@@ -234,10 +234,10 @@ def markdown(problems: Sequence[Problem]) -> str:
 @cli.command
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--names", default=placelist.DEFAULT_PATH)
+    ap.add_argument("--names", default=paths.PLACES)
     ap.add_argument("--curation", default=paths.CURATION)
     ap.add_argument("--dialects", default=paths.DIALECTS)
-    ap.add_argument("--areas", default=dialects.AREA_LIST_PATH)
+    ap.add_argument("--areas", default=paths.DIALECT_AREA_LIST)
     ap.add_argument(
         "--fix",
         action="store_true",

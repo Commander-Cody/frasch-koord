@@ -5,7 +5,7 @@ Matching is EXACT after normalisation -- no fuzzy matching.  The German names
 of a row (the Danish ones where a row has no German name) are compared against
 the candidates' name, name:de, name:da, short_name, official_name, alt_name
 and old_name.
-Candidates come from names/work/candidates.jsonl (see build_candidates.py).
+Candidates come from names/work/candidates.jsonl (see frasch.build_candidates).
 
 What gets written where
   names/places.csv        only `osm`, `wikidata` and `status` of the rows the
@@ -93,11 +93,6 @@ from frasch.provenance import ExtractStamp
 if TYPE_CHECKING:
     import requests
 
-CSV_PATH = placelist.DEFAULT_PATH
-CAND_PATH = paths.CANDIDATES
-MATCH_PATH = paths.MATCHES
-REPORT_PATH = paths.REPORT
-WD_CACHE = paths.WIKIDATA_CACHE
 EXTRACTS_STATE = "match-extracts.json"  # next to the candidates file
 
 MATCH_COLUMNS = [
@@ -331,7 +326,7 @@ WD_USER_AGENT = (
 WD_COUNTRY_CLASSES = {"Q6256", "Q3624078", "Q1763527", "Q112099", "Q185441"}
 
 
-def read_wikidata_cache(cache_path: str = WD_CACHE) -> dict[str, str]:
+def read_wikidata_cache(cache_path: str = paths.WIKIDATA_CACHE) -> dict[str, str]:
     """The cached lookups, `{German name: QID or ""}` (`""` = the lookup worked
     and found no country item).  A damaged file stops the run: starting from
     an empty cache would look like "not found" for every country offline."""
@@ -409,7 +404,7 @@ def _wikidata_country(session: requests.Session, name: str) -> str:
 
 
 def wikidata_countries(
-    names: Iterable[str], cache_path: str = WD_CACHE, offline: bool = False
+    names: Iterable[str], cache_path: str = paths.WIKIDATA_CACHE, offline: bool = False
 ) -> tuple[dict[str, str], set[str]]:
     """German country name -> QID, via wbsearchentities + wbgetentities.
 
@@ -1017,7 +1012,7 @@ REPORT_STATES = [
 
 
 def write_report(
-    rows: Sequence[PlaceRow], results: Mapping[str, MatchResult], path: str = REPORT_PATH
+    rows: Sequence[PlaceRow], results: Mapping[str, MatchResult], path: str = paths.REPORT
 ) -> None:
     """`results` maps a row's id to its match_row() output (only for the rows
     the matcher owns).  The report depends on these alone -- no date, no run
@@ -1163,7 +1158,7 @@ def write_matches(
     rows: Iterable[PlaceRow],
     results: Mapping[str, MatchResult],
     index: NameIndex,
-    path: str = MATCH_PATH,
+    path: str = paths.MATCHES,
 ) -> None:
     """work/matches.csv: one line per places.csv row, with the match details
     (and lon/lat also for rows a human filled in, looked up by id)."""
@@ -1222,16 +1217,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    ap.add_argument("--names", default=CSV_PATH)
-    ap.add_argument("--candidates", default=CAND_PATH)
-    ap.add_argument("--matches", default=MATCH_PATH)
-    ap.add_argument("--report", default=REPORT_PATH)
+    ap.add_argument("--names", default=paths.PLACES)
+    ap.add_argument("--candidates", default=paths.CANDIDATES)
+    ap.add_argument("--matches", default=paths.MATCHES)
+    ap.add_argument("--report", default=paths.REPORT)
     ap.add_argument(
         "--offline", action="store_true", help="do not call the Wikidata API (use the cache only)"
     )
     ap.add_argument(
         "--wikidata-cache",
-        default=WD_CACHE,
+        default=paths.WIKIDATA_CACHE,
         help="country lookups already made (default: %(default)s)",
     )
     ap.add_argument(

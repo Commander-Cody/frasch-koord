@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from frasch import placelist
+from frasch import curationlist, placelist
 from frasch.candidates import Candidate, HeaderLine
 
 
@@ -74,12 +74,11 @@ CURATION_HEADER = "osm,name,lat,lon,set_tags,minzoom,maxzoom,polygon_km2,note\n"
 def curation_file(directory: Path, *rows: Mapping[str, str]) -> str:
     """Write a curation.csv of `rows` (dicts of the cells that are not empty)
     into `directory` and return its path."""
-    columns = CURATION_HEADER.strip().split(",")
     buf = io.StringIO(newline="")
-    w = csv.DictWriter(buf, fieldnames=columns, lineterminator="\n")
+    w = csv.DictWriter(buf, fieldnames=curationlist.COLUMNS, lineterminator="\n")
     w.writeheader()
     for r in rows:
-        w.writerow({k: r.get(k, "") for k in columns})
+        w.writerow({k: r.get(k, "") for k in curationlist.COLUMNS})
     path = directory / "curation.csv"
     path.write_text(buf.getvalue(), encoding="utf-8")
     return str(path)

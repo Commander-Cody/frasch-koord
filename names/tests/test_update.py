@@ -11,7 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from frasch import build_dialect_areas, locate, paths, placelist, provenance, update
+from frasch import build_dialect_areas, paths, placelist, provenance, update
+from frasch.objects import Objects, objects_json
 from frasch.provenance import ExtractStamp
 from conftest import cand, places_text, write_candidates
 from osm_fixture import Nodes, ring, write_extract
@@ -99,6 +100,21 @@ def test_a_new_row_ends_up_matched_located_and_searchable(workspace: Path) -> No
     assert "node/240044107" in objects["objects"]
     index = json.loads((workspace / "names.json").read_text(encoding="utf-8"))
     assert [e["id"] for e in index["places"]] == ["toftem"]
+
+
+def test_the_objects_are_located_with_the_registry_passed_in(workspace: Path) -> None:
+    # a row named only in a dialect of the workspace's own registry is on the map
+    registry = workspace / "dialects.csv"
+    registry.write_text(
+        registry.read_text(encoding="utf-8") + "frr-x-strand,strand,Strander,extinct,no,\n",
+        encoding="utf-8",
+    )
+    toftem = TOFTEM | {"mooring": "", "osm": "node/240044107", "status": "ok"}
+    header, row, _ = places_text([toftem]).split("\n")
+    (workspace / "places.csv").write_text(f"{header},strand\n{row},Toftem\n", encoding="utf-8")
+    assert run(workspace) == 0
+    objects = json.loads((workspace / "osm_objects.json").read_text(encoding="utf-8"))
+    assert list(objects["objects"]) == ["node/240044107"]
 
 
 def test_a_decision_from_the_curation_view_is_written_into_the_name_list(workspace: Path) -> None:
@@ -273,9 +289,7 @@ def test_objects_are_stale_until_located_for_the_current_references_and_extracts
     path = tmp_path / "osm_objects.json"
     assert update.objects_stale(path, {("n", 1)}, [SH])
     path.write_text(
-        locate.objects_json(
-            locate.Objects({("n", 1): {"lon": 8.83, "lat": 54.71}}, {"extracts": [SH]})
-        ),
+        objects_json(Objects({("n", 1): {"lon": 8.83, "lat": 54.71}}, {"extracts": [SH]})),
         encoding="utf-8",
     )
     assert not update.objects_stale(path, {("n", 1)}, [SH])

@@ -49,8 +49,8 @@ and which dialect a place's own `local` column belongs to.  The smallest area
 containing the object wins.  Without the file the injector still runs -- it
 warns and writes `frasch:local` only for rows with an explicit `local` name.
 Where an object lies comes from `names/osm_objects.json` (`names/locate.py`),
-and `locate.dialect_at` turns that into a dialect -- the same file and the same
-function the search index uses (names/export_search_index.py), so a map label
+and `objects.dialect_at` turns that into a dialect -- the same file and the same
+function the search index uses (frasch.searchindex), so a map label
 and its search entry cannot disagree (#24).  An object of the name list the
 file does not know stops the build.  Objects matched only through their
 Wikidata QID are not in it: a node is asked at its own location, a way or
@@ -100,7 +100,6 @@ from frasch import (
     cli,
     curationlist,
     dialects,
-    locate,
     osmscan,
     paths,
     placelist,
@@ -109,15 +108,10 @@ from frasch import (
 from frasch.curationlist import LocalPoint, Square, Tuning
 from frasch.errors import PipelineError, ValidationError
 from frasch.geo import LonLat
-from frasch.locate import LocatedObject
+from frasch.objects import LocatedObject, dialect_at, read_objects
 from frasch.placelist import OsmRef, PlaceRow, Ref, Row
 from frasch.registry import Registry
 
-DEFAULT_NAMES = placelist.DEFAULT_PATH
-DEFAULT_DIALECTS = paths.DIALECTS
-DEFAULT_AREAS = dialects.DEFAULT_AREAS
-DEFAULT_OBJECTS = locate.DEFAULT_OUT
-DEFAULT_CURATION = paths.CURATION
 KIND_KEY = "frasch:kind"
 MINZOOM_KEY = curationlist.MINZOOM_KEY
 MAXZOOM_KEY = curationlist.MAXZOOM_KEY
@@ -334,7 +328,7 @@ def scan_waterways(path: str, by_id: Iterable[Ref]) -> dict[OsmRef, tuple[OsmRef
         tags = rel["tags"]
         if not (tags.get("type") == "waterway" or "waterway" in tags):
             continue
-        for way_id in rel["rings"]["outer"] + rel["rings"]["inner"]:
+        for way_id in rel["member_ways"]:
             members.setdefault(("w", way_id), (("r", rel_id), tags.get("name", "")))
     return members
 
@@ -419,9 +413,9 @@ class Injector:
         A node found only through its QID is asked at its own location; a
         way or relation found that way gets none."""
         if key in self.objects:
-            return locate.dialect_at(self.objects[key], self.areas)
+            return dialect_at(self.objects[key], self.areas)
         if isinstance(o, osmium.osm.Node) and o.location.valid():
-            return locate.dialect_at({"lon": o.location.lon, "lat": o.location.lat}, self.areas)
+            return dialect_at({"lon": o.location.lon, "lat": o.location.lat}, self.areas)
         return None
 
     def flush(self, t: str) -> None:
@@ -444,7 +438,7 @@ class Injector:
             if rows is None:
                 continue  # no name-list row uses it (reported in run)
             lon, lat = p["lon"], p["lat"]
-            area_tag = locate.dialect_at({"lon": lon, "lat": lat}, self.areas)
+            area_tag = dialect_at({"lon": lon, "lat": lat}, self.areas)
             tags = point_tags(rows, area_tag, self.reg, p["tags"], p["where"])
             self.seen_keys.add(key)
             self._count_names(tags)
@@ -637,7 +631,7 @@ def run(
     curation_csv: str | None = None,
     curation_required: bool = False,
     areas_required: bool = False,
-    objects_json: str = DEFAULT_OBJECTS,
+    objects_json: str = paths.OBJECTS,
 ) -> int:
     reg = registry.read(dialects_csv)
     names = load_names(names_csv, reg)
@@ -769,7 +763,7 @@ def _load_objects(
     and then for every one of them."""
     if not areas:
         return {}
-    objects = locate.read_objects(objects_json).by_ref
+    objects = read_objects(objects_json).by_ref
     missing = unlocated(by_id, objects)
     if missing:
         lines = "\n".join(
@@ -935,26 +929,26 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     ap.add_argument("infile")
     ap.add_argument("outfile")
-    ap.add_argument("--names", default=DEFAULT_NAMES)
+    ap.add_argument("--names", default=paths.PLACES)
     ap.add_argument(
         "--dialects",
-        default=DEFAULT_DIALECTS,
+        default=paths.DIALECTS,
         help="the dialect registry; its tags become the name:* tags",
     )
     ap.add_argument(
         "--areas",
-        default=DEFAULT_AREAS,
+        default=paths.DIALECT_AREAS,
         help="dialect areas as GeoJSON (names/build_dialect_areas.py); "
         "skipped with a warning when absent",
     )
     ap.add_argument(
         "--objects",
-        default=DEFAULT_OBJECTS,
+        default=paths.OBJECTS,
         help="where the name list's objects are (names/locate.py); needed with the dialect areas",
     )
     ap.add_argument(
         "--curation",
-        default=DEFAULT_CURATION,
+        default=paths.CURATION,
         help="per-feature map tuning (set_tags / minzoom / maxzoom / polygon_km2); "
         "default names/curation.csv, skipped when absent",
     )
@@ -974,9 +968,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         None if a.no_areas else a.areas,
         a.dry_run,
         curation_csv=None if a.no_curation else a.curation,
-        curation_required=a.curation != DEFAULT_CURATION,
+        curation_required=a.curation != paths.CURATION,
         # an explicitly named area file must exist; the default one is
         # optional (the injector then warns and skips frasch:dialect)
-        areas_required=os.path.abspath(a.areas) != DEFAULT_AREAS,
+        areas_required=os.path.abspath(a.areas) != paths.DIALECT_AREAS,
         objects_json=a.objects,
     )

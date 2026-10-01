@@ -26,7 +26,6 @@ import argparse
 import gzip
 import json
 import math
-import os
 import sys
 from collections.abc import Mapping, Sequence
 from typing import Literal, NotRequired, TypedDict
@@ -34,13 +33,9 @@ from typing import Literal, NotRequired, TypedDict
 import mapbox_vector_tile
 from pmtiles.reader import MmapSource, Reader
 
-from frasch import cli
+from frasch import cli, paths
 from frasch.geo import LonLat
 from frasch.searchindex import SearchEntry
-
-DEFAULT_NAMES = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "..", "web", "public", "data", "names.json"
-)
 
 # OpenMapTiles feature ids: the OSM id times ten plus the type
 # (web/src/names.ts's osmRefFromFeatureId)
@@ -207,7 +202,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     ap.add_argument("archive")
-    ap.add_argument("--names", default=DEFAULT_NAMES)
+    ap.add_argument("--names", default=paths.SEARCH_INDEX)
     ap.add_argument("--zoom", type=int, default=14)
     a = ap.parse_args(argv)
     with open(a.names, encoding="utf-8") as fh:
