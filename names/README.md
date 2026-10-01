@@ -177,7 +177,7 @@ every reference has resolved and every polygon is assembled, so a crashed or
 interrupted run never leaves a truncated file. Each one's `properties` records
 a `built_from`: the git blob hash of `dialect_areas.csv` and `dialects.csv`,
 plus the file name and replication timestamp of every extract read — the same
-provenance scheme as the rest of the pipeline (`names/provenance.py`).
+provenance scheme as the rest of the pipeline (`frasch/provenance.py`).
 
 **No Python consumer may read the parts file.** Its unit is the municipality,
 not the dialect, so handing it to `dialects.AreaIndex` would silently change
