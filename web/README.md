@@ -22,7 +22,9 @@ no Java, Python or OSM downloads. `npm run fetch-assets` runs
 
 Other scripts: `npm run build` (type-checks with `tsc -b` then builds with
 Vite), `npm run typecheck` (`tsc -b` only; `npx tsc --noEmit` checks nothing,
-the root tsconfig has `files: []`), `npm run lint` (oxlint), `npm test`
+the root tsconfig has `files: []`), `npm run lint` (oxlint), `npm run format`
+(oxfmt, `format:check` only checks; generated and vendored files are in
+`ignorePatterns` of `.oxfmtrc.json`), `npm test`
 (Vitest, `src/**/*.test.ts(x)`), and the two checks of a production build
 below.
 
@@ -208,7 +210,7 @@ coalesce(name:frr-x-mooring, frasch:local, name:frr, name:nds, name:de, name:lat
 i.e. `coalesce(get "name:frr-x-mooring", get "frasch:local", get "name:frr",
 get "name:nds", get "name:de", get "name:latin", get "name")`. `frasch:local`
 sits right behind the selected dialect so that a place the dialect has no
-name for still gets a *Frisian* label (the Fering name on Föhr) rather than
+name for still gets a _Frisian_ label (the Fering name on Föhr) rather than
 dropping to German.
 
 Local view (`tag = LOCAL_TAG`):
@@ -304,21 +306,21 @@ The old single `place-other` layer (which rendered island, hamlet,
 isolated_dwelling, neighbourhood, … all identically in uppercase) is split
 into dedicated layers, keyed on `frasch:kind` first, then `class`:
 
-| Layer            | Filter (besides the minzoom clause above)                                            | Layer `minzoom` | `symbol-sort-key` tier |
-|------------------|----------------------------------------------------------------------------------------|:---:|:---:|
-| `place-island`   | `frasch:kind == island`, or (no `frasch:kind` and `class == island`)                   | – | 0 (highest) |
-| `place-hallig`   | `frasch:kind == hallig`; the smallest Halligen (OpenMapTiles island `rank` 6, e.g. Habel, Norderoog) additionally wait until z12 | – | 1 |
-| `place-village`  | `class == village`                                                                      | – | 2 |
-| `place-town`     | `class == town`                                                                         | – | 2 |
-| `place-sand`     | not a settlement class (city/town/village/state/country/continent) and `frasch:kind == sand` (sands are `place=island` polygons in OSM, so `class == island` must NOT be excluded here) | 10 | 3 |
-| `place-other`    | not a settlement class, not `class == island`, not `frasch:kind` island/hallig/sand/warft, and not a Warft by the rule below (i.e. hamlet, neighbourhood, suburb, … as OSM Bright had them) | – | 4 |
-| `place-warft`    | not a settlement class, and (`frasch:kind == warft`, or — for features without `frasch:kind` — `class == isolated_dwelling` or a name containing *warf* / *weerw* / *wäärw*). Catches the Hallig Warften that OSM tags `place=hamlet` (Ipkenswarft, Ockenswarft, Olandswarft) so all Warften look the same and start at z13 | 13 | 5 (lowest) |
+| Layer           | Filter (besides the minzoom clause above)                                                                                                                                                                                                                                                                                   | Layer `minzoom` | `symbol-sort-key` tier |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :-------------: | :--------------------: |
+| `place-island`  | `frasch:kind == island`, or (no `frasch:kind` and `class == island`)                                                                                                                                                                                                                                                        |        –        |      0 (highest)       |
+| `place-hallig`  | `frasch:kind == hallig`; the smallest Halligen (OpenMapTiles island `rank` 6, e.g. Habel, Norderoog) additionally wait until z12                                                                                                                                                                                            |        –        |           1            |
+| `place-village` | `class == village`                                                                                                                                                                                                                                                                                                          |        –        |           2            |
+| `place-town`    | `class == town`                                                                                                                                                                                                                                                                                                             |        –        |           2            |
+| `place-sand`    | not a settlement class (city/town/village/state/country/continent) and `frasch:kind == sand` (sands are `place=island` polygons in OSM, so `class == island` must NOT be excluded here)                                                                                                                                     |       10        |           3            |
+| `place-other`   | not a settlement class, not `class == island`, not `frasch:kind` island/hallig/sand/warft, and not a Warft by the rule below (i.e. hamlet, neighbourhood, suburb, … as OSM Bright had them)                                                                                                                                 |        –        |           4            |
+| `place-warft`   | not a settlement class, and (`frasch:kind == warft`, or — for features without `frasch:kind` — `class == isolated_dwelling` or a name containing _warf_ / _weerw_ / _wäärw_). Catches the Hallig Warften that OSM tags `place=hamlet` (Ipkenswarft, Ockenswarft, Olandswarft) so all Warften look the same and start at z13 |       13        |       5 (lowest)       |
 
 `symbol-sort-key = tier * 100 + coalesce(rank, 0)`, so within a tier a
 bigger/more important feature (lower `rank`) still sorts first.
 
 `place-sand`/`place-warft` explicitly exclude the "big" classes so that a
-`frasch:kind` tag can never *demote* a feature OSM/OpenMapTiles already
+`frasch:kind` tag can never _demote_ a feature OSM/OpenMapTiles already
 classifies more prominently — e.g. Tammensiel on Pellworm is `class=village`
 **and** `frasch:kind=warft` (a warft that grew into a village); it must stay
 in `place-village` rather than drop behind `place-warft`'s `minzoom: 13`
@@ -326,12 +328,12 @@ floor, which would bury its curated `frasch:minzoom=10` under an unrelated
 class-tier default.
 
 **Cross-layer priority (MapLibre limitation to know about):** MapLibre
-processes symbol placement in *reverse* `style.layers` array order — the
-*last* layer in the array is inserted into the shared collision index first
+processes symbol placement in _reverse_ `style.layers` array order — the
+_last_ layer in the array is inserted into the shared collision index first
 and therefore wins collisions; the first layer is processed last and is most
 likely to lose (see `PauseablePlacement.continuePlacement` in maplibre-gl:
 it starts at `order.length - 1` and counts down). `symbol-sort-key` only
-reorders features *within* one layer's own bucket — it cannot change
+reorders features _within_ one layer's own bucket — it cannot change
 priority between two different layers. So to get islands > halligen >
 town/village > sand > hamlet/other > warft (highest priority first), the
 layers appear in the **reverse** of that order in `frasch-bright.json`:
@@ -376,20 +378,20 @@ per place):
 
 ```jsonc
 {
-  "id": "string",                 // the name-list row's id, e.g. "naibel"
-  "osm": "string",                // omitted: the row's OSM reference(s), e.g. "node/240042766"
-  "names": { "frr-x-mooring": "Naibel" },  // by registry tag; only non-empty ones
-  "local": "string",              // omitted when unknown: the place's own name
-  "dialect": "frr-x-fering",      // omitted outside the Frisian dialect areas
-  "variety": "Foortuftinge",      // omitted: sub-dialect of the local name
-  "name_nds": "string",           // omitted: OSM's Low Saxon name of the place's object
-  "name_osm": "string",           // omitted: OSM's generic `name` of the place's object
-  "name_de": "string",            // German name, shown alongside as a hint
-  "name_da": "string",            // omitted: Danish name, where the list has one
-  "wikidata": "Q3127",            // omitted: QID of the place, where the row has one
+  "id": "string", // the name-list row's id, e.g. "naibel"
+  "osm": "string", // omitted: the row's OSM reference(s), e.g. "node/240042766"
+  "names": { "frr-x-mooring": "Naibel" }, // by registry tag; only non-empty ones
+  "local": "string", // omitted when unknown: the place's own name
+  "dialect": "frr-x-fering", // omitted outside the Frisian dialect areas
+  "variety": "Foortuftinge", // omitted: sub-dialect of the local name
+  "name_nds": "string", // omitted: OSM's Low Saxon name of the place's object
+  "name_osm": "string", // omitted: OSM's generic `name` of the place's object
+  "name_de": "string", // German name, shown alongside as a hint
+  "name_da": "string", // omitted: Danish name, where the list has one
+  "wikidata": "Q3127", // omitted: QID of the place, where the row has one
   "lon": 0,
   "lat": 0,
-  "kind": "string"                // e.g. "settlement", "island", "hallig"
+  "kind": "string", // e.g. "settlement", "island", "hallig"
 }
 ```
 
@@ -424,7 +426,7 @@ archive (`VITE_TILES_URL`) is not checked.
 **All** of an entry's names (every dialect, the local one, Low Saxon and German)
 are flattened into one indexed string, so a place stays findable under any of
 its names whichever view is selected — typing "Naibel" while the map is in
-Fering still finds Niebüll. Which name a result *shows* follows the selected
+Fering still finds Niebüll. Which name a result _shows_ follows the selected
 option through `resolveName`, i.e. the label chain above, with the German
 name on the second line when it differs. Selecting a result flies the map to it.
 
@@ -475,7 +477,7 @@ Two details worth knowing:
 
 - **The area dialect's name and the local form are often the same string.**
   `frasch/dialects.py:dialect_name()` falls the dialect of the place's own area
-  back to the `local` column, so e.g. `names["frr-x-fering"]` on Föhr *is* the
+  back to the `local` column, so e.g. `names["frr-x-fering"]` on Föhr _is_ the
   local form. The card shows such a name once, on the local line, which names
   the dialect it belongs to.
 - **The headline never lies about which dialect it is in.** When the selected
@@ -543,12 +545,12 @@ endpoint is a Vite plugin with `apply: 'serve'` (`vite-plugins/areas.ts`,
 as well as tidy: the notes quote research prose about assignments nobody has
 confirmed ("best guess only", "no direct source found"), which should not ship
 to the public site. **The view is read-only** — unlike `?curate`, nothing
-writes back. Edit `names/dialect_areas.csv`, re-run the build, press *Reload*.
+writes back. Edit `names/dialect_areas.csv`, re-run the build, press _Reload_.
 
 The four layers (`src/dev/areaLayers.ts`) are inserted before
 `waterway-name`, the style's first symbol layer, so no place label is ever
 covered. The outline is drawn in the **same hue as the fill at ~3x the alpha**:
-that is what keeps two adjacent municipalities *of the same dialect* apart,
+that is what keeps two adjacent municipalities _of the same dialect_ apart,
 which is the whole job, since what is being reviewed is a per-municipality
 assignment. `fill-antialias` cannot do it — it draws the fill's own edge in the
 fill colour.
@@ -589,7 +591,7 @@ One JSON file per dialect in `src/locales/`, same keys in each:
 
 - Mooring UI translations for the remaining keys (see i18n section above),
   including the name of the local-dialect view (`dialect.local`).
-- Nothing in the *style* reads `frasch:dialect`/`frasch:variety`; the place
+- Nothing in the _style_ reads `frasch:dialect`/`frasch:variety`; the place
   card does.
 - The `within`-polygon split of the label chain for non-German areas (see
   "Label chain").

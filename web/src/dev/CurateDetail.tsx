@@ -11,9 +11,21 @@ import type { RefObject } from 'react';
 
 import type { MapViewHandle } from '../components/Map';
 import { primary } from '../names';
-import { candidateColor, hasPoint, type Position, usePositionPin, useRowPins } from './curateMapLayers';
+import {
+  candidateColor,
+  hasPoint,
+  type Position,
+  usePositionPin,
+  useRowPins,
+} from './curateMapLayers';
 import { isValidSlug, singleWikidataId, type Decision, type PatchEntry } from './curatePatch';
-import { parseRefs, slugify, type Bbox, type CurateCandidate, type CurateRow } from './curateWorklist';
+import {
+  parseRefs,
+  slugify,
+  type Bbox,
+  type CurateCandidate,
+  type CurateRow,
+} from './curateWorklist';
 import CurateLookup from './CurateLookup';
 import { useOsmLookup } from './osmLookup';
 import RefItem from './RefItem';
@@ -95,7 +107,15 @@ export default function CurateDetail({ row, done, bbox, mapRef, onSave }: Curate
   // One decision at a time: a double click must not append two patch lines.
   const [saving, setSaving] = useState(false);
 
-  useRowPins({ mapRef, row, bbox, lookupResults: lookup.results, checked, onActivate: setActiveRef, onToggle: toggle });
+  useRowPins({
+    mapRef,
+    row,
+    bbox,
+    lookupResults: lookup.results,
+    checked,
+    onActivate: setActiveRef,
+    onToggle: toggle,
+  });
 
   const decide = (decision: Decision) => {
     if (saving) return;
@@ -212,13 +232,23 @@ interface CandidatesProps {
 }
 
 /** The matcher's candidates, numbered and coloured like their pins. */
-function Candidates({ candidates, activeRef, isChecked, onToggle, onCheckAll, onShow, onPick }: CandidatesProps) {
+function Candidates({
+  candidates,
+  activeRef,
+  isChecked,
+  onToggle,
+  onCheckAll,
+  onShow,
+  onPick,
+}: CandidatesProps) {
   const inSh = candidates.filter((candidate) => candidate.in_sh);
   const hasInShFlag = candidates.some((candidate) => candidate.in_sh !== undefined);
   return (
     <>
       <h3 className="dev-panel-section">Candidates ({candidates.length})</h3>
-      {candidates.length === 0 && <p className="dev-panel-hint">no candidates — use the lookups below</p>}
+      {candidates.length === 0 && (
+        <p className="dev-panel-hint">no candidates — use the lookups below</p>
+      )}
       {candidates.length > 1 && (
         <div className="curate-row">
           <button type="button" onClick={() => onCheckAll(candidates)}>
@@ -227,7 +257,11 @@ function Candidates({ candidates, activeRef, isChecked, onToggle, onCheckAll, on
           <button
             type="button"
             disabled={inSh.length === 0}
-            title={hasInShFlag ? undefined : 'curate.json predates the in_sh flag — re-run names/curate.py export'}
+            title={
+              hasInShFlag
+                ? undefined
+                : 'curate.json predates the in_sh flag — re-run names/curate.py export'
+            }
             onClick={() => onCheckAll(inSh)}
           >
             select all in Schleswig-Holstein ({inSh.length})
@@ -284,7 +318,9 @@ function CheckedPick({ checked, onClear, decide }: CheckedPickProps) {
         {checked.length} selected: {refs.slice(0, MAX_LISTED_REFS).join('; ')}
         {checked.length > MAX_LISTED_REFS ? '; …' : ''}
       </span>
-      {qids.length > 1 && <p className="dev-panel-hint">different wikidata ids ({qids.join(', ')}) — none saved</p>}
+      {qids.length > 1 && (
+        <p className="dev-panel-hint">different wikidata ids ({qids.join(', ')}) — none saved</p>
+      )}
       <div className="curate-row">
         <button type="button" onClick={pick}>
           Pick {checked.length} selected
@@ -312,10 +348,16 @@ function ManualRef({ decide }: { decide: (decision: Decision) => void }) {
         onChange={(event) => setText(event.target.value)}
       />
       <div className="curate-row">
-        <button type="button" disabled={!refs} onClick={() => refs && decide(osmDecision(refs.join('; ')))}>
+        <button
+          type="button"
+          disabled={!refs}
+          onClick={() => refs && decide(osmDecision(refs.join('; ')))}
+        >
           Pick reference
         </button>
-        {text.trim() && !refs && <span className="dev-panel-error">node/way/relation id or OSM URL expected</span>}
+        {text.trim() && !refs && (
+          <span className="dev-panel-error">node/way/relation id or OSM URL expected</span>
+        )}
       </div>
     </>
   );
@@ -355,9 +397,15 @@ function LocalRef({ row, initialSlug, mapRef, decide }: LocalRefProps) {
         aria-label="slug"
         onChange={(event) => setSlug(event.target.value)}
       />
-      {!isValidSlug(slug) && <p className="dev-panel-error">slug must look like `toftem-emmelsbuell`</p>}
+      {!isValidSlug(slug) && (
+        <p className="dev-panel-error">slug must look like `toftem-emmelsbuell`</p>
+      )}
       <div className="curate-row">
-        <button type="button" className={picking ? 'is-armed' : undefined} onClick={() => setPicking(!picking)}>
+        <button
+          type="button"
+          className={picking ? 'is-armed' : undefined}
+          onClick={() => setPicking(!picking)}
+        >
           {picking ? 'click the map…' : 'set position on map'}
         </button>
         <span className="dev-panel-mono curate-mono">
@@ -376,7 +424,11 @@ function LocalRef({ row, initialSlug, mapRef, decide }: LocalRefProps) {
           onChange={(event) => setPolygonKm2(event.target.value)}
         />
       )}
-      <button type="button" disabled={!isValidSlug(slug) || !position} onClick={() => position && save(position)}>
+      <button
+        type="button"
+        disabled={!isValidSlug(slug) || !position}
+        onClick={() => position && save(position)}
+      >
         Save local
       </button>
     </>

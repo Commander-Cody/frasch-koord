@@ -510,7 +510,7 @@ Open questions for the list owner (from the first run):
 
 ## Development environment notes (WSL2)
 - **JDK 21** (Temurin) installed user-locally at `~/.local/opt/jdk-21*` (no sudo in this shell); `tiles/build.sh` finds it automatically.
-- **Python**: `uv` at `~/.local/bin/uv`; `uv sync` creates the project venv `.venv` (Python 3.12) from `pyproject.toml` / `uv.lock` (osmium, shapely, requests; pytest, ruff and mypy -- strict, tests included -- for development), see the root `README.md`. System Python 3.14 has no pip/venv.
+- **Python**: `uv` at `~/.local/bin/uv`; `uv sync` creates the project venv `.venv` (Python 3.12) from `pyproject.toml` / `uv.lock` (osmium, shapely, requests; pytest, ruff (lint and format) and mypy -- strict, tests included -- for development), see the root `README.md`. System Python 3.14 has no pip/venv.
 - **pmtiles CLI** at `~/.local/bin/pmtiles` for inspecting archives.
 - Docker is not needed with Planetiler.
 - **Node v24.21.0 (LTS, npm 11.19.0)** installed in WSL via nvm 0.40.7 and set as the default (`lts/*`). Pin the version in `.nvmrc` once `web/` is scaffolded. Note: a Windows Node install exists at `/mnt/d/Program Files/nodejs/`; make sure WSL shells use the nvm one.

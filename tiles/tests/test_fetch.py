@@ -3,6 +3,7 @@
 Runs the shell functions through a real subshell (`source fetch.sh; ...`)
 against file:// URLs, so curl's own request/response handling is exercised
 too -- these are not tests of the script text."""
+
 from __future__ import annotations
 
 import hashlib
@@ -17,7 +18,8 @@ def run(*args: str) -> subprocess.CompletedProcess[str]:
     exactly what build.sh does after `source ./fetch.sh`."""
     return subprocess.run(
         ["bash", "-c", f'source "{FETCH_SH}" && "$@"', "bash", *args],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
 
 
@@ -42,7 +44,6 @@ def test_accepts_a_good_file_with_the_right_checksum(tmp_path: Path) -> None:
     assert not Path(str(dest) + ".part").exists()
 
 
-
 def test_a_binary_file_passes_without_a_word(tmp_path: Path) -> None:
     # an OSM PBF starts with a zero byte (the length of its first block)
     src = tmp_path / "src.osm.pbf"
@@ -53,6 +54,7 @@ def test_a_binary_file_passes_without_a_word(tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stderr
     assert result.stderr == ""
+
 
 def test_rejects_a_wrong_checksum(tmp_path: Path) -> None:
     src = tmp_path / "src.bin"
@@ -87,7 +89,9 @@ def test_rejects_an_html_response(tmp_path: Path) -> None:
 def test_leaves_no_part_file_when_the_url_does_not_resolve(tmp_path: Path) -> None:
     dest = tmp_path / "out.bin"
 
-    result = run("fetch_verified", (tmp_path / "missing.bin").as_uri(), str(dest), "sha256", "0" * 64)
+    result = run(
+        "fetch_verified", (tmp_path / "missing.bin").as_uri(), str(dest), "sha256", "0" * 64
+    )
 
     assert result.returncode != 0
     assert not dest.exists()
@@ -216,7 +220,9 @@ def test_pinned_fetch_leaves_a_matching_file_alone(tmp_path: Path) -> None:
     dest.write_bytes(b"natural earth\n")
 
     # the source does not even exist: a matching file is not fetched again
-    result = run("fetch_pinned", (tmp_path / "gone.zip").as_uri(), str(dest), sha256_of(b"natural earth\n"))
+    result = run(
+        "fetch_pinned", (tmp_path / "gone.zip").as_uri(), str(dest), sha256_of(b"natural earth\n")
+    )
 
     assert result.returncode == 0, result.stderr
     assert dest.read_bytes() == b"natural earth\n"
@@ -277,7 +283,10 @@ def test_extract_name_rejects_a_malformed_snapshot() -> None:
 def test_extract_url_is_the_geofabrik_download_of_the_latest_file() -> None:
     result = run("geofabrik_extract_url", "schleswig-holstein")
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == "https://download.geofabrik.de/europe/germany/schleswig-holstein-latest.osm.pbf"
+    assert (
+        result.stdout.strip()
+        == "https://download.geofabrik.de/europe/germany/schleswig-holstein-latest.osm.pbf"
+    )
 
 
 def test_extract_url_with_a_snapshot_names_the_dated_file() -> None:

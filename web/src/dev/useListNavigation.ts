@@ -15,7 +15,11 @@ function isTyping(target: EventTarget | null): boolean {
  * one past either end. Global so the keys work wherever the eye is, but
  * never while typing.
  */
-export function useListNavigation<T>(items: readonly T[], selected: T | null, select: (item: T) => void): void {
+export function useListNavigation<T>(
+  items: readonly T[],
+  selected: T | null,
+  select: (item: T) => void,
+): void {
   useEffect(() => {
     const move = (delta: number) => {
       if (items.length === 0) return;

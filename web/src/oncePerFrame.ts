@@ -10,7 +10,9 @@ export interface FrameThrottled<Args extends unknown[]> {
  * last call before it: for work on every pointer move that only has to keep
  * up with what is painted.
  */
-export function oncePerFrame<Args extends unknown[]>(run: (...args: Args) => void): FrameThrottled<Args> {
+export function oncePerFrame<Args extends unknown[]>(
+  run: (...args: Args) => void,
+): FrameThrottled<Args> {
   let frame: number | null = null;
   let latest: Args;
   return {

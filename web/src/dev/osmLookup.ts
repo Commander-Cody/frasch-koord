@@ -19,11 +19,22 @@ export interface LookupResult {
 }
 
 /** Tags worth seeing at a glance in a lookup result. */
-const INTERESTING_TAGS = ['place', 'highway', 'natural', 'landuse', 'waterway', 'boundary', 'water', 'man_made'];
+const INTERESTING_TAGS = [
+  'place',
+  'highway',
+  'natural',
+  'landuse',
+  'waterway',
+  'boundary',
+  'water',
+  'man_made',
+];
 
 function tagSummary(tags: Record<string, string> | undefined): string {
   if (!tags) return '';
-  return INTERESTING_TAGS.filter((k) => tags[k]).map((k) => `${k}=${tags[k]}`).join(' ');
+  return INTERESTING_TAGS.filter((k) => tags[k])
+    .map((k) => `${k}=${tags[k]}`)
+    .join(' ');
 }
 
 /**
@@ -45,7 +56,11 @@ interface NominatimHit {
   lon: string;
 }
 
-async function searchNominatim(query: string, [w, s, e, n]: Bbox, signal: AbortSignal): Promise<LookupResult[]> {
+async function searchNominatim(
+  query: string,
+  [w, s, e, n]: Bbox,
+  signal: AbortSignal,
+): Promise<LookupResult[]> {
   const url =
     'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=25&bounded=1' +
     `&viewbox=${w},${n},${e},${s}&q=${encodeURIComponent(query)}`;
@@ -73,7 +88,11 @@ interface OverpassElement {
   tags?: Record<string, string>;
 }
 
-async function searchOverpass(query: string, [w, s, e, n]: Bbox, signal: AbortSignal): Promise<LookupResult[]> {
+async function searchOverpass(
+  query: string,
+  [w, s, e, n]: Bbox,
+  signal: AbortSignal,
+): Promise<LookupResult[]> {
   const overpassQuery =
     '[out:json][timeout:25];' +
     `nwr["name"~"${escapeRegex(query)}",i](${s},${w},${n},${e});` +

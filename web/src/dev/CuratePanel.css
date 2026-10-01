@@ -288,7 +288,9 @@
   border: 2px solid white;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
   color: white;
-  font: 700 12px/1 system-ui, sans-serif;
+  font:
+    700 12px/1 system-ui,
+    sans-serif;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -309,5 +311,7 @@
 /* Ticked for a multi-object pick (shift-click or the list checkbox). */
 .curate-pin.curate-pin-checked {
   border-color: #2e7d32;
-  box-shadow: 0 0 0 3px white, 0 0 0 5px #2e7d32;
+  box-shadow:
+    0 0 0 3px white,
+    0 0 0 5px #2e7d32;
 }

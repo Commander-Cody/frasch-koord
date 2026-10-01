@@ -27,8 +27,18 @@ afterEach(() => {
 it('keeps the map when the place card crashes', async () => {
   // React and ErrorBoundary both log the crash.
   vi.spyOn(console, 'error').mockImplementation(() => {});
-  const entry = { id: 'naibel', names: {}, name_de: 'Niebüll', lon: 8.83, lat: 54.79, kind: 'settlement' };
-  vi.stubGlobal('fetch', async () => new Response(JSON.stringify({ built_from: {}, places: [entry] }), { status: 200 }));
+  const entry = {
+    id: 'naibel',
+    names: {},
+    name_de: 'Niebüll',
+    lon: 8.83,
+    lat: 54.79,
+    kind: 'settlement',
+  };
+  vi.stubGlobal(
+    'fetch',
+    async () => new Response(JSON.stringify({ built_from: {}, places: [entry] }), { status: 200 }),
+  );
   // A link to the place opens its card as soon as the name list is there.
   window.history.replaceState(null, '', '/?place=naibel');
 

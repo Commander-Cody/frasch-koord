@@ -43,6 +43,7 @@ records the worklist actually mentions.
 Run:  .venv/bin/python names/curate.py            # = export
       .venv/bin/python names/curate.py apply --dry-run
 """
+
 from __future__ import annotations
 
 import argparse
@@ -82,9 +83,21 @@ PATCH_PATH = paths.PATCH
 
 # The order the browser walks the worklist in: the kinds a human can decide
 # quickly first (a village is either there or it is not), the vague ones last.
-KIND_ORDER = ["settlement", "island", "hallig", "helgoland", "sand",
-              "landscape", "water", "harde", "road", "country", "koog",
-              "warft", "not_a_place"]
+KIND_ORDER = [
+    "settlement",
+    "island",
+    "hallig",
+    "helgoland",
+    "sand",
+    "landscape",
+    "water",
+    "harde",
+    "road",
+    "country",
+    "koog",
+    "warft",
+    "not_a_place",
+]
 
 # The extract (build_candidates.py `src`) the tiles are built from: only its
 # objects can carry an injected name, so it is what "in Schleswig-Holstein"
@@ -97,8 +110,7 @@ RESULTS = ("ambiguous", "not_found")
 # curate.json, as web/src/dev/curateWorklist.ts reads it
 
 # a candidate as match.py's `candidates` cell names it (`class` is a keyword)
-_Listed = TypedDict("_Listed", {"ref": str, "name": str, "class": str,
-                                "km": int | None})
+_Listed = TypedDict("_Listed", {"ref": str, "name": str, "class": str, "km": int | None})
 
 
 class ListedCandidate(_Listed):
@@ -158,15 +170,21 @@ def parse_candidates(cell: str | None) -> list[ListedCandidate]:
         if t not in placelist.TYPE_NAME or not ident.isdigit():
             print(f"  ignoring unreadable candidate {part!r}", file=sys.stderr)
             continue
-        out.append({"key": (t, int(ident)),
-                    "ref": f"{placelist.TYPE_NAME[t]}/{ident}",
-                    "name": name, "class": cls,
-                    "km": int(km) if km.isdigit() else None})
+        out.append(
+            {
+                "key": (t, int(ident)),
+                "ref": f"{placelist.TYPE_NAME[t]}/{ident}",
+                "name": name,
+                "class": cls,
+                "km": int(km) if km.isdigit() else None,
+            }
+        )
     return out
 
 
-def stream_records(path: StrPath, keys: Collection[OsmRef],
-                   hint_norms: Collection[str]) -> list[Candidate]:
+def stream_records(
+    path: StrPath, keys: Collection[OsmRef], hint_norms: Collection[str]
+) -> list[Candidate]:
     """One pass over work/candidates.jsonl, keeping the records the worklist
     refers to (by id) and those a location hint could name (by normalised
     name) -- roughly a thousand of 180 000."""
@@ -179,22 +197,29 @@ def stream_records(path: StrPath, keys: Collection[OsmRef],
             continue
         for field in nameindex.NAME_FIELDS:
             v = rec["tags"].get(field)
-            if v and any(nameindex.norm(p) in hint_norms
-                         for p, _pen in nameindex.split_name_values(v)):
+            if v and any(
+                nameindex.norm(p) in hint_norms for p, _pen in nameindex.split_name_values(v)
+            ):
                 kept.append(rec)
                 break
     return kept
 
 
 # ----------------------------------------------------------------- export ---
-def work_candidate(listed: ListedCandidate, rec: Candidate | None,
-                   in_sh: bool) -> WorkCandidate:
+def work_candidate(listed: ListedCandidate, rec: Candidate | None, in_sh: bool) -> WorkCandidate:
     """A candidate as the worklist shows it: with its position and what it is,
     when candidates.jsonl still has its record."""
-    c: WorkCandidate = {"ref": listed["ref"], "name": listed["name"],
-                        "class": listed["class"], "km": listed["km"],
-                        "lon": None, "lat": None, "tags": "", "in_sh": False}
-    if rec is None:                     # candidates.jsonl rebuilt since the run
+    c: WorkCandidate = {
+        "ref": listed["ref"],
+        "name": listed["name"],
+        "class": listed["class"],
+        "km": listed["km"],
+        "lon": None,
+        "lat": None,
+        "tags": "",
+        "in_sh": False,
+    }
+    if rec is None:  # candidates.jsonl rebuilt since the run
         return c
     c["lon"], c["lat"] = rec["lon"], rec["lat"]
     c["tags"] = candidates.decisive_tags(rec)
@@ -215,17 +240,19 @@ def cmd_export(args: argparse.Namespace) -> int:
     with open(args.matches, encoding="utf-8", newline="") as fh:
         reader = csv.DictReader(fh)
         if "id" not in (reader.fieldnames or []):
-            raise ValidationError(f"{args.matches} has no `id` column (written before "
-                             f"places.csv had ids) -- re-run names/match.py")
+            raise ValidationError(
+                f"{args.matches} has no `id` column (written before "
+                f"places.csv had ids) -- re-run names/match.py"
+            )
         for m in reader:
             if m["result"] not in RESULTS:
                 continue
             row = by_id.get(m["id"])
-            if row is None:             # deleted from places.csv since the run
+            if row is None:  # deleted from places.csv since the run
                 stale += 1
                 continue
             if not placelist.owned_by_matcher(row):
-                unowned += 1            # decided by hand since the last run
+                unowned += 1  # decided by hand since the last run
                 continue
             work.append((row, m))
 
@@ -240,9 +267,11 @@ def cmd_export(args: argparse.Namespace) -> int:
 
     t0 = time.time()
     index = nameindex.NameIndex(stream_records(args.candidates, keys, hint_norms))
-    print(f"read {args.candidates}: kept {len(index.recs):,} records "
-          f"({len(keys):,} candidates, {len(hint_norms)} hint names, "
-          f"{time.time()-t0:.0f}s)")
+    print(
+        f"read {args.candidates}: kept {len(index.recs):,} records "
+        f"({len(keys):,} candidates, {len(hint_norms)} hint names, "
+        f"{time.time() - t0:.0f}s)"
+    )
     hints = HintResolver(index)
     srcs: collections.defaultdict[OsmRef, set[str | None]] = collections.defaultdict(set)
     for rec in index.recs:
@@ -262,18 +291,23 @@ def cmd_export(args: argparse.Namespace) -> int:
         hint_pt = hints.resolve(row["hint"].split(";")[0].strip())
         if hint_pt:
             n_hint += 1
-        out.append({
-            "id": row["id"],
-            "line": row.line,
-            "kind": row["kind"],
-            "result": m["result"],
-            "name": placelist.any_name(row),
-            "names": {c: row[c] for c in placelist.name_columns() if row[c]},
-            "de": row["de"], "da": row["da"], "hint": row["hint"],
-            "note": row["note"], "why": m["note"],
-            "hint_point": list(hint_pt) if hint_pt else None,
-            "candidates": cands,
-        })
+        out.append(
+            {
+                "id": row["id"],
+                "line": row.line,
+                "kind": row["kind"],
+                "result": m["result"],
+                "name": placelist.any_name(row),
+                "names": {c: row[c] for c in placelist.name_columns() if row[c]},
+                "de": row["de"],
+                "da": row["da"],
+                "hint": row["hint"],
+                "note": row["note"],
+                "why": m["note"],
+                "hint_point": list(hint_pt) if hint_pt else None,
+                "candidates": cands,
+            }
+        )
     order = {k: i for i, k in enumerate(KIND_ORDER)}
     out.sort(key=lambda r: (order.get(r["kind"], len(order)), r["line"]))
 
@@ -282,27 +316,35 @@ def cmd_export(args: argparse.Namespace) -> int:
         "generated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "bbox": list(geo.NF_BBOX),
         "kind_order": KIND_ORDER,
-        "rows": out}
+        "rows": out,
+    }
     with open(args.out, "w", encoding="utf-8") as fh:
         json.dump(worklist, fh, ensure_ascii=False, indent=1)
         fh.write("\n")
     cnt = collections.Counter(r["result"] for r in out)
-    print(f"wrote {len(out)} rows to {args.out} "
-          f"({os.path.getsize(args.out)/1e3:.0f} kB): "
-          f"{cnt['ambiguous']} ambiguous, {cnt['not_found']} not found; "
-          f"{n_pos} candidates with a position, {n_hint} rows with a hint point")
+    print(
+        f"wrote {len(out)} rows to {args.out} "
+        f"({os.path.getsize(args.out) / 1e3:.0f} kB): "
+        f"{cnt['ambiguous']} ambiguous, {cnt['not_found']} not found; "
+        f"{n_pos} candidates with a position, {n_hint} rows with a hint point"
+    )
     if unowned:
-        print(f"note: {unowned} row(s) have been decided by hand since "
-              f"{os.path.relpath(args.matches, paths.NAMES)} was written -- not exported")
+        print(
+            f"note: {unowned} row(s) have been decided by hand since "
+            f"{os.path.relpath(args.matches, paths.NAMES)} was written -- not exported"
+        )
     if stale:
-        print(f"note: {stale} row(s) of {os.path.relpath(args.matches, paths.NAMES)} "
-              f"are no longer in places.csv (stale, re-run match.py)")
+        print(
+            f"note: {stale} row(s) of {os.path.relpath(args.matches, paths.NAMES)} "
+            f"are no longer in places.csv (stale, re-run match.py)"
+        )
     return 0
 
 
 # ------------------------------------------------------------------ apply ---
 class PatchEntry(TypedDict):
     """One line of the patch, as names/curate-patch.schema.json allows it."""
+
     id: str
     action: Literal["osm", "local", "skip", "clear"]
     line: NotRequired[int]
@@ -323,18 +365,21 @@ class PatchEntry(TypedDict):
 # (`_patch_line`), and for a line that is no valid entry what is wrong with it
 # (`_problem`) and the line's value itself (`_raw`).
 
+
 @final
 class ReadEntry(PatchEntry):
     """A valid line of the patch as apply read it."""
+
     _patch_line: int
 
 
 @final
 class RefusedLine(TypedDict):
     """A line of the patch that is no valid entry, as apply read it."""
+
     _patch_line: int
     _problem: str
-    _raw: object                        # the line's JSON value
+    _raw: object  # the line's JSON value
 
 
 PatchLine = ReadEntry | RefusedLine
@@ -377,11 +422,14 @@ def read_patch(path: StrPath) -> list[PatchLine]:
 def patch_entry(value: Any, n: int) -> PatchLine:
     """One parsed line of the patch as apply handles it: the entry plus its
     line, or the line's value and what makes it no valid entry."""
-    why = (schema_problem(value) if isinstance(value, dict)
-           else "not a JSON object (curate-patch.schema.json)")
+    why = (
+        schema_problem(value)
+        if isinstance(value, dict)
+        else "not a JSON object (curate-patch.schema.json)"
+    )
     if why:
         return {"_patch_line": n, "_problem": why, "_raw": value}
-    entry: PatchEntry = value           # valid: the schema's shape
+    entry: PatchEntry = value  # valid: the schema's shape
     return {**entry, "_patch_line": n}
 
 
@@ -425,8 +473,10 @@ def line_problem(line: RefusedLine) -> str:
     """Why apply refuses a line that is no valid entry."""
     raw = line["_raw"]
     if isinstance(raw, dict) and "id" not in raw:
-        return ("no `id` (a patch from before the row ids -- "
-                "re-run names/curate.py export and decide it again)")
+        return (
+            "no `id` (a patch from before the row ids -- "
+            "re-run names/curate.py export and decide it again)"
+        )
     return line["_problem"]
 
 
@@ -434,8 +484,10 @@ def owner_problem(row: PlaceRow, names: str) -> str | None:
     """Why apply refuses an entry's row before looking at its decision, or
     None: the row must be the matcher's to fill."""
     if not placelist.owned_by_matcher(row):
-        return (f"{names}:{row.line} is not the matcher's to fill "
-                f"(status={row['status'] or 'empty'}, osm={row['osm'] or '-'})")
+        return (
+            f"{names}:{row.line} is not the matcher's to fill "
+            f"(status={row['status'] or 'empty'}, osm={row['osm'] or '-'})"
+        )
     return None
 
 
@@ -458,8 +510,9 @@ def decide(entry: PatchEntry, row: dict[str, str]) -> str | None:
     return None
 
 
-def decide_local(entry: PatchEntry, row: dict[str, str],
-                 used_slugs: set[str]) -> tuple[str | None, dict[str, str] | None]:
+def decide_local(
+    entry: PatchEntry, row: dict[str, str], used_slugs: set[str]
+) -> tuple[str | None, dict[str, str] | None]:
     """Write a `local` decision -- a place OSM does not have -- into `row`;
     -> (why not, or None; the curation row that positions it)."""
     slug = entry.get("slug")
@@ -475,8 +528,9 @@ def decide_local(entry: PatchEntry, row: dict[str, str],
     row["status"] = "ok"
     used_slugs.add(slug)
     cur = {c: "" for c in curationlist.COLUMNS}
-    cur.update(osm=row["osm"], lat=fmt_deg(lat), lon=fmt_deg(lon),
-               note=(entry.get("note") or "").strip())
+    cur.update(
+        osm=row["osm"], lat=fmt_deg(lat), lon=fmt_deg(lon), note=(entry.get("note") or "").strip()
+    )
     if (km2 := entry.get("polygon_km2")) is not None:
         # the README's Koog route: no labelled node, only a square of that
         # area -- and OpenMapTiles labels a polygon only as island
@@ -489,25 +543,30 @@ def decision_text(entry: PatchEntry, row: Row, curation: str) -> str:
     if entry["action"] == "skip":
         return "status = skip"
     if entry["action"] == "osm":
-        return (f"osm = {row['osm']}"
-                + (f", wikidata = {entry['wikidata']}" if entry.get("wikidata") else "")
-                + ", status = ok")
-    text = (f"osm = {row['osm']}, status = ok; "
-            f"{curation} += {fmt_deg(entry['lat'])}/{fmt_deg(entry['lon'])}")
+        return (
+            f"osm = {row['osm']}"
+            + (f", wikidata = {entry['wikidata']}" if entry.get("wikidata") else "")
+            + ", status = ok"
+        )
+    text = (
+        f"osm = {row['osm']}, status = ok; "
+        f"{curation} += {fmt_deg(entry['lat'])}/{fmt_deg(entry['lon'])}"
+    )
     if (km2 := entry.get("polygon_km2")) is not None:
         return text + f", polygon_km2 = {km2:g}"
     if row["kind"] not in curationlist.POINT_TAGS:
-        text += (f"\n    warning: kind={row['kind']} has no default `place=` "
-                 f"(curationlist.POINT_TAGS) -- put one into the curation row's "
-                 f"`set_tags` before the next build")
+        text += (
+            f"\n    warning: kind={row['kind']} has no default `place=` "
+            f"(curationlist.POINT_TAGS) -- put one into the curation row's "
+            f"`set_tags` before the next build"
+        )
     return text
 
 
 def curation_name(row: Row) -> str:
     """The free-text label of the appended curation row -- German, else Danish,
     else Frisian, plus the hint, so the file stays readable by a human."""
-    name = (placelist.primary(row["de"]) or placelist.primary(row["da"])
-            or placelist.any_name(row))
+    name = placelist.primary(row["de"]) or placelist.primary(row["da"]) or placelist.any_name(row)
     return f"{name} ({row['hint']})" if row["hint"] else name
 
 
@@ -516,13 +575,13 @@ def fmt_deg(v: float) -> str:
 
 
 def cmd_apply(args: argparse.Namespace) -> int:
-    refused = apply(args.names, args.curation, args.patch,
-                    dry_run=args.dry_run, keep=args.keep)
+    refused = apply(args.names, args.curation, args.patch, dry_run=args.dry_run, keep=args.keep)
     return 1 if refused else 0
 
 
-def apply(names: str, curation: str, patch: str, *, dry_run: bool = False,
-          keep: bool = False) -> int:
+def apply(
+    names: str, curation: str, patch: str, *, dry_run: bool = False, keep: bool = False
+) -> int:
     """Write the decisions of `patch` into `names` and `curation` (see the
     module docstring); -> how many it refused.  Those stay in the patch; a
     problem that stops the whole apply raises."""
@@ -545,8 +604,9 @@ def _apply(names: str, curation: str, patch: str, dry_run: bool, keep: bool) -> 
             used_slugs.add(slug)
 
     if not os.path.exists(patch):
-        raise PipelineError(f"{patch} not found -- decide some rows in the "
-                         f"browser first (web/, `?curate`)")
+        raise PipelineError(
+            f"{patch} not found -- decide some rows in the browser first (web/, `?curate`)"
+        )
     snapshot = None
     if dry_run or keep:
         source = patch
@@ -559,7 +619,7 @@ def _apply(names: str, curation: str, patch: str, dry_run: bool, keep: bool) -> 
         snapshot = source = f"{root}.{stamp}.applied{ext}"
         os.rename(patch, snapshot)
 
-    cur_written: str | None = None       # digest of the curation.csv apply wrote
+    cur_written: str | None = None  # digest of the curation.csv apply wrote
     new_curation: list[dict[str, str]] = []
     try:
         entries = read_patch(source)
@@ -577,11 +637,10 @@ def _apply(names: str, curation: str, patch: str, dry_run: bool, keep: bool) -> 
                 refuse(e, line_problem(e))
                 continue
             if e["action"] == "clear":
-                continue                     # withdrawn in the browser
+                continue  # withdrawn in the browser
             row = by_id.get(e["id"])
             if row is None:
-                refuse(e, f"no row with id {e['id']!r} in {names} "
-                          f"(deleted since the export?)")
+                refuse(e, f"no row with id {e['id']!r} in {names} (deleted since the export?)")
                 continue
             why = owner_problem(row, names)
             if why is None and e["action"] == "local":
@@ -594,14 +653,17 @@ def _apply(names: str, curation: str, patch: str, dry_run: bool, keep: bool) -> 
             if why:
                 refuse(e, why)
                 continue
-            print(f"  {names}:{row.line} {placelist.describe(row)}: "
-                  f"{decision_text(e, row, curation)}")
+            print(
+                f"  {names}:{row.line} {placelist.describe(row)}: {decision_text(e, row, curation)}"
+            )
             applied += 1
 
         if dry_run:
-            print(f"dry run: {applied} row(s) would change, "
-                  f"{len(new_curation)} curation row(s) would be appended, "
-                  f"{refused} refused -- nothing written")
+            print(
+                f"dry run: {applied} row(s) would change, "
+                f"{len(new_curation)} curation row(s) would be appended, "
+                f"{refused} refused -- nothing written"
+            )
             return refused
 
         if applied:
@@ -616,8 +678,7 @@ def _apply(names: str, curation: str, patch: str, dry_run: bool, keep: bool) -> 
             placelist.write(rows, names, fields)
     except BaseException:
         if cur_written:
-            unwrite_curation(curation, cur_data, cur_written,
-                             [c["osm"] for c in new_curation])
+            unwrite_curation(curation, cur_data, cur_written, [c["osm"] for c in new_curation])
         if snapshot:
             restore_patch(snapshot, patch)
             print(f"nothing applied -- {patch} restored", file=sys.stderr)
@@ -629,11 +690,18 @@ def _apply(names: str, curation: str, patch: str, dry_run: bool, keep: bool) -> 
             # a refused decision is not lost: it goes back into the patch (and
             # so stays "done" in the browser) until fixed or cleared
             n = append_back(patch, kept_back)
-            print(f"{n} refused entr{'y' if n == 1 else 'ies'} kept in {patch}"
-                  + (f" ({len(kept_back) - n} decided again in the browser meanwhile)"
-                     if n < len(kept_back) else ""))
-    print(f"{applied} row(s) written to {names}, "
-          f"{len(new_curation)} appended to {curation}, {refused} refused")
+            print(
+                f"{n} refused entr{'y' if n == 1 else 'ies'} kept in {patch}"
+                + (
+                    f" ({len(kept_back) - n} decided again in the browser meanwhile)"
+                    if n < len(kept_back)
+                    else ""
+                )
+            )
+    print(
+        f"{applied} row(s) written to {names}, "
+        f"{len(new_curation)} appended to {curation}, {refused} refused"
+    )
     return refused
 
 
@@ -653,10 +721,13 @@ def append_back(path: str, entries: Iterable[PatchLine]) -> int:
                 e = json.loads(line)
             except ValueError:
                 continue
-            if (key := patch_key(e)):
+            if key := patch_key(e):
                 newer.add(key)
-    lines = [json.dumps(stored(e), ensure_ascii=False) + "\n"
-             for e in entries if patch_key(stored(e)) not in newer]
+    lines = [
+        json.dumps(stored(e), ensure_ascii=False) + "\n"
+        for e in entries
+        if patch_key(stored(e)) not in newer
+    ]
     if lines:
         with open(path, "a", encoding="utf-8") as fh:
             fh.write(("" if ends_nl else "\n") + "".join(lines))
@@ -668,7 +739,7 @@ def restore_patch(snapshot: str, path: str) -> None:
     patch again, followed by whatever the browser appended in the meantime."""
     while True:
         try:
-            os.link(snapshot, path)          # unlike rename, never overwrites
+            os.link(snapshot, path)  # unlike rename, never overwrites
             os.unlink(snapshot)
             return
         except FileExistsError:
@@ -686,8 +757,7 @@ def restore_patch(snapshot: str, path: str) -> None:
         os.unlink(newer)
 
 
-def unwrite_curation(path: str, old: bytes | None, written: str,
-                     refs: Sequence[str]) -> None:
+def unwrite_curation(path: str, old: bytes | None, written: str, refs: Sequence[str]) -> None:
     """Undo apply's curation.csv write after the places.csv write failed: put
     back `old` (its bytes before; None = there was no file), unless someone
     changed the file after apply wrote it (`written`, its digest) -- then say
@@ -700,9 +770,12 @@ def unwrite_curation(path: str, old: bytes | None, written: str,
         else:
             raise errors.Conflict(f"{path} changed on disk meanwhile")
     except (OSError, errors.PipelineError) as exc:
-        print(f"error: could not take the new rows out of {path} again ({exc}) "
-              f"-- delete the rows for {', '.join(refs)} by hand before the next "
-              f"apply", file=sys.stderr)
+        print(
+            f"error: could not take the new rows out of {path} again ({exc}) "
+            f"-- delete the rows for {', '.join(refs)} by hand before the next "
+            f"apply",
+            file=sys.stderr,
+        )
     else:
         print(f"{path} put back as it was", file=sys.stderr)
 
@@ -711,22 +784,25 @@ def unwrite_curation(path: str, old: bytes | None, written: str,
 @cli.command
 def main(argv: Sequence[str] | None = None) -> int:
     argparser, apply_only = parser()
-    args = argparser.parse_args(with_subcommand(
-        sys.argv[1:] if argv is None else argv, argparser, apply_only))
+    args = argparser.parse_args(
+        with_subcommand(sys.argv[1:] if argv is None else argv, argparser, apply_only)
+    )
     run: Callable[[argparse.Namespace], int] = args.func
     return run(args)
 
 
-def with_subcommand(argv: Sequence[str], argparser: argparse.ArgumentParser,
-                    apply_only: Collection[str]) -> list[str]:
+def with_subcommand(
+    argv: Sequence[str], argparser: argparse.ArgumentParser, apply_only: Collection[str]
+) -> list[str]:
     """`argv`, with `export` in front when it names no subcommand: export is
     what one runs every time.  An option only `apply` takes stops it then
     (`curate.py --dry-run` meant `apply --dry-run`)."""
     if argv and argv[0] in ("export", "apply", "-h", "--help"):
         return list(argv)
-    if (option := next((a for a in argv if a.split("=")[0] in apply_only), None)):
-        argparser.error(f"{option} belongs to `apply`: did you mean "
-                        f"`curate.py apply {' '.join(argv)}`?")
+    if option := next((a for a in argv if a.split("=")[0] in apply_only), None):
+        argparser.error(
+            f"{option} belongs to `apply`: did you mean `curate.py apply {' '.join(argv)}`?"
+        )
     return ["export", *argv]
 
 
@@ -736,8 +812,9 @@ def options_of(argparser: argparse.ArgumentParser) -> set[str]:
 
 def parser() -> tuple[argparse.ArgumentParser, set[str]]:
     """-> (the parser, the options only its `apply` subcommand takes)."""
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     ex = sub.add_parser("export", help="write the worklist for the browser")
@@ -751,10 +828,11 @@ def parser() -> tuple[argparse.ArgumentParser, set[str]]:
     ap_.add_argument("--names", default=placelist.DEFAULT_PATH)
     ap_.add_argument("--curation", default=paths.CURATION)
     ap_.add_argument("--patch", default=PATCH_PATH)
-    ap_.add_argument("--dry-run", action="store_true",
-                     help="print what would change and write nothing")
-    ap_.add_argument("--keep", action="store_true",
-                     help="do not rename the patch file after applying it")
+    ap_.add_argument(
+        "--dry-run", action="store_true", help="print what would change and write nothing"
+    )
+    ap_.add_argument(
+        "--keep", action="store_true", help="do not rename the patch file after applying it"
+    )
     ap_.set_defaults(func=cmd_apply)
     return ap, options_of(ap_) - options_of(ex)
-

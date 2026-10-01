@@ -43,7 +43,9 @@ export function candidateColor(candidate: CurateCandidate): string {
 }
 
 /** True when the candidate carries a usable position. */
-export function hasPoint(candidate: CurateCandidate): candidate is CurateCandidate & { lon: number; lat: number } {
+export function hasPoint(
+  candidate: CurateCandidate,
+): candidate is CurateCandidate & { lon: number; lat: number } {
   return typeof candidate.lon === 'number' && typeof candidate.lat === 'number';
 }
 
@@ -217,7 +219,12 @@ function candidateMarkers(
   return markers;
 }
 
-function hintMarker(map: MapLibreMap, [lon, lat, radiusKm]: HintPoint, text: string, bounds: LngLatBounds): Marker {
+function hintMarker(
+  map: MapLibreMap,
+  [lon, lat, radiusKm]: HintPoint,
+  text: string,
+  bounds: LngLatBounds,
+): Marker {
   const el = pinElement('H', COLOR_HINT, `location hint: ${text} (${radiusKm} km)`);
   el.classList.add('curate-pin-hint');
   bounds.extend([lon, lat]);
@@ -282,7 +289,13 @@ export interface PositionPinOptions {
 }
 
 /** The draggable pin of a local reference's position, and setting it by a map click. */
-export function usePositionPin({ mapRef, position, setPosition, picking, setPicking }: PositionPinOptions): void {
+export function usePositionPin({
+  mapRef,
+  position,
+  setPosition,
+  picking,
+  setPicking,
+}: PositionPinOptions): void {
   useEffect(() => {
     const map = mapRef.current?.getMap();
     if (!map || !picking) return;
@@ -308,7 +321,9 @@ export function usePositionPin({ mapRef, position, setPosition, picking, setPick
       marker.current.setLngLat([position.lon, position.lat]);
       return;
     }
-    const pin = new Marker({ color: '#2e7d32', draggable: true }).setLngLat([position.lon, position.lat]).addTo(map);
+    const pin = new Marker({ color: '#2e7d32', draggable: true })
+      .setLngLat([position.lon, position.lat])
+      .addTo(map);
     pin.on('dragend', () => {
       const at = pin.getLngLat();
       setPosition({ lon: at.lng, lat: at.lat });

@@ -21,6 +21,7 @@ CLI:  `names/provenance.py [--names ...] [--dialects ...] [--curation ...]
       prints `{"built_from": {...}}` for those files (default: the committed
       ones)
 """
+
 from __future__ import annotations
 
 import argparse
@@ -36,6 +37,7 @@ from frasch.paths import StrPath
 
 class ExtractStamp(TypedDict):
     """An OSM extract, as a `built_from` records it."""
+
     file: str
     replication_timestamp: str
 
@@ -76,30 +78,42 @@ def recorded(path: StrPath) -> BuiltFrom:
     return found
 
 
-def stamp(places: StrPath, dialects: StrPath, curation: StrPath, areas: StrPath,
-          objects: StrPath) -> BuiltFrom:
+def stamp(
+    places: StrPath, dialects: StrPath, curation: StrPath, areas: StrPath, objects: StrPath
+) -> BuiltFrom:
     """What the search index and the tiles are built from: the name list,
     the dialect registry, the curation, the dialect areas and the located
     objects -- and, through the objects file, the extracts they were located
     in."""
     with open(objects, encoding="utf-8") as fh:
         extracts: list[ExtractStamp] = json.load(fh)["built_from"]["extracts"]
-    return built_from({"places.csv": places, "dialects.csv": dialects,
-                       "curation.csv": curation, "dialect_areas.geojson": areas,
-                       "osm_objects.json": objects}, extracts)
+    return built_from(
+        {
+            "places.csv": places,
+            "dialects.csv": dialects,
+            "curation.csv": curation,
+            "dialect_areas.geojson": areas,
+            "osm_objects.json": objects,
+        },
+        extracts,
+    )
 
 
 @cli.command
 def main(argv: Sequence[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("--names", default=paths.PLACES)
     ap.add_argument("--dialects", default=paths.DIALECTS)
     ap.add_argument("--curation", default=paths.CURATION)
     ap.add_argument("--areas", default=paths.DIALECT_AREAS)
     ap.add_argument("--objects", default=paths.OBJECTS)
     a = ap.parse_args(argv)
-    print(json.dumps({"built_from": stamp(a.names, a.dialects, a.curation, a.areas,
-                                          a.objects)}, separators=(",", ":")))
+    print(
+        json.dumps(
+            {"built_from": stamp(a.names, a.dialects, a.curation, a.areas, a.objects)},
+            separators=(",", ":"),
+        )
+    )
     return 0
-

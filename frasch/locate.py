@@ -32,6 +32,7 @@ the search index can then be rebuilt -- and checked in CI -- without an
 extract.  Re-run it (`just objects`) when a row gets a new `osm` reference;
 the search export and the injector stop on a reference it does not know.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -54,6 +55,7 @@ ROUND = 6
 
 class Facts(TypedDict, total=False):
     """See `object_facts`."""
+
     admin_level: int
     name_nds: str
     name: str
@@ -72,8 +74,7 @@ class LocatedObject(Point, Facts):
 
 def mapped_refs(rows: Iterable[Row]) -> set[OsmRef]:
     """The OSM references (not the local ones) of the rows on the map."""
-    return {ref for row in rows if placelist.on_map(row)
-            for ref in placelist.osm_refs(row["osm"])}
+    return {ref for row in rows if placelist.on_map(row) for ref in placelist.osm_refs(row["osm"])}
 
 
 def locate(pbfs: Iterable[StrPath], refs: Collection[OsmRef]) -> dict[OsmRef, LocatedObject]:
@@ -154,9 +155,13 @@ def _node_object(node: osmscan.Node | None) -> Point | None:
     return {"lon": lon, "lat": lat}
 
 
-def _area_object(ref: OsmRef, label: int | None,
-                 rel_rings: Mapping[int, Rings], way_nodes: Mapping[int, Sequence[int]],
-                 locs: Mapping[int, LonLat]) -> Point | None:
+def _area_object(
+    ref: OsmRef,
+    label: int | None,
+    rel_rings: Mapping[int, Rings],
+    way_nodes: Mapping[int, Sequence[int]],
+    locs: Mapping[int, LonLat],
+) -> Point | None:
     """A way or relation: inside its polygon if it closes into one, else at
     its outline point; the outline point is kept for the dialect lookup.
     `label`: a relation's label node (osmscan.relations)."""
@@ -171,9 +176,12 @@ def _area_object(ref: OsmRef, label: int | None,
     return obj
 
 
-def _inside_point(ref: OsmRef, rel_rings: Mapping[int, Rings],
-                  way_nodes: Mapping[int, Sequence[int]],
-                  locs: Mapping[int, LonLat]) -> LonLat | None:
+def _inside_point(
+    ref: OsmRef,
+    rel_rings: Mapping[int, Rings],
+    way_nodes: Mapping[int, Sequence[int]],
+    locs: Mapping[int, LonLat],
+) -> LonLat | None:
     """A point inside the object's own polygon, or None when it does not
     close.  Ring assembly is frasch.osmgeom's, so a place and the areas it
     is compared against are read out of OSM the same way."""
@@ -182,15 +190,19 @@ def _inside_point(ref: OsmRef, rel_rings: Mapping[int, Rings],
             continue
         try:
             p = geom.representative_point()
-        except Exception:          # a ring OSM leaves in a state shapely
-            continue               # cannot make a point of
+        except Exception:  # a ring OSM leaves in a state shapely
+            continue  # cannot make a point of
         return p.x, p.y
     return None
 
 
-def _outline_point(ref: OsmRef, label: int | None,
-                   rel_rings: Mapping[int, Rings], way_nodes: Mapping[int, Sequence[int]],
-                   locs: Mapping[int, LonLat]) -> LonLat | None:
+def _outline_point(
+    ref: OsmRef,
+    label: int | None,
+    rel_rings: Mapping[int, Rings],
+    way_nodes: Mapping[int, Sequence[int]],
+    locs: Mapping[int, LonLat],
+) -> LonLat | None:
     """The relation's `label` / `admin_centre` member node, else the first
     vertex of its first outer way the extract holds (of a way: its own first
     vertex).  An extract holds a sea or a large area only in part: the North
@@ -198,8 +210,11 @@ def _outline_point(ref: OsmRef, label: int | None,
     t, i = ref
     if label is not None and label in locs:
         return locs[label]
-    first = way_nodes.get(i) if t == "w" else next(
-        (way_nodes[w] for w in rel_rings[i]["outer"] if w in way_nodes), None)
+    first = (
+        way_nodes.get(i)
+        if t == "w"
+        else next((way_nodes[w] for w in rel_rings[i]["outer"] if w in way_nodes), None)
+    )
     return locs.get(first[0]) if first else None
 
 
@@ -237,14 +252,14 @@ def dialect_at(obj: LocatedObject, areas: AreaIndex | None) -> str | None:
 
 class Objects(NamedTuple):
     """The objects file, read back: `by_ref` maps ('w', 12) to its object."""
+
     by_ref: dict[OsmRef, LocatedObject]
     built_from: provenance.BuiltFrom
 
 
 def read_objects(path: str = DEFAULT_OUT) -> Objects:
     if not os.path.exists(path):
-        raise PipelineError(f"{path} not found -- build it with `just objects` "
-                         f"(names/locate.py)")
+        raise PipelineError(f"{path} not found -- build it with `just objects` (names/locate.py)")
     with open(path, encoding="utf-8") as fh:
         data = json.load(fh)
     by_ref = {placelist.osm_refs(ref)[0]: obj for ref, obj in data["objects"].items()}
@@ -254,10 +269,15 @@ def read_objects(path: str = DEFAULT_OUT) -> Objects:
 def objects_json(objects: Objects) -> str:
     """The file's text: one object per line, in reference order, so a re-run
     on a moved object is a one-line diff."""
-    lines = [f"{json.dumps(placelist.format_osm([ref]))}:{_compact(_rounded(obj))}"
-             for ref, obj in sorted(objects.by_ref.items(), key=_ref_order)]
-    return (f'{{"built_from":{_compact(objects.built_from)},\n"objects":{{\n'
-            + ",\n".join(lines) + "\n}}\n")
+    lines = [
+        f"{json.dumps(placelist.format_osm([ref]))}:{_compact(_rounded(obj))}"
+        for ref, obj in sorted(objects.by_ref.items(), key=_ref_order)
+    ]
+    return (
+        f'{{"built_from":{_compact(objects.built_from)},\n"objects":{{\n'
+        + ",\n".join(lines)
+        + "\n}}\n"
+    )
 
 
 def _compact(data: object) -> str:
@@ -270,29 +290,39 @@ def _ref_order(item: tuple[OsmRef, LocatedObject]) -> tuple[int, int]:
 
 
 def _rounded(obj: LocatedObject) -> dict[str, object]:
-    return {k: (round(v, ROUND) if isinstance(v, float)
-                else [round(x, ROUND) for x in v] if isinstance(v, list) else v)
-            for k, v in obj.items()}
+    return {
+        k: (
+            round(v, ROUND)
+            if isinstance(v, float)
+            else [round(x, ROUND) for x in v]
+            if isinstance(v, list)
+            else v
+        )
+        for k, v in obj.items()
+    }
 
 
 @cli.command
 def main(argv: Sequence[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("pbf", nargs="+", help="OSM extract(s) holding the objects")
     ap.add_argument("--names", default=placelist.DEFAULT_PATH)
     ap.add_argument("--out", default=DEFAULT_OUT)
     a = ap.parse_args(argv)
     rows, _ = placelist.read(a.names)
     refs = mapped_refs(rows)
-    objects = Objects(locate(a.pbf, refs),
-                      {"extracts": [provenance.extract_stamp(p) for p in a.pbf]})
+    objects = Objects(
+        locate(a.pbf, refs), {"extracts": [provenance.extract_stamp(p) for p in a.pbf]}
+    )
     files.atomic_write(a.out, objects_json(objects))
     print(f"wrote {a.out}: {len(objects.by_ref)} of {len(refs)} objects located")
     missing = sorted(refs - set(objects.by_ref), key=lambda ref: ("nwr".index(ref[0]), ref[1]))
     if missing:
         # the search export and the injector stop on these; fix the rows
-        print(f"{len(missing)} not in {', '.join(map(os.path.basename, a.pbf))}: "
-              + ", ".join(placelist.format_osm([ref]) for ref in missing))
+        print(
+            f"{len(missing)} not in {', '.join(map(os.path.basename, a.pbf))}: "
+            + ", ".join(placelist.format_osm([ref]) for ref in missing)
+        )
     return 0
-

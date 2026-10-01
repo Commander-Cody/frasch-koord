@@ -42,7 +42,12 @@ const SCRIPT = /\.m?js$/;
 function listFiles(dist) {
   return readdirSync(dist, { recursive: true, withFileTypes: true })
     .filter((entry) => !entry.isDirectory())
-    .map((entry) => join(entry.parentPath, entry.name).slice(dist.length + 1).split('\\').join('/'));
+    .map((entry) =>
+      join(entry.parentPath, entry.name)
+        .slice(dist.length + 1)
+        .split('\\')
+        .join('/'),
+    );
 }
 
 /** The worker: a hashed file under assets/, named in some other chunk, and no chunk naming one that is not there. */
@@ -57,7 +62,8 @@ function workerProblems(assets, code) {
   }
   for (const [f, text] of Object.entries(code)) {
     for (const [, name] of text.matchAll(/assets\/(maplibre-gl-worker[\w.-]*?\.m?js)/g)) {
-      if (!assets.includes(name)) problems.push(`${f} refers to assets/${name}, which dist/ does not have`);
+      if (!assets.includes(name))
+        problems.push(`${f} refers to assets/${name}, which dist/ does not have`);
     }
   }
   return { workers, problems };
@@ -89,7 +95,9 @@ function areaReviewProblems(files, text) {
     .filter((f) => f.includes(AREA_DATA))
     .map((f) => `${f}: the dialect-area review data is in the build`);
   const notes = Object.entries(text)
-    .filter(([f, content]) => !f.includes(AREA_DATA) && RESEARCH_NOTES.some((note) => note.test(content)))
+    .filter(
+      ([f, content]) => !f.includes(AREA_DATA) && RESEARCH_NOTES.some((note) => note.test(content)),
+    )
     .map(([f]) => `${f}: the dialect-area research notes are in the build`);
   return [...data, ...notes];
 }
@@ -100,13 +108,19 @@ function areaReviewProblems(files, text) {
  */
 export function checkBuild(dist) {
   if (!existsSync(join(dist, 'assets'))) {
-    return { problems: [`no ${join(dist, 'assets')}: run \`npm run build\` first`], scripts: 0, workers: [] };
+    return {
+      problems: [`no ${join(dist, 'assets')}: run \`npm run build\` first`],
+      scripts: 0,
+      workers: [],
+    };
   }
   const files = listFiles(dist);
   const text = Object.fromEntries(
     files.filter((f) => TEXT.test(f)).map((f) => [f, readFileSync(join(dist, f), 'utf8')]),
   );
-  const assetText = Object.fromEntries(Object.entries(text).filter(([f]) => /^assets\/[^/]+\.(?:m?js|css)$/.test(f)));
+  const assetText = Object.fromEntries(
+    Object.entries(text).filter(([f]) => /^assets\/[^/]+\.(?:m?js|css)$/.test(f)),
+  );
   const code = Object.fromEntries(Object.entries(assetText).filter(([f]) => SCRIPT.test(f)));
   const assets = files.filter((f) => f.startsWith('assets/')).map((f) => f.slice('assets/'.length));
 

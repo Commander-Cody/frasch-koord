@@ -24,6 +24,7 @@ uv sync
 .venv/bin/pytest                    # tests of names/ and tiles/
 .venv/bin/python names/check.py     # check places.csv, curation.csv, dialects.csv
 .venv/bin/ruff check .
+.venv/bin/ruff format .             # format the code (CI checks it with --check)
 .venv/bin/mypy                      # strict type check of all Python code, tests included
 uv run just check                   # the committed build outputs match their inputs
 uv run shellcheck tiles/*.sh web/scripts/*.sh
@@ -42,7 +43,17 @@ Node 24 (see `web/.nvmrc`), for the frontend:
 cd web
 npm ci
 npm run fetch-assets                # the glyphs and the published tile archive (not in git)
-npm run dev                         # also: npm test, npm run lint, npm run typecheck
+npm run dev                         # also: npm test, npm run lint, npm run format, npm run typecheck
+```
+
+Both parts have a formatter, and CI fails on unformatted code: `ruff format`
+for Python, [oxfmt](https://oxc.rs/docs/guide/usage/formatter) for `web/`
+(`npm run format`, configured in `web/.oxfmtrc.json`). `uv run just format`
+runs both. The commit that first formatted everything is listed in
+`.git-blame-ignore-revs`; to have `git blame` skip it:
+
+```sh
+git config blame.ignoreRevsFile .git-blame-ignore-revs
 ```
 
 The map needs a tile archive and the glyphs, which are not in git:

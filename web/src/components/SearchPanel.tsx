@@ -44,7 +44,13 @@ const MAX_RESULTS = 8;
 
 /** Flattens all of an entry's names into the indexed `text` field, deduplicated. */
 function toIndexed(entry: NameEntry): IndexedEntry {
-  const all = [...Object.values(entry.names ?? {}), entry.local, entry.name_nds, entry.name_osm, entry.name_de];
+  const all = [
+    ...Object.values(entry.names ?? {}),
+    entry.local,
+    entry.name_nds,
+    entry.name_osm,
+    entry.name_de,
+  ];
   return { id: entry.id, text: [...new Set(all.filter(Boolean))].join(' ') };
 }
 
@@ -61,7 +67,9 @@ function indexable(entries: NameEntry[]): NameEntry[] {
     return true;
   });
   if (kept.length < entries.length) {
-    console.warn(`names.json: skipped ${entries.length - kept.length} entries without an id or with a repeated one`);
+    console.warn(
+      `names.json: skipped ${entries.length - kept.length} entries without an id or with a repeated one`,
+    );
   }
   return kept;
 }
@@ -176,7 +184,9 @@ export default function SearchPanel({
         aria-autocomplete="list"
         aria-expanded={showList}
         aria-controls={listId}
-        aria-activedescendant={showList && results[activeIdx] ? `${listId}-${activeIdx}` : undefined}
+        aria-activedescendant={
+          showList && results[activeIdx] ? `${listId}-${activeIdx}` : undefined
+        }
         autoComplete="off"
         onChange={(e) => {
           setQuery(e.target.value);

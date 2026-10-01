@@ -1,6 +1,7 @@
 """match.py and the extracts behind candidates.jsonl (#24): its readers skip
 the header, and a run warns when the set of extracts changed since the last
 one -- dropping the Denmark extract clears every `auto` row only it has."""
+
 from __future__ import annotations
 
 import json
@@ -16,16 +17,31 @@ from frasch.candidates import HeaderLine, read_records
 from frasch.provenance import ExtractStamp
 from conftest import cand, places_text, write_candidates
 
-SH: ExtractStamp = {"file": "schleswig-holstein-latest.osm.pbf",
-                    "replication_timestamp": "2026-09-20T20:21:02Z"}
-DK: ExtractStamp = {"file": "denmark-latest.osm.pbf",
-                    "replication_timestamp": "2026-09-21T20:20:00Z"}
+SH: ExtractStamp = {
+    "file": "schleswig-holstein-latest.osm.pbf",
+    "replication_timestamp": "2026-09-20T20:21:02Z",
+}
+DK: ExtractStamp = {
+    "file": "denmark-latest.osm.pbf",
+    "replication_timestamp": "2026-09-21T20:20:00Z",
+}
 HEADER: HeaderLine = {"header": {"extracts": [SH]}}
 TOFTUM = cand("n", 240044107, 8.83, 54.71, place="village", name="Toftum")
-HOYER = cand("n", 26854466, 8.693, 54.9602, src="denmark", place="town",
-             name="Højer", name__de="Hoyer", name__da="Højer")
-ROWS = [{"id": "toftem", "kind": "settlement", "mooring": "Toftem", "de": "Toftum"},
-        {"id": "huuger", "kind": "settlement", "mooring": "Huuger", "de": "Hoyer"}]
+HOYER = cand(
+    "n",
+    26854466,
+    8.693,
+    54.9602,
+    src="denmark",
+    place="town",
+    name="Højer",
+    name__de="Hoyer",
+    name__da="Højer",
+)
+ROWS = [
+    {"id": "toftem", "kind": "settlement", "mooring": "Toftem", "de": "Toftum"},
+    {"id": "huuger", "kind": "settlement", "mooring": "Huuger", "de": "Hoyer"},
+]
 
 
 def test_the_index_skips_the_header(tmp_path: Path) -> None:
@@ -43,19 +59,31 @@ def test_the_curation_export_skips_the_header(tmp_path: Path) -> None:
 def run_match(world: Path, extracts: list[ExtractStamp] | None, *extra: str) -> None:
     """match.py on ROWS against candidates built from `extracts` (None: a file
     from before the header); the extracts of HOYER's are DK's only."""
-    recs = [TOFTUM] + ([HOYER] if extracts and DK["file"] in
-                       {e["file"] for e in extracts} else [])
-    header: list[HeaderLine] = \
-        [{"header": {"extracts": extracts}}] if extracts is not None else []
+    recs = [TOFTUM] + ([HOYER] if extracts and DK["file"] in {e["file"] for e in extracts} else [])
+    header: list[HeaderLine] = [{"header": {"extracts": extracts}}] if extracts is not None else []
     cands = write_candidates(world / "work" / "candidates.jsonl", *header, *recs)
     places = world / "places.csv"
     if not places.exists():
         places.write_text(places_text(ROWS), encoding="utf-8")
-    assert match.main(["--names", str(places), "--candidates", str(cands),
-                       "--matches", str(world / "work" / "matches.csv"),
-                       "--report", str(world / "REPORT.md"), "--offline",
-                       "--wikidata-cache", str(world / "work" / "wd.json"),
-                       *extra]) == 0
+    assert (
+        match.main(
+            [
+                "--names",
+                str(places),
+                "--candidates",
+                str(cands),
+                "--matches",
+                str(world / "work" / "matches.csv"),
+                "--report",
+                str(world / "REPORT.md"),
+                "--offline",
+                "--wikidata-cache",
+                str(world / "work" / "wd.json"),
+                *extra,
+            ]
+        )
+        == 0
+    )
 
 
 def recorded(world: Path) -> object:
@@ -79,7 +107,8 @@ def test_a_dry_run_records_nothing(world: Path) -> None:
 
 
 def test_a_dropped_extract_is_named_and_its_rows_said_to_be_cleared(
-        world: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    world: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     run_match(world, [SH, DK])
     assert statuses(world) == {"toftem": "auto", "huuger": "auto"}
     capsys.readouterr()
@@ -98,8 +127,7 @@ def test_an_added_extract_is_named(world: Path, capsys: pytest.CaptureFixture[st
     assert "added: denmark-latest.osm.pbf" in capsys.readouterr().err
 
 
-def test_a_refreshed_extract_is_no_warning(world: Path,
-                                           capsys: pytest.CaptureFixture[str]) -> None:
+def test_a_refreshed_extract_is_no_warning(world: Path, capsys: pytest.CaptureFixture[str]) -> None:
     run_match(world, [SH, DK])
     capsys.readouterr()
     run_match(world, [{**SH, "replication_timestamp": "2026-09-27T20:21:02Z"}, DK])
@@ -107,7 +135,8 @@ def test_a_refreshed_extract_is_no_warning(world: Path,
 
 
 def test_candidates_without_a_header_are_to_be_rebuilt(
-        world: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    world: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     run_match(world, None)
     assert "build_candidates.py" in capsys.readouterr().err
     assert recorded(world) is None

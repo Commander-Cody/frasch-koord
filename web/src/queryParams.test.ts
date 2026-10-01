@@ -14,7 +14,9 @@ describe('replaceQueryParams', () => {
   it("sets a parameter, keeping the others and MapLibre's viewport hash", () => {
     window.history.replaceState(null, '', '/?curate#12/54.79/8.83');
     replaceQueryParams({ row: 'schorkewarw-2' });
-    expect(`${window.location.search}${window.location.hash}`).toBe('?curate=&row=schorkewarw-2#12/54.79/8.83');
+    expect(`${window.location.search}${window.location.hash}`).toBe(
+      '?curate=&row=schorkewarw-2#12/54.79/8.83',
+    );
   });
 
   it('removes a parameter without a value, and the ? with the last one', () => {

@@ -1,6 +1,7 @@
 """Where the pipeline's files live by default -- in one place, so that a
 command's default and the module that reads the file cannot disagree.  Every
 command takes its inputs and outputs as options too; tests pass their own."""
+
 from __future__ import annotations
 
 import os
@@ -10,7 +11,7 @@ StrPath = str | os.PathLike[str]
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 NAMES = os.path.join(ROOT, "names")
-WORK = os.path.join(NAMES, "work")          # git-ignored scratch
+WORK = os.path.join(NAMES, "work")  # git-ignored scratch
 
 # the hand-edited inputs
 PLACES = os.path.join(NAMES, "places.csv")

@@ -21,6 +21,7 @@ from the extracts its stamp names (found among the given ones by file name),
 and compared.  Exits 1 on any difference and says which `just` recipe
 rebuilds the file.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -53,8 +54,9 @@ def regenerated_problems(a: argparse.Namespace, tmp: str) -> list[str]:
     problems = []
     index = os.path.join(tmp, "names.json")
     try:
-        searchindex.write(searchindex.build(
-            a.names, a.dialects, a.curation, a.areas, a.objects), index)
+        searchindex.write(
+            searchindex.build(a.names, a.dialects, a.curation, a.areas, a.objects), index
+        )
     except PipelineError as stop:
         problems.append(f"the search index cannot be rebuilt: {stop}")
     else:
@@ -74,25 +76,34 @@ def unlocated_problems(a: argparse.Namespace) -> list[str]:
     objects = locate.read_objects(a.objects).by_ref
     problems = []
     for row in (r for r in rows if placelist.on_map(r, reg)):
-        missing = [ref for ref in placelist.parse_osm(row["osm"])
-                   if ref[0] != placelist.LOCAL_TYPE and ref not in objects]
+        missing = [
+            ref
+            for ref in placelist.parse_osm(row["osm"])
+            if ref[0] != placelist.LOCAL_TYPE and ref not in objects
+        ]
         if missing:
-            problems.append(f"{row['id']}: {placelist.format_osm(missing)} not in "
-                            f"{a.objects} -- locate it with `just objects`")
+            problems.append(
+                f"{row['id']}: {placelist.format_osm(missing)} not in "
+                f"{a.objects} -- locate it with `just objects`"
+            )
     return problems
 
 
 def stamp_problems(a: argparse.Namespace) -> list[str]:
     """The dialect areas, by the inputs their stamp names."""
-    current = {label: provenance.blob_hash(path) for label, path
-               in build_dialect_areas.stamp_inputs(a.area_list, a.dialects).items()}
+    current = {
+        label: provenance.blob_hash(path)
+        for label, path in build_dialect_areas.stamp_inputs(a.area_list, a.dialects).items()
+    }
     problems = []
     for path in (a.areas, a.parts):
         stamp = provenance.recorded(path)
         stale = [k for k, v in current.items() if stamp.get(k) != v]
         if stale:
-            problems.append(f"{path} was built from another {' and '.join(stale)} "
-                            f"-- rebuild it with `just areas`")
+            problems.append(
+                f"{path} was built from another {' and '.join(stale)} "
+                f"-- rebuild it with `just areas`"
+            )
     return problems
 
 
@@ -111,13 +122,25 @@ def extract_problems(a: argparse.Namespace, tmp: str) -> list[str]:
     with contextlib.redirect_stdout(io.StringIO()):
         if locate.main(objects_from + ["--names", a.names, "--out", objects]):
             return [f"{a.objects} cannot be rebuilt (see above)"]
-        if build_dialect_areas.main(areas_from + ["--areas", a.area_list,
-                                                  "--registry", a.dialects,
-                                                  "--out", areas, "--parts-out", parts]):
+        if build_dialect_areas.main(
+            areas_from
+            + [
+                "--areas",
+                a.area_list,
+                "--registry",
+                a.dialects,
+                "--out",
+                areas,
+                "--parts-out",
+                parts,
+            ]
+        ):
             return [f"{a.areas} cannot be rebuilt (see above)"]
-    return (differs(a.objects, objects, "just objects")
-            + differs(a.areas, areas, "just areas")
-            + differs(a.parts, parts, "just areas"))
+    return (
+        differs(a.objects, objects, "just objects")
+        + differs(a.areas, areas, "just areas")
+        + differs(a.parts, parts, "just areas")
+    )
 
 
 def stamped_extracts(path: str, a: argparse.Namespace) -> list[str]:
@@ -131,8 +154,9 @@ def stamped_extracts(path: str, a: argparse.Namespace) -> list[str]:
     names = [e["file"] for e in extracts]
     absent = [n for n in names if n not in given]
     if absent:
-        raise LookupError(f"{path} was built from {', '.join(absent)}, which "
-                          f"--extracts does not name")
+        raise LookupError(
+            f"{path} was built from {', '.join(absent)}, which --extracts does not name"
+        )
     return [given[n] for n in names]
 
 
@@ -144,8 +168,9 @@ def differs(committed: str, regenerated: str, recipe: str) -> list[str]:
 
 @cli.command
 def main(argv: Sequence[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("--names", default=placelist.DEFAULT_PATH)
     ap.add_argument("--dialects", default=paths.DIALECTS)
     ap.add_argument("--curation", default=paths.CURATION)
@@ -155,13 +180,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--objects", default=locate.DEFAULT_OUT)
     ap.add_argument("--index", default=paths.SEARCH_INDEX)
     ap.add_argument("--registry-json", default=DEFAULT_REGISTRY_JSON)
-    ap.add_argument("--extracts", nargs="+", default=[], metavar="PBF",
-                    help="also rebuild names/osm_objects.json and the dialect "
-                         "areas from these extracts and compare them")
+    ap.add_argument(
+        "--extracts",
+        nargs="+",
+        default=[],
+        metavar="PBF",
+        help="also rebuild names/osm_objects.json and the dialect "
+        "areas from these extracts and compare them",
+    )
     a = ap.parse_args(argv)
     with tempfile.TemporaryDirectory() as tmp:
-        problems = (unlocated_problems(a) + regenerated_problems(a, tmp)
-                    + stamp_problems(a))
+        problems = unlocated_problems(a) + regenerated_problems(a, tmp) + stamp_problems(a)
         if a.extracts:
             problems += extract_problems(a, tmp)
     for p in problems:
@@ -170,4 +199,3 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
     print("the committed build outputs match their inputs")
     return 0
-

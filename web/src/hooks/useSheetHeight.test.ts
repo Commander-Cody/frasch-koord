@@ -6,7 +6,8 @@ import { useSheetHeight } from './useSheetHeight';
 /** jsdom lays nothing out: a card of a given height, and a way to change it. */
 function cardOf(height: number) {
   const card = document.createElement('section');
-  const setHeight = (px: number) => Object.defineProperty(card, 'offsetHeight', { value: px, configurable: true });
+  const setHeight = (px: number) =>
+    Object.defineProperty(card, 'offsetHeight', { value: px, configurable: true });
   setHeight(height);
   return { card, setHeight };
 }
@@ -58,9 +59,12 @@ describe('useSheetHeight', () => {
     const app = document.createElement('div');
     const { card } = cardOf(240);
     const cardRef: { current: HTMLElement | null } = { current: card };
-    const { rerender } = renderHook((open: boolean) => useSheetHeight({ current: app }, cardRef, open), {
-      initialProps: true,
-    });
+    const { rerender } = renderHook(
+      (open: boolean) => useSheetHeight({ current: app }, cardRef, open),
+      {
+        initialProps: true,
+      },
+    );
     cardRef.current = null;
     rerender(false);
     expect(app.style.getPropertyValue('--sheet-height')).toBe('');

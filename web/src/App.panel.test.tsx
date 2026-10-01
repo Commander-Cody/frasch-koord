@@ -45,7 +45,10 @@ function holdNames(entries: NameEntry[]): () => Promise<void> {
 
 /** A click on the map label of the name-list row `ref`, as the tiles carry it. */
 function clickLabel(ref: string, props: Record<string, string>) {
-  const feature = { id: 2400427660, properties: { 'frasch:ref': ref, ...props } } as unknown as MapGeoJSONFeature;
+  const feature = {
+    id: 2400427660,
+    properties: { 'frasch:ref': ref, ...props },
+  } as unknown as MapGeoJSONFeature;
   act(() => map.select?.(feature, { lng: 8.83, lat: 54.79 } as LngLat));
 }
 

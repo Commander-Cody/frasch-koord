@@ -4,6 +4,7 @@ The inputs are edited by hand, some in a spreadsheet, so reading them has to
 cope with what a spreadsheet saves (a byte order mark, a `;`-separated
 export); and the outputs -- the name list above all, which holds uncommitted
 hand edits -- must never be left half-written."""
+
 from __future__ import annotations
 
 import contextlib
@@ -29,8 +30,10 @@ def decode(data: bytes) -> str:
     return data.decode("utf-8-sig")
 
 
-SEMICOLON_SEPARATED = ("the cells are separated by `;`, not `,` (a German-locale "
-                       "spreadsheet export?) -- save it as comma-separated CSV")
+SEMICOLON_SEPARATED = (
+    "the cells are separated by `;`, not `,` (a German-locale "
+    "spreadsheet export?) -- save it as comma-separated CSV"
+)
 
 
 def csv_header_problem(fields: Sequence[str], required: Sequence[str]) -> str | None:
@@ -51,13 +54,12 @@ def cell_count_problem(cells: Sequence[str], header: Sequence[str]) -> str | Non
     """A row whose cells do not line up with the header's columns: a comma
     too many or too few, and every cell after it is in the wrong column."""
     if len(cells) != len(header):
-        return (f"{len(cells)} cells, the header has {len(header)} "
-                f"(a comma too many or too few?)")
+        return f"{len(cells)} cells, the header has {len(header)} (a comma too many or too few?)"
     return None
 
 
 # ---------------------------------------------------------------- writing ---
-MISSING = "missing"                     # `expect` for a file that must not exist
+MISSING = "missing"  # `expect` for a file that must not exist
 
 
 def digest(data: bytes) -> str:
@@ -86,13 +88,16 @@ def atomic_write(path: str, data: bytes | str, expect: str | None = None) -> Non
 
 
 @overload
-def replacing(path: str, expect: str | None = None,
-              text: Literal[False] = False) -> contextlib.AbstractContextManager[IO[bytes]]: ...
+def replacing(
+    path: str, expect: str | None = None, text: Literal[False] = False
+) -> contextlib.AbstractContextManager[IO[bytes]]: ...
 @overload
-def replacing(path: str, expect: str | None = None, *,
-              text: Literal[True]) -> contextlib.AbstractContextManager[IO[str]]: ...
-def replacing(path: str, expect: str | None = None,
-              text: bool = False) -> contextlib.AbstractContextManager[IO[bytes] | IO[str]]:
+def replacing(
+    path: str, expect: str | None = None, *, text: Literal[True]
+) -> contextlib.AbstractContextManager[IO[str]]: ...
+def replacing(
+    path: str, expect: str | None = None, text: bool = False
+) -> contextlib.AbstractContextManager[IO[bytes] | IO[str]]:
     """A file handle whose content replaces `path` in one step when the block
     ends: it writes a temporary file next to it, flushes it to disk, then
     `os.replace`s it over the original.  A crash at any point -- or an
@@ -104,30 +109,30 @@ def replacing(path: str, expect: str | None = None,
 
 
 @contextlib.contextmanager
-def _replacing(path: str, expect: str | None,
-               text: bool) -> Iterator[IO[bytes] | IO[str]]:
+def _replacing(path: str, expect: str | None, text: bool) -> Iterator[IO[bytes] | IO[str]]:
     path = os.path.abspath(path)
     directory = os.path.dirname(path)
-    fd, tmp = tempfile.mkstemp(dir=directory, prefix=f".{os.path.basename(path)}.",
-                               suffix=".tmp")
+    fd, tmp = tempfile.mkstemp(dir=directory, prefix=f".{os.path.basename(path)}.", suffix=".tmp")
     try:
         fh: IO[bytes] | IO[str]
-        with (os.fdopen(fd, "w", encoding="utf-8") if text else os.fdopen(fd, "wb")) as fh:
+        with os.fdopen(fd, "w", encoding="utf-8") if text else os.fdopen(fd, "wb") as fh:
             yield fh
             fh.flush()
             os.fsync(fh.fileno())
         os.chmod(tmp, _mode_for(path))
         if expect is not None and fingerprint(path) != expect:
-            raise Conflict(f"{path} changed on disk while this was running "
-                           f"(a spreadsheet, match.py or curate.py apply?) -- "
-                           f"not overwriting it.  Nothing was written; save or "
-                           f"commit the other change and run this again.")
+            raise Conflict(
+                f"{path} changed on disk while this was running "
+                f"(a spreadsheet, match.py or curate.py apply?) -- "
+                f"not overwriting it.  Nothing was written; save or "
+                f"commit the other change and run this again."
+            )
         os.replace(tmp, path)
     except BaseException:
         with contextlib.suppress(FileNotFoundError):
             os.unlink(tmp)
         raise
-    _sync_directory(directory)          # make the rename itself durable
+    _sync_directory(directory)  # make the rename itself durable
 
 
 def _mode_for(path: str) -> int:

@@ -1,4 +1,5 @@
 """places.csv is written atomically and only over what was read (#21, M1)."""
+
 from __future__ import annotations
 
 import csv
@@ -12,10 +13,7 @@ from frasch import errors, placelist
 from frasch.errors import PipelineError
 from conftest import places_text
 
-ROWS = [
-    {"kind": "settlement", "mooring": f"Taarep {i}", "de": f"Dorf {i}"}
-    for i in range(20)
-]
+ROWS = [{"kind": "settlement", "mooring": f"Taarep {i}", "de": f"Dorf {i}"} for i in range(20)]
 
 
 @pytest.fixture
@@ -32,8 +30,9 @@ def test_round_trip_is_byte_identical(places: Path) -> None:
     assert places.read_bytes() == before
 
 
-def test_interrupted_write_leaves_the_file_alone(places: Path,
-                                                 monkeypatch: pytest.MonkeyPatch) -> None:
+def test_interrupted_write_leaves_the_file_alone(
+    places: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     before = places.read_bytes()
     rows, fields = placelist.read(str(places))
     rows[0]["mooring"] = "changed"
@@ -54,8 +53,9 @@ def test_interrupted_write_leaves_the_file_alone(places: Path,
     assert sorted(os.listdir(places.parent)) == ["curation.csv", "places.csv", "work"]
 
 
-def test_crash_while_flushing_leaves_the_file_alone(places: Path,
-                                                    monkeypatch: pytest.MonkeyPatch) -> None:
+def test_crash_while_flushing_leaves_the_file_alone(
+    places: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     before = places.read_bytes()
     rows, fields = placelist.read(str(places))
     rows[0]["mooring"] = "changed"
@@ -109,5 +109,5 @@ def test_lock_is_exclusive(places: Path) -> None:
         with pytest.raises(PipelineError, match="another match.py"):
             with placelist.lock(str(places)):
                 pass
-    with placelist.lock(str(places)):   # released again
+    with placelist.lock(str(places)):  # released again
         pass

@@ -246,7 +246,10 @@ export function useNames(): NamesData {
         return res.json();
       })
       .then((index: unknown) => {
-        const { built_from: builtFrom, places } = (index ?? {}) as { built_from?: BuiltFrom; places?: unknown };
+        const { built_from: builtFrom, places } = (index ?? {}) as {
+          built_from?: BuiltFrom;
+          places?: unknown;
+        };
         if (!Array.isArray(places)) throw new Error('no list of places');
         if (cancelled) return;
         const list = places as NameEntry[];

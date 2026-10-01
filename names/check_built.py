@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Launcher -- the code is frasch/check_built.py (`--help` for its usage)."""
+
 import sys
 
 from frasch.check_built import main

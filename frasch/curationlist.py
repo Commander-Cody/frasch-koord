@@ -16,6 +16,7 @@ This module is the one reading of the file's rules: the injector, the search
 export (for the positions), names/check.py and `curate.py apply` (which
 appends rows) all go through it.
 """
+
 from __future__ import annotations
 
 import csv
@@ -31,11 +32,10 @@ from frasch.geo import LonLat
 from frasch.placelist import LOCAL_TYPE, Ref, format_osm, local_slug, parse_osm
 
 DEFAULT_PATH = paths.CURATION
-COLUMNS = ["osm", "name", "lat", "lon", "set_tags", "minzoom", "maxzoom",
-           "polygon_km2", "note"]
+COLUMNS = ["osm", "name", "lat", "lon", "set_tags", "minzoom", "maxzoom", "polygon_km2", "note"]
 MINZOOM_KEY = "frasch:minzoom"
 MAXZOOM_KEY = "frasch:maxzoom"
-MAX_ZOOM = 24                           # the deepest zoom a map style knows
+MAX_ZOOM = 24  # the deepest zoom a map style knows
 
 # The default `place=` of the node the injector adds for a local reference, by
 # the row's kind.  Only kinds whose OSM equivalent is unambiguous are listed;
@@ -60,13 +60,16 @@ def parse_point(lat: str | None, lon: str | None, where: str = "") -> LonLat | N
     if not lat and not lon:
         return None
     if not (lat and lon):
-        raise Invalid(where, f"`lat` and `lon` go together "
-                             f"(got lat={lat or '-'}, lon={lon or '-'})")
+        raise Invalid(
+            where, f"`lat` and `lon` go together (got lat={lat or '-'}, lon={lon or '-'})"
+        )
     try:
         flat, flon = float(lat), float(lon)
     except ValueError:
-        raise Invalid(where, f"lat/lon {lat!r}/{lon!r} are not numbers "
-                             f"(decimal degrees, e.g. 54.65097 / 8.34019)") from None
+        raise Invalid(
+            where,
+            f"lat/lon {lat!r}/{lon!r} are not numbers (decimal degrees, e.g. 54.65097 / 8.34019)",
+        ) from None
     if not (-90 <= flat <= 90 and -180 <= flon <= 180):
         raise Invalid(where, f"lat/lon {flat}/{flon} out of range")
     return flon, flat
@@ -132,13 +135,16 @@ class _Seen:
     def __init__(self) -> None:
         self.positioned: set[str] = set()
         self.squares: set[Ref] = set()
-        self.tuned: dict[Ref, int] = {}         # -> the line of its row
+        self.tuned: dict[Ref, int] = {}  # -> the line of its row
 
     def tune(self, n: int, refs: Sequence[Ref]) -> list[str]:
         """Claim `refs` for the tuning row on line `n`; -> the objects an
         earlier tuning row claimed already."""
-        found = [f"second row for {format_osm([ref])} (line {self.tuned[ref]})"
-                 for ref in refs if ref in self.tuned]
+        found = [
+            f"second row for {format_osm([ref])} (line {self.tuned[ref]})"
+            for ref in refs
+            if ref in self.tuned
+        ]
         for ref in refs:
             self.tuned.setdefault(ref, n)
         return found
@@ -146,6 +152,7 @@ class _Seen:
 
 class Entry(TypedDict):
     """One row of the file that follows its rules, see `rows`."""
+
     line: int
     refs: list[Ref]
     local: str | None
@@ -170,8 +177,9 @@ def _entry(n: int, row: Mapping[str, str], seen: _Seen) -> tuple[Entry | None, l
     found: list[str] = []
     local = local_slug(refs[0])
     if pos and not local:
-        found.append(f"lat/lon only go with a local reference "
-                     f"(local/<slug>), not with {row['osm']!r}")
+        found.append(
+            f"lat/lon only go with a local reference (local/<slug>), not with {row['osm']!r}"
+        )
     if local and not pos:
         found.append(f"local/{local} needs `lat` and `lon`")
     if local and local in seen.positioned:
@@ -184,8 +192,7 @@ def _entry(n: int, row: Mapping[str, str], seen: _Seen) -> tuple[Entry | None, l
     km2 = _km2(row, found)
     if km2 is not None:
         if len(refs) != 1 or refs[0][0] not in ("n", LOCAL_TYPE):
-            found.append("polygon_km2 needs exactly one node (or local "
-                         "reference) in `osm`")
+            found.append("polygon_km2 needs exactly one node (or local reference) in `osm`")
         elif not local and refs[0] in seen.squares:
             found.append(f"second polygon_km2 row for {format_osm(refs)}")
         seen.squares.add(refs[0])
@@ -195,9 +202,17 @@ def _entry(n: int, row: Mapping[str, str], seen: _Seen) -> tuple[Entry | None, l
         seen.positioned.add(local)
     if found:
         return None, found
-    return {"line": n, "refs": refs, "local": local, "pos": pos, "tags": tags,
-            "minzoom": minzoom, "maxzoom": maxzoom, "km2": km2,
-            "label": row.get("name", "")}, []
+    return {
+        "line": n,
+        "refs": refs,
+        "local": local,
+        "pos": pos,
+        "tags": tags,
+        "minzoom": minzoom,
+        "maxzoom": maxzoom,
+        "km2": km2,
+        "label": row.get("name", ""),
+    }, []
 
 
 def rows(path: str = DEFAULT_PATH) -> tuple[list[Entry], list[tuple[int, str]]]:
@@ -215,17 +230,18 @@ def rows(path: str = DEFAULT_PATH) -> tuple[list[Entry], list[tuple[int, str]]]:
     with files.open_csv(path) as fh:
         reader = csv.reader(fh)
         header = next(reader, [])
-        if (what := files.csv_header_problem(header, ["osm"])):
+        if what := files.csv_header_problem(header, ["osm"]):
             return entries, [(1, what)]
         for cells in reader:
             n = reader.line_num
             if not cells:
-                continue                          # a blank line
-            if (what := files.cell_count_problem(cells, header)):
-                problems.append((n, what))        # its columns cannot be trusted
+                continue  # a blank line
+            if what := files.cell_count_problem(cells, header):
+                problems.append((n, what))  # its columns cannot be trusted
                 continue
-            entry, found = _entry(n, {k: v.strip() for k, v in zip(header, cells, strict=True)},
-                                  seen)
+            entry, found = _entry(
+                n, {k: v.strip() for k, v in zip(header, cells, strict=True)}, seen
+            )
             problems += [(n, what) for what in found]
             if entry:
                 entries.append(entry)
@@ -241,6 +257,7 @@ def _valid_entries(path: str) -> list[Entry]:
 
 class Tuning(TypedDict):
     """The tags to set on an OSM object, and the curation row's `name`."""
+
     tags: dict[str, str]
     label: str
 
@@ -267,6 +284,7 @@ class Curation(NamedTuple):
     points   {('l', 'westerheide-amrum'): {'lon', 'lat', 'km2', 'tags',
              'label', 'where'}} -- a place OSM does not have: the node (or,
              with `km2`, the square) to add for it"""
+
     objects: dict[Ref, Tuning]
     squares: dict[Ref, Square]
     points: dict[Ref, LocalPoint]
@@ -280,16 +298,21 @@ def read(path: str = DEFAULT_PATH) -> Curation:
         tags = dict(e["tags"])
         for key, zoom in ((MINZOOM_KEY, e["minzoom"]), (MAXZOOM_KEY, e["maxzoom"])):
             if zoom is not None:
-                tags[key] = str(zoom)         # tag values must be strings
+                tags[key] = str(zoom)  # tag values must be strings
         ref, label, km2 = e["refs"][0], e["label"], e["km2"]
-        if (pos := e["pos"]) is not None:     # only a local reference has one
-            curation.points[ref] = {"lon": pos[0], "lat": pos[1],
-                                    "km2": km2, "tags": tags, "label": label,
-                                    "where": f"{path}:{e['line']}"}
+        if (pos := e["pos"]) is not None:  # only a local reference has one
+            curation.points[ref] = {
+                "lon": pos[0],
+                "lat": pos[1],
+                "km2": km2,
+                "tags": tags,
+                "label": label,
+                "where": f"{path}:{e['line']}",
+            }
         elif km2 is not None:
             curation.squares[ref] = {"km2": km2, "tags": tags, "label": label}
-        elif tags:                            # else nothing to apply yet
-            for ref in e["refs"]:             # one row per object (`rows`)
+        elif tags:  # else nothing to apply yet
+            for ref in e["refs"]:  # one row per object (`rows`)
                 curation.objects[ref] = {"tags": dict(tags), "label": label}
     return curation
 
@@ -299,8 +322,7 @@ def local_points(path: str = DEFAULT_PATH) -> dict[str, LonLat]:
     places OSM does not have; `{}` without the file."""
     if not os.path.exists(path):
         return {}
-    return {local: pos for e in _valid_entries(path)
-            if (local := e["local"]) and (pos := e["pos"])}
+    return {local: pos for e in _valid_entries(path) if (local := e["local"]) and (pos := e["pos"])}
 
 
 # -------------------------------------------------------------- appending ---
@@ -319,14 +341,12 @@ def read_bytes(path: str) -> tuple[bytes | None, list[str]]:
     return data, fields
 
 
-def appended(data: bytes | None, fields: list[str],
-             new_rows: Iterable[Mapping[str, str]]) -> bytes:
+def appended(data: bytes | None, fields: list[str], new_rows: Iterable[Mapping[str, str]]) -> bytes:
     """The whole file with `new_rows` appended: the old bytes (`read_bytes`)
     untouched, the new rows in the file's column order; with a header when
     there was no file."""
     buf = io.StringIO(newline="")
-    w = csv.DictWriter(buf, fieldnames=fields, lineterminator="\n",
-                       extrasaction="ignore")
+    w = csv.DictWriter(buf, fieldnames=fields, lineterminator="\n", extrasaction="ignore")
     if data is None:
         w.writeheader()
         data = b""

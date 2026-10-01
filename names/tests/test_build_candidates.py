@@ -1,5 +1,6 @@
 """build_candidates.py: the way-position store, and candidates.jsonl -- its
 header naming the extracts it was built from, and the one-step write (#24)."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -39,10 +40,14 @@ HOYER = ((8.69, 54.96), {"name": "Højer", "name:de": "Hoyer", "place": "town"})
 
 def extracts(tmp_path: Path) -> tuple[Path, Path]:
     """A Schleswig-Holstein and a Denmark extract, one village each."""
-    sh = write_extract(tmp_path / "schleswig-holstein-latest.osm.pbf",
-                       nodes={1: TOFTUM}, timestamp="2026-09-20T20:21:02Z")
-    dk = write_extract(tmp_path / "denmark-latest.osm.pbf",
-                       nodes={2: HOYER}, timestamp="2026-09-21T20:20:00Z")
+    sh = write_extract(
+        tmp_path / "schleswig-holstein-latest.osm.pbf",
+        nodes={1: TOFTUM},
+        timestamp="2026-09-20T20:21:02Z",
+    )
+    dk = write_extract(
+        tmp_path / "denmark-latest.osm.pbf", nodes={2: HOYER}, timestamp="2026-09-21T20:20:00Z"
+    )
     return sh, dk
 
 
@@ -55,24 +60,24 @@ def build(tmp_path: Path, *pbfs: Path) -> Path:
 def test_header_names_every_extract_with_its_timestamp(tmp_path: Path) -> None:
     out = build(tmp_path, *extracts(tmp_path))
     assert candidates.read_header(out) == [
-        {"file": "schleswig-holstein-latest.osm.pbf",
-         "replication_timestamp": "2026-09-20T20:21:02Z"},
-        {"file": "denmark-latest.osm.pbf",
-         "replication_timestamp": "2026-09-21T20:20:00Z"},
+        {
+            "file": "schleswig-holstein-latest.osm.pbf",
+            "replication_timestamp": "2026-09-20T20:21:02Z",
+        },
+        {"file": "denmark-latest.osm.pbf", "replication_timestamp": "2026-09-21T20:20:00Z"},
     ]
 
 
 def test_records_follow_the_header(tmp_path: Path) -> None:
     out = build(tmp_path, *extracts(tmp_path))
-    got = [(r["src"], r["t"], r["id"], r["tags"]["name"])
-           for r in candidates.read_records(out)]
-    assert got == [("schleswig-holstein", "n", 1, "Toftum"),
-                   ("denmark", "n", 2, "Højer")]
+    got = [(r["src"], r["t"], r["id"], r["tags"]["name"]) for r in candidates.read_records(out)]
+    assert got == [("schleswig-holstein", "n", 1, "Toftum"), ("denmark", "n", 2, "Højer")]
 
 
 def test_a_file_from_before_the_header_has_none_and_all_records(tmp_path: Path) -> None:
-    legacy = write_candidates(tmp_path / "candidates.jsonl",
-                              cand("n", 1, 8.83, 54.71, name="Toftum", place="village"))
+    legacy = write_candidates(
+        tmp_path / "candidates.jsonl", cand("n", 1, 8.83, 54.71, name="Toftum", place="village")
+    )
     assert candidates.read_header(legacy) is None
     assert [r["id"] for r in candidates.read_records(legacy)] == [1]
 
@@ -85,8 +90,15 @@ def write_unsorted_extract(path: Path) -> Path:
         for i, loc in ((1, (8.8, 54.7)), (2, (8.9, 54.8))):
             w.add_node(Node(id=i, version=1, visible=True, location=loc))
         for i in (20, 10):
-            w.add_way(Way(id=i, version=1, visible=True, nodes=[1, 2],
-                          tags={"name": f"Weg {i}", "highway": "residential"}))
+            w.add_way(
+                Way(
+                    id=i,
+                    version=1,
+                    visible=True,
+                    nodes=[1, 2],
+                    tags={"name": f"Weg {i}", "highway": "residential"},
+                )
+            )
     finally:
         w.close()
     return path

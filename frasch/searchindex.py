@@ -35,6 +35,7 @@ it belongs to (web/src/names.ts).  Its `osm` is the row's `osm` cell, for the
 card's link to OpenStreetMap and for the share links and tiles from before the
 row ids, which name a place by its first OSM reference (or its QID).
 """
+
 from __future__ import annotations
 
 import json
@@ -60,8 +61,9 @@ from frasch.registry import Registry
 class SearchEntry(TypedDict):
     """One place of the index (web/src/names.ts reads it); the optional
     fields are left out when empty."""
+
     id: str
-    names: dict[str, str]           # dialect tag -> name
+    names: dict[str, str]  # dialect tag -> name
     name_de: str
     lon: float
     lat: float
@@ -81,8 +83,9 @@ class SearchIndex(TypedDict):
     places: list[SearchEntry]
 
 
-def entry_object(row: Row, objects: locate.Objects, local_points: Mapping[str, LonLat],
-                 reg: Registry, where: str) -> locate.LocatedObject | None:
+def entry_object(
+    row: Row, objects: locate.Objects, local_points: Mapping[str, LonLat], reg: Registry, where: str
+) -> locate.LocatedObject | None:
     """The object a row's entry stands for: the object of the first reference
     in its `osm` cell, or for a local reference the point the injector adds --
     at its curation position, with the name the injector gives it.  None for
@@ -90,8 +93,9 @@ def entry_object(row: Row, objects: locate.Objects, local_points: Mapping[str, L
     slug = placelist.local_ref(row["osm"])
     if slug:
         if slug not in local_points:
-            raise ValidationError(f"{where}: local/{slug} has no row with lat/lon "
-                             f"in the curation file")
+            raise ValidationError(
+                f"{where}: local/{slug} has no row with lat/lon in the curation file"
+            )
         lon, lat = local_points[slug]
         point: locate.LocatedObject = {"lon": lon, "lat": lat}
         if name := placelist.point_name(row, reg):
@@ -103,8 +107,9 @@ def entry_object(row: Row, objects: locate.Objects, local_points: Mapping[str, L
     return objects.by_ref[refs[0]]
 
 
-def entry(row: Row, obj: locate.LocatedObject, areas: dialects.AreaIndex,
-          reg: Registry) -> SearchEntry:
+def entry(
+    row: Row, obj: locate.LocatedObject, areas: dialects.AreaIndex, reg: Registry
+) -> SearchEntry:
     """The search-index entry of one row whose object is `obj`."""
     area_tag = locate.dialect_at(obj, areas)
     names: dict[str, str] = {}
@@ -139,8 +144,9 @@ def entry(row: Row, obj: locate.LocatedObject, areas: dialects.AreaIndex,
     return out
 
 
-def build(names: str, dialects_csv: str, curation: str, areas_path: str,
-          objects_path: str) -> SearchIndex:
+def build(
+    names: str, dialects_csv: str, curation: str, areas_path: str, objects_path: str
+) -> SearchIndex:
     """The search index, `{"built_from", "places"}`, from its input files."""
     reg = registry.read(dialects_csv)
     if not os.path.exists(areas_path):
@@ -158,20 +164,22 @@ def build(names: str, dialects_csv: str, curation: str, areas_path: str,
         try:
             obj = entry_object(r, objects, local_points, reg, f"{names}:{r.line}")
         except KeyError as missing:
-            unlocated.append(f"  {r['id']} (line {r.line}): "
-                             f"{placelist.format_osm([missing.args[0]])}")
+            unlocated.append(
+                f"  {r['id']} (line {r.line}): {placelist.format_osm([missing.args[0]])}"
+            )
             continue
         if obj is not None:
             places.append(entry(r, obj, areas, reg))
     if unlocated:
-        raise PipelineError(f"{len(unlocated)} row(s) on the map have an object that "
-                            f"{objects_path} does not know -- run `just objects` "
-                            f"(names/locate.py) to locate them:\n" + "\n".join(unlocated))
+        raise PipelineError(
+            f"{len(unlocated)} row(s) on the map have an object that "
+            f"{objects_path} does not know -- run `just objects` "
+            f"(names/locate.py) to locate them:\n" + "\n".join(unlocated)
+        )
     stamp = provenance.stamp(names, dialects_csv, curation, areas_path, objects_path)
     return {"built_from": stamp, "places": places}
 
 
 def write(index: SearchIndex, out: str) -> None:
     os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
-    files.atomic_write(out, json.dumps(index, ensure_ascii=False,
-                                       separators=(",", ":")) + "\n")
+    files.atomic_write(out, json.dumps(index, ensure_ascii=False, separators=(",", ":")) + "\n")

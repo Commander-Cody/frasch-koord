@@ -33,7 +33,9 @@ const WORKLIST: CurateWorklist = {
     curateRow('deesbel', 'Deesbel', 'Dagebüll'),
     {
       ...curateRow('taning', 'Taning', 'Tönning'),
-      candidates: [{ ref: 'node/7', name: 'Tönning', class: 'town', km: 1, wikidata: 'Q1717813;Q20729612' }],
+      candidates: [
+        { ref: 'node/7', name: 'Tönning', class: 'town', km: 1, wikidata: 'Q1717813;Q20729612' },
+      ],
     },
     {
       ...curateRow('hoosem', 'Hoosem', 'Husum'),
@@ -55,7 +57,10 @@ function deferred() {
 }
 
 function json(body: unknown): Response {
-  return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
 }
 
 /** The dev server's patch endpoint as a stub: every POST waits until the test answers it. */
@@ -116,7 +121,16 @@ async function findOverpassResult(osmRef: string, wikidata: string) {
   const { reply } = lookups[lookups.length - 1];
   await act(async () => {
     reply.resolve(
-      json({ elements: [{ type, id: Number(id), center: { lat: 54.8, lon: 8.8 }, tags: { name: 'Niebüll', wikidata } }] }),
+      json({
+        elements: [
+          {
+            type,
+            id: Number(id),
+            center: { lat: 54.8, lon: 8.8 },
+            tags: { name: 'Niebüll', wikidata },
+          },
+        ],
+      }),
     );
     await reply.promise;
   });
@@ -159,7 +173,9 @@ describe('CuratePanel', () => {
     await openRow('Naibel');
     fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
     await act(async () => {
-      posts[0].reply.resolve(new Response(JSON.stringify({ ok: false, error: 'disk full' }), { status: 500 }));
+      posts[0].reply.resolve(
+        new Response(JSON.stringify({ ok: false, error: 'disk full' }), { status: 500 }),
+      );
       await posts[0].reply.promise;
     });
     await screen.findByText('could not save: disk full');
@@ -240,14 +256,20 @@ describe('CuratePanel', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Pick 2 selected' }));
 
-    expect(posts[0].entry).toMatchObject({ action: 'osm', osm: 'node/9; way/10', wikidata: 'Q21159' });
+    expect(posts[0].entry).toMatchObject({
+      action: 'osm',
+      osm: 'node/9; way/10',
+      wikidata: 'Q21159',
+    });
   });
 
   it('says on a candidate that its wikidata tag with several ids is not saved', async () => {
     await renderPanel();
     await openRow('Taning');
 
-    within(await listedItem('node/7')).getByText('wikidata Q1717813;Q20729612: not one id, not saved');
+    within(await listedItem('node/7')).getByText(
+      'wikidata Q1717813;Q20729612: not one id, not saved',
+    );
   });
 
   it('says on an Overpass result that its wikidata tag with several ids is not saved', async () => {

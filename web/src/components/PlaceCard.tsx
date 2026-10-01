@@ -48,7 +48,13 @@ interface Line {
  * Its data is `cardEntry(selection)` — the name-list entry where the place has
  * one, filled up from the clicked tile feature (see names.ts).
  */
-export default function PlaceCard({ selection, view, onClose, ref: cardRef, headingRef }: PlaceCardProps) {
+export default function PlaceCard({
+  selection,
+  view,
+  onClose,
+  ref: cardRef,
+  headingRef,
+}: PlaceCardProps) {
   const { t, i18n } = useTranslation();
   const entry = useMemo(() => cardEntry(selection), [selection]);
   // Dialect names are translated like any other UI string; the registry
@@ -72,7 +78,9 @@ export default function PlaceCard({ selection, view, onClose, ref: cardRef, head
   // dialect's name. Where the place has a form of its own (Woiguurd, while
   // Mooring says Waiguurd), calling both "Mooring" would contradict itself.
   const localIsAreaName = area !== undefined && entry.names?.[area.tag] === entry.local;
-  const localLabel = localIsAreaName ? `${t('card.local')} · ${dialectLabel(area)}` : t('card.local');
+  const localLabel = localIsAreaName
+    ? `${t('card.local')} · ${dialectLabel(area)}`
+    : t('card.local');
   const sourceKey = SOURCE_LABEL_KEYS[shownAs];
   const sourceLabel = sourceKey ? t(sourceKey) : shownDialect && dialectLabel(shownDialect);
   const headlineLabel = shownAs === 'local' ? localLabel : sourceLabel;
@@ -123,7 +131,11 @@ export default function PlaceCard({ selection, view, onClose, ref: cardRef, head
   return (
     <aside ref={cardRef} className="place-card" aria-label={t('card.title')}>
       {/* A click from Enter or Space has no pointer clicks to count. */}
-      <CloseButton className="place-card-close" label={t('card.close')} onClick={(e) => onClose(e.detail === 0)} />
+      <CloseButton
+        className="place-card-close"
+        label={t('card.close')}
+        onClick={(e) => onClose(e.detail === 0)}
+      />
       <h2 ref={headingRef} className="place-card-name" tabIndex={-1}>
         {headline}
       </h2>

@@ -4,6 +4,7 @@ read/write round trip of the real name list.
 
 Malformed name cells (unbalanced brackets, `?`, `;` without a space) are
 deliberately not pinned down here: names/check.py owns them."""
+
 from __future__ import annotations
 
 import json
@@ -20,19 +21,21 @@ from frasch.errors import ValidationError
 
 # ------------------------------------------------------------- name cells ---
 def test_parts_splits_variants_and_keeps_each_remark() -> None:
-    assert placelist.parts("Rübel; Rübbel (wisinge)") == [
-        ("Rübel", ""), ("Rübbel", "wisinge")]
+    assert placelist.parts("Rübel; Rübbel (wisinge)") == [("Rübel", ""), ("Rübbel", "wisinge")]
 
 
 def test_semicolon_inside_a_remark_does_not_split() -> None:
     # the README's own example: two names, the remark lists two varieties
     assert placelist.parts("Huađer; Huuger (Sölring; Wisinge)") == [
-        ("Huađer", ""), ("Huuger", "Sölring; Wisinge")]
+        ("Huađer", ""),
+        ("Huuger", "Sölring; Wisinge"),
+    ]
 
 
 def test_several_remarks_on_one_variant_are_joined() -> None:
     assert placelist.parts("Brouersweerw (Foortuftinge) (Nickelsen 1982)") == [
-        ("Brouersweerw", "Foortuftinge; Nickelsen 1982")]
+        ("Brouersweerw", "Foortuftinge; Nickelsen 1982")
+    ]
 
 
 def test_empty_and_missing_cells_have_no_parts() -> None:
@@ -69,13 +72,17 @@ def test_remark_of_a_later_variant_is_not_the_cells_remark() -> None:
 # ------------------------------------------------------------- osm column ---
 def test_parse_osm_reads_several_references_in_order() -> None:
     assert placelist.parse_osm("way/1347936331; node/1332249790") == [
-        ("w", 1347936331), ("n", 1332249790)]
+        ("w", 1347936331),
+        ("n", 1332249790),
+    ]
 
 
 def test_parse_osm_does_not_need_a_space_after_the_semicolon() -> None:
     # places.csv has cells written that way (the Nordwarft on Ockholm)
     assert placelist.parse_osm("way/1347936331;node/1332249790") == [
-        ("w", 1347936331), ("n", 1332249790)]
+        ("w", 1347936331),
+        ("n", 1332249790),
+    ]
 
 
 def test_parse_osm_of_an_empty_cell_is_no_reference() -> None:
@@ -87,25 +94,32 @@ def test_parse_osm_reads_a_local_reference() -> None:
     assert placelist.parse_osm("local/westerheide-amrum") == [("l", "westerheide-amrum")]
 
 
-@pytest.mark.parametrize("ref, osm, slug", [
-    (("w", 12), ("w", 12), None),
-    (("l", "westerheide-amrum"), None, "westerheide-amrum"),
-])
+@pytest.mark.parametrize(
+    "ref, osm, slug",
+    [
+        (("w", 12), ("w", 12), None),
+        (("l", "westerheide-amrum"), None, "westerheide-amrum"),
+    ],
+)
 def test_a_reference_is_either_an_osm_object_or_a_local_slug(
-        ref: placelist.Ref, osm: placelist.OsmRef | None, slug: str | None) -> None:
+    ref: placelist.Ref, osm: placelist.OsmRef | None, slug: str | None
+) -> None:
     assert placelist.as_osm_ref(ref) == osm
     assert placelist.local_slug(ref) == slug
 
 
-@pytest.mark.parametrize("cell", [
-    "way/abc",                        # not an id
-    "Way/12",                         # types are lowercase
-    "w/12",                           # the short type letter is internal only
-    "https://www.openstreetmap.org/way/177387348",
-    "local/Westerheide",              # slugs are lowercase
-    "local/wester_heide",             # ... letters, digits and hyphens only
-    "local/-westerheide",
-])
+@pytest.mark.parametrize(
+    "cell",
+    [
+        "way/abc",  # not an id
+        "Way/12",  # types are lowercase
+        "w/12",  # the short type letter is internal only
+        "https://www.openstreetmap.org/way/177387348",
+        "local/Westerheide",  # slugs are lowercase
+        "local/wester_heide",  # ... letters, digits and hyphens only
+        "local/-westerheide",
+    ],
+)
 def test_parse_osm_refuses_a_bad_reference(cell: str) -> None:
     with pytest.raises(ValidationError, match="bad reference"):
         placelist.parse_osm(cell, "places.csv:7")
@@ -127,25 +141,32 @@ def test_two_local_references_cannot_be_combined_either() -> None:
 
 
 def test_format_osm_writes_the_cell_spelling() -> None:
-    assert placelist.format_osm([("w", 1347936331), ("n", 1332249790)]) == \
-        "way/1347936331; node/1332249790"
+    assert (
+        placelist.format_osm([("w", 1347936331), ("n", 1332249790)])
+        == "way/1347936331; node/1332249790"
+    )
     assert placelist.format_osm([("r", 1420555)]) == "relation/1420555"
     assert placelist.format_osm([("l", "huelltoft")]) == "local/huelltoft"
 
 
-@pytest.mark.parametrize("cell", [
-    "node/240102263",
-    "way/44051131; way/44051132; way/628205597",
-    "relation/5615880",
-    "local/westerheide-amrum",
-])
+@pytest.mark.parametrize(
+    "cell",
+    [
+        "node/240102263",
+        "way/44051131; way/44051132; way/628205597",
+        "relation/5615880",
+        "local/westerheide-amrum",
+    ],
+)
 def test_format_osm_round_trips_parse_osm(cell: str) -> None:
     assert placelist.format_osm(placelist.parse_osm(cell)) == cell
 
 
 def test_format_osm_normalises_the_separator() -> None:
-    assert placelist.format_osm(placelist.parse_osm("way/1347936331;node/1332249790")) == \
-        "way/1347936331; node/1332249790"
+    assert (
+        placelist.format_osm(placelist.parse_osm("way/1347936331;node/1332249790"))
+        == "way/1347936331; node/1332249790"
+    )
 
 
 # --------------------------------------------------- the real name list ---
@@ -162,15 +183,18 @@ def test_real_name_list_round_trips_byte_identical(tmp_path: Path) -> None:
 
 
 # ------------------------------------------------------------------- slug ---
-@pytest.mark.parametrize("name, slug", [
-    ("Schörkewärw", "schorkewarw"),
-    ("Hamborjer Håli", "hamborjer-hali"),
-    ("Straße", "strasse"),
-    ("Æ Løkke", "ae-lokke"),
-    ("Rudbøl", "rudbol"),
-    ("Huađer", "huader"),
-    ("Friedrich-Wilhelm-Lübke-Kuuch", "friedrich-wilhelm-lubke-kuuch"),
-])
+@pytest.mark.parametrize(
+    "name, slug",
+    [
+        ("Schörkewärw", "schorkewarw"),
+        ("Hamborjer Håli", "hamborjer-hali"),
+        ("Straße", "strasse"),
+        ("Æ Løkke", "ae-lokke"),
+        ("Rudbøl", "rudbol"),
+        ("Huađer", "huader"),
+        ("Friedrich-Wilhelm-Lübke-Kuuch", "friedrich-wilhelm-lubke-kuuch"),
+    ],
+)
 def test_slug_folds_a_name_to_lowercase_ascii(name: str, slug: str) -> None:
     assert placelist.slug(name) == slug
 
@@ -181,8 +205,20 @@ def _schema() -> Any:
         return json.load(fh)
 
 
-SLUGS = ["taarep", "westerheide-amrum", "a1", "hus-2", "", "Taarep", "wester_heide",
-         "-westerheide", "westerheide-", "wester--heide", "wester heide", "hüs"]
+SLUGS = [
+    "taarep",
+    "westerheide-amrum",
+    "a1",
+    "hus-2",
+    "",
+    "Taarep",
+    "wester_heide",
+    "-westerheide",
+    "westerheide-",
+    "wester--heide",
+    "wester heide",
+    "hüs",
+]
 QIDS = ["Q35", "Q21003", "Q1", "q35", "Q", "35", "Q35;Q36", "Q3 5", "QQ35"]
 
 

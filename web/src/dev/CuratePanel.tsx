@@ -26,7 +26,14 @@ import CurateDetail from './CurateDetail';
 import CurateFilters from './CurateFilters';
 import CurateList from './CurateList';
 import { decidedRows, postPatchEntry, type Decision, type PatchEntry } from './curatePatch';
-import { fetchWorklist, filterRows, NO_FILTER, rowKinds, type CurateRow, type CurateWorklist } from './curateWorklist';
+import {
+  fetchWorklist,
+  filterRows,
+  NO_FILTER,
+  rowKinds,
+  type CurateRow,
+  type CurateWorklist,
+} from './curateWorklist';
 import DevPanel from './DevPanel';
 import { useDeepLinkParam } from './useDeepLinkParam';
 import { useListNavigation } from './useListNavigation';
@@ -70,10 +77,19 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
   // sees one stable array rather than a fresh `[]` on each render.
   const rows = useMemo(() => worklist?.rows ?? [], [worklist]);
   const kinds = useMemo(() => (worklist ? rowKinds(worklist) : []), [worklist]);
-  const visible = useMemo(() => filterRows(rows, filter, (id) => doneById.has(id)), [rows, filter, doneById]);
+  const visible = useMemo(
+    () => filterRows(rows, filter, (id) => doneById.has(id)),
+    [rows, filter, doneById],
+  );
   const visibleIds = useMemo(() => visible.map((row) => row.id), [visible]);
-  const selected = useMemo(() => rows.find((row) => row.id === selectedId) ?? null, [rows, selectedId]);
-  const doneCount = useMemo(() => rows.filter((row) => doneById.has(row.id)).length, [rows, doneById]);
+  const selected = useMemo(
+    () => rows.find((row) => row.id === selectedId) ?? null,
+    [rows, selectedId],
+  );
+  const doneCount = useMemo(
+    () => rows.filter((row) => doneById.has(row.id)).length,
+    [rows, doneById],
+  );
 
   /* --------------------------------------------------------- navigation */
 

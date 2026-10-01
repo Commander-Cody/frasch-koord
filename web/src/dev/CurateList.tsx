@@ -28,7 +28,11 @@ export default function CurateList({ rows, doneById, selectedId, onSelect }: Cur
       {rows.length === 0 && <li className="curate-empty">nothing matches the filter</li>}
       {rows.map((row) => {
         const done = doneById.get(row.id);
-        const className = ['curate-item', row.id === selectedId ? 'is-selected' : '', done ? 'is-done' : '']
+        const className = [
+          'curate-item',
+          row.id === selectedId ? 'is-selected' : '',
+          done ? 'is-done' : '',
+        ]
           .filter(Boolean)
           .join(' ');
         return (

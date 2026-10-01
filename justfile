@@ -92,6 +92,11 @@ check:
 check-full: extracts
     {{py}} names/check_built.py --extracts {{extracts}}
 
+# format the Python code (ruff format) and the web code (oxfmt; needs node on PATH)
+format:
+    uv run ruff format .
+    cd web && npm run format
+
 # compare a built tile archive with names.json, label by label
 check-tiles region=region:
     {{py}} tiles/check_tiles.py tiles/data/{{file_name(region)}}.pmtiles

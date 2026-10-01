@@ -22,6 +22,7 @@ This is the one reader of the file.  Whatever needs the registry takes a
 `Registry` as a parameter; `default()` reads names/dialects.csv the first
 time it is asked for, never at import.
 """
+
 from __future__ import annotations
 
 import csv
@@ -35,7 +36,7 @@ from frasch import files, paths
 from frasch.errors import PipelineError, ValidationError
 
 FIELDS = ["tag", "column", "label", "status", "view", "note"]
-EXPORT_FIELDS = FIELDS[:-1]            # what the frontend gets: all but `note`
+EXPORT_FIELDS = FIELDS[:-1]  # what the frontend gets: all but `note`
 STATUSES = {"living", "extinct"}
 VIEWS = {"yes", "no"}
 
@@ -48,6 +49,7 @@ _TAG = re.compile(r"frr-x-[a-z0-9]{1,8}(-[a-z0-9]{1,8})*$")
 
 class Dialect(TypedDict):
     """One row of the registry: the FIELDS."""
+
     tag: str
     column: str
     label: str
@@ -91,18 +93,20 @@ class Registry:
         for d in self.dialects:
             if d[field] == value:
                 return d
-        raise ValidationError(f"unknown dialect {field} {value!r} "
-                              f"(not in the dialect registry)")
+        raise ValidationError(f"unknown dialect {field} {value!r} (not in the dialect registry)")
 
 
-def row_problem(row: Mapping[str, str], seen_tags: Collection[str] = (),
-                seen_cols: Collection[str] = ()) -> str | None:
+def row_problem(
+    row: Mapping[str, str], seen_tags: Collection[str] = (), seen_cols: Collection[str] = ()
+) -> str | None:
     """What is wrong with one registry row (`seen_*`: the tags and columns of
     the rows above it), or None."""
     if not _TAG.fullmatch(row["tag"]):
         # BCP 47 allows at most 8 characters per private-use subtag
-        return (f"bad tag {row['tag']!r} -- expected frr-x-<subtag>, subtags "
-                f"[a-z0-9] and at most 8 characters each")
+        return (
+            f"bad tag {row['tag']!r} -- expected frr-x-<subtag>, subtags "
+            f"[a-z0-9] and at most 8 characters each"
+        )
     if not re.fullmatch(r"[a-z][a-z0-9_]*", row["column"]):
         return f"bad column name {row['column']!r}"
     if row["column"] == LOCAL_COLUMN:
@@ -127,7 +131,7 @@ def rows(path: str) -> tuple[list[Dialect], list[tuple[int, str]]]:
     with files.open_csv(path) as fh:
         reader = csv.reader(fh)
         header = next(reader, [])
-        if (what := files.csv_header_problem(header, FIELDS)):
+        if what := files.csv_header_problem(header, FIELDS):
             return [], [(1, what)]
         found: list[Dialect] = []
         problems: list[tuple[int, str]] = []
@@ -137,13 +141,13 @@ def rows(path: str) -> tuple[list[Dialect], list[tuple[int, str]]]:
             n = reader.line_num
             if not cells:
                 continue
-            if (what := files.cell_count_problem(cells, header)):
+            if what := files.cell_count_problem(cells, header):
                 problems.append((n, what))
                 continue
             row = {k: v.strip() for k, v in zip(header, cells, strict=True)}
             if not row["tag"]:
-                continue                       # blank spacer line
-            if (what := row_problem(row, seen_tags, seen_cols)):
+                continue  # blank spacer line
+            if what := row_problem(row, seen_tags, seen_cols):
                 problems.append((n, what))
             else:
                 found.append(_dialect(row))
@@ -155,8 +159,14 @@ def rows(path: str) -> tuple[list[Dialect], list[tuple[int, str]]]:
 
 
 def _dialect(row: Mapping[str, str]) -> Dialect:
-    return Dialect(tag=row["tag"], column=row["column"], label=row["label"],
-                   status=row["status"], view=row["view"], note=row["note"])
+    return Dialect(
+        tag=row["tag"],
+        column=row["column"],
+        label=row["label"],
+        status=row["status"],
+        view=row["view"],
+        note=row["note"],
+    )
 
 
 def read(path: str = paths.DIALECTS) -> Registry:
