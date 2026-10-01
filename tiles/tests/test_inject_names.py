@@ -80,6 +80,7 @@ BRODERSWARFT = place(
 def test_name_tags_of_a_row_with_a_local_variety(reg: Registry) -> None:
     assert inject_names.name_tags([BRODERSWARFT], "frr-x-mooring", reg) == {
         "name:frr-x-mooring": "Brouderswärw",
+        "name:de": "Broderswarft",
         "frasch:kind": "warft",
         "frasch:dialect": "frr-x-mooring",
         "frasch:local": "Brouersweerw",
@@ -105,6 +106,7 @@ def test_name_tags_outside_any_area_have_no_dialect(reg: Registry) -> None:
     assert inject_names.name_tags([hanswarft], None, reg) == {
         "name:frr-x-mooring": "Hanswärw",
         "name:frr-x-hallig": "Hansweerf",
+        "name:de": "Hanswarft",
         "frasch:kind": "warft",
         "frasch:ref": "hanswarw",
     }
@@ -120,14 +122,24 @@ def test_name_tags_first_row_wins_per_tag(reg: Registry) -> None:
         kind="koog",
         mooring="Hulm Gutskuuch",
         wieding="Hoolm",
-        de="Holm",
+        de="Holmer Gotteskoog",
         osm="node/240102263",
     )
     tags = inject_names.name_tags([first, second], None, reg)
     assert tags["name:frr-x-mooring"] == "Hulm"
+    assert tags["name:de"] == "Holm"
     assert tags["name:frr-x-wieding"] == "Hoolm"
     assert tags["frasch:kind"] == "settlement"
     assert tags["frasch:ref"] == "hulm"
+
+
+def test_name_tags_carry_the_lists_german_name(reg: Registry) -> None:
+    # the map's name:de step must say what the card's says, which is the
+    # list's `de` (#61) -- its first variant, as names.json's name_de
+    listlai = place(
+        id="listlai", kind="water", solring="Listlai", de="Lister Ley; Ley", osm="way/1273915431"
+    )
+    assert inject_names.name_tags([listlai], None, reg)["name:de"] == "Lister Ley"
 
 
 def test_name_tags_refer_to_the_rows_id(reg: Registry) -> None:
@@ -221,13 +233,13 @@ PLACES = [
         status="ok",
     ),
     # the Kreis relation runs along the Hallig's outline here: a district
-    # around a Hallig, so its inside point lies in the Hallig's area
+    # around a Hallig, so its inside point lies in the Hallig's area; no
+    # German name in the list, OSM has one
     dict(
         id="kris",
         kind="landscape",
         mooring="Kris Nordfraschlönj",
         nordgoes="Noordfräischloun Krais",
-        de="Kreis Nordfriesland",
         osm=f"relation/{KREIS}",
         status="ok",
     ),
@@ -355,6 +367,7 @@ def write_extract(path: Path) -> None:
                     "boundary": "administrative",
                     "admin_level": "6",
                     "name": "Kreis Nordfriesland",
+                    "name:de": "Nordfriesland",
                 },
             )
         )
@@ -548,6 +561,7 @@ def test_matched_node_gets_its_names_and_keeps_its_tags(injected: Injected) -> N
         "name": "Holm",
         "wikidata": "Q559369",
         "name:frr-x-mooring": "Hulm",
+        "name:de": "Holm",
         "frasch:kind": "settlement",
         "frasch:ref": "hulm",
     }
@@ -561,6 +575,7 @@ def test_matched_way_gets_the_dialect_of_its_area(injected: Injected) -> None:
         "landuse": "residential",
         "name:frr-x-mooring": "Nordwärw",
         "name:frr-x-nordgoes": "Noordweerw",
+        "name:de": "Nordwarft",
         "frasch:kind": "warft",
         "frasch:dialect": "frr-x-nordgoes",
         "frasch:local": "Noordweerw",
@@ -577,6 +592,7 @@ def test_matched_relation_gets_the_smallest_area_and_its_curation(injected: Inje
         "admin_level": "10",
         "name": "Hamburger Hallig",
         "name:frr-x-mooring": "Hamborjer Håli",
+        "name:de": "Hamburger Hallig",
         "frasch:kind": "hallig",
         "frasch:dialect": "frr-x-hallig",
         "frasch:ref": "hamborjer-hali",
@@ -590,6 +606,12 @@ def test_a_district_gets_no_dialect(injected: Injected) -> None:
     tags, _ = by_key[("r", KREIS)]
     assert "frasch:dialect" not in tags and "frasch:local" not in tags
     assert tags["frasch:ref"] == "kris"
+
+
+def test_osms_german_name_stays_where_the_list_has_none(injected: Injected) -> None:
+    _, by_key = injected
+    tags, _ = by_key[("r", KREIS)]
+    assert tags["name:de"] == "Nordfriesland"
 
 
 def test_an_object_nobody_located_stops_the_build(tmp_path: Path) -> None:
@@ -652,6 +674,7 @@ def test_local_reference_becomes_the_first_new_node(injected: Injected) -> None:
         "place": "hamlet",
         "name": "Westerheide",
         "name:frr-x-oomrang": "Waasterhias",
+        "name:de": "Westerheide",
         "frasch:kind": "settlement",
         "frasch:dialect": "frr-x-oomrang",
         "frasch:local": "Waasterhias",
