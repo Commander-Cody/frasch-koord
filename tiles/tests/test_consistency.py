@@ -53,7 +53,7 @@ NODES = (
     {
         1: ((9.25, 54.5), {"name": "Stadum"}),  # Stiardebel
         2: ((9.35, 54.5), {"name": "Nordwarft"}),  # Nordwärw's node
-        3: ((9.15, 54.5), {"name": "Ockholm", "wikidata": "Q1"}),  # only by QID
+        3: ((9.15, 54.5), {"place": "village", "name": "Ockholm", "wikidata": "Q1"}),  # only by QID
         4: ((9.15, 54.45), {}),  # Nordwärw's way starts here
     }
     | SYLT_NODES

@@ -734,7 +734,7 @@ def test_synthetic_square_carries_the_nodes_names_and_its_own_tags(injected: Inj
 # a dry run over a second extract, for what the report says about rows and
 # curation rows that do not fit: two rows on Holm, a QID-only row (the North
 # Sea), the Arlau with one same-named and one renamed member way, ids and
-# local references nobody can place
+# local references nobody can place, a shop that carries Holm's QID
 REPORT_PLACES = [
     dict(
         id="hulm",
@@ -791,6 +791,8 @@ def write_report_extract(path: Path) -> None:
             3: ((8.91, 54.61), {}),
             4: ((8.92, 54.61), {}),
             5: ((8.93, 54.61), {}),
+            # a shop mis-tagged with Holm's QID
+            6: ((8.9, 54.6), {"shop": "gift", "name": "Rosen-Huus", "wikidata": "Q559369"}),
         },
         ways={
             10: ([3, 4], {"waterway": "river", "name": "Arlau"}),
@@ -844,7 +846,7 @@ def test_report_of_rows_and_curation_rows_that_do_not_fit(
         "<dir>/places.csv uses it -- nothing added",
         "waterways : 2 member ways of matched waterway relations",
         "",
-        "scanned 8 objects in 0s",
+        "scanned 9 objects in 0s",
         "tagged  4 objects: 2 nodes, 1 ways, 1 relations (of these 1 matched by wikidata: "
         "1 of 2 QIDs present); 1 same-named member ways of waterway relations",
         "names written per dialect:",
@@ -854,7 +856,8 @@ def test_report_of_rows_and_curation_rows_that_do_not_fit(
         "1 rows reference ids that are not in in.osm.pbf:",
         "  node/99  Bräist",
         "",
-        "1 wikidata QIDs not present in the file: Q559369 (Hulm)",
+        "1 objects carry a QID of the list but are not place-like -- not tagged:",
+        "  n/6  Rosen-Huus: Q559369 (Hulm)",
         "",
         "curated 1 objects: 1 nodes, 0 ways, 0 relations",
         "  n/1  Holm: frasch:minzoom=11",
@@ -863,7 +866,7 @@ def test_report_of_rows_and_curation_rows_that_do_not_fit(
         "  n/98  Gone",
         "",
         "added 1 synthetic polygon(s):",
-        "  way/12 (nodes 6..9)  Sophien-Koog: 2 km²",
+        "  way/12 (nodes 7..10)  Sophien-Koog: 2 km²",
         "  ! n/97 Gone island: node not in in.osm.pbf, no polygon added",
         "",
         "(dry run -- nothing written)",
@@ -947,4 +950,70 @@ def test_the_member_ways_of_a_matched_waterway_relation_are_found(tmp_path: Path
     assert inject_names.scan_waterways(str(path), by_id) == {
         ("w", 10): (("r", 20), "Arlau"),
         ("w", 11): (("r", 20), "Arlau"),
+    }
+
+
+# --------------------------------------------------------- QID carriers ---
+# a QID reaches more than the row's own object: the place node next to a
+# matched boundary, the offshore sea node -- and, mis-tagged in OSM, a shop
+# (Rosen-Huus in Friedrichstadt carries the town's QID, #55)
+NORDSIIE = dict(id="nordsiie", kind="water", mooring="Nordsiie", de="Nordsee", wikidata="Q1693")
+
+
+def carrier_tags_after_run(tmp_path: Path, t: str, tags: dict[str, str]) -> dict[str, str]:
+    """The tags an object of type `t` carrying the North Sea's QID comes out with."""
+    (tmp_path / "places.csv").write_text(places_csv([NORDSIIE]), encoding="utf-8")
+    tags = tags | {"name": "Carrier", "wikidata": "Q1693"}
+    nodes: Nodes = {1: ((7.5, 54.5), tags if t == "n" else {}), 2: ((7.6, 54.5), {})}
+    ways = {10: ([1, 2], tags)} if t == "w" else {}
+    relations = {20: ([("n", 1, "")], tags)} if t == "r" else {}
+    write_osm(tmp_path / "in.osm.pbf", nodes=nodes, ways=ways, relations=relations)
+    with contextlib.redirect_stdout(io.StringIO()):
+        inject_names.run(
+            str(tmp_path / "in.osm.pbf"),
+            str(tmp_path / "out.osm.pbf"),
+            str(tmp_path / "places.csv"),
+            paths.DIALECTS,
+            None,
+            curation_csv=curation_file(tmp_path),
+        )
+    out = {(o[0], o[1]): o[2] for o in read_extract(tmp_path / "out.osm.pbf")}
+    return out[(t, {"n": 1, "w": 10, "r": 20}[t])]
+
+
+@pytest.mark.parametrize(
+    ("t", "tags"),
+    [
+        ("n", {"place": "sea"}),
+        ("n", {"natural": "peninsula"}),
+        ("w", {"natural": "water", "water": "lake"}),
+        ("w", {"water": "lake"}),
+        ("w", {"waterway": "river"}),
+        ("r", {"type": "waterway"}),
+        ("r", {"type": "boundary", "boundary": "administrative"}),
+        # a landmark that is also a sight: Lange Anna
+        ("w", {"natural": "bare_rock", "tourism": "attraction"}),
+    ],
+)
+def test_a_place_like_qid_carrier_gets_the_rows_names(
+    tmp_path: Path, t: str, tags: dict[str, str]
+) -> None:
+    assert carrier_tags_after_run(tmp_path, t, tags)["name:frr-x-mooring"] == "Nordsiie"
+
+
+@pytest.mark.parametrize(
+    ("t", "tags"),
+    [
+        ("n", {"shop": "gift"}),
+        ("n", {"amenity": "restaurant"}),
+        ("w", {"building": "yes"}),
+        ("r", {"type": "multipolygon", "landuse": "retail"}),
+    ],
+)
+def test_any_other_qid_carrier_passes_unchanged(
+    tmp_path: Path, t: str, tags: dict[str, str]
+) -> None:
+    assert carrier_tags_after_run(tmp_path, t, tags) == tags | {
+        "name": "Carrier",
+        "wikidata": "Q1693",
     }
