@@ -32,7 +32,7 @@ There is no `--dialect` switch any more: **every** dialect of the registry is in
 
 ### The `frasch:*` tile attributes
 
-Planetiler runs with `--extra_name_tags=frasch:kind,frasch:minzoom,frasch:maxzoom,frasch:dialect,frasch:local,frasch:variety,frasch:ref`. The stock OpenMapTiles profile passes tags listed there through verbatim, so they arrive as **string** attributes on the labelled `place` features. The names themselves are ordinary `name:*` attributes: one per dialect of `names/dialects.csv` (`--languages=de,da,nds,frr,$(names/dialects.py --tags)`), e.g. `name:frr-x-mooring`, `name:frr-x-fering`.
+Planetiler runs with `--extra_name_tags=frasch:kind,frasch:minzoom,frasch:maxzoom,frasch:dialect,frasch:local,frasch:variety,frasch:ref`. The stock OpenMapTiles profile passes tags listed there through verbatim, so they arrive as **string** attributes on the labelled `place` features. The names themselves are ordinary `name:*` attributes: one per dialect of `names/dialects.csv` (`--languages=de,da,nds,frr,$(names/dialects.py --tags)`), e.g. `name:frr-x-mooring`, `name:frr-x-fering`. The injector also writes the first variant of the row's `de` as `name:de`, in place of OSM's, so the map's German fallback says what the place card does (#61). Where the list has no German name, OSM's `name:de` stays.
 
 | attribute | source | meaning |
 |---|---|---|

@@ -41,7 +41,10 @@ export interface NameEntry {
    * before German, so the card needs it for the same reason as `name_frr`.
    */
   name_nds?: string;
-  /** German name, shown as a hint next to a Frisian one. */
+  /**
+   * German name — the list's `de`, shown as a hint next to a Frisian one. The
+   * tiles carry the same as `name:de` on the place's objects (issue #61).
+   */
   name_de: string;
   /**
    * The place's generic name — OSM's plain `name`, the chain's generic

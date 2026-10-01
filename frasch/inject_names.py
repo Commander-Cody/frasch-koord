@@ -16,6 +16,9 @@ dialect (the columns come from `names/dialects.csv`, the registry).  Every row
 that is not `skip` tags the object(s) in its `osm` column with
 
     name:<tag>       for every dialect whose name for the row is non-empty
+    name:de          the first variant of the row's `de`, in place of OSM's
+                     (the card's German name comes from the list, #61);
+                     OSM's stays where the list has none
     frasch:kind      the row's kind (island, hallig, sand, settlement, ...)
     frasch:dialect   the dialect spoken where the object lies
     frasch:local     what the people of the place themselves call it
@@ -112,6 +115,7 @@ from frasch.objects import LocatedObject, dialect_at, read_objects
 from frasch.placelist import OsmRef, PlaceRow, Ref, Row
 from frasch.registry import Registry
 
+GERMAN_KEY = "name:de"
 KIND_KEY = "frasch:kind"
 MINZOOM_KEY = curationlist.MINZOOM_KEY
 MAXZOOM_KEY = curationlist.MAXZOOM_KEY
@@ -205,33 +209,26 @@ def _conflicts(key: Ref, rows: Sequence[PlaceRow], reg: Registry) -> list[Confli
 
 def name_tags(rows: Sequence[Row], area_tag: str | None, reg: Registry) -> dict[str, str]:
     """The full tag dict for one object: a `name:<tag>` per dialect that has a
-    name for it, plus the frasch:* attributes.  `rows` are the name-list rows
-    claiming the object, in file order -- the first non-empty value wins."""
+    name for it, `name:de` where the list has a German name, plus the frasch:*
+    attributes.  `rows` are the name-list rows claiming the object, in file
+    order -- the first non-empty value wins."""
     tags: dict[str, str] = {}
     for d in reg:
-        for row in rows:
-            name = dialects.dialect_name(row, d["tag"], area_tag, reg)
-            if name:
-                tags["name:" + d["tag"]] = name
-                break
-    for row in rows:
-        if row["kind"]:
-            tags[KIND_KEY] = row["kind"]
-            break
-    if area_tag:
-        tags[DIALECT_KEY] = area_tag
-    for row in rows:
-        local = dialects.local_name(row, area_tag, reg)
-        if local:
-            tags[LOCAL_KEY] = local
-            break
-    for row in rows:
-        variety = dialects.variety(row)
-        if variety:
-            tags[VARIETY_KEY] = variety
-            break
+        tags["name:" + d["tag"]] = _first(
+            dialects.dialect_name(row, d["tag"], area_tag, reg) for row in rows
+        )
+    tags[GERMAN_KEY] = _first(placelist.primary(row["de"]) for row in rows)
+    tags[KIND_KEY] = _first(row["kind"] for row in rows)
+    tags[DIALECT_KEY] = area_tag or ""
+    tags[LOCAL_KEY] = _first(dialects.local_name(row, area_tag, reg) for row in rows)
+    tags[VARIETY_KEY] = _first(dialects.variety(row) for row in rows)
     tags[REF_KEY] = rows[0]["id"]
-    return tags
+    return {k: v for k, v in tags.items() if v}
+
+
+def _first(values: Iterable[str]) -> str:
+    """The first non-empty value, or `""`."""
+    return next(filter(None, values), "")
 
 
 def point_tags(

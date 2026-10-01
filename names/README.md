@@ -42,7 +42,7 @@ are gone from the tree; `git show b602a3f:names/bootstrap/` lists them.
 | `mooring` | the Mooring name(s). **The first one is the map label** in the Mooring view. |
 | `local` | the form the people of the place **itself** use where it differs from the dialect of the area around it (sub-dialects such as Fahretoft's *Foortuftinge*). Empty means "same as the area's dialect". The bracket remark names the variety and becomes the tile attribute `frasch:variety`: `Brouersweerw (Foortuftinge)`. |
 | one column per dialect | `wieding`, `karrhard`, `nordgoes`, `midgoes`, `suedgoes`, `fering`, `oomrang`, `solring`, `hallig`, `halunder` — the names in that dialect. **The column list comes from `dialects.csv`**, see below; the old catch-all `other` column is gone (see *Migration*). |
-| `de` | German name(s). What the matcher searches for in OSM. |
+| `de` | German name(s). What the matcher searches for in OSM. The first one is also the tiles' `name:de` on the row's objects, in place of OSM's (#61). |
 | `hint` | where the feature is, for matching: `Langeness`, `Ockholm`, `bei Leck`. Binding — a hint that matches nothing sends the row to review. |
 | `da` | Danish name(s). Used for matching when there is no German name. |
 | `osm` | the OSM object(s) that carry the label: `node/123`, `way/123`, `relation/123`. Several separated by `;` when OSM splits a river or dyke into pieces: `way/1; way/2`. A place **OSM does not have** carries a local reference instead: `local/<slug>` (lowercase ascii letters, digits, hyphens) alone in the cell, e.g. `local/westerheide-amrum` — never mixed with a real reference, never split by `;`. See *Places OSM does not have*. |

@@ -97,6 +97,7 @@ Sölring, Öömrang, Halunder and Hålifrasch names. They are now first-class.
 5. **Tile attributes** per matched object: `name:<tag>` for every dialect with a
    name, `frasch:kind` (unchanged), `frasch:dialect` (the area's dialect),
    `frasch:local` (the local name), `frasch:variety` (the variety's name).
+   (Since 2026-10-01 also `name:de` from the list's `de`, see below.)
 6. **Label chains** (Phase 1 = Schleswig-Holstein tiles, so Low Saxon is always
    the local majority language; a northern-Germany `within` polygon comes with
    the planet build):
@@ -475,6 +476,26 @@ A failing step stops the run. The exception is a decision that `curate.py
 apply` refuses: it stays in the patch as before, and the rest of the run
 goes on (the command exits 1). Otherwise one stale decision in the browser
 would block every update. Nothing is committed automatically.
+
+## Decided 2026-10-01: the list's German name is the tiles' `name:de` (issue #61)
+
+The injector writes the first variant of a row's `de` as `name:de` on every
+object the row tags, in place of OSM's own. Where the list has no German name,
+OSM's `name:de` stays. `check_tiles.py` holds the tiles to it like the
+dialect and the local name.
+
+**Why**: the label chain's `name:de` step read two different things. The map
+took OSM's `name:de` from the tile, while the place card and the search
+results took the list's `de` from names.json. With today's data no listed
+place reaches that step: a row is on the map only with a Frisian name, and
+the dialect chain tries every dialect first. The local view reaches it only
+for an object without an OSM `name`. But it would have split as soon as one
+did. Writing the list's name into the tiles makes the two sides agree by
+construction, and the map's German fallback follows the curated list rather
+than OSM. The other option was to carry OSM's `name:de` in names.json beside
+the list's (as `name_osm` does for `name`, #32). That would have kept OSM's
+German names on the map. It changes 5 objects today, e.g. *Norddorf auf
+Amrum* → *Norddorf* and *Glücksburg (Ostsee)* → *Glücksburg*.
 
 ## Remaining open questions
 1. Hosting provider for the site (R2 + Pages proposed, nothing set up yet); the tiles are GitHub release assets for now (issue #28).
