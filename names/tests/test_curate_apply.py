@@ -52,7 +52,9 @@ def append(path: Path, *entries: object) -> None:
 def lines(path: Path) -> list[Any]:
     if not path.exists():
         return []
-    return [json.loads(x) for x in path.read_text(encoding="utf-8").splitlines() if x]
+    # split at newlines only, as a file is read: `splitlines` also splits
+    # inside a JSON string that holds a line separator (U+2028)
+    return [json.loads(x) for x in path.read_text(encoding="utf-8").split("\n") if x]
 
 
 @dataclasses.dataclass
@@ -142,6 +144,19 @@ def test_refused_entry_redecided_meanwhile_is_not_appended_back(
     during_read(monkeypatch, lambda: append(w.patch, newer))
     assert w.apply() == 1
     assert lines(w.patch) == [newer]  # the newer decision wins
+
+
+def test_a_newer_decision_is_found_whatever_characters_its_note_has(
+    w: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # the browser's JSON.stringify writes a line separator (U+2028) as it is:
+    # it ends no line of the patch, and hides no newer decision
+    refused = entry(4, action="osm", osm="node/5")
+    append(w.patch, refused)
+    newer = entry(4, action="skip", note="erst\u2028dann")
+    during_read(monkeypatch, lambda: append(w.patch, newer))
+    assert w.apply() == 1
+    assert lines(w.patch) == [newer]
 
 
 def test_bad_curation_csv_leaves_places_csv_untouched(
@@ -381,9 +396,11 @@ def test_an_entry_that_breaks_the_patch_schema_is_refused_and_kept(
     assert lines(w.patch) == [broken]
 
 
-def test_a_refused_line_with_the_keys_apply_uses_itself_comes_back_unchanged(w: World) -> None:
-    # `_raw` and `_patch_line` are what apply adds to a line it read; a
-    # hand-edited line that happens to carry them is still kept as written
+def test_a_refused_line_with_keys_the_schema_does_not_know_comes_back_unchanged(
+    w: World,
+) -> None:
+    # apply keeps what it knows about a line apart from the line's value: a
+    # hand-edited line with keys of its own is kept as written
     foreign = entry(2, action="skip") | {"_raw": "x", "_patch_line": 7}
     append(w.patch, foreign)
     assert w.apply() == 1

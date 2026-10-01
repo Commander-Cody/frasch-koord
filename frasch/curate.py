@@ -51,11 +51,12 @@ import collections
 import csv
 import dataclasses
 import functools
+import io
 import json
 import os
 import sys
 import time
-from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Iterator, Mapping, Sequence
 from typing import Any, Literal, NotRequired, TypedDict, final
 
 import jsonschema
@@ -76,11 +77,6 @@ from frasch.errors import PipelineError, ValidationError
 from frasch.hints import HINT_FALLBACK, Circle, HintResolver
 from frasch.paths import StrPath
 from frasch.placelist import OsmRef, PlaceRow, Row
-
-CAND_PATH = paths.CANDIDATES
-MATCH_PATH = paths.MATCHES
-WORKLIST_PATH = paths.WORKLIST
-PATCH_PATH = paths.PATCH
 
 # The order the browser walks the worklist in: the kinds a human can decide
 # quickly first (a village is either there or it is not), the vague ones last.
@@ -417,28 +413,31 @@ class PatchEntry(TypedDict):
     at: NotRequired[str]
 
 
-# What apply adds to a line it read: its line number in the patch
-# (`_patch_line`), and for a line that is no valid entry what is wrong with it
-# (`_problem`) and the line's value itself (`_raw`).
-
-
 @final
-class ReadEntry(PatchEntry):
+@dataclasses.dataclass(frozen=True)
+class EntryLine:
     """A valid line of the patch as apply read it."""
 
-    _patch_line: int
+    number: int  # its line in the patch
+    entry: PatchEntry
+
+    @property
+    def value(self) -> object:
+        """The line's JSON value, as the patch holds it."""
+        return self.entry
 
 
 @final
-class RefusedLine(TypedDict):
+@dataclasses.dataclass(frozen=True)
+class RefusedLine:
     """A line of the patch that is no valid entry, as apply read it."""
 
-    _patch_line: int
-    _problem: str
-    _raw: object  # the line's JSON value
+    number: int  # its line in the patch
+    value: object  # the line's JSON value, as the patch holds it
+    problem: str  # what makes it no valid entry
 
 
-PatchLine = ReadEntry | RefusedLine
+PatchLine = EntryLine | RefusedLine
 
 
 def patch_key(value: object) -> str | None:
@@ -460,22 +459,36 @@ def read_patch(path: StrPath) -> list[PatchLine]:
     back the row's earlier decision.  A line without a usable id (a patch
     from before the row ids) is a decision of its own, never swallowed by a
     later one."""
+
+    def not_json(n: int, exc: ValueError) -> None:
+        print(f"{path}:{n}: not JSON ({exc}) -- ignored", file=sys.stderr)
+
     last: dict[str | tuple[str, int], PatchLine] = {}
     with open(path, encoding="utf-8") as fh:
-        for n, line in enumerate(fh, start=1):
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                e = patch_entry(json.loads(line), n)
-            except ValueError as exc:
-                print(f"{path}:{n}: not JSON ({exc}) -- ignored", file=sys.stderr)
-                continue
-            last[patch_key(stored(e)) or ("line", n)] = e
+        for line in patch_lines(fh, not_json):
+            last[patch_key(line.value) or ("line", line.number)] = line
     return sorted(last.values(), key=_patch_order)
 
 
-def patch_entry(value: Any, n: int) -> PatchLine:
+def patch_lines(
+    text: Iterable[str], not_json: Callable[[int, ValueError], object] = lambda n, exc: None
+) -> Iterator[PatchLine]:
+    """The lines of a patch (its text, a newline-ended line at a time, as
+    a file gives it) as apply reads them, blank ones left out; a line that
+    is no JSON goes to `not_json` with its number instead."""
+    for n, line in enumerate(text, start=1):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            value = json.loads(line)
+        except ValueError as exc:
+            not_json(n, exc)
+            continue
+        yield patch_line(value, n)
+
+
+def patch_line(value: Any, n: int) -> PatchLine:
     """One parsed line of the patch as apply handles it: the entry plus its
     line, or the line's value and what makes it no valid entry."""
     why = (
@@ -484,29 +497,21 @@ def patch_entry(value: Any, n: int) -> PatchLine:
         else "not a JSON object (curate-patch.schema.json)"
     )
     if why:
-        return {"_patch_line": n, "_problem": why, "_raw": value}
+        return RefusedLine(n, value, why)
     entry: PatchEntry = value  # valid: the schema's shape
-    return {**entry, "_patch_line": n}
+    return EntryLine(n, entry)
 
 
-def _patch_order(entry: PatchLine) -> tuple[int, int]:
+def _patch_order(line: PatchLine) -> tuple[int, int]:
     """Places.csv order (the row's `line` when the worklist was exported),
     then patch order."""
-    line = entry.get("line") if "_problem" not in entry else None
-    return (line or 0, entry["_patch_line"])
+    row_line = line.entry.get("line") if isinstance(line, EntryLine) else None
+    return (row_line or 0, line.number)
 
 
-def stored(entry: PatchLine) -> object:
-    """A line as the patch holds it: without what apply added."""
-    if "_problem" in entry:
-        return entry["_raw"]
-    return {k: v for k, v in entry.items() if k != "_patch_line"}
-
-
-def _names_of(entry: PatchLine) -> str:
+def _names_of(line: PatchLine) -> str:
     """`name / de` of the row a line is about, for the messages."""
-    value = stored(entry)
-    fields = value if isinstance(value, dict) else {}
+    fields = line.value if isinstance(line.value, dict) else {}
     return f"{fields.get('name')} / {fields.get('de')}"
 
 
@@ -527,13 +532,12 @@ def schema_problem(entry: object) -> str | None:
 
 def line_problem(line: RefusedLine) -> str:
     """Why apply refuses a line that is no valid entry."""
-    raw = line["_raw"]
-    if isinstance(raw, dict) and "id" not in raw:
+    if isinstance(line.value, dict) and "id" not in line.value:
         return (
             "no `id` (a patch from before the row ids -- "
             "re-run names/curate.py export and decide it again)"
         )
-    return line["_problem"]
+    return line.problem
 
 
 def owner_problem(row: PlaceRow, names: str) -> str | None:
@@ -662,8 +666,8 @@ def _apply(names: str, curation: str, patch: str, dry_run: bool, keep: bool) -> 
     cur_written: str | None = None  # digest of the curation.csv apply wrote
     decisions = _Decisions()
     try:
-        for e in read_patch(snapshot or patch):
-            _decide_entry(e, lists, decisions)
+        for line in read_patch(snapshot or patch):
+            _decide_entry(line, lists, decisions)
 
         if dry_run:
             print(
@@ -755,29 +759,30 @@ class _Decisions:
     def refused(self) -> int:
         return len(self.kept_back)
 
-    def refuse(self, entry: PatchLine, why: str) -> None:
-        self.kept_back.append(entry)
-        print(f"  refused patch line {entry['_patch_line']} ({_names_of(entry)}): {why}")
+    def refuse(self, line: PatchLine, why: str) -> None:
+        self.kept_back.append(line)
+        print(f"  refused patch line {line.number} ({_names_of(line)}): {why}")
 
 
-def _decide_entry(e: PatchLine, lists: _Lists, decisions: _Decisions) -> None:
+def _decide_entry(line: PatchLine, lists: _Lists, decisions: _Decisions) -> None:
     """Write one entry of the patch into its row, or refuse it."""
-    if "_problem" in e:
-        decisions.refuse(e, line_problem(e))
+    if isinstance(line, RefusedLine):
+        decisions.refuse(line, line_problem(line))
         return
+    e = line.entry
     if e["action"] == "clear":
         return  # withdrawn in the browser
     row = lists.by_id.get(e["id"])
     if row is None:
         decisions.refuse(
-            e, f"no row with id {e['id']!r} in {lists.names} (deleted since the export?)"
+            line, f"no row with id {e['id']!r} in {lists.names} (deleted since the export?)"
         )
         return
     why = owner_problem(row, lists.names)
     if why is None:
         why = _decide_row(e, row, lists.used_slugs, decisions.new_curation)
     if why:
-        decisions.refuse(e, why)
+        decisions.refuse(line, why)
         return
     print(
         f"  {lists.names}:{row.line} {placelist.describe(row)}: {decision_text(e, row, lists.curation)}"
@@ -817,9 +822,9 @@ def _keep_refused(snapshot: str, patch: str, kept_back: Sequence[PatchLine]) -> 
         )
 
 
-def append_back(path: str, entries: Iterable[PatchLine]) -> int:
-    """Append refused entries to the live patch -- appending, never
-    rewriting, because the dev server may be appending to it too.  An entry
+def append_back(path: str, refused: Iterable[PatchLine]) -> int:
+    """Append refused lines to the live patch -- appending, never
+    rewriting, because the dev server may be appending to it too.  A line
     whose row has been decided again since then is dropped: the newer
     decision wins, as it would in `read_patch`.  -> how many were appended."""
     newer: set[str] = set()
@@ -828,17 +833,14 @@ def append_back(path: str, entries: Iterable[PatchLine]) -> int:
         with open(path, encoding="utf-8") as fh:
             text = fh.read()
         ends_nl = not text or text.endswith("\n")
-        for line in text.splitlines():
-            try:
-                e = json.loads(line)
-            except ValueError:
-                continue
-            if key := patch_key(e):
-                newer.add(key)
+        # line by line as a file is read (not `splitlines`, which also ends
+        # a line inside a JSON string that holds a U+2028)
+        keys = (patch_key(line.value) for line in patch_lines(io.StringIO(text)))
+        newer = {key for key in keys if key}
     lines = [
-        json.dumps(stored(e), ensure_ascii=False) + "\n"
-        for e in entries
-        if patch_key(stored(e)) not in newer
+        json.dumps(line.value, ensure_ascii=False) + "\n"
+        for line in refused
+        if patch_key(line.value) not in newer
     ]
     if lines:
         with open(path, "a", encoding="utf-8") as fh:
@@ -930,16 +932,16 @@ def parser() -> tuple[argparse.ArgumentParser, set[str]]:
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     ex = sub.add_parser("export", help="write the worklist for the browser")
-    ex.add_argument("--names", default=placelist.DEFAULT_PATH)
-    ex.add_argument("--matches", default=MATCH_PATH)
-    ex.add_argument("--candidates", default=CAND_PATH)
-    ex.add_argument("--out", default=WORKLIST_PATH)
+    ex.add_argument("--names", default=paths.PLACES)
+    ex.add_argument("--matches", default=paths.MATCHES)
+    ex.add_argument("--candidates", default=paths.CANDIDATES)
+    ex.add_argument("--out", default=paths.WORKLIST)
     ex.set_defaults(func=cmd_export)
 
     ap_ = sub.add_parser("apply", help="write the browser's decisions back")
-    ap_.add_argument("--names", default=placelist.DEFAULT_PATH)
+    ap_.add_argument("--names", default=paths.PLACES)
     ap_.add_argument("--curation", default=paths.CURATION)
-    ap_.add_argument("--patch", default=PATCH_PATH)
+    ap_.add_argument("--patch", default=paths.PATCH)
     ap_.add_argument(
         "--dry-run", action="store_true", help="print what would change and write nothing"
     )
