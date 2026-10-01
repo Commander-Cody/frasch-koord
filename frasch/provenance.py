@@ -30,9 +30,7 @@ import os
 from collections.abc import Mapping, Sequence
 from typing import TypedDict
 
-import osmium
-
-from frasch import cli, paths
+from frasch import cli, osmscan, paths
 from frasch.paths import StrPath
 
 
@@ -56,11 +54,7 @@ def blob_hash(path: StrPath) -> str:
 def extract_stamp(pbf: StrPath) -> ExtractStamp:
     """`{"file", "replication_timestamp"}` of an OSM extract; the timestamp is
     `""` when the header has none."""
-    reader = osmium.io.Reader(str(pbf))
-    try:
-        timestamp = reader.header().get("osmosis_replication_timestamp") or ""
-    finally:
-        reader.close()
+    timestamp = osmscan.header(pbf).get("osmosis_replication_timestamp") or ""
     return {"file": os.path.basename(pbf), "replication_timestamp": timestamp}
 
 

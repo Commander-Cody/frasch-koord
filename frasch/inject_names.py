@@ -90,7 +90,7 @@ import collections
 import os
 import time
 from collections.abc import Container, Iterable, Mapping, Sequence
-from typing import NotRequired, TypedDict
+from typing import NamedTuple, NotRequired, TypedDict
 
 import osmium
 
@@ -130,19 +130,31 @@ _OsmObject = osmium.osm.Node | osmium.osm.Way | osmium.osm.Relation
 Conflict = tuple[Ref, str, str, int, str, int]
 
 
+# (QID, line of the row that keeps it, line of a later row that is ignored)
+DuplicateQid = tuple[str, int, int]
+
+
 # ------------------------------------------------------------ name list ----
-def load_names(path: str, reg: Registry) -> tuple[dict[Ref, list[PlaceRow]],
-                                                 dict[str, list[PlaceRow]], int,
-                                                 list[Conflict]]:
-    """-> (by_id, by_qid, n_rows_used, conflicts)
+class NameList(NamedTuple):
+    """The name list as the injector uses it.
 
     by_id maps ('w', 12) -> [row, ...] in file order (a local reference is
     the key ('l', slug)), by_qid 'Q42' -> [row].  The rows are kept whole
     because the tags of an object depend on where it lies (see `name_tags`),
-    which is only known while the file streams past."""
+    which is only known while the file streams past.  `conflicts` and
+    `duplicate_qids` are reported, not fatal: the first row wins."""
+    by_id: dict[Ref, list[PlaceRow]]
+    by_qid: dict[str, list[PlaceRow]]
+    used: int
+    conflicts: list[Conflict]
+    duplicate_qids: list[DuplicateQid]
+
+
+def load_names(path: str, reg: Registry) -> NameList:
     by_id: dict[Ref, list[PlaceRow]] = {}
     by_qid: dict[str, list[PlaceRow]] = {}
     conflicts: list[Conflict] = []
+    duplicate_qids: list[DuplicateQid] = []
     used = 0
     rows, _ = placelist.read(path, reg)
     for row in rows:
@@ -162,11 +174,13 @@ def load_names(path: str, reg: Registry) -> tuple[dict[Ref, list[PlaceRow]],
         # the place node next to a matched boundary relation).  Only rows
         # without any OSM id depend on this; for the others it is a bonus.
         qid = row["wikidata"]
-        if qid and qid not in by_qid:
+        if qid in by_qid:
+            duplicate_qids.append((qid, by_qid[qid][0].line, row.line))
+        elif qid:
             by_qid[qid] = [row]
     for key, claim in by_id.items():
         conflicts += _conflicts(key, claim, reg)
-    return by_id, by_qid, used, conflicts
+    return NameList(by_id, by_qid, used, conflicts, duplicate_qids)
 
 
 def _conflicts(key: Ref, rows: Sequence[PlaceRow], reg: Registry) -> list[Conflict]:
@@ -519,7 +533,7 @@ def run(inp: str, out: str, names_csv: str, dialects_csv: str, areas_geojson: st
         curation_required: bool = False, areas_required: bool = False,
         objects_json: str = DEFAULT_OBJECTS) -> int:
     reg = registry.read(dialects_csv)
-    by_id, by_qid, used, conflicts = load_names(names_csv, reg)
+    by_id, by_qid, used, conflicts, duplicate_qids = load_names(names_csv, reg)
     local_keys = sorted(k for k in by_id if k[0] == placelist.LOCAL_TYPE)
     print(f"name list : {names_csv}")
     print(f"dialects  : {dialects_csv} -> {len(reg)} columns "
@@ -531,6 +545,9 @@ def run(inp: str, out: str, names_csv: str, dialects_csv: str, areas_geojson: st
         print(f"  ! {placelist.format_osm([ckey])} claimed twice in `{column}`: "
               f"keeping {kept!r} (line {kept_line}), ignoring {dropped!r} "
               f"(places.csv line {line})")
+    for qid, kept_line, line in duplicate_qids:
+        print(f"  ! {qid} claimed twice: keeping line {kept_line}, ignoring "
+              f"places.csv line {line}")
 
     areas: dialects.AreaIndex | None = None
     if areas_geojson and os.path.exists(areas_geojson):
@@ -593,7 +610,7 @@ def run(inp: str, out: str, names_csv: str, dialects_csv: str, areas_geojson: st
     if not dry_run:
         # copy the input header so the extract bounds survive (Planetiler uses
         # them; without bounds it renders low-zoom tiles for the whole world)
-        writer = osmium.SimpleWriter(out, overwrite=True, header=osmium.io.Reader(inp).header())
+        writer = osmium.SimpleWriter(out, overwrite=True, header=osmscan.header(inp))
     inj = Injector(writer, by_id, by_qid, reg, areas, objects, curation,
                    members, synthetic, points)
 
