@@ -1024,8 +1024,7 @@ def run(args: argparse.Namespace) -> int:
                     else "cleared" if before[2] == "auto" and not after[2]
                     else "changed"] += 1
 
-    # matches.csv first: a run that cannot write it leaves places.csv as it
-    # was, so the two never describe different runs
+    # matches.csv first: a run that cannot write it leaves places.csv as it was
     write_matches(rows, results, index, args.matches)
     if not args.dry_run:
         placelist.write(rows, args.names, fields)
