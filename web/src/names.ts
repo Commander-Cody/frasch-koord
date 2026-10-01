@@ -9,7 +9,7 @@ import { labelChain } from './labelChain';
 import type { BuiltFrom } from './provenance';
 
 /**
- * One entry of public/data/names.json, written by names/export_search_index.py.
+ * One entry of public/data/names.json, written by frasch/searchindex.py.
  * Only non-empty values are exported, so every optional field is genuinely
  * absent rather than an empty string.
  */
@@ -36,7 +36,7 @@ export interface NameEntry {
   name_frr?: string;
   /**
    * Low Saxon name — OSM's `name:nds`, never our name list (it has no Low
-   * Saxon column). names/export_search_index.py takes it from the object's
+   * Saxon column). frasch/searchindex.py takes it from the object's
    * entry in names/osm_objects.json, a tile feature carries it itself. The label chain falls back to it
    * before German, so the card needs it for the same reason as `name_frr`.
    */
@@ -48,7 +48,7 @@ export interface NameEntry {
    * steps near its end (`name:latin`, `name`) and therefore what the local
    * view labels a place with that has neither a local nor a Low Saxon name. In this region
    * that is usually the German name, but north of the border it is the Danish
-   * one (Ribe, where German says Ripen). names/export_search_index.py takes it
+   * one (Ribe, where German says Ripen). frasch/searchindex.py takes it
    * from names/osm_objects.json, a tile feature carries it itself.
    */
   name_osm?: string;
@@ -348,8 +348,14 @@ export function osmUrl(ref: string | undefined): string | null {
   return `https://www.openstreetmap.org/${type}/${rest}`;
 }
 
+/**
+ * A Wikidata item id (`Q42`), the shape the patch contract
+ * (names/curate-patch.schema.json) and frasch/placelist.py take too.
+ */
+export const WIKIDATA_ID = /^Q\d+$/;
+
 export function wikidataUrl(qid: string | undefined): string | null {
-  return qid && /^Q\d+$/.test(qid) ? `https://www.wikidata.org/wiki/${qid}` : null;
+  return qid && WIKIDATA_ID.test(qid) ? `https://www.wikidata.org/wiki/${qid}` : null;
 }
 
 /**

@@ -52,6 +52,23 @@ export function hasPoint(
 /* ------------------------------------------------------------------- pins */
 
 const FIT_MAX_ZOOM = 14;
+/** What the map flies to when the row has nothing to pin: the region. */
+const REGION_ZOOM = 9;
+/** What a click on a lookup pin flies to: the object. */
+const PIN_ZOOM = 14;
+
+/** Where the pins register by ref, and what clicking them does. */
+interface PinWiring {
+  /** Pin element per ref (`useRowPins`'s `pinEls`). */
+  pins: Map<string, HTMLElement>;
+  onActivate: (ref: string) => void;
+  onToggle: (ref: string, wikidata?: string) => void;
+}
+
+/** Both moves answer the user's own action, so `essential`: reduced motion does not skip them. */
+function flyTo(map: MapLibreMap, center: [number, number], zoom: number): void {
+  map.flyTo({ center, zoom, essential: true });
+}
 
 /** A numbered dot as a marker element; MapLibre positions it, we only style it. */
 function pinElement(label: string, color: string, title: string): HTMLElement {
@@ -61,6 +78,15 @@ function pinElement(label: string, color: string, title: string): HTMLElement {
   el.textContent = label;
   el.title = title;
   return el;
+}
+
+/** A pin's click and shift-click; neither reaches the map (position picking). */
+function onPinClick(el: HTMLElement, click: () => void, shiftClick: () => void): void {
+  el.addEventListener('click', (event) => {
+    event.stopPropagation();
+    if (event.shiftKey) shiftClick();
+    else click();
+  });
 }
 
 /** Drops `el` from the ref -> pin map, leaving another pin under the same ref alone. */
@@ -157,7 +183,7 @@ export function useRowPins(options: RowPinsOptions): void {
     if (!map) return;
     const pins = pinEls.current;
     const bounds = new LngLatBounds();
-    const markers = [...candidateMarkers(map, row, pins, onActivate, onToggle, bounds)];
+    const markers = [...candidateMarkers(map, row, { pins, onActivate, onToggle }, bounds)];
     const hint = row.hint_point;
     if (hint) markers.push(hintMarker(map, hint, row.hint, bounds));
     const stopCircle = hint ? drawHintCircle(map, hint) : () => {};
@@ -167,7 +193,7 @@ export function useRowPins(options: RowPinsOptions): void {
     } else {
       // Nothing to look at: at least put the region on screen.
       const [w, s, e, n] = bbox;
-      map.flyTo({ center: [(w + e) / 2, (s + n) / 2], zoom: 9, essential: true });
+      flyTo(map, [(w + e) / 2, (s + n) / 2], REGION_ZOOM);
     }
 
     return () => {
@@ -180,7 +206,9 @@ export function useRowPins(options: RowPinsOptions): void {
     const map = mapRef.current?.getMap();
     if (!map || lookupResults.length === 0) return;
     const pins = pinEls.current;
-    const markers = lookupResults.map((result, i) => lookupMarker(map, result, i, pins, onToggle));
+    const markers = lookupResults.map((result, i) =>
+      lookupMarker(map, result, i, { pins, onToggle }),
+    );
     return () => removeMarkers(markers, pins);
   }, [lookupResults, mapRef, onToggle]);
 
@@ -196,9 +224,7 @@ export function useRowPins(options: RowPinsOptions): void {
 function candidateMarkers(
   map: MapLibreMap,
   row: CurateRow,
-  pins: Map<string, HTMLElement>,
-  onActivate: (ref: string) => void,
-  onToggle: (ref: string, wikidata?: string) => void,
+  { pins, onActivate, onToggle }: PinWiring,
   bounds: LngLatBounds,
 ): Marker[] {
   const markers: Marker[] = [];
@@ -206,12 +232,11 @@ function candidateMarkers(
     if (!hasPoint(candidate)) return;
     const title = `${candidate.ref} ${candidate.name} (${candidate.class})`;
     const el = pinElement(String(i + 1), candidateColor(candidate), title);
-    el.addEventListener('click', (event) => {
-      // Otherwise the click would also reach the map (position picking).
-      event.stopPropagation();
-      if (event.shiftKey) onToggle(candidate.ref, candidate.wikidata);
-      else onActivate(candidate.ref);
-    });
+    onPinClick(
+      el,
+      () => onActivate(candidate.ref),
+      () => onToggle(candidate.ref, candidate.wikidata),
+    );
     pins.set(candidate.ref, el);
     markers.push(new Marker({ element: el }).setLngLat([candidate.lon, candidate.lat]).addTo(map));
     bounds.extend([candidate.lon, candidate.lat]);
@@ -259,16 +284,15 @@ function lookupMarker(
   map: MapLibreMap,
   result: LookupResult,
   i: number,
-  pins: Map<string, HTMLElement>,
-  onToggle: (ref: string, wikidata?: string) => void,
+  { pins, onToggle }: Pick<PinWiring, 'pins' | 'onToggle'>,
 ): Marker {
   const el = pinElement(String(i + 1), COLOR_LOOKUP, `${result.ref} ${result.name}`);
   el.classList.add('curate-pin-lookup');
-  el.addEventListener('click', (event) => {
-    event.stopPropagation();
-    if (event.shiftKey) onToggle(result.ref, result.wikidata);
-    else map.flyTo({ center: [result.lon, result.lat], zoom: 14, essential: true });
-  });
+  onPinClick(
+    el,
+    () => flyTo(map, [result.lon, result.lat], PIN_ZOOM),
+    () => onToggle(result.ref, result.wikidata),
+  );
   // A ref that is also a candidate keeps its candidate pin in the map.
   if (!pins.has(result.ref)) pins.set(result.ref, el);
   return new Marker({ element: el }).setLngLat([result.lon, result.lat]).addTo(map);

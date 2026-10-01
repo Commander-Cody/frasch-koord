@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 
+import patchSchema from '../../names/curate-patch.schema.json';
 import {
   cardEntry,
   entryLookup,
@@ -11,6 +12,7 @@ import {
   primary,
   resolveName,
   useNames,
+  WIKIDATA_ID,
   type NameEntry,
 } from './names';
 
@@ -328,6 +330,21 @@ describe('osmUrl', () => {
   it('returns null when there is no reference at all', () => {
     expect(osmUrl(undefined)).toBeNull();
   });
+});
+
+// The card links a row's QID only if WIKIDATA_ID takes it, and the curation
+// panel saves one only if the patch schema does: the two must never disagree.
+// The schema also takes the empty string (an empty cell), which wikidataUrl
+// turns away before it tests, so the samples are all non-empty.
+describe('WIKIDATA_ID', () => {
+  const schema = new RegExp(patchSchema.properties.wikidata.pattern);
+
+  it.each(['Q1', 'Q42', 'Q559369', 'q42', 'Q', 'Q4a', ' Q42', 'P31', 'Q-1'])(
+    'takes %j exactly when the patch schema does',
+    (qid) => {
+      expect(WIKIDATA_ID.test(qid)).toBe(schema.test(qid));
+    },
+  );
 });
 
 describe('entryLookup', () => {

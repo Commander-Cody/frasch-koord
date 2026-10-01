@@ -101,7 +101,7 @@ export function usePlaceSelection(
 
   /**
    * `frasch:ref` is the id of the feature's row in the name list
-   * (tiles/inject_names.py writes it, names/export_search_index.py uses it as
+   * (frasch/inject_names.py writes it, frasch/searchindex.py uses it as
    * the entry id; tiles built before the row ids carry the row's OSM
    * reference, which `find` knows too); a feature without one, or one the
    * list does not have, still gets a card — from the tile's own attributes.

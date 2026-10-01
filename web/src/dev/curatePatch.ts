@@ -7,7 +7,7 @@ import patchSchema from '../../../names/curate-patch.schema.json';
 
 /** One line of `names/work/curate-patch.jsonl`. */
 export interface PatchEntry {
-  /** The places.csv row's `id` — what names/curate.py apply finds the row by. */
+  /** The places.csv row's `id` — what frasch/curate.py's `apply` finds the row by. */
   id: string;
   /** Its line in places.csv when the worklist was exported; for messages only. */
   line: number;
@@ -48,7 +48,7 @@ export async function postPatchEntry(entry: PatchEntry): Promise<PatchEntry> {
 }
 
 /**
- * The decided rows: the last entry per row id, as names/curate.py apply reads
+ * The decided rows: the last entry per row id, as frasch/curate.py's `apply` reads
  * the patch. A `clear` entry withdraws the row's decision.
  */
 export function decidedRows(entries: PatchEntry[]): Map<string, PatchEntry> {
