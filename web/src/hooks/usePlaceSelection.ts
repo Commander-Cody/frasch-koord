@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import type { LngLat, MapGeoJSONFeature } from 'maplibre-gl';
 
@@ -21,6 +21,21 @@ const ZOOM_BY_KIND: Record<string, number> = {
 };
 const DEFAULT_TARGET_ZOOM = 14;
 
+/**
+ * What was clicked or picked: the name-list reference, and for a map click
+ * the tile feature. The entry itself is looked up on every render, so a card
+ * opened before the name list has loaded gets it once the list is there.
+ */
+interface PickedPlace {
+  ref?: string;
+  props?: TileProps;
+  featureId?: string | number;
+}
+
+function selectionOf({ ref, props, featureId }: PickedPlace, find: EntryLookup): PlaceSelection {
+  return { entry: ref === undefined ? undefined : find(ref), props, featureId };
+}
+
 /** A map move given how many pixels at the bottom of the map the card covers. */
 type Move = (inset: number) => void;
 
@@ -31,7 +46,7 @@ type Move = (inset: number) => void;
  * laid out — before paint, so the map starts moving in the same frame the
  * sheet shows.
  */
-function useMoveAfterCard(cardRef: RefObject<HTMLElement | null>, selection: PlaceSelection | null) {
+function useMoveAfterCard(cardRef: RefObject<HTMLElement | null>, picked: PickedPlace | null) {
   const pendingMove = useRef<Move | null>(null);
   useLayoutEffect(() => {
     const move = pendingMove.current;
@@ -39,7 +54,7 @@ function useMoveAfterCard(cardRef: RefObject<HTMLElement | null>, selection: Pla
     if (!move) return;
     const card = cardRef.current;
     move(card && window.matchMedia(PHONE_MEDIA).matches ? card.offsetHeight : 0);
-  }, [cardRef, selection]);
+  }, [cardRef, picked]);
   return useCallback((move: Move) => {
     pendingMove.current = move;
   }, []);
@@ -67,17 +82,18 @@ export function usePlaceSelection(
   find: EntryLookup,
   view: string,
 ): PlaceSelectionState {
-  const [selection, setSelection] = useState<PlaceSelection | null>(null);
-  const moveAfterCard = useMoveAfterCard(cardRef, selection);
+  const [picked, setPicked] = useState<PickedPlace | null>(null);
+  const selection = useMemo(() => picked && selectionOf(picked, find), [picked, find]);
+  const moveAfterCard = useMoveAfterCard(cardRef, picked);
 
   const selectEntry = (entry: NameEntry, name: string) => {
     const zoom = ZOOM_BY_KIND[entry.kind] ?? DEFAULT_TARGET_ZOOM;
     moveAfterCard((inset) => mapRef.current?.flyTo([entry.lon, entry.lat], zoom, { title: name }, inset));
-    setSelection({ entry });
+    setPicked({ ref: entry.id });
   };
 
   const close = useCallback(() => {
-    setSelection(null);
+    setPicked(null);
     mapRef.current?.clearMarker();
   }, [mapRef]);
 
@@ -99,16 +115,12 @@ export function usePlaceSelection(
       moveAfterCard((inset) => mapRef.current?.reveal(at, inset));
       const props = feature.properties as TileProps;
       const ref = props['frasch:ref'];
-      setSelection({
-        entry: typeof ref === 'string' ? find(ref) : undefined,
-        props,
-        featureId: feature.id,
-      });
+      setPicked({ ref: typeof ref === 'string' ? ref : undefined, props, featureId: feature.id });
       // The label the user just clicked says where the place is; a search
       // marker from before would only sit somewhere else.
       mapRef.current?.clearMarker();
     },
-    [find, close, mapRef, moveAfterCard],
+    [close, mapRef, moveAfterCard],
   );
 
   const openLinked = (entry: NameEntry, hasViewport: boolean) => {
@@ -117,7 +129,7 @@ export function usePlaceSelection(
       selectEntry(entry, name);
       return;
     }
-    setSelection({ entry });
+    setPicked({ ref: entry.id });
     mapRef.current?.showMarker([entry.lon, entry.lat], { title: name });
     // The link keeps its viewport, but a desktop sharer never had the
     // phone's sheet in the way.

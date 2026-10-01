@@ -1,12 +1,13 @@
 {
   "app": {
-    "title": ""
+    "title": "Frasch Maps"
   },
   "search": {
-    "placeholder": "Stää säke…",
+    "label": "Stää säke",
+    "placeholder": "Säk en stää…",
     "noResults": "Niinj riseltoote",
-    "loading": "",
-    "error": ""
+    "loading": "Toorpslist wårt leesed…",
+    "error": "E toorpslist köö ai leesed wårde, et koon ai am stäänge soocht wårde"
   },
   "dialect": {
     "label": "Spräkewise",
@@ -43,9 +44,9 @@
     "wikidata": "Wikidata"
   },
   "errors": {
-    "map": "",
-    "panel": "",
-    "dismiss": ""
+    "map": "Diile foon e koord köön ai leesed wårde",
+    "panel": "Heer as wat ferkiird lim",
+    "dismiss": "Wis ai mör"
   },
   "kind": {
     "settlement": "Stää",

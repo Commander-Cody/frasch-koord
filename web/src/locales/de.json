@@ -3,6 +3,7 @@
     "title": "Frasch Maps"
   },
   "search": {
+    "label": "Ort suchen",
     "placeholder": "Ort suchen…",
     "noResults": "Keine Ergebnisse",
     "loading": "Ortsliste wird geladen…",

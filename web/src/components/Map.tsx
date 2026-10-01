@@ -8,7 +8,7 @@ import {
   addProtocol,
   setWorkerUrl,
 } from 'maplibre-gl';
-import type { LngLat, LngLatLike, MapGeoJSONFeature, StyleSpecification } from 'maplibre-gl';
+import type { LngLat, LngLatLike, MapGeoJSONFeature, Point, StyleSpecification } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 // MapLibre 6 looks for its worker next to its own module
 // (`new URL('./maplibre-gl-worker.mjs', import.meta.url)`), a file Vite's
@@ -23,6 +23,8 @@ import { useTranslation } from 'react-i18next';
 import fraschBright from '../style/frasch-bright.json';
 import { buildStyle, placeLayerIds } from '../style/localize';
 import { TILES_URL } from '../config';
+import { TOUCH_MEDIA } from '../layout';
+import { oncePerFrame } from '../oncePerFrame';
 import CloseButton from './CloseButton';
 
 // Register the pmtiles:// protocol with MapLibre exactly once, no matter
@@ -40,8 +42,14 @@ setWorkerUrl(maplibreWorkerUrl);
 const NORTH_FRISIA_CENTER: [number, number] = [8.85, 54.6];
 const INITIAL_ZOOM = 9;
 
-/** Half-width in pixels of the box a click queries: a finger is not a pixel. */
+/** Half-width in pixels of the box a click queries: a mouse pointer is not a pixel. */
 const CLICK_SLOP = 6;
+/** The same for a finger, which is wider still (a 24 px box). */
+const TOUCH_CLICK_SLOP = 12;
+
+function clickSlop(): number {
+  return window.matchMedia(TOUCH_MEDIA).matches ? TOUCH_CLICK_SLOP : CLICK_SLOP;
+}
 
 /** How close (px) to the edge of a bottom inset a place may sit before `reveal` pans. */
 const REVEAL_MARGIN = 24;
@@ -184,21 +192,27 @@ export default function MapView({ view, onSelectFeature, ref }: MapViewProps) {
     // not added yet.
     const placeLayers = placeLayerIds(style);
     const labelLayers = () => placeLayers.filter((id) => map.getLayer(id));
-    const hit = (point: { x: number; y: number }) =>
-      map.queryRenderedFeatures(
+    const hit = (point: Point) => {
+      const slop = clickSlop();
+      return map.queryRenderedFeatures(
         [
-          [point.x - CLICK_SLOP, point.y - CLICK_SLOP],
-          [point.x + CLICK_SLOP, point.y + CLICK_SLOP],
+          [point.x - slop, point.y - slop],
+          [point.x + slop, point.y + slop],
         ],
         { layers: labelLayers() },
       )[0];
+    };
     map.on('click', (e) => {
       if (!selectRef.current) return;
       selectRef.current(hit(e.point) ?? null, e.lngLat);
     });
+    // A hit test over every label layer is too much for every mouse move;
+    // the cursor only has to keep up with what is painted.
+    const hover = oncePerFrame((point: Point) => {
+      map.getCanvas().style.cursor = hit(point) ? 'pointer' : '';
+    });
     map.on('mousemove', (e) => {
-      if (!selectRef.current) return;
-      map.getCanvas().style.cursor = hit(e.point) ? 'pointer' : '';
+      if (selectRef.current) hover.call(e.point);
     });
 
     // MapLibre logs errors itself only while nobody listens for them.
@@ -231,6 +245,7 @@ export default function MapView({ view, onSelectFeature, ref }: MapViewProps) {
       // restore it so both mounts see the same starting view.
       const hash = window.location.hash;
       window.clearTimeout(loadTimer);
+      hover.cancel();
       markerRef.current?.remove();
       markerRef.current = null;
       map.remove();

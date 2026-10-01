@@ -27,7 +27,7 @@
   font: inherit;
   font-size: 20px;
   line-height: 1;
-  color: #777;
+  color: #6b6b6b;
   cursor: pointer;
 }
 
@@ -43,10 +43,16 @@
   line-height: 1.2;
 }
 
+/* The headline takes focus only so that a card a search opens is announced
+   (hooks/useCardFocus.ts); it is nothing to operate, so it gets no ring. */
+.place-card-name:focus {
+  outline: none;
+}
+
 .place-card-meta {
   margin: 3px 0 10px;
   font-size: 12px;
-  color: #777;
+  color: #6b6b6b;
 }
 
 .place-card-kind::before {
@@ -72,7 +78,7 @@
 
 .place-card-names dt {
   font-size: 12px;
-  color: #777;
+  color: #6b6b6b;
 }
 
 .place-card-names dd {
@@ -88,7 +94,7 @@
 .place-card-note {
   margin-left: 6px;
   font-size: 12px;
-  color: #777;
+  color: #6b6b6b;
 }
 
 .place-card-note::before {
@@ -103,12 +109,26 @@
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
-  margin: 10px 0 0;
+  /* The links' tall line boxes (below) add the rest of the distance. */
+  margin: 5px 0 0;
   font-size: 12px;
 }
 
 .place-card-links a {
+  /* At least 24 px to hit (WCAG 2.5.8), more for a finger, below. */
+  line-height: 24px;
   color: #36c;
+}
+
+/* Finger-sized links. Their line box is space enough above the text. */
+@media (pointer: coarse) {
+  .place-card-links {
+    margin-top: 0;
+  }
+
+  .place-card-links a {
+    line-height: 44px;
+  }
 }
 
 /* Phone width (App.css has the rest of that layout): a bottom sheet across
@@ -123,7 +143,8 @@
     bottom: 0;
     max-height: 50vh;
     max-height: 50dvh;
-    padding: 14px 16px calc(14px + env(safe-area-inset-bottom));
+    /* The unsafe edges are App.css's --safe-*. */
+    padding: 14px calc(16px + var(--safe-right)) calc(14px + var(--safe-bottom)) calc(16px + var(--safe-left));
     border-radius: 12px 12px 0 0;
     box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.2);
     overscroll-behavior: contain;

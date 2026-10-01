@@ -7,6 +7,7 @@ import MapView from './components/Map';
 import type { MapViewHandle } from './components/Map';
 import PlaceCard from './components/PlaceCard';
 import SearchPanel from './components/SearchPanel';
+import { useCardFocus } from './hooks/useCardFocus';
 import { useCloseOnEscape } from './hooks/useCloseOnEscape';
 import { useLinkedPlace } from './hooks/useLinkedPlace';
 import { usePlaceSelection } from './hooks/usePlaceSelection';
@@ -21,6 +22,8 @@ function App() {
   const mapRef = useRef<MapViewHandle | null>(null);
   const appRef = useRef<HTMLDivElement | null>(null);
   const cardRef = useRef<HTMLElement | null>(null);
+  const cardHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  const searchFieldRef = useRef<HTMLInputElement | null>(null);
   // One fetch of the name list for both the search index and the card.
   const { status: namesStatus, entries, find, builtFrom } = useNames();
   useProvenanceCheck(builtFrom);
@@ -31,11 +34,16 @@ function App() {
     find,
     view,
   );
+  const { focusNextCard, closeByKeyboard } = useCardFocus(
+    { card: cardRef, heading: cardHeadingRef, searchField: searchFieldRef },
+    selection,
+    close,
+  );
   const linkedPlace = useLinkedPlace(namesStatus, find, openLinked);
   const cardOpen = selection !== null;
   useSheetHeight(appRef, cardRef, cardOpen);
   useUrlSync({ view, place: selection?.entry?.id ?? linkedPlace });
-  useCloseOnEscape(cardOpen, close);
+  useCloseOnEscape(cardOpen, closeByKeyboard);
 
   return (
     <div ref={appRef} className="app">
@@ -57,13 +65,25 @@ function App() {
       >
         <div className="side-panel">
           <SearchPanel
+            ref={searchFieldRef}
             entries={entries}
             status={namesStatus}
             view={view}
             onViewChange={changeView}
-            onSelect={selectEntry}
+            onSelect={(entry, name) => {
+              focusNextCard();
+              selectEntry(entry, name);
+            }}
           />
-          {selection && <PlaceCard ref={cardRef} selection={selection} view={view} onClose={close} />}
+          {selection && (
+            <PlaceCard
+              ref={cardRef}
+              headingRef={cardHeadingRef}
+              selection={selection}
+              view={view}
+              onClose={(byKeyboard) => (byKeyboard ? closeByKeyboard() : close())}
+            />
+          )}
         </div>
       </ErrorBoundary>
     </div>

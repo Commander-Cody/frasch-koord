@@ -6,9 +6,13 @@ import frrMooring from './locales/frr-x-mooring.json';
 import { labelOption } from './config';
 import { initialView } from './urlState';
 
-// The page's title follows the UI language like every other string.
+// The page's title follows the UI language like every other string, and
+// the page's language is the one the UI is actually in: German for a
+// dialect nobody has written UI strings for yet, so screen readers read
+// German text as German.
 i18n.on('languageChanged', () => {
   document.title = i18n.t('app.title');
+  document.documentElement.lang = i18n.resolvedLanguage ?? i18n.language;
 });
 
 // Mooring UI strings that nobody has written yet (see
