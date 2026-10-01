@@ -15,7 +15,13 @@ export interface CurateLookupProps {
   onPick: (ref: string, wikidata?: string) => void;
 }
 
-export default function CurateLookup({ lookup, isChecked, onToggle, onShow, onPick }: CurateLookupProps) {
+export default function CurateLookup({
+  lookup,
+  isChecked,
+  onToggle,
+  onShow,
+  onPick,
+}: CurateLookupProps) {
   const { query, setQuery, results, source, busy, error, run } = lookup;
   return (
     <>

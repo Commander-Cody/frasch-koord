@@ -31,6 +31,7 @@ Why these: a reconnaissance pass over Schleswig-Holstein showed that
 
 Run:  .venv/bin/python names/build_candidates.py tiles/data/*.osm.pbf
 """
+
 from __future__ import annotations
 
 import argparse
@@ -53,19 +54,64 @@ DEFAULT_OUT = paths.CANDIDATES
 
 
 NATURAL_KEEP = {
-    "water", "bay", "strait", "wetland", "sand", "shoal", "beach", "island",
-    "islet", "archipelago", "peninsula", "cape", "reef", "mud", "dune",
-    "spring", "glacier", "isthmus", "hill", "ridge",
+    "water",
+    "bay",
+    "strait",
+    "wetland",
+    "sand",
+    "shoal",
+    "beach",
+    "island",
+    "islet",
+    "archipelago",
+    "peninsula",
+    "cape",
+    "reef",
+    "mud",
+    "dune",
+    "spring",
+    "glacier",
+    "isthmus",
+    "hill",
+    "ridge",
 }
 BOUNDARY_KEEP = {
-    "administrative", "political", "historic", "maritime", "land_area",
-    "place", "protected_area",
+    "administrative",
+    "political",
+    "historic",
+    "maritime",
+    "land_area",
+    "place",
+    "protected_area",
 }
-NAME_KEYS_EXTRA = ("alt_name", "old_name", "official_name", "loc_name",
-                   "short_name", "int_name", "nat_name", "reg_name")
-CLASS_KEYS = ("place", "natural", "water", "waterway", "landuse", "boundary",
-              "man_made", "historic", "harbour", "leisure", "amenity",
-              "highway", "admin_level", "type", "tourism", "building")
+NAME_KEYS_EXTRA = (
+    "alt_name",
+    "old_name",
+    "official_name",
+    "loc_name",
+    "short_name",
+    "int_name",
+    "nat_name",
+    "reg_name",
+)
+CLASS_KEYS = (
+    "place",
+    "natural",
+    "water",
+    "waterway",
+    "landuse",
+    "boundary",
+    "man_made",
+    "historic",
+    "harbour",
+    "leisure",
+    "amenity",
+    "highway",
+    "admin_level",
+    "type",
+    "tourism",
+    "building",
+)
 EXTRA_KEYS = ("wikidata", "wikipedia", "population", "ref")
 
 
@@ -123,9 +169,11 @@ class WayCentroids:
 
     def add(self, wid: int, lon: float, lat: float) -> None:
         if self.ids and wid < self.ids[-1]:
-            raise ValueError(f"way {wid} comes after way {self.ids[-1]}: the "
-                             f"extract is not sorted by id -- sort it first "
-                             f"(`osmium sort in.osm.pbf -o sorted.osm.pbf`)")
+            raise ValueError(
+                f"way {wid} comes after way {self.ids[-1]}: the "
+                f"extract is not sorted by id -- sort it first "
+                f"(`osmium sort in.osm.pbf -o sorted.osm.pbf`)"
+            )
         self.ids.append(wid)
         self.lon.append(lon)
         self.lat.append(lat)
@@ -185,15 +233,16 @@ def has_name(tags: osmium.osm.TagList) -> bool:
     return False
 
 
-def process(pbf: str, src: str, out: IO[str], counts: collections.Counter[str],
-            idx: str = "flex_mem") -> None:
+def process(
+    pbf: str, src: str, out: IO[str], counts: collections.Counter[str], idx: str = "flex_mem"
+) -> None:
     ways = WayCentroids()
     t0 = time.time()
     n_seen = 0
     fp = osmium.FileProcessor(pbf).with_locations(idx)
     for o in fp:
         n_seen += 1
-        typ = o.type_str()          # 'n' | 'w' | 'r'
+        typ = o.type_str()  # 'n' | 'w' | 'r'
         otags = o.tags
         lon: float | None
         lat: float | None
@@ -206,7 +255,7 @@ def process(pbf: str, src: str, out: IO[str], counts: collections.Counter[str],
                 ways.add(o.id, c[0], c[1])
             if not otags or not has_name(otags):
                 continue
-            lon, lat = (way_centroid(o) or c or (None, None))
+            lon, lat = way_centroid(o) or c or (None, None)
         elif isinstance(o, osmium.osm.Node):
             if not otags or not has_name(otags):
                 continue
@@ -227,7 +276,7 @@ def process(pbf: str, src: str, out: IO[str], counts: collections.Counter[str],
                         n += 1
             if n:
                 lon, lat = sx / n, sy / n
-        else:                        # an area or a changeset: never a candidate
+        else:  # an area or a changeset: never a candidate
             continue
 
         tags = dict(otags)
@@ -244,28 +293,36 @@ def process(pbf: str, src: str, out: IO[str], counts: collections.Counter[str],
         keep = {k: tags[k] for k in CLASS_KEYS + EXTRA_KEYS if k in tags}
         keep.update(names)
         rec: candidates.Candidate = {
-            "src": src, "t": typ, "id": o.id,
+            "src": src,
+            "t": typ,
+            "id": o.id,
             "lon": round(lon, 6) if lon is not None else None,
             "lat": round(lat, 6) if lat is not None else None,
-            "cls": cls, "tags": keep}
+            "cls": cls,
+            "tags": keep,
+        }
         out.write(json.dumps(rec, ensure_ascii=False) + "\n")
         for cl in cls:
             counts[cl.split("=")[0]] += 1
         counts["_total"] += 1
         counts["_total_" + typ] += 1
-    print(f"  {src}: {n_seen:,} objects scanned, "
-          f"{len(ways.ids):,} way centroids cached, {time.time()-t0:.0f}s",
-          file=sys.stderr)
+    print(
+        f"  {src}: {n_seen:,} objects scanned, "
+        f"{len(ways.ids):,} way centroids cached, {time.time() - t0:.0f}s",
+        file=sys.stderr,
+    )
 
 
 @cli.command
 def main(argv: Sequence[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("pbf", nargs="+", help="OSM extracts to scan")
     ap.add_argument("--out", default=DEFAULT_OUT)
-    ap.add_argument("--index", default="flex_mem",
-                    help="pyosmium node-location index (default flex_mem)")
+    ap.add_argument(
+        "--index", default="flex_mem", help="pyosmium node-location index (default flex_mem)"
+    )
     args = ap.parse_args(argv)
 
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
@@ -278,13 +335,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"scanning {p} ...", file=sys.stderr)
             process(p, src, fh, counts, args.index)
 
-    print(f"\nwrote {counts['_total']:,} candidates to {args.out} "
-          f"in {time.time()-t0:.0f}s")
-    print(f"  nodes {counts['_total_n']:,}  ways {counts['_total_w']:,}  "
-          f"relations {counts['_total_r']:,}")
+    print(f"\nwrote {counts['_total']:,} candidates to {args.out} in {time.time() - t0:.0f}s")
+    print(
+        f"  nodes {counts['_total_n']:,}  ways {counts['_total_w']:,}  "
+        f"relations {counts['_total_r']:,}"
+    )
     print("counts by tag class (an object can count in several):")
     for k, v in sorted(counts.items()):
         if not k.startswith("_"):
             print(f"  {v:8,d}  {k}")
     return 0
-

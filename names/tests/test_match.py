@@ -6,6 +6,7 @@ decision `match_row` makes for a row
 in build_candidates.py's format.  The records are real OSM objects (ids,
 positions and tags as in the Schleswig-Holstein / Denmark extracts of
 September 2026), trimmed to the tags the matcher reads."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -35,84 +36,168 @@ def run(tmp_path: Path, r: placelist.PlaceRow, *recs: Candidate) -> match.MatchR
 
 
 # real objects -------------------------------------------------------------
-HOLM_NF = cand("n", 240102263, 8.866668, 54.833305, name="Holm", place="village",
-               wikidata="Q559369")
-HOLM_HAMBURG = cand("n", 240086046, 9.672896, 53.620139, name="Holm", place="village",
-                    wikidata="Q691934")
-HOLME_DK = cand("n", 2716731633, 9.065537, 54.982492, src="denmark", name="Holme",
-                name__da="Holme", name__de="Holm", place="hamlet",
-                wikidata="Q140690355")
-HOLM_STREET = cand("w", 33228153, 8.554547, 54.696678, name="Holm",
-                   highway="residential")
+HOLM_NF = cand(
+    "n", 240102263, 8.866668, 54.833305, name="Holm", place="village", wikidata="Q559369"
+)
+HOLM_HAMBURG = cand(
+    "n", 240086046, 9.672896, 53.620139, name="Holm", place="village", wikidata="Q691934"
+)
+HOLME_DK = cand(
+    "n",
+    2716731633,
+    9.065537,
+    54.982492,
+    src="denmark",
+    name="Holme",
+    name__da="Holme",
+    name__de="Holm",
+    place="hamlet",
+    wikidata="Q140690355",
+)
+HOLM_STREET = cand("w", 33228153, 8.554547, 54.696678, name="Holm", highway="residential")
 
-MORSUM_SYLT = cand("n", 310191124, 8.429612, 54.872876, name="Morsum", place="village",
-                   wikidata="Q20629")
-NORDSTRAND_VILLAGE = cand("n", 85929111, 8.865286, 54.487378, name="Nordstrand",
-                          place="village")
-NORDSTRAND_PENINSULA = cand("n", 6337086093, 8.865555, 54.487371, name="Nordstrand",
-                            natural="peninsula", wikidata="Q15058181")
-SYLT = cand("r", 1576925, 8.418235, 54.888448, name="Sylt", name__de="Sylt",
-            name__da="Sild", place="island", wikidata="Q3107")
+MORSUM_SYLT = cand(
+    "n", 310191124, 8.429612, 54.872876, name="Morsum", place="village", wikidata="Q20629"
+)
+NORDSTRAND_VILLAGE = cand("n", 85929111, 8.865286, 54.487378, name="Nordstrand", place="village")
+NORDSTRAND_PENINSULA = cand(
+    "n",
+    6337086093,
+    8.865555,
+    54.487371,
+    name="Nordstrand",
+    natural="peninsula",
+    wikidata="Q15058181",
+)
+SYLT = cand(
+    "r",
+    1576925,
+    8.418235,
+    54.888448,
+    name="Sylt",
+    name__de="Sylt",
+    name__da="Sild",
+    place="island",
+    wikidata="Q3107",
+)
 
-KAMPEN_SYLT = cand("n", 240063898, 8.344065, 54.95377, name="Kampen (Sylt)",
-                   place="village")
-KAMPEN_SYLT_MUNICIPALITY = cand("r", 1147133, 8.356739, 54.967875, name="Kampen (Sylt)",
-                                boundary="administrative", admin_level="8",
-                                wikidata="Q27332")
-KAMPEN_STORMARN = cand("n", 6694657313, 9.937962, 53.857649, name="Kampen",
-                       place="hamlet")
+KAMPEN_SYLT = cand("n", 240063898, 8.344065, 54.95377, name="Kampen (Sylt)", place="village")
+KAMPEN_SYLT_MUNICIPALITY = cand(
+    "r",
+    1147133,
+    8.356739,
+    54.967875,
+    name="Kampen (Sylt)",
+    boundary="administrative",
+    admin_level="8",
+    wikidata="Q27332",
+)
+KAMPEN_STORMARN = cand("n", 6694657313, 9.937962, 53.857649, name="Kampen", place="hamlet")
 
-OSTENFELD_RENDSBURG = cand("n", 240062575, 9.780628, 54.316519, name="Ostenfeld",
-                           place="village", wikidata="Q667300")
-OSTENFELD_HUSUM = cand("n", 240104163, 9.232751, 54.46359, name="Ostenfeld (Husum)",
-                       name__da="Østerfjolde", place="village")
+OSTENFELD_RENDSBURG = cand(
+    "n", 240062575, 9.780628, 54.316519, name="Ostenfeld", place="village", wikidata="Q667300"
+)
+OSTENFELD_HUSUM = cand(
+    "n",
+    240104163,
+    9.232751,
+    54.46359,
+    name="Ostenfeld (Husum)",
+    name__da="Østerfjolde",
+    place="village",
+)
 RENDSBURG = cand("n", 43366937, 9.665008, 54.300292, name="Rendsburg", place="town")
 
 DRAGE_STEINBURG = cand("n", 240054933, 9.51933, 54.004272, name="Drage", place="village")
-DRAGE_STEINBURG_MUNICIPALITY = cand("r", 450076, 9.533033, 54.016063, name="Drage",
-                                    boundary="administrative", admin_level="8",
-                                    wikidata="Q634156")
-DRAGE_ELBE_MUNICIPALITY = cand("r", 308488, 10.327176, 53.42993, name="Drage",
-                               boundary="administrative", admin_level="8",
-                               wikidata="Q665062")
+DRAGE_STEINBURG_MUNICIPALITY = cand(
+    "r",
+    450076,
+    9.533033,
+    54.016063,
+    name="Drage",
+    boundary="administrative",
+    admin_level="8",
+    wikidata="Q634156",
+)
+DRAGE_ELBE_MUNICIPALITY = cand(
+    "r",
+    308488,
+    10.327176,
+    53.42993,
+    name="Drage",
+    boundary="administrative",
+    admin_level="8",
+    wikidata="Q665062",
+)
 
 # the village node carries wikidata=Q551483 -- left out to test the fallback
-SCHAFFLUND_NO_QID = cand("n", 240090603, 9.183447, 54.759282, name="Schafflund",
-                         place="village")
-SCHAFFLUND_MUNICIPALITY = cand("r", 1156027, 9.137018, 54.771625, name="Schafflund",
-                               boundary="administrative", admin_level="8",
-                               wikidata="Q551483")
-AMT_SCHAFFLUND = cand("r", 1156150, 9.154304, 54.763147, name="Schafflund",
-                      name__prefix="Amt", boundary="administrative", admin_level="7",
-                      wikidata="Q479884")
+SCHAFFLUND_NO_QID = cand("n", 240090603, 9.183447, 54.759282, name="Schafflund", place="village")
+SCHAFFLUND_MUNICIPALITY = cand(
+    "r",
+    1156027,
+    9.137018,
+    54.771625,
+    name="Schafflund",
+    boundary="administrative",
+    admin_level="8",
+    wikidata="Q551483",
+)
+AMT_SCHAFFLUND = cand(
+    "r",
+    1156150,
+    9.154304,
+    54.763147,
+    name="Schafflund",
+    name__prefix="Amt",
+    boundary="administrative",
+    admin_level="7",
+    wikidata="Q479884",
+)
 
-KIRCHWARFT_HOOGE = cand("n", 11711096159, 8.544362, 54.572982, name="Kirchwarft",
-                        place="hamlet")
-KIRCHWARFT_OCKHOLM = cand("n", 1333738478, 8.826992, 54.664965, name="Kirchwarft",
-                          place="hamlet")
-HOOGE = cand("w", 1472528450, 8.538734, 54.572607, name="Hooge", place="island",
-             natural="coastline", wikidata="Q17047971")
-OCKHOLM = cand("n", 240080339, 8.827915, 54.665533, name="Ockholm", name__de="Ockholm",
-               name__da="Okholm", place="village")
+KIRCHWARFT_HOOGE = cand("n", 11711096159, 8.544362, 54.572982, name="Kirchwarft", place="hamlet")
+KIRCHWARFT_OCKHOLM = cand("n", 1333738478, 8.826992, 54.664965, name="Kirchwarft", place="hamlet")
+HOOGE = cand(
+    "w",
+    1472528450,
+    8.538734,
+    54.572607,
+    name="Hooge",
+    place="island",
+    natural="coastline",
+    wikidata="Q17047971",
+)
+OCKHOLM = cand(
+    "n",
+    240080339,
+    8.827915,
+    54.665533,
+    name="Ockholm",
+    name__de="Ockholm",
+    name__da="Okholm",
+    place="village",
+)
 
 
 # ---------------------------------------------------------------- kind_ok ---
-@pytest.mark.parametrize("kind,tags,ok", [
-    ("settlement", {"place": "village"}, True),
-    ("settlement", {"highway": "residential"}, False),   # the street "Holm"
-    ("settlement", {"boundary": "administrative", "admin_level": "8"}, True),
-    ("settlement", {"boundary": "administrative", "admin_level": "4"}, False),  # a Land
-    ("hallig", {"place": "isolated_dwelling"}, True),    # some Halligen are one dwelling
-    ("island", {"place": "isolated_dwelling"}, False),
-    ("island", {"natural": "peninsula"}, True),          # Nordstrand
-    ("warft", {"landuse": "residential"}, True),
-    ("warft", {"highway": "service"}, False),
-    ("water", {"waterway": "river"}, True),
-    ("road", {"highway": "unclassified"}, True),
-    ("road", {"place": "village"}, False),
-    ("country", {"boundary": "administrative", "admin_level": "2"}, True),
-    ("country", {"boundary": "administrative", "admin_level": "4"}, False),
-])
+@pytest.mark.parametrize(
+    "kind,tags,ok",
+    [
+        ("settlement", {"place": "village"}, True),
+        ("settlement", {"highway": "residential"}, False),  # the street "Holm"
+        ("settlement", {"boundary": "administrative", "admin_level": "8"}, True),
+        ("settlement", {"boundary": "administrative", "admin_level": "4"}, False),  # a Land
+        ("hallig", {"place": "isolated_dwelling"}, True),  # some Halligen are one dwelling
+        ("island", {"place": "isolated_dwelling"}, False),
+        ("island", {"natural": "peninsula"}, True),  # Nordstrand
+        ("warft", {"landuse": "residential"}, True),
+        ("warft", {"highway": "service"}, False),
+        ("water", {"waterway": "river"}, True),
+        ("road", {"highway": "unclassified"}, True),
+        ("road", {"place": "village"}, False),
+        ("country", {"boundary": "administrative", "admin_level": "2"}, True),
+        ("country", {"boundary": "administrative", "admin_level": "4"}, False),
+    ],
+)
 def test_kind_ok(kind: str, tags: dict[str, str], ok: bool) -> None:
     assert match.kind_ok(kind, tags, []) is ok
 
@@ -120,7 +205,7 @@ def test_kind_ok(kind: str, tags: dict[str, str], ok: bool) -> None:
 # ---------------------------------------------------------------- cluster ---
 def test_two_village_nodes_two_km_apart_are_two_villages() -> None:
     a = cand("n", 1, 8.80, 54.80, name="Holm", place="village")
-    b = cand("n", 2, 8.80, 54.818, name="Holm", place="hamlet")      # 2.0 km north
+    b = cand("n", 2, 8.80, 54.818, name="Holm", place="hamlet")  # 2.0 km north
     assert len(match.cluster([a, b])) == 2
 
 
@@ -139,7 +224,7 @@ def test_point_features_further_apart_than_three_km_stay_apart() -> None:
 
 def test_pieces_of_a_river_twenty_km_apart_are_one_river() -> None:
     a = cand("w", 1, 9.00, 54.60, name="Arlau", waterway="river")
-    b = cand("w", 2, 9.00, 54.78, name="Arlau", waterway="river")      # 20 km
+    b = cand("w", 2, 9.00, 54.78, name="Arlau", waterway="river")  # 20 km
     assert len(match.cluster([a, b])) == 1
 
 
@@ -160,17 +245,20 @@ def test_a_record_without_location_is_a_cluster_of_its_own() -> None:
 
 
 # ------------------------------------------------------- owned_by_matcher ---
-@pytest.mark.parametrize("cells,owned", [
-    ({}, True),                                                    # nothing yet
-    ({"osm": "node/240063898", "status": "auto"}, True),           # filled by match.py
-    ({"wikidata": "Q35", "status": "auto", "kind": "country"}, True),
-    ({"osm": "relation/1420394"}, False),                          # filled by hand
-    ({"wikidata": "Q35", "kind": "country"}, False),
-    ({"osm": "node/1331229597", "status": "ok"}, False),
-    ({"status": "ok"}, False),                                     # checked: no reference
-    ({"status": "skip"}, False),
-    ({"kind": "not_a_place"}, False),
-])
+@pytest.mark.parametrize(
+    "cells,owned",
+    [
+        ({}, True),  # nothing yet
+        ({"osm": "node/240063898", "status": "auto"}, True),  # filled by match.py
+        ({"wikidata": "Q35", "status": "auto", "kind": "country"}, True),
+        ({"osm": "relation/1420394"}, False),  # filled by hand
+        ({"wikidata": "Q35", "kind": "country"}, False),
+        ({"osm": "node/1331229597", "status": "ok"}, False),
+        ({"status": "ok"}, False),  # checked: no reference
+        ({"status": "skip"}, False),
+        ({"kind": "not_a_place"}, False),
+    ],
+)
 def test_owned_by_matcher(cells: dict[str, str], owned: bool) -> None:
     assert placelist.owned_by_matcher(row(**{"kind": "settlement", **cells})) is owned
 
@@ -183,8 +271,7 @@ def test_a_local_reference_is_never_the_matchers_even_as_auto() -> None:
 
 # -------------------------------------------------------------- match_row ---
 def test_one_candidate_is_matched(tmp_path: Path) -> None:
-    out = run(tmp_path, row(kind="settlement", solring="Muasem", de="Morsum"),
-              MORSUM_SYLT)
+    out = run(tmp_path, row(kind="settlement", solring="Muasem", de="Morsum"), MORSUM_SYLT)
     assert out["status"] == "matched"
     assert (out["osm_type"], out["osm_id"], out["wikidata"]) == ("node", "310191124", "Q20629")
 
@@ -194,23 +281,20 @@ def test_a_hit_on_name_outranks_a_hit_on_name_de(tmp_path: Path) -> None:
     inside the North Frisia box, 21 km from the North Frisian village Holm.
     Clustered as equals they would be two villages and the row ambiguous; the
     hit on the OSM `name` wins instead."""
-    out = run(tmp_path, row(kind="settlement", mooring="Hulm", de="Holm"),
-              HOLME_DK, HOLM_NF)
+    out = run(tmp_path, row(kind="settlement", mooring="Hulm", de="Holm"), HOLME_DK, HOLM_NF)
     assert out["status"] == "matched"
     assert (out["osm_type"], out["osm_id"], out["wikidata"]) == ("node", "240102263", "Q559369")
 
 
 def test_only_candidate_in_north_frisia_wins_when_the_rivals_are_far(tmp_path: Path) -> None:
-    out = run(tmp_path, row(kind="settlement", mooring="Hulm", de="Holm"),
-              HOLM_HAMBURG, HOLM_NF)
+    out = run(tmp_path, row(kind="settlement", mooring="Hulm", de="Holm"), HOLM_HAMBURG, HOLM_NF)
     assert out["status"] == "matched"
     assert out["osm_id"] == "240102263"
     assert out["note"] == "auto: only candidate in North Frisia"
 
 
 def test_a_street_of_the_same_name_is_no_candidate(tmp_path: Path) -> None:
-    out = run(tmp_path, row(kind="settlement", mooring="Hulm", de="Holm"),
-              HOLM_STREET, HOLM_NF)
+    out = run(tmp_path, row(kind="settlement", mooring="Hulm", de="Holm"), HOLM_STREET, HOLM_NF)
     assert out["status"] == "matched"
     assert out["osm_id"] == "240102263"
 
@@ -222,21 +306,30 @@ def test_only_streets_of_that_name_is_not_found(tmp_path: Path) -> None:
 
 
 def test_two_equal_villages_in_north_frisia_are_ambiguous(tmp_path: Path) -> None:
-    out = run(tmp_path, row(kind="warft", mooring="Schörkewärw", de="Kirchwarft"),
-              KIRCHWARFT_HOOGE, KIRCHWARFT_OCKHOLM)
+    out = run(
+        tmp_path,
+        row(kind="warft", mooring="Schörkewärw", de="Kirchwarft"),
+        KIRCHWARFT_HOOGE,
+        KIRCHWARFT_OCKHOLM,
+    )
     assert out["status"] == "ambiguous"
     assert out["osm_id"] == ""
     assert "n/11711096159:Kirchwarft:hamlet:" in out["candidates"]
     assert "n/1333738478:Kirchwarft:hamlet:" in out["candidates"]
 
 
-@pytest.mark.parametrize("hint,winner", [("Hooge", "11711096159"),
-                                         ("Ockholm", "1333738478")])
-def test_the_hint_picks_one_of_several_places_with_that_name(tmp_path: Path, hint: str,
-                                                             winner: str) -> None:
-    out = run(tmp_path,
-              row(kind="warft", mooring="Schörkewärw", de="Kirchwarft", hint=hint),
-              KIRCHWARFT_HOOGE, KIRCHWARFT_OCKHOLM, HOOGE, OCKHOLM)
+@pytest.mark.parametrize("hint,winner", [("Hooge", "11711096159"), ("Ockholm", "1333738478")])
+def test_the_hint_picks_one_of_several_places_with_that_name(
+    tmp_path: Path, hint: str, winner: str
+) -> None:
+    out = run(
+        tmp_path,
+        row(kind="warft", mooring="Schörkewärw", de="Kirchwarft", hint=hint),
+        KIRCHWARFT_HOOGE,
+        KIRCHWARFT_OCKHOLM,
+        HOOGE,
+        OCKHOLM,
+    )
     assert out["status"] == "matched"
     assert out["osm_id"] == winner
     assert out["note"] == "auto: location hint"
@@ -246,9 +339,13 @@ def test_a_hint_is_binding_even_for_the_only_candidate(tmp_path: Path) -> None:
     """Morsum/Nordstrand: the list means a Morsum on Nordstrand; OSM's only
     Morsum is on Sylt, 50 km away.  The row goes to review instead of
     getting the Sylt village."""
-    out = run(tmp_path, row(kind="settlement", mooring="Mursem", de="Morsum",
-                            hint="Nordstrand"),
-              MORSUM_SYLT, NORDSTRAND_VILLAGE, NORDSTRAND_PENINSULA)
+    out = run(
+        tmp_path,
+        row(kind="settlement", mooring="Mursem", de="Morsum", hint="Nordstrand"),
+        MORSUM_SYLT,
+        NORDSTRAND_VILLAGE,
+        NORDSTRAND_PENINSULA,
+    )
     assert out["status"] == "ambiguous"
     assert out["osm_id"] == ""
     assert out["note"] == "location hint 'Nordstrand' matched no cluster"
@@ -256,17 +353,23 @@ def test_a_hint_is_binding_even_for_the_only_candidate(tmp_path: Path) -> None:
 
 
 def test_a_hint_that_fits_confirms_the_only_candidate(tmp_path: Path) -> None:
-    out = run(tmp_path, row(kind="settlement", solring="Muasem", de="Morsum", hint="Sylt"),
-              MORSUM_SYLT, SYLT)
+    out = run(
+        tmp_path,
+        row(kind="settlement", solring="Muasem", de="Morsum", hint="Sylt"),
+        MORSUM_SYLT,
+        SYLT,
+    )
     assert out["status"] == "matched"
     assert out["osm_id"] == "310191124"
 
 
 def test_a_hint_nobody_knows_matches_nothing_and_binds_nothing(tmp_path: Path) -> None:
     # an unresolvable hint is no hint: the single candidate still wins
-    out = run(tmp_path, row(kind="settlement", solring="Muasem", de="Morsum",
-                            hint="bei Keitum"),
-              MORSUM_SYLT)
+    out = run(
+        tmp_path,
+        row(kind="settlement", solring="Muasem", de="Morsum", hint="bei Keitum"),
+        MORSUM_SYLT,
+    )
     assert out["status"] == "matched"
     assert out["osm_id"] == "310191124"
 
@@ -276,44 +379,53 @@ def test_a_weaker_osm_annotation_hit_beats_a_far_away_hamlet(tmp_path: Path) -> 
     *Kampen* it is only a penalised hit, while the exact hit is a hamlet near
     Hamburg.  That far-away hamlet is implausible for the list, and the weaker
     hit in North Frisia is taken instead."""
-    out = run(tmp_path, row(kind="settlement", solring="Kaamp", de="Kampen"),
-              KAMPEN_STORMARN, KAMPEN_SYLT)
+    out = run(
+        tmp_path, row(kind="settlement", solring="Kaamp", de="Kampen"), KAMPEN_STORMARN, KAMPEN_SYLT
+    )
     assert out["status"] == "matched"
     assert out["osm_id"] == "240063898"
     assert out["match_name"] == "Kampen (Sylt)"
     assert out["note"] == "auto: only candidate in North Frisia (weaker name hit)"
 
 
-def test_a_far_away_village_with_a_weaker_hit_in_north_frisia_is_ambiguous(
-        tmp_path: Path) -> None:
+def test_a_far_away_village_with_a_weaker_hit_in_north_frisia_is_ambiguous(tmp_path: Path) -> None:
     """Ostenfeld: the exact hit is the village near Rendsburg, outside North
     Frisia; OSM calls the one near Husum `Ostenfeld (Husum)`, only a weaker
     hit.  A far-away village is no implausible winner the way a hamlet is, so
     neither is taken -- the row goes to review with both."""
-    out = run(tmp_path, row(kind="settlement", mooring="Ååstenfälj", de="Ostenfeld"),
-              OSTENFELD_RENDSBURG, OSTENFELD_HUSUM)
+    out = run(
+        tmp_path,
+        row(kind="settlement", mooring="Ååstenfälj", de="Ostenfeld"),
+        OSTENFELD_RENDSBURG,
+        OSTENFELD_HUSUM,
+    )
     assert out["status"] == "ambiguous"
     assert (out["osm_id"], out["wikidata"]) == ("", "")
     assert "n/240062575:Ostenfeld:village:" in out["candidates"]
     assert "n/240104163:Ostenfeld (Husum):village:" in out["candidates"]
-    assert out["note"] == ("best name hit is 71 km from North Frisia, a weaker "
-                           "one lies inside -- verify by hand")
+    assert out["note"] == (
+        "best name hit is 71 km from North Frisia, a weaker one lies inside -- verify by hand"
+    )
 
 
 def test_a_hint_confirms_a_far_away_village_over_a_weaker_hit_in_north_frisia(
-        tmp_path: Path) -> None:
+    tmp_path: Path,
+) -> None:
     # the hint is binding: it says the list means the Ostenfeld near Rendsburg
-    out = run(tmp_path, row(kind="settlement", mooring="Ååstenfälj", de="Ostenfeld",
-                            hint="Rendsburg"),
-              OSTENFELD_RENDSBURG, OSTENFELD_HUSUM, RENDSBURG)
+    out = run(
+        tmp_path,
+        row(kind="settlement", mooring="Ååstenfälj", de="Ostenfeld", hint="Rendsburg"),
+        OSTENFELD_RENDSBURG,
+        OSTENFELD_HUSUM,
+        RENDSBURG,
+    )
     assert out["status"] == "matched"
     assert out["osm_id"] == "240062575"
     assert out["note"] == "auto: location hint"
 
 
 def test_a_far_away_hamlet_alone_is_left_for_review(tmp_path: Path) -> None:
-    out = run(tmp_path, row(kind="settlement", solring="Kaamp", de="Kampen"),
-              KAMPEN_STORMARN)
+    out = run(tmp_path, row(kind="settlement", solring="Kaamp", de="Kampen"), KAMPEN_STORMARN)
     assert out["status"] == "ambiguous"
     assert out["osm_id"] == ""
     assert "verify by hand" in out["note"]
@@ -352,10 +464,17 @@ def test_any_dialect_column_counts_as_a_frisian_name(tmp_path: Path) -> None:
 
 
 def test_the_place_node_wins_over_the_boundary_relation(tmp_path: Path) -> None:
-    relation = cand("r", 1420394, 8.857041, 54.831964, name="Holm",
-                    boundary="administrative", admin_level="8", wikidata="Q559369")
-    out = run(tmp_path, row(kind="settlement", mooring="Hulm", de="Holm"),
-              relation, HOLM_NF)
+    relation = cand(
+        "r",
+        1420394,
+        8.857041,
+        54.831964,
+        name="Holm",
+        boundary="administrative",
+        admin_level="8",
+        wikidata="Q559369",
+    )
+    out = run(tmp_path, row(kind="settlement", mooring="Hulm", de="Holm"), relation, HOLM_NF)
     assert out["status"] == "matched"
     assert (out["osm_type"], out["osm_id"]) == ("node", "240102263")
 
@@ -363,8 +482,12 @@ def test_the_place_node_wins_over_the_boundary_relation(tmp_path: Path) -> None:
 def test_the_boundary_relation_lends_its_wikidata_to_the_place_node(tmp_path: Path) -> None:
     """Kampen (Sylt): the village node has no `wikidata`, the municipality's
     boundary relation 1.8 km away has.  The node wins, with the relation's QID."""
-    out = run(tmp_path, row(kind="settlement", solring="Kaamp", de="Kampen"),
-              KAMPEN_SYLT_MUNICIPALITY, KAMPEN_SYLT)
+    out = run(
+        tmp_path,
+        row(kind="settlement", solring="Kaamp", de="Kampen"),
+        KAMPEN_SYLT_MUNICIPALITY,
+        KAMPEN_SYLT,
+    )
     assert out["status"] == "matched"
     assert (out["osm_type"], out["osm_id"], out["wikidata"]) == ("node", "240063898", "Q27332")
 
@@ -372,37 +495,59 @@ def test_the_boundary_relation_lends_its_wikidata_to_the_place_node(tmp_path: Pa
 def test_a_far_away_namesake_boundary_lends_no_wikidata(tmp_path: Path) -> None:
     """Drage: the Drage (Elbe) municipality lies 83 km from the Drage
     (Steinburg) village node -- another place, its QID is not the node's."""
-    out = run(tmp_path, row(kind="settlement", mooring="Draage", de="Drage"),
-              DRAGE_ELBE_MUNICIPALITY, DRAGE_STEINBURG)
+    out = run(
+        tmp_path,
+        row(kind="settlement", mooring="Draage", de="Drage"),
+        DRAGE_ELBE_MUNICIPALITY,
+        DRAGE_STEINBURG,
+    )
     assert out["status"] == "matched"
     assert (out["osm_type"], out["osm_id"], out["wikidata"]) == ("node", "240054933", "")
 
 
-def test_of_two_municipalities_nearby_the_nearer_lends_its_wikidata(
-        tmp_path: Path) -> None:
+def test_of_two_municipalities_nearby_the_nearer_lends_its_wikidata(tmp_path: Path) -> None:
     # made up: a second Gemeinde "Drage" 8 km from the village node
-    neighbour = cand("r", 1, 9.64, 54.004272, name="Drage", boundary="administrative",
-                     admin_level="8", wikidata="Q1")
-    out = run(tmp_path, row(kind="settlement", mooring="Draage", de="Drage"),
-              neighbour, DRAGE_STEINBURG_MUNICIPALITY, DRAGE_STEINBURG)
+    neighbour = cand(
+        "r",
+        1,
+        9.64,
+        54.004272,
+        name="Drage",
+        boundary="administrative",
+        admin_level="8",
+        wikidata="Q1",
+    )
+    out = run(
+        tmp_path,
+        row(kind="settlement", mooring="Draage", de="Drage"),
+        neighbour,
+        DRAGE_STEINBURG_MUNICIPALITY,
+        DRAGE_STEINBURG,
+    )
     assert out["status"] == "matched"
     assert (out["osm_id"], out["wikidata"]) == ("240054933", "Q634156")
 
 
-def test_the_municipality_lends_its_wikidata_rather_than_the_nearer_amt(
-        tmp_path: Path) -> None:
+def test_the_municipality_lends_its_wikidata_rather_than_the_nearer_amt(tmp_path: Path) -> None:
     """Schafflund: the Amt relation (admin_level 7) lies 1.9 km from the
     village node, the Gemeinde relation (admin_level 8) 3.3 km.  The most
     local boundary is the village's."""
-    out = run(tmp_path, row(kind="settlement", mooring="Schååflem", de="Schafflund"),
-              AMT_SCHAFFLUND, SCHAFFLUND_MUNICIPALITY, SCHAFFLUND_NO_QID)
+    out = run(
+        tmp_path,
+        row(kind="settlement", mooring="Schååflem", de="Schafflund"),
+        AMT_SCHAFFLUND,
+        SCHAFFLUND_MUNICIPALITY,
+        SCHAFFLUND_NO_QID,
+    )
     assert out["status"] == "matched"
     assert (out["osm_type"], out["osm_id"], out["wikidata"]) == ("node", "240090603", "Q551483")
 
 
 def test_all_pieces_of_a_river_are_matched(tmp_path: Path) -> None:
-    pieces = [cand("w", i, 9.0, 54.6 + 0.01 * i, name="Arlau", waterway="river")
-              for i in (44051133, 44051131, 44051132)]
+    pieces = [
+        cand("w", i, 9.0, 54.6 + 0.01 * i, name="Arlau", waterway="river")
+        for i in (44051133, 44051131, 44051132)
+    ]
     out = run(tmp_path, row(kind="water", mooring="Arlou", de="Arlau"), *pieces)
     assert out["status"] == "matched"
     assert out["osm_type"] == "way"

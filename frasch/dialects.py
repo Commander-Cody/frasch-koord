@@ -17,6 +17,7 @@ CLI:  `names/dialects.py`          prints the registry
                                    writes the registry the frontend compiles
                                    in (every column but `note`)
 """
+
 from __future__ import annotations
 
 import argparse
@@ -40,6 +41,7 @@ AREA_LIST_PATH = paths.DIALECT_AREA_LIST
 
 class AreaRow(TypedDict):
     """A row of the dialect area list, see `area_rows`."""
+
     line: int
     dialect: str
     name: str
@@ -70,7 +72,7 @@ def area_rows(path: str, reg: Registry) -> tuple[list[AreaRow], list[tuple[int, 
         for n, row in enumerate(reader, start=2):
             tag = (row.get("dialect") or "").strip()
             if not tag and not (row.get("osm") or "").strip():
-                continue                                  # blank spacer line
+                continue  # blank spacer line
             if tag not in known:
                 problems.append((n, f"unknown dialect {tag!r} (not in names/dialects.csv)"))
                 continue
@@ -82,25 +84,42 @@ def area_rows(path: str, reg: Registry) -> tuple[list[AreaRow], list[tuple[int, 
             if not refs:
                 problems.append((n, "no OSM reference"))
                 continue
-            area_refs = [osm for ref in refs
-                         if (osm := placelist.as_osm_ref(ref)) and osm[0] in ("w", "r")]
+            area_refs = [
+                osm for ref in refs if (osm := placelist.as_osm_ref(ref)) and osm[0] in ("w", "r")
+            ]
             if len(area_refs) < len(refs):
                 # a node can never be a polygon, and `local/` names an object
                 # of our own invention (curation.csv), not an OSM boundary
                 bad = [r for r in refs if r not in area_refs]
-                problems.append((n, f"{placelist.format_osm(bad)}: only way/ "
-                                    f"or relation/ references are allowed here"))
+                problems.append(
+                    (
+                        n,
+                        f"{placelist.format_osm(bad)}: only way/ "
+                        f"or relation/ references are allowed here",
+                    )
+                )
                 continue
             taken = [r for r in area_refs if r in first_line]
             if taken:
-                problems.append((n, f"{placelist.format_osm(taken[:1])} is already "
-                                    f"on line {first_line[taken[0]]}"))
+                problems.append(
+                    (
+                        n,
+                        f"{placelist.format_osm(taken[:1])} is already "
+                        f"on line {first_line[taken[0]]}",
+                    )
+                )
                 continue
             first_line.update((r, n) for r in area_refs)
-            rows.append({"line": n, "dialect": tag,
-                         "name": (row.get("name") or "").strip(),
-                         "note": (row.get("note") or "").strip(),
-                         "osm": placelist.format_osm(area_refs), "refs": area_refs})
+            rows.append(
+                {
+                    "line": n,
+                    "dialect": tag,
+                    "name": (row.get("name") or "").strip(),
+                    "note": (row.get("note") or "").strip(),
+                    "osm": placelist.format_osm(area_refs),
+                    "refs": area_refs,
+                }
+            )
     return rows, problems
 
 
@@ -148,6 +167,7 @@ class AreaIndex:
         # polygons, so "smallest wins" compares the actual island, not the
         # union of every Hallig
         from shapely import STRtree
+
         self.polygons = polygons
         self.geoms = [g for _, g in polygons]
         self.tree = STRtree(self.geoms) if self.geoms else None
@@ -155,6 +175,7 @@ class AreaIndex:
     @classmethod
     def from_geojson(cls, path: str = DEFAULT_AREAS) -> AreaIndex:
         from shapely.geometry import shape
+
         with open(path, encoding="utf-8") as fh:
             fc = json.load(fh)
         polygons: list[tuple[str, BaseGeometry]] = []
@@ -169,13 +190,14 @@ class AreaIndex:
         for tag, geom in polygons:
             for g in getattr(geom, "geoms", [geom]):
                 flat.append((tag, g))
-        flat.sort(key=lambda tg: tg[1].area)     # smallest first -> first hit wins
+        flat.sort(key=lambda tg: tg[1].area)  # smallest first -> first hit wins
         return cls(flat)
 
     def lookup(self, lon: float | str, lat: float | str) -> str | None:
         if self.tree is None:
             return None
         from shapely.geometry import Point
+
         pt = Point(float(lon), float(lat))
         best: tuple[str, float] | None = None
         for i in self.tree.query(pt):
@@ -197,17 +219,22 @@ class AreaIndex:
 
 @cli.command
 def main(argv: Sequence[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("--registry", default=paths.DIALECTS)
-    ap.add_argument("--tags", action="store_true",
-                    help="print the language tags as a comma-separated list "
-                         "(tiles/build.sh feeds them to Planetiler)")
-    ap.add_argument("--columns", action="store_true",
-                    help="print the places.csv columns instead")
-    ap.add_argument("--export", metavar="PATH",
-                    help="write the registry as JSON for the frontend "
-                         "(web/src/generated/dialects.json)")
+    ap.add_argument(
+        "--tags",
+        action="store_true",
+        help="print the language tags as a comma-separated list "
+        "(tiles/build.sh feeds them to Planetiler)",
+    )
+    ap.add_argument("--columns", action="store_true", help="print the places.csv columns instead")
+    ap.add_argument(
+        "--export",
+        metavar="PATH",
+        help="write the registry as JSON for the frontend (web/src/generated/dialects.json)",
+    )
     a = ap.parse_args(argv)
     reg = registry.read(a.registry)
     if a.export:
@@ -218,14 +245,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(",".join(reg.columns))
     else:
         for d in reg:
-            print(f"{d['tag']:<16} {d['column']:<10} {d['label']:<18} "
-                  f"{d['status']:<7} view={d['view']:<4} {d['note']}")
+            print(
+                f"{d['tag']:<16} {d['column']:<10} {d['label']:<18} "
+                f"{d['status']:<7} view={d['view']:<4} {d['note']}"
+            )
     return 0
 
 
 def export_json(reg: Registry, path: str) -> None:
     """Write the registry the frontend compiles in: every column but `note`."""
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-    files.atomic_write(path, json.dumps(
-        [{k: v for k, v in d.items() if k in EXPORT_FIELDS} for d in reg],
-        ensure_ascii=False, separators=(",", ":")) + "\n")
+    files.atomic_write(
+        path,
+        json.dumps(
+            [{k: v for k, v in d.items() if k in EXPORT_FIELDS} for d in reg],
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+        + "\n",
+    )

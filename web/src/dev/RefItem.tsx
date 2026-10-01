@@ -24,8 +24,22 @@ export interface RefItemProps {
 }
 
 export default function RefItem(props: RefItemProps) {
-  const { osmRef, number, color, name, meta, wikidataTag, active = false, checked, onToggle, onShow, onPick } = props;
-  const className = [active ? 'is-active' : '', checked ? 'is-checked' : ''].filter(Boolean).join(' ');
+  const {
+    osmRef,
+    number,
+    color,
+    name,
+    meta,
+    wikidataTag,
+    active = false,
+    checked,
+    onToggle,
+    onShow,
+    onPick,
+  } = props;
+  const className = [active ? 'is-active' : '', checked ? 'is-checked' : '']
+    .filter(Boolean)
+    .join(' ');
   return (
     <li className={className || undefined}>
       <input
@@ -44,7 +58,9 @@ export default function RefItem(props: RefItemProps) {
           <span className="dev-panel-mono curate-mono">{osmRef}</span>
           <span className="curate-candidate-meta">{meta}</span>
           {wikidataTag && !singleWikidataId(wikidataTag) && (
-            <span className="curate-candidate-warning">wikidata {wikidataTag}: not one id, not saved</span>
+            <span className="curate-candidate-warning">
+              wikidata {wikidataTag}: not one id, not saved
+            </span>
           )}
         </span>
       </button>

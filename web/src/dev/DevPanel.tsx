@@ -51,7 +51,12 @@ export default function DevPanel({ title, className, header, children, ...load }
   );
 }
 
-function LoadStatus({ what, needs, error, onReload }: Pick<DevPanelProps, 'what' | 'needs' | 'error' | 'onReload'>) {
+function LoadStatus({
+  what,
+  needs,
+  error,
+  onReload,
+}: Pick<DevPanelProps, 'what' | 'needs' | 'error' | 'onReload'>) {
   if (!error) return <p className="dev-panel-hint">Loading…</p>;
   return (
     <>

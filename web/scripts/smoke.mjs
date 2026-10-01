@@ -26,7 +26,9 @@ let browser;
 try {
   // Software WebGL: headless has no GPU, and Chromium only falls back to
   // SwiftShader for WebGL when told to.
-  browser = await chromium.launch({ args: ['--enable-unsafe-swiftshader', '--use-angle=swiftshader'] });
+  browser = await chromium.launch({
+    args: ['--enable-unsafe-swiftshader', '--use-angle=swiftshader'],
+  });
   const page = await browser.newPage();
   page.on('pageerror', (err) => problems.push(`page error: ${err.message}`));
   page.on('console', (msg) => {
@@ -57,7 +59,8 @@ try {
   // The dev tools are not in the build: `?curate` is the public map.
   await page.goto(`${url}?curate${VIEW}`);
   await page.waitForSelector('.search-input', { timeout: TIMEOUT });
-  if (await page.locator('.curate-panel, .area-panel').count()) problems.push('?curate opens a dev tool');
+  if (await page.locator('.curate-panel, .area-panel').count())
+    problems.push('?curate opens a dev tool');
 } catch (err) {
   problems.push(String(err));
 } finally {

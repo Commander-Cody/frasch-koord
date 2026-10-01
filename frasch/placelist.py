@@ -26,6 +26,7 @@ depends on the dialect registry: the functions that need it take a
 dialect-aware name logic (the fallbacks) lives one layer up in
 frasch.dialects.
 """
+
 from __future__ import annotations
 
 import contextlib
@@ -54,12 +55,28 @@ def name_columns(reg: Registry | None = None) -> list[str]:
 
 def columns(reg: Registry | None = None) -> list[str]:
     """The columns of the name list, in the order it is written in."""
-    return (["kind"] + name_columns(reg)
-            + ["de", "hint", "da", "osm", "wikidata", "status", "note", "id"])
+    return (
+        ["kind"]
+        + name_columns(reg)
+        + ["de", "hint", "da", "osm", "wikidata", "status", "note", "id"]
+    )
 
 
-KINDS = {"settlement", "koog", "harde", "island", "hallig", "sand", "warft",
-         "landscape", "water", "road", "country", "helgoland", "not_a_place"}
+KINDS = {
+    "settlement",
+    "koog",
+    "harde",
+    "island",
+    "hallig",
+    "sand",
+    "warft",
+    "landscape",
+    "water",
+    "road",
+    "country",
+    "helgoland",
+    "not_a_place",
+}
 STATUSES = {"", "auto", "ok", "skip"}
 
 # The tile attribute naming the row a label comes from: its `id`.  The
@@ -181,8 +198,7 @@ def on_map(row: Row, reg: Registry | None = None) -> bool:
     """Whether a row puts names on the map: it has a Frisian name and is
     neither `skip` nor `not_a_place`.  The injector labels these rows'
     objects, and the search index lists them."""
-    return (row["status"] != "skip" and row["kind"] != "not_a_place"
-            and bool(any_name(row, reg)))
+    return row["status"] != "skip" and row["kind"] != "not_a_place" and bool(any_name(row, reg))
 
 
 def owned_by_matcher(row: Row) -> bool:
@@ -191,7 +207,7 @@ def owned_by_matcher(row: Row) -> bool:
     hand-filled reference, a local reference, `not_a_place` -- only one it
     filled itself (`auto`) or one with nothing in it yet."""
     if local_ref(row["osm"]):
-        return False              # a local reference: OSM has no object for it
+        return False  # a local reference: OSM has no object for it
     if row["kind"] == "not_a_place" or row["status"] in ("ok", "skip"):
         return False
     if row["status"] == "auto":
@@ -212,16 +228,22 @@ def parse_osm(cell: str | None, where: str = "") -> list[Ref]:
             continue
         m = re.fullmatch(rf"(node|way|relation)/(\d+)|(local)/({SLUG.pattern})", ref)
         if not m:
-            raise Invalid(where, f"bad reference {ref!r} (expected node/ID, "
-                                 f"way/ID, relation/ID or local/slug with a slug "
-                                 f"of lowercase letters, digits and hyphens)")
+            raise Invalid(
+                where,
+                f"bad reference {ref!r} (expected node/ID, "
+                f"way/ID, relation/ID or local/slug with a slug "
+                f"of lowercase letters, digits and hyphens)",
+            )
         if m.group(3):
             out.append((LOCAL_TYPE, m.group(4)))
         else:
             out.append((OSM_TYPES[m.group(1)], int(m.group(2))))
     if len(out) > 1 and any(t == LOCAL_TYPE for t, _ in out):
-        raise Invalid(where, f"a local reference stands alone, it cannot be "
-                             f"combined with other references: {cell!r}")
+        raise Invalid(
+            where,
+            f"a local reference stands alone, it cannot be "
+            f"combined with other references: {cell!r}",
+        )
     return out
 
 
@@ -271,8 +293,10 @@ def claimed_refs(row: Row) -> list[Ref]:
 def header_problem(fields: Sequence[str], reg: Registry | None = None) -> str | None:
     """What is wrong with the header of the name list, or None."""
     if "lat" in fields or "lon" in fields:
-        return ("`lat`/`lon` moved to names/curation.csv (2026-09-18): reference "
-                "the place as local/<slug> in `osm` and delete the two columns")
+        return (
+            "`lat`/`lon` moved to names/curation.csv (2026-09-18): reference "
+            "the place as local/<slug> in `osm` and delete the two columns"
+        )
     what = files.csv_header_problem(fields, columns(reg))
     if what and "id" not in fields:
         what += " (names/check.py --fix adds `id`)"
@@ -297,8 +321,9 @@ def row_problems(row: Row) -> list[str]:
     if row["wikidata"] and not WIKIDATA_ID.fullmatch(row["wikidata"]):
         out.append(f"bad wikidata id {row['wikidata']!r}")
     if row["wikidata"] and local:
-        out.append("a local reference is for a place OSM does not have -- it "
-                   "cannot have a wikidata id")
+        out.append(
+            "a local reference is for a place OSM does not have -- it cannot have a wikidata id"
+        )
     return out
 
 
@@ -309,16 +334,19 @@ def id_problem(row: Row, seen: dict[str, int]) -> str | None:
     if not ident:
         return "no id (run names/check.py --fix to give new rows one)"
     if not SLUG.fullmatch(ident):
-        return (f"bad id {ident!r} (lowercase letters, digits and hyphens; "
-                f"run names/check.py --fix for a new row)")
+        return (
+            f"bad id {ident!r} (lowercase letters, digits and hyphens; "
+            f"run names/check.py --fix for a new row)"
+        )
     if ident in seen:
         return f"id {ident} is already used on line {seen[ident]}"
     return None
 
 
 # the letters NFKD does not take apart into a base letter and a diacritic
-_ASCII_FOLD = str.maketrans({"ß": "ss", "æ": "ae", "Æ": "ae", "ø": "o", "Ø": "o",
-                             "đ": "d", "Đ": "d"})
+_ASCII_FOLD = str.maketrans(
+    {"ß": "ss", "æ": "ae", "Æ": "ae", "ø": "o", "Ø": "o", "đ": "d", "Đ": "d"}
+)
 
 
 def slug(text: str) -> str:
@@ -333,8 +361,12 @@ def slug(text: str) -> str:
 def new_id(row: Row, taken: set[str], reg: Registry | None = None) -> str:
     """An id for a row that has none: the slug of its Frisian name (German,
     then Danish, when it has none), with `-2`, `-3`, ... when that is taken."""
-    base = (slug(any_name(row, reg)) or slug(primary(row.get("de")))
-            or slug(primary(row.get("da"))) or "row")
+    base = (
+        slug(any_name(row, reg))
+        or slug(primary(row.get("de")))
+        or slug(primary(row.get("da")))
+        or "row"
+    )
     ident, n = base, 1
     while ident in taken:
         n += 1
@@ -357,13 +389,13 @@ def fill_ids(path: str = DEFAULT_PATH, reg: Registry | None = None) -> int:
     reader = csv.reader(io.StringIO(files.decode(data), newline=""))
     header = next(reader, [])
     fields = header if "id" in header else header + ["id"]
-    if (what := header_problem(fields, reg)):
+    if what := header_problem(fields, reg):
         raise ValidationError(f"{path}: {what}")
     rows: list[dict[str, str]] = []
     for cells in reader:
         if not cells:
             continue
-        if (what := files.cell_count_problem(cells, header)):
+        if what := files.cell_count_problem(cells, header):
             raise ValidationError(f"{path}:{reader.line_num}: {what}")
         rows.append(dict(zip(header, cells, strict=True)))
     taken = {r["id"].strip() for r in rows if r.get("id", "").strip()}
@@ -379,8 +411,7 @@ def fill_ids(path: str = DEFAULT_PATH, reg: Registry | None = None) -> int:
     return given
 
 
-def read(path: str = DEFAULT_PATH,
-         reg: Registry | None = None) -> tuple[list[PlaceRow], list[str]]:
+def read(path: str = DEFAULT_PATH, reg: Registry | None = None) -> tuple[list[PlaceRow], list[str]]:
     """-> (rows, fieldnames).  A row is identified by its `id` and knows its
     `line`.  A ValidationError lists every row that breaks the rules."""
     with open(path, "rb") as fh:
@@ -391,13 +422,13 @@ def read(path: str = DEFAULT_PATH,
     with io.StringIO(files.decode(data), newline="") as fh:
         reader = csv.DictReader(fh)
         fields = list(reader.fieldnames or [])
-        if (what := header_problem(fields, reg)):
+        if what := header_problem(fields, reg):
             raise ValidationError(f"{path}: {what}")
         rows: list[PlaceRow] = []
         problems: list[str] = []
         seen: dict[str, int] = {}
         for raw in reader:
-            n = reader.line_num                  # blank lines count too
+            n = reader.line_num  # blank lines count too
             what = _row_problem(raw, seen)
             if what:
                 problems.append(f"{path}:{n}: {what}")
@@ -417,7 +448,7 @@ _RawRow = Mapping[str | None, str | list[str] | None]
 
 def _row_problem(raw: _RawRow, seen: dict[str, int]) -> str | None:
     """The first thing wrong with one raw row of `read`, or None."""
-    if None in raw:                              # more cells than columns
+    if None in raw:  # more cells than columns
         return f"row has more cells than the header (a stray comma?): {raw[None]}"
     row = _stripped(raw)
     problems = row_problems(row) + [id_problem(row, seen)]
@@ -426,12 +457,12 @@ def _row_problem(raw: _RawRow, seen: dict[str, int]) -> str | None:
 
 def _stripped(raw: _RawRow) -> dict[str, str]:
     """The cells of a raw row that `_row_problem` let through, stripped."""
-    return {k: v.strip() if isinstance(v, str) else ""
-            for k, v in raw.items() if k is not None}
+    return {k: v.strip() if isinstance(v, str) else "" for k, v in raw.items() if k is not None}
 
 
-def write(rows: Iterable[Row], path: str = DEFAULT_PATH,
-          fields: Sequence[str] | None = None) -> None:
+def write(
+    rows: Iterable[Row], path: str = DEFAULT_PATH, fields: Sequence[str] | None = None
+) -> None:
     """Write the name list -- atomically, and only if nobody else changed the
     file since this process `read` it.
 
@@ -443,11 +474,12 @@ def write(rows: Iterable[Row], path: str = DEFAULT_PATH,
     fields = fields or columns()
     expect = _read_digests.get(os.path.abspath(path))
     if expect is None:
-        raise RuntimeError(f"placelist.write({path!r}) without a placelist.read "
-                           f"of it first -- nothing to check for changes against")
+        raise RuntimeError(
+            f"placelist.write({path!r}) without a placelist.read "
+            f"of it first -- nothing to check for changes against"
+        )
     buf = io.StringIO(newline="")
-    w = csv.DictWriter(buf, fieldnames=fields, lineterminator="\n",
-                       extrasaction="ignore")
+    w = csv.DictWriter(buf, fieldnames=fields, lineterminator="\n", extrasaction="ignore")
     w.writeheader()
     for r in rows:
         w.writerow({k: r.get(k, "") for k in fields})
@@ -456,7 +488,7 @@ def write(rows: Iterable[Row], path: str = DEFAULT_PATH,
     _read_digests[os.path.abspath(path)] = files.digest(data)
 
 
-_read_digests: dict[str, str] = {}      # abspath -> sha256 of what `read` saw
+_read_digests: dict[str, str] = {}  # abspath -> sha256 of what `read` saw
 
 
 @contextlib.contextmanager
@@ -466,6 +498,7 @@ def lock(names_path: str = DEFAULT_PATH) -> Iterator[None]:
     the same time.  Advisory (`flock`): a spreadsheet does not take it -- that
     is what the check in `write` is for."""
     import fcntl  # POSIX only; the pipeline runs in WSL
+
     work = os.path.join(os.path.dirname(os.path.abspath(names_path)), "work")
     os.makedirs(work, exist_ok=True)
     lock_path = os.path.join(work, ".lock")
@@ -475,9 +508,11 @@ def lock(names_path: str = DEFAULT_PATH) -> Iterator[None]:
         except OSError as exc:
             if exc.errno not in (errno.EWOULDBLOCK, errno.EAGAIN, errno.EACCES):
                 raise
-            raise PipelineError(f"{lock_path} is held: another match.py or "
-                                f"curate.py apply is running -- wait for it to "
-                                f"finish") from None
+            raise PipelineError(
+                f"{lock_path} is held: another match.py or "
+                f"curate.py apply is running -- wait for it to "
+                f"finish"
+            ) from None
         try:
             yield
         finally:

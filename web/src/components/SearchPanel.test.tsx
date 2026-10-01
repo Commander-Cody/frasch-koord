@@ -12,11 +12,24 @@ afterEach(() => {
 
 it('searches past entries without an id or with a repeated one', () => {
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-  const entry = { id: 'node/1', names: {}, name_de: 'Niebüll', lon: 8.83, lat: 54.79, kind: 'settlement' };
+  const entry = {
+    id: 'node/1',
+    names: {},
+    name_de: 'Niebüll',
+    lon: 8.83,
+    lat: 54.79,
+    kind: 'settlement',
+  };
   const entries = [entry, { ...entry }, { ...entry, id: undefined }] as unknown as NameEntry[];
 
   render(
-    <SearchPanel entries={entries} status="ready" view="frr-x-mooring" onViewChange={() => {}} onSelect={() => {}} />,
+    <SearchPanel
+      entries={entries}
+      status="ready"
+      view="frr-x-mooring"
+      onViewChange={() => {}}
+      onSelect={() => {}}
+    />,
   );
   fireEvent.change(screen.getByPlaceholderText(/./), { target: { value: 'Niebüll' } });
 
@@ -38,7 +51,13 @@ it('hands a picked result on as the whole name-list entry', () => {
   };
   const onSelect = vi.fn();
   render(
-    <SearchPanel entries={[entry]} status="ready" view="frr-x-mooring" onViewChange={() => {}} onSelect={onSelect} />,
+    <SearchPanel
+      entries={[entry]}
+      status="ready"
+      view="frr-x-mooring"
+      onViewChange={() => {}}
+      onSelect={onSelect}
+    />,
   );
 
   fireEvent.change(screen.getByPlaceholderText(/./), { target: { value: 'Naibel' } });
@@ -58,7 +77,15 @@ it("finds a place by OSM's generic name, which the local view labels it with", (
     lat: 55.33,
     kind: 'settlement',
   };
-  render(<SearchPanel entries={[entry]} status="ready" view="frr-x-local" onViewChange={() => {}} onSelect={() => {}} />);
+  render(
+    <SearchPanel
+      entries={[entry]}
+      status="ready"
+      view="frr-x-local"
+      onViewChange={() => {}}
+      onSelect={() => {}}
+    />,
+  );
 
   fireEvent.change(screen.getByPlaceholderText(/./), { target: { value: 'Ribe' } });
 
@@ -66,7 +93,15 @@ it("finds a place by OSM's generic name, which the local view labels it with", (
 });
 
 it('names the search field for screen readers, not only by its placeholder', () => {
-  render(<SearchPanel entries={[]} status="ready" view="frr-x-mooring" onViewChange={() => {}} onSelect={() => {}} />);
+  render(
+    <SearchPanel
+      entries={[]}
+      status="ready"
+      view="frr-x-mooring"
+      onViewChange={() => {}}
+      onSelect={() => {}}
+    />,
+  );
 
   // Without its label, the field would be named by the placeholder.
   expect(screen.getByRole('combobox', { name: i18n.t('search.label') })).toBeDefined();

@@ -6,6 +6,7 @@ Schleswig-Holstein extract; ring nodes made up): the village Holm, the
 Nordwarft way on Ockholm, the Hamburger Hallig relation, the Nordstrand
 village node that carries the synthetic island square, Tammensiel (curated,
 not in the name list), and Westerheide on Amrum, a place OSM does not have."""
+
 from __future__ import annotations
 
 import csv
@@ -62,9 +63,14 @@ def place(line: int = 2, **cells: str) -> placelist.PlaceRow:
     return placelist.PlaceRow({c: "" for c in placelist.columns()} | cells, line)
 
 
-BRODERSWARFT = place(id="brouderswarw", kind="warft", mooring="Brouderswärw",
-                     local="Brouersweerw (Foortuftinge)", de="Broderswarft",
-                     osm="node/1594721085")
+BRODERSWARFT = place(
+    id="brouderswarw",
+    kind="warft",
+    mooring="Brouderswärw",
+    local="Brouersweerw (Foortuftinge)",
+    de="Broderswarft",
+    osm="node/1594721085",
+)
 
 
 def test_name_tags_of_a_row_with_a_local_variety(reg: Registry) -> None:
@@ -84,8 +90,14 @@ def test_name_tags_fill_the_areas_dialect_from_local(reg: Registry) -> None:
 
 
 def test_name_tags_outside_any_area_have_no_dialect(reg: Registry) -> None:
-    hanswarft = place(id="hanswarw", kind="warft", mooring="Hanswärw", hallig="Hansweerf",
-                      de="Hanswarft", osm="node/3410324993")
+    hanswarft = place(
+        id="hanswarw",
+        kind="warft",
+        mooring="Hanswärw",
+        hallig="Hansweerf",
+        de="Hanswarft",
+        osm="node/3410324993",
+    )
     assert inject_names.name_tags([hanswarft], None, reg) == {
         "name:frr-x-mooring": "Hanswärw",
         "name:frr-x-hallig": "Hansweerf",
@@ -97,10 +109,16 @@ def test_name_tags_outside_any_area_have_no_dialect(reg: Registry) -> None:
 def test_name_tags_first_row_wins_per_tag(reg: Registry) -> None:
     # two rows claim one object: the first in file order keeps its names,
     # the second only fills what the first leaves empty
-    first = place(2, id="hulm", kind="settlement", mooring="Hulm", de="Holm",
-                  osm="node/240102263")
-    second = place(9, id="hulm-gutskuuch", kind="koog", mooring="Hulm Gutskuuch", wieding="Hoolm",
-                   de="Holm", osm="node/240102263")
+    first = place(2, id="hulm", kind="settlement", mooring="Hulm", de="Holm", osm="node/240102263")
+    second = place(
+        9,
+        id="hulm-gutskuuch",
+        kind="koog",
+        mooring="Hulm Gutskuuch",
+        wieding="Hoolm",
+        de="Holm",
+        osm="node/240102263",
+    )
     tags = inject_names.name_tags([first, second], None, reg)
     assert tags["name:frr-x-mooring"] == "Hulm"
     assert tags["name:frr-x-wieding"] == "Hoolm"
@@ -110,8 +128,9 @@ def test_name_tags_first_row_wins_per_tag(reg: Registry) -> None:
 
 def test_name_tags_refer_to_the_rows_id(reg: Registry) -> None:
     # not to the object: the search index names the place by the row (#23)
-    denmark = place(id="daanemark", kind="country", mooring="Däänemark",
-                    de="Dänemark", wikidata="Q35")
+    denmark = place(
+        id="daanemark", kind="country", mooring="Däänemark", de="Dänemark", wikidata="Q35"
+    )
     assert inject_names.name_tags([denmark], None, reg)["frasch:ref"] == "daanemark"
 
 
@@ -119,10 +138,15 @@ def test_name_tags_refer_to_the_rows_id(reg: Registry) -> None:
 # (the file's rules are frasch.curationlist's, see names/tests/test_curationlist.py)
 def test_a_second_row_with_the_same_qid_is_reported(tmp_path: Path, reg: Registry) -> None:
     path = tmp_path / "places.csv"
-    path.write_text(places_csv([
-        {"id": "daanemark", "kind": "country", "mooring": "Däänemark", "wikidata": "Q35"},
-        {"id": "daanemoark", "kind": "country", "mooring": "Däänemoark", "wikidata": "Q35"},
-    ]), encoding="utf-8")
+    path.write_text(
+        places_csv(
+            [
+                {"id": "daanemark", "kind": "country", "mooring": "Däänemark", "wikidata": "Q35"},
+                {"id": "daanemoark", "kind": "country", "mooring": "Däänemoark", "wikidata": "Q35"},
+            ]
+        ),
+        encoding="utf-8",
+    )
     names = inject_names.load_names(str(path), reg)
     assert [r["id"] for r in names.by_qid["Q35"]] == ["daanemark"]
     assert names.duplicate_qids == [("Q35", 2, 3)]
@@ -149,41 +173,97 @@ HAMBURGER_HALLIG = 5615880
 KREIS = 27019
 
 # closed rings: the Nordwarft on Ockholm, the Hamburger Hallig's outline
-NORDWARFT_NODES = {9000000001: (8.826, 54.668), 9000000002: (8.830, 54.668),
-                   9000000003: (8.830, 54.671), 9000000004: (8.826, 54.671)}
-HALLIG_NODES = {9100000001: (8.825, 54.585), 9100000002: (8.850, 54.585),
-                9100000003: (8.850, 54.600), 9100000004: (8.825, 54.600)}
+NORDWARFT_NODES = {
+    9000000001: (8.826, 54.668),
+    9000000002: (8.830, 54.668),
+    9000000003: (8.830, 54.671),
+    9000000004: (8.826, 54.671),
+}
+HALLIG_NODES = {
+    9100000001: (8.825, 54.585),
+    9100000002: (8.850, 54.585),
+    9100000003: (8.850, 54.600),
+    9100000004: (8.825, 54.600),
+}
 MAX_NODE = 9100000004
 MAX_WAY = NORDWARFT
 
 PLACES = [
-    dict(id="hulm", kind="settlement", mooring="Hulm", de="Holm", osm=f"node/{HOLM}",
-         wikidata="Q559369", status="ok"),
-    dict(id="nordwarw", kind="warft", mooring="Nordwärw", nordgoes="Noordweerw", de="Nordwarft",
-         hint="Ockholm", osm=f"way/{NORDWARFT}", status="ok"),
-    dict(id="hamborjer-hali", kind="hallig", mooring="Hamborjer Håli", de="Hamburger Hallig",
-         osm=f"relation/{HAMBURGER_HALLIG}", status="ok"),
+    dict(
+        id="hulm",
+        kind="settlement",
+        mooring="Hulm",
+        de="Holm",
+        osm=f"node/{HOLM}",
+        wikidata="Q559369",
+        status="ok",
+    ),
+    dict(
+        id="nordwarw",
+        kind="warft",
+        mooring="Nordwärw",
+        nordgoes="Noordweerw",
+        de="Nordwarft",
+        hint="Ockholm",
+        osm=f"way/{NORDWARFT}",
+        status="ok",
+    ),
+    dict(
+        id="hamborjer-hali",
+        kind="hallig",
+        mooring="Hamborjer Håli",
+        de="Hamburger Hallig",
+        osm=f"relation/{HAMBURGER_HALLIG}",
+        status="ok",
+    ),
     # the Kreis relation runs along the Hallig's outline here: a district
     # around a Hallig, so its inside point lies in the Hallig's area
-    dict(id="kris", kind="landscape", mooring="Kris Nordfraschlönj",
-         nordgoes="Noordfräischloun Krais", de="Kreis Nordfriesland",
-         osm=f"relation/{KREIS}", status="ok"),
-    dict(id="waasterhias", kind="settlement", oomrang="Waasterhias", de="Westerheide",
-         osm="local/westerheide-amrum", status="ok"),
+    dict(
+        id="kris",
+        kind="landscape",
+        mooring="Kris Nordfraschlönj",
+        nordgoes="Noordfräischloun Krais",
+        de="Kreis Nordfriesland",
+        osm=f"relation/{KREIS}",
+        status="ok",
+    ),
+    dict(
+        id="waasterhias",
+        kind="settlement",
+        oomrang="Waasterhias",
+        de="Westerheide",
+        osm="local/westerheide-amrum",
+        status="ok",
+    ),
 ]
 
 CURATION = [
-    {"osm": f"node/{NORDSTRAND}", "name": "Nordstrand (synthetic island polygon)",
-     "set_tags": "place=island;frasch:kind=island", "maxzoom": "11",
-     "polygon_km2": "50"},
-    {"osm": f"node/{NORDSTRAND}", "name": "Nordstrand (village node)",
-     "set_tags": "name:frr-x-mooring=e Strönj;frasch:ref=relation/1420555",
-     "minzoom": "12"},
+    {
+        "osm": f"node/{NORDSTRAND}",
+        "name": "Nordstrand (synthetic island polygon)",
+        "set_tags": "place=island;frasch:kind=island",
+        "maxzoom": "11",
+        "polygon_km2": "50",
+    },
+    {
+        "osm": f"node/{NORDSTRAND}",
+        "name": "Nordstrand (village node)",
+        "set_tags": "name:frr-x-mooring=e Strönj;frasch:ref=relation/1420555",
+        "minzoom": "12",
+    },
     {"osm": f"node/{TAMMENSIEL}", "name": "Tammensiel", "minzoom": "10"},
-    {"osm": f"relation/{HAMBURGER_HALLIG}", "name": "Hamburger Hallig",
-     "set_tags": "place=island", "minzoom": "12"},
-    {"osm": "local/westerheide-amrum", "name": "Westerheide (Amrum)",
-     "lat": "54.65097", "lon": "8.34019"},
+    {
+        "osm": f"relation/{HAMBURGER_HALLIG}",
+        "name": "Hamburger Hallig",
+        "set_tags": "place=island",
+        "minzoom": "12",
+    },
+    {
+        "osm": "local/westerheide-amrum",
+        "name": "Westerheide (Amrum)",
+        "lat": "54.65097",
+        "lon": "8.34019",
+    },
 ]
 
 
@@ -193,24 +273,33 @@ def box(west: float, south: float, east: float, north: float) -> list[list[list[
 
 # Amrum; Ockholm (Nordergoesharde); Reußenköge (Mooring) with the Hamburger
 # Hallig (Halligfriesisch) inside it -- the smaller area must win
-AREAS = {"type": "FeatureCollection", "features": [
-    {"type": "Feature", "properties": {"dialect": tag},
-     "geometry": {"type": "Polygon", "coordinates": box(*bounds)}}
-    for tag, bounds in [
-        ("frr-x-oomrang", (8.30, 54.62, 8.40, 54.70)),
-        ("frr-x-nordgoes", (8.78, 54.64, 8.90, 54.70)),
-        ("frr-x-mooring", (8.80, 54.55, 8.95, 54.63)),
-        ("frr-x-hallig", (8.82, 54.58, 8.86, 54.605)),
-    ]]}
+AREAS = {
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "properties": {"dialect": tag},
+            "geometry": {"type": "Polygon", "coordinates": box(*bounds)},
+        }
+        for tag, bounds in [
+            ("frr-x-oomrang", (8.30, 54.62, 8.40, 54.70)),
+            ("frr-x-nordgoes", (8.78, 54.64, 8.90, 54.70)),
+            ("frr-x-mooring", (8.80, 54.55, 8.95, 54.63)),
+            ("frr-x-hallig", (8.82, 54.58, 8.86, 54.605)),
+        ]
+    ],
+}
 
 
 def write_extract(path: Path) -> None:
-    Node, Way, Relation = (osmium.osm.mutable.Node, osmium.osm.mutable.Way,
-                           osmium.osm.mutable.Relation)
+    Node, Way, Relation = (
+        osmium.osm.mutable.Node,
+        osmium.osm.mutable.Way,
+        osmium.osm.mutable.Relation,
+    )
     nodes = {
         NORDSTRAND: ((8.865286, 54.487378), {"place": "village", "name": "Nordstrand"}),
-        HOLM: ((8.866668, 54.833305), {"place": "village", "name": "Holm",
-                                       "wikidata": "Q559369"}),
+        HOLM: ((8.866668, 54.833305), {"place": "village", "name": "Holm", "wikidata": "Q559369"}),
         UNTOUCHED_NODE: ((8.9, 54.6), {"place": "village", "name": "Bredstedt"}),
         TAMMENSIEL: ((8.7033, 54.7433), {"place": "hamlet", "name": "Tammensiel"}),
     }
@@ -223,23 +312,62 @@ def write_extract(path: Path) -> None:
             w.add_node(Node(id=nid, version=1, visible=True, location=loc, tags=tags))
         # ways in ascending id order, like any extract
         ring = list(HALLIG_NODES)
-        w.add_way(Way(id=HALLIG_RING, version=1, visible=True, nodes=ring + ring[:1],
-                      tags={"natural": "coastline"}))
-        w.add_way(Way(id=UNTOUCHED_WAY, version=1, visible=True,
-                      nodes=[NORDSTRAND, HOLM], tags={"highway": "track"}))
+        w.add_way(
+            Way(
+                id=HALLIG_RING,
+                version=1,
+                visible=True,
+                nodes=ring + ring[:1],
+                tags={"natural": "coastline"},
+            )
+        )
+        w.add_way(
+            Way(
+                id=UNTOUCHED_WAY,
+                version=1,
+                visible=True,
+                nodes=[NORDSTRAND, HOLM],
+                tags={"highway": "track"},
+            )
+        )
         ring = list(NORDWARFT_NODES)
-        w.add_way(Way(id=NORDWARFT, version=1, visible=True, nodes=ring + ring[:1],
-                      tags={"name": "Nordwarft", "landuse": "residential"}))
-        w.add_relation(Relation(
-            id=KREIS, version=1, visible=True,
-            members=[("w", HALLIG_RING, "outer")],
-            tags={"type": "boundary", "boundary": "administrative",
-                  "admin_level": "6", "name": "Kreis Nordfriesland"}))
-        w.add_relation(Relation(
-            id=HAMBURGER_HALLIG, version=1, visible=True,
-            members=[("w", HALLIG_RING, "outer")],
-            tags={"type": "boundary", "boundary": "administrative",
-                  "admin_level": "10", "name": "Hamburger Hallig"}))
+        w.add_way(
+            Way(
+                id=NORDWARFT,
+                version=1,
+                visible=True,
+                nodes=ring + ring[:1],
+                tags={"name": "Nordwarft", "landuse": "residential"},
+            )
+        )
+        w.add_relation(
+            Relation(
+                id=KREIS,
+                version=1,
+                visible=True,
+                members=[("w", HALLIG_RING, "outer")],
+                tags={
+                    "type": "boundary",
+                    "boundary": "administrative",
+                    "admin_level": "6",
+                    "name": "Kreis Nordfriesland",
+                },
+            )
+        )
+        w.add_relation(
+            Relation(
+                id=HAMBURGER_HALLIG,
+                version=1,
+                visible=True,
+                members=[("w", HALLIG_RING, "outer")],
+                tags={
+                    "type": "boundary",
+                    "boundary": "administrative",
+                    "admin_level": "10",
+                    "name": "Hamburger Hallig",
+                },
+            )
+        )
     finally:
         w.close()
 
@@ -258,9 +386,13 @@ def read_extract(path: Path) -> list[ExtractObject]:
     out: list[ExtractObject] = []
     for o in osmium.FileProcessor(str(path)):
         t = o.type_str()
-        extra: Extra = ((o.location.lon, o.location.lat) if isinstance(o, osmium.osm.Node)
-                        else [n.ref for n in o.nodes] if isinstance(o, osmium.osm.Way)
-                        else None)
+        extra: Extra = (
+            (o.location.lon, o.location.lat)
+            if isinstance(o, osmium.osm.Node)
+            else [n.ref for n in o.nodes]
+            if isinstance(o, osmium.osm.Way)
+            else None
+        )
         out.append((t, o.id, dict(o.tags), extra))
     return out
 
@@ -281,12 +413,24 @@ def injected(tmp_path_factory: pytest.TempPathFactory) -> Injected:
     curation = curation_file(d, *CURATION)
     (d / "areas.geojson").write_text(json.dumps(AREAS), encoding="utf-8")
     write_extract(d / "in.osm.pbf")
-    locate.main([str(d / "in.osm.pbf"), "--names", str(d / "places.csv"),
-                 "--out", str(d / "osm_objects.json")])
-    inject_names.run(str(d / "in.osm.pbf"), str(d / "out.osm.pbf"),
-                     str(d / "places.csv"), paths.DIALECTS,
-                     str(d / "areas.geojson"), curation_csv=curation,
-                     objects_json=str(d / "osm_objects.json"))
+    locate.main(
+        [
+            str(d / "in.osm.pbf"),
+            "--names",
+            str(d / "places.csv"),
+            "--out",
+            str(d / "osm_objects.json"),
+        ]
+    )
+    inject_names.run(
+        str(d / "in.osm.pbf"),
+        str(d / "out.osm.pbf"),
+        str(d / "places.csv"),
+        paths.DIALECTS,
+        str(d / "areas.geojson"),
+        curation_csv=curation,
+        objects_json=str(d / "osm_objects.json"),
+    )
     objs = read_extract(d / "out.osm.pbf")
     return objs, {(t, i): (tags, extra) for t, i, tags, extra in objs}
 
@@ -306,9 +450,17 @@ def test_output_ids_ascend_within_each_type(injected: Injected, t: str) -> None:
 
 def test_every_input_object_is_still_there(injected: Injected) -> None:
     _, by_key = injected
-    for key in [("n", NORDSTRAND), ("n", HOLM), ("n", UNTOUCHED_NODE), ("n", TAMMENSIEL),
-                ("w", NORDWARFT), ("w", HALLIG_RING), ("w", UNTOUCHED_WAY),
-                ("r", KREIS), ("r", HAMBURGER_HALLIG)]:
+    for key in [
+        ("n", NORDSTRAND),
+        ("n", HOLM),
+        ("n", UNTOUCHED_NODE),
+        ("n", TAMMENSIEL),
+        ("w", NORDWARFT),
+        ("w", HALLIG_RING),
+        ("w", UNTOUCHED_WAY),
+        ("r", KREIS),
+        ("r", HAMBURGER_HALLIG),
+    ]:
         assert key in by_key
 
 
@@ -324,30 +476,46 @@ def test_matched_node_gets_its_names_and_keeps_its_tags(injected: Injected) -> N
     _, by_key = injected
     tags, _ = by_key[("n", HOLM)]
     # outside every dialect area: no frasch:dialect, no frasch:local
-    assert tags == {"place": "village", "name": "Holm", "wikidata": "Q559369",
-                    "name:frr-x-mooring": "Hulm", "frasch:kind": "settlement",
-                    "frasch:ref": "hulm"}
+    assert tags == {
+        "place": "village",
+        "name": "Holm",
+        "wikidata": "Q559369",
+        "name:frr-x-mooring": "Hulm",
+        "frasch:kind": "settlement",
+        "frasch:ref": "hulm",
+    }
 
 
 def test_matched_way_gets_the_dialect_of_its_area(injected: Injected) -> None:
     _, by_key = injected
     tags, _ = by_key[("w", NORDWARFT)]
-    assert tags == {"name": "Nordwarft", "landuse": "residential",
-                    "name:frr-x-mooring": "Nordwärw",
-                    "name:frr-x-nordgoes": "Noordweerw",
-                    "frasch:kind": "warft", "frasch:dialect": "frr-x-nordgoes",
-                    "frasch:local": "Noordweerw", "frasch:ref": "nordwarw"}
+    assert tags == {
+        "name": "Nordwarft",
+        "landuse": "residential",
+        "name:frr-x-mooring": "Nordwärw",
+        "name:frr-x-nordgoes": "Noordweerw",
+        "frasch:kind": "warft",
+        "frasch:dialect": "frr-x-nordgoes",
+        "frasch:local": "Noordweerw",
+        "frasch:ref": "nordwarw",
+    }
 
 
 def test_matched_relation_gets_the_smallest_area_and_its_curation(injected: Injected) -> None:
     _, by_key = injected
     tags, _ = by_key[("r", HAMBURGER_HALLIG)]
-    assert tags == {"type": "boundary", "boundary": "administrative",
-                    "admin_level": "10", "name": "Hamburger Hallig",
-                    "name:frr-x-mooring": "Hamborjer Håli", "frasch:kind": "hallig",
-                    "frasch:dialect": "frr-x-hallig",
-                    "frasch:ref": "hamborjer-hali",
-                    "place": "island", "frasch:minzoom": "12"}
+    assert tags == {
+        "type": "boundary",
+        "boundary": "administrative",
+        "admin_level": "10",
+        "name": "Hamburger Hallig",
+        "name:frr-x-mooring": "Hamborjer Håli",
+        "frasch:kind": "hallig",
+        "frasch:dialect": "frr-x-hallig",
+        "frasch:ref": "hamborjer-hali",
+        "place": "island",
+        "frasch:minzoom": "12",
+    }
 
 
 def test_a_district_gets_no_dialect(injected: Injected) -> None:
@@ -361,13 +529,18 @@ def test_an_object_nobody_located_stops_the_build(tmp_path: Path) -> None:
     (tmp_path / "places.csv").write_text(places_csv([PLACES[0]]), encoding="utf-8")
     (tmp_path / "areas.geojson").write_text(json.dumps(AREAS), encoding="utf-8")
     (tmp_path / "osm_objects.json").write_text(
-        locate.objects_json(locate.Objects({}, {"extracts": []})), encoding="utf-8")
+        locate.objects_json(locate.Objects({}, {"extracts": []})), encoding="utf-8"
+    )
     write_extract(tmp_path / "in.osm.pbf")
     with pytest.raises(PipelineError, match=f"node/{HOLM}"):
-        inject_names.run(str(tmp_path / "in.osm.pbf"), str(tmp_path / "out.osm.pbf"),
-                         str(tmp_path / "places.csv"), paths.DIALECTS,
-                         str(tmp_path / "areas.geojson"),
-                         objects_json=str(tmp_path / "osm_objects.json"))
+        inject_names.run(
+            str(tmp_path / "in.osm.pbf"),
+            str(tmp_path / "out.osm.pbf"),
+            str(tmp_path / "places.csv"),
+            paths.DIALECTS,
+            str(tmp_path / "areas.geojson"),
+            objects_json=str(tmp_path / "osm_objects.json"),
+        )
     assert not (tmp_path / "out.osm.pbf").exists()
 
 
@@ -378,21 +551,28 @@ def test_a_relations_member_way_is_left_alone(injected: Injected) -> None:
 
 def test_curation_applies_to_objects_the_name_list_does_not_know(injected: Injected) -> None:
     _, by_key = injected
-    assert by_key[("n", TAMMENSIEL)][0] == {"place": "hamlet", "name": "Tammensiel",
-                                            "frasch:minzoom": "10"}
+    assert by_key[("n", TAMMENSIEL)][0] == {
+        "place": "hamlet",
+        "name": "Tammensiel",
+        "frasch:minzoom": "10",
+    }
 
 
 def test_curation_tags_win_over_the_original_tags(injected: Injected) -> None:
     # the village node keeps place=village; only the square becomes an island
     _, by_key = injected
     assert by_key[("n", NORDSTRAND)][0] == {
-        "place": "village", "name": "Nordstrand",
-        "name:frr-x-mooring": "e Strönj", "frasch:ref": "relation/1420555",
-        "frasch:minzoom": "12"}
+        "place": "village",
+        "name": "Nordstrand",
+        "name:frr-x-mooring": "e Strönj",
+        "frasch:ref": "relation/1420555",
+        "frasch:minzoom": "12",
+    }
 
 
-def new_objects(by_key: Mapping[tuple[str, int], tuple[dict[str, str], Extra]], t: str,
-                above: int) -> list[tuple[int, tuple[dict[str, str], Extra]]]:
+def new_objects(
+    by_key: Mapping[tuple[str, int], tuple[dict[str, str], Extra]], t: str, above: int
+) -> list[tuple[int, tuple[dict[str, str], Extra]]]:
     return sorted((i, v) for (tt, i), v in by_key.items() if tt == t and i > above)
 
 
@@ -401,10 +581,15 @@ def test_local_reference_becomes_the_first_new_node(injected: Injected) -> None:
     (nid, (tags, loc)), *_ = new_objects(by_key, "n", MAX_NODE)
     assert nid == MAX_NODE + 1
     assert loc == pytest.approx((8.34019, 54.65097))
-    assert tags == {"place": "hamlet", "name": "Westerheide",
-                    "name:frr-x-oomrang": "Waasterhias", "frasch:kind": "settlement",
-                    "frasch:dialect": "frr-x-oomrang", "frasch:local": "Waasterhias",
-                    "frasch:ref": "waasterhias"}
+    assert tags == {
+        "place": "hamlet",
+        "name": "Westerheide",
+        "name:frr-x-oomrang": "Waasterhias",
+        "frasch:kind": "settlement",
+        "frasch:dialect": "frr-x-oomrang",
+        "frasch:local": "Waasterhias",
+        "frasch:ref": "waasterhias",
+    }
 
 
 def test_synthetic_square_is_one_new_closed_way(injected: Injected) -> None:
@@ -418,21 +603,24 @@ def test_synthetic_square_is_one_new_closed_way(injected: Injected) -> None:
 def test_synthetic_square_nodes_are_written_as_untagged_nodes(injected: Injected) -> None:
     _, by_key = injected
     corners = new_objects(by_key, "n", MAX_NODE + 1)
-    assert [nid for nid, _ in corners] == [MAX_NODE + 2, MAX_NODE + 3,
-                                          MAX_NODE + 4, MAX_NODE + 5]
+    assert [nid for nid, _ in corners] == [MAX_NODE + 2, MAX_NODE + 3, MAX_NODE + 4, MAX_NODE + 5]
     assert all(tags == {} for _, (tags, _) in corners)
 
 
 def test_synthetic_square_is_fifty_km2_around_the_village_node(injected: Injected) -> None:
     _, by_key = injected
-    corners = [loc for _, (_, loc) in new_objects(by_key, "n", MAX_NODE + 1)
-               if isinstance(loc, tuple)]
+    corners = [
+        loc for _, (_, loc) in new_objects(by_key, "n", MAX_NODE + 1) if isinstance(loc, tuple)
+    ]
     lon = sum(x for x, _ in corners) / 4
     lat = sum(y for _, y in corners) / 4
     assert (lon, lat) == pytest.approx((8.865286, 54.487378), abs=1e-6)
     side_ns = (max(y for _, y in corners) - min(y for _, y in corners)) * 111.32
-    side_ew = ((max(x for x, _ in corners) - min(x for x, _ in corners))
-               * 111.32 * math.cos(math.radians(54.487378)))
+    side_ew = (
+        (max(x for x, _ in corners) - min(x for x, _ in corners))
+        * 111.32
+        * math.cos(math.radians(54.487378))
+    )
     assert side_ns == pytest.approx(math.sqrt(50), rel=1e-4)
     assert side_ew == pytest.approx(math.sqrt(50), rel=1e-4)
 
@@ -442,22 +630,38 @@ def test_synthetic_square_carries_the_nodes_names_and_its_own_tags(injected: Inj
     # polygon row -- but not the node's own minzoom, which holds it to z12
     _, by_key = injected
     ((_, (tags, _)),) = new_objects(by_key, "w", MAX_WAY)
-    assert tags == {"name": "Nordstrand", "name:frr-x-mooring": "e Strönj",
-                    "frasch:ref": "relation/1420555", "place": "island",
-                    "frasch:kind": "island", "frasch:maxzoom": "11"}
+    assert tags == {
+        "name": "Nordstrand",
+        "name:frr-x-mooring": "e Strönj",
+        "frasch:ref": "relation/1420555",
+        "place": "island",
+        "frasch:kind": "island",
+        "frasch:maxzoom": "11",
+    }
 
 
 # ------------------------------------------------------------- waterways ---
 def test_the_member_ways_of_a_matched_waterway_relation_are_found(tmp_path: Path) -> None:
     # the Arlau: the row names the river relation, the labels go on its ways
     nodes: Nodes = {i: ((8.9 + i / 100, 54.6), {}) for i in range(1, 5)}
-    path = write_osm(tmp_path / "river.osm.pbf", nodes=nodes,
-                     ways={10: ([1, 2], {"waterway": "river"}),
-                           11: ([2, 3], {"waterway": "river"}),
-                           12: ([3, 4], {"highway": "track"})},
-                     relations={20: ([("w", 10, "main_stream"), ("w", 11, "side_stream")],
-                                     {"type": "waterway", "name": "Arlau"}),
-                                21: ([("w", 12, "")], {"type": "route"})})
+    path = write_osm(
+        tmp_path / "river.osm.pbf",
+        nodes=nodes,
+        ways={
+            10: ([1, 2], {"waterway": "river"}),
+            11: ([2, 3], {"waterway": "river"}),
+            12: ([3, 4], {"highway": "track"}),
+        },
+        relations={
+            20: (
+                [("w", 10, "main_stream"), ("w", 11, "side_stream")],
+                {"type": "waterway", "name": "Arlau"},
+            ),
+            21: ([("w", 12, "")], {"type": "route"}),
+        },
+    )
     by_id: dict[placelist.Ref, list[placelist.Row]] = {("r", 20): [{}], ("r", 21): [{}]}
     assert inject_names.scan_waterways(str(path), by_id) == {
-        ("w", 10): (("r", 20), "Arlau"), ("w", 11): (("r", 20), "Arlau")}
+        ("w", 10): (("r", 20), "Arlau"),
+        ("w", 11): (("r", 20), "Arlau"),
+    }

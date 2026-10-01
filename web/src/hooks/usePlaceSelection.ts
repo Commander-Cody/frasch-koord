@@ -88,7 +88,9 @@ export function usePlaceSelection(
 
   const selectEntry = (entry: NameEntry, name: string) => {
     const zoom = ZOOM_BY_KIND[entry.kind] ?? DEFAULT_TARGET_ZOOM;
-    moveAfterCard((inset) => mapRef.current?.flyTo([entry.lon, entry.lat], zoom, { title: name }, inset));
+    moveAfterCard((inset) =>
+      mapRef.current?.flyTo([entry.lon, entry.lat], zoom, { title: name }, inset),
+    );
     setPicked({ ref: entry.id });
   };
 

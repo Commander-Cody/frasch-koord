@@ -19,6 +19,7 @@ archive and the index were built from different states of them -- compare
 their `built_from` stamps -- or a bug (#24).  The tile build does not run in
 CI; run this (`just check-tiles`) after building tiles.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -37,13 +38,14 @@ from frasch import cli
 from frasch.geo import LonLat
 from frasch.searchindex import SearchEntry
 
-DEFAULT_NAMES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "web",
-                             "public", "data", "names.json")
+DEFAULT_NAMES = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "web", "public", "data", "names.json"
+)
 
 # OpenMapTiles feature ids: the OSM id times ten plus the type
 # (web/src/names.ts's osmRefFromFeatureId)
 OSM_TYPE_BY_DIGIT = {1: "node", 2: "way", 3: "relation"}
-TOLERANCE_DEG = 1e-4                      # ~10 m, far above tile precision at z14
+TOLERANCE_DEG = 1e-4  # ~10 m, far above tile precision at z14
 
 # the value of a feature property in a vector tile
 PropValue = str | int | float | bool
@@ -52,6 +54,7 @@ PropValue = str | int | float | bool
 class Label(TypedDict):
     """A labelled feature of the tiles: its OSM object (`node/1`, None for
     one the injector added), its properties and, for a point, its position."""
+
     osm: str | None
     props: dict[str, PropValue]
     lon: NotRequired[float]
@@ -71,22 +74,31 @@ def compare(entries: Mapping[str, SearchEntry], features: Sequence[Label]) -> li
         where = f"{ref} ({f['osm'] or 'added by the injector'})"
         for key, prop in (("dialect", "frasch:dialect"), ("local", "frasch:local")):
             if entry.get(key) != f["props"].get(prop):
-                problems.append(f"{where}: tiles {prop}={f['props'].get(prop)!r}, "
-                                f"names.json {key}={entry.get(key)!r}")
-        if _is_point_object(f) and math.dist((f["lon"], f["lat"]),
-                                              (entry["lon"], entry["lat"])) > TOLERANCE_DEG:
-            problems.append(f"{where}: tiles at {f['lat']:.5f}, {f['lon']:.5f}, "
-                            f"names.json at {entry['lat']:.5f}, {entry['lon']:.5f}")
+                problems.append(
+                    f"{where}: tiles {prop}={f['props'].get(prop)!r}, "
+                    f"names.json {key}={entry.get(key)!r}"
+                )
+        if (
+            _is_point_object(f)
+            and math.dist((f["lon"], f["lat"]), (entry["lon"], entry["lat"])) > TOLERANCE_DEG
+        ):
+            problems.append(
+                f"{where}: tiles at {f['lat']:.5f}, {f['lon']:.5f}, "
+                f"names.json at {entry['lat']:.5f}, {entry['lon']:.5f}"
+            )
     return problems
 
 
-def checked_entries(entries: Mapping[str, SearchEntry],
-                    features: Sequence[Label]) -> set[str]:
+def checked_entries(entries: Mapping[str, SearchEntry], features: Sequence[Label]) -> set[str]:
     """The ids of the entries `compare` holds to a feature: those whose own
     object is among the features, not merely another object of the row."""
-    return {ref for f in features
-            if isinstance(ref := f["props"].get("frasch:ref"), str) and ref in entries
-            and _is_entry_object(entries[ref], f)}
+    return {
+        ref
+        for f in features
+        if isinstance(ref := f["props"].get("frasch:ref"), str)
+        and ref in entries
+        and _is_entry_object(entries[ref], f)
+    }
 
 
 def _is_point_object(feature: Label) -> bool:
@@ -107,7 +119,7 @@ def _is_entry_object(entry: SearchEntry, feature: Label) -> bool:
 # ------------------------------------------------------------- the archive ----
 class _PointGeometry(TypedDict):
     type: Literal["Point"]
-    coordinates: list[float]              # [x, y] in tile units, y pointing down
+    coordinates: list[float]  # [x, y] in tile units, y pointing down
 
 
 class _ShapeGeometry(TypedDict):
@@ -117,6 +129,7 @@ class _ShapeGeometry(TypedDict):
 
 class _TileFeature(TypedDict):
     """A feature as mapbox_vector_tile decodes it."""
+
     geometry: _PointGeometry | _ShapeGeometry
     properties: dict[str, PropValue]
     id: NotRequired[int]
@@ -129,7 +142,7 @@ class _TileLayer(TypedDict):
 
 def tile_of(lon: float, lat: float, zoom: int) -> tuple[int, int]:
     """The (x, y) of the web-mercator tile holding a point."""
-    n = 2 ** zoom
+    n = 2**zoom
     x = int((lon + 180) / 360 * n)
     y = int((1 - math.asinh(math.tan(math.radians(lat))) / math.pi) / 2 * n)
     return x, y
@@ -137,7 +150,7 @@ def tile_of(lon: float, lat: float, zoom: int) -> tuple[int, int]:
 
 def lonlat(zoom: int, x: int, y: int, px: float, py: float, extent: int) -> LonLat:
     """A tile-local point (y pointing down) in degrees."""
-    n = 2 ** zoom
+    n = 2**zoom
     lon = (x + px / extent) / n * 360 - 180
     lat = math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * (y + py / extent) / n))))
     return lon, lat
@@ -155,7 +168,8 @@ def osm_ref(feature_id: int | None) -> str | None:
 def tile_features(data: bytes, zoom: int, x: int, y: int) -> list[Label]:
     """The features of one (gzip-compressed) tile that carry a frasch:ref."""
     layers: dict[str, _TileLayer] = mapbox_vector_tile.decode(
-        gzip.decompress(data), default_options={"y_coord_down": True})
+        gzip.decompress(data), default_options={"y_coord_down": True}
+    )
     out: list[Label] = []
     for layer in layers.values():
         for f in layer["features"]:
@@ -171,8 +185,7 @@ def tile_features(data: bytes, zoom: int, x: int, y: int) -> list[Label]:
     return out
 
 
-def archive_features(path: str, entries: Mapping[str, SearchEntry],
-                     zoom: int) -> list[Label]:
+def archive_features(path: str, entries: Mapping[str, SearchEntry], zoom: int) -> list[Label]:
     """The labelled features of the tiles the entries lie in, each once."""
     seen: set[tuple[str | None, PropValue, float | None, float | None]] = set()
     out: list[Label] = []
@@ -190,8 +203,9 @@ def archive_features(path: str, entries: Mapping[str, SearchEntry],
 
 @cli.command
 def main(argv: Sequence[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("archive")
     ap.add_argument("--names", default=DEFAULT_NAMES)
     ap.add_argument("--zoom", type=int, default=14)
@@ -200,14 +214,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         entries: dict[str, SearchEntry] = {e["id"]: e for e in json.load(fh)["places"]}
     features = archive_features(a.archive, entries, a.zoom)
     problems = compare(entries, features)
-    print(f"{len(features)} labelled features in the z{a.zoom} tiles of "
-          f"{len(entries)} entries; {len(checked_entries(entries, features))} "
-          f"entries compared on their own object")
+    print(
+        f"{len(features)} labelled features in the z{a.zoom} tiles of "
+        f"{len(entries)} entries; {len(checked_entries(entries, features))} "
+        f"entries compared on their own object"
+    )
     for p in problems:
         print(f"  ! {p}")
     if problems:
-        print(f"{len(problems)} disagreement(s) between {a.archive} and {a.names}",
-              file=sys.stderr)
+        print(f"{len(problems)} disagreement(s) between {a.archive} and {a.names}", file=sys.stderr)
         return 1
     return 0
-

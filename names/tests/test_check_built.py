@@ -1,6 +1,7 @@
 """names/check_built.py (`just check`, run in CI): are the committed build
 outputs what their committed inputs give?  (#24: names.json was once built
 from an uncommitted places.csv.)"""
+
 from __future__ import annotations
 
 import json
@@ -18,8 +19,14 @@ from frasch import provenance
 from conftest import places_text
 from osm_fixture import Relations, RingNodes, ring, write_extract
 
-NAIBEL = {"id": "naibel", "kind": "settlement", "mooring": "Naibel", "de": "Niebüll",
-          "osm": "node/240042766", "status": "ok"}
+NAIBEL = {
+    "id": "naibel",
+    "kind": "settlement",
+    "mooring": "Naibel",
+    "de": "Niebüll",
+    "osm": "node/240042766",
+    "status": "ok",
+}
 AREA_LIST = "dialect,name,osm,note\nfrr-x-mooring,Niebüll,relation/1,\n"
 
 # the `extract` fixture: the check's argv, and the extract's nodes, ring way
@@ -33,25 +40,50 @@ def repo(world: Path) -> list[str]:
     (world / "places.csv").write_text(places_text([NAIBEL]), encoding="utf-8")
     shutil.copy(paths.DIALECTS, world / "dialects.csv")
     (world / "dialect_areas.csv").write_text(AREA_LIST, encoding="utf-8")
-    stamp = {"dialect_areas.csv": provenance.blob_hash(world / "dialect_areas.csv"),
-             "dialects.csv": provenance.blob_hash(world / "dialects.csv"), "extracts": []}
+    stamp = {
+        "dialect_areas.csv": provenance.blob_hash(world / "dialect_areas.csv"),
+        "dialects.csv": provenance.blob_hash(world / "dialects.csv"),
+        "extracts": [],
+    }
     for name in ("dialect_areas.geojson", "dialect_areas_parts.geojson"):
-        (world / name).write_text(json.dumps({"type": "FeatureCollection", "features": [],
-                                              "properties": {"built_from": stamp}}),
-                                  encoding="utf-8")
-    (world / "osm_objects.json").write_text(locate.objects_json(locate.Objects(
-        {("n", 240042766): {"lon": 8.83, "lat": 54.79}}, {"extracts": []})), encoding="utf-8")
-    inputs = ["--names", str(world / "places.csv"), "--dialects", str(world / "dialects.csv"),
-              "--curation", str(world / "curation.csv"),
-              "--areas", str(world / "dialect_areas.geojson"),
-              "--objects", str(world / "osm_objects.json")]
+        (world / name).write_text(
+            json.dumps(
+                {"type": "FeatureCollection", "features": [], "properties": {"built_from": stamp}}
+            ),
+            encoding="utf-8",
+        )
+    (world / "osm_objects.json").write_text(
+        locate.objects_json(
+            locate.Objects({("n", 240042766): {"lon": 8.83, "lat": 54.79}}, {"extracts": []})
+        ),
+        encoding="utf-8",
+    )
+    inputs = [
+        "--names",
+        str(world / "places.csv"),
+        "--dialects",
+        str(world / "dialects.csv"),
+        "--curation",
+        str(world / "curation.csv"),
+        "--areas",
+        str(world / "dialect_areas.geojson"),
+        "--objects",
+        str(world / "osm_objects.json"),
+    ]
     export_search_index.main(inputs + ["--out", str(world / "names.json")])
-    dialects.main(["--registry", str(world / "dialects.csv"),
-                   "--export", str(world / "dialects.json")])
-    return inputs + ["--index", str(world / "names.json"),
-                     "--registry-json", str(world / "dialects.json"),
-                     "--area-list", str(world / "dialect_areas.csv"),
-                     "--parts", str(world / "dialect_areas_parts.geojson")]
+    dialects.main(
+        ["--registry", str(world / "dialects.csv"), "--export", str(world / "dialects.json")]
+    )
+    return inputs + [
+        "--index",
+        str(world / "names.json"),
+        "--registry-json",
+        str(world / "dialects.json"),
+        "--area-list",
+        str(world / "dialect_areas.csv"),
+        "--parts",
+        str(world / "dialect_areas_parts.geojson"),
+    ]
 
 
 def test_up_to_date_outputs_pass(repo: list[str]) -> None:
@@ -59,15 +91,18 @@ def test_up_to_date_outputs_pass(repo: list[str]) -> None:
 
 
 def test_an_index_built_from_another_name_list_fails(
-        repo: list[str], world: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    (world / "places.csv").write_text(places_text([NAIBEL | {"mooring": "Naibel;Niebel"}]),
-                                      encoding="utf-8")
+    repo: list[str], world: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (world / "places.csv").write_text(
+        places_text([NAIBEL | {"mooring": "Naibel;Niebel"}]), encoding="utf-8"
+    )
     assert check_built.main(repo) == 1
     assert "names.json" in capsys.readouterr().out
 
 
 def test_a_registry_edit_without_an_export_fails(
-        repo: list[str], world: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    repo: list[str], world: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     registry = world / "dialects.csv"
     text = registry.read_text(encoding="utf-8")
     registry.write_text(text.replace(",Mooring,", ",Mooring (edited),", 1), encoding="utf-8")
@@ -76,9 +111,11 @@ def test_a_registry_edit_without_an_export_fails(
 
 
 def test_dialect_areas_built_from_another_area_list_fail(
-        repo: list[str], world: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    (world / "dialect_areas.csv").write_text(AREA_LIST + "frr-x-fering,Wyk,relation/2,\n",
-                                             encoding="utf-8")
+    repo: list[str], world: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (world / "dialect_areas.csv").write_text(
+        AREA_LIST + "frr-x-fering,Wyk,relation/2,\n", encoding="utf-8"
+    )
     assert check_built.main(repo) == 1
     out = capsys.readouterr().out
     assert "dialect_areas.geojson" in out and "dialect_areas_parts.geojson" in out
@@ -86,18 +123,20 @@ def test_dialect_areas_built_from_another_area_list_fail(
 
 
 def test_dialect_areas_without_a_stamp_fail(
-        repo: list[str], world: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    repo: list[str], world: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     (world / "dialect_areas_parts.geojson").write_text(
-        json.dumps({"type": "FeatureCollection", "features": []}), encoding="utf-8")
+        json.dumps({"type": "FeatureCollection", "features": []}), encoding="utf-8"
+    )
     assert check_built.main(repo) == 1
     out = capsys.readouterr().out
     assert "dialect_areas_parts.geojson" in out and "just areas" in out
 
 
 def test_a_row_whose_object_was_never_located_fails(
-        repo: list[str], world: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    (world / "places.csv").write_text(places_text([NAIBEL | {"osm": "node/99"}]),
-                                      encoding="utf-8")
+    repo: list[str], world: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (world / "places.csv").write_text(places_text([NAIBEL | {"osm": "node/99"}]), encoding="utf-8")
     assert check_built.main(repo) == 1
     assert "node/99" in capsys.readouterr().out
 
@@ -111,12 +150,22 @@ def extract(world: Path, repo: list[str]) -> Extract:
     nodes[240042766] = ((8.83, 54.79), {})
     relations = {1: ([("w", 5, "outer")], {"boundary": "administrative"})}
     pbf = write_extract(world / "in.osm.pbf", nodes, {5: (way, {})}, relations)
-    locate.main([str(pbf), "--names", str(world / "places.csv"),
-                 "--out", str(world / "osm_objects.json")])
-    build_dialect_areas.main([str(pbf), "--areas", str(world / "dialect_areas.csv"),
-                              "--registry", str(world / "dialects.csv"),
-                              "--out", str(world / "dialect_areas.geojson"),
-                              "--parts-out", str(world / "dialect_areas_parts.geojson")])
+    locate.main(
+        [str(pbf), "--names", str(world / "places.csv"), "--out", str(world / "osm_objects.json")]
+    )
+    build_dialect_areas.main(
+        [
+            str(pbf),
+            "--areas",
+            str(world / "dialect_areas.csv"),
+            "--registry",
+            str(world / "dialects.csv"),
+            "--out",
+            str(world / "dialect_areas.geojson"),
+            "--parts-out",
+            str(world / "dialect_areas_parts.geojson"),
+        ]
+    )
     export_search_index.main(repo[:10] + ["--out", str(world / "names.json")])
     return repo + ["--extracts", str(pbf)], (nodes, way, relations)
 
@@ -127,7 +176,8 @@ def test_outputs_the_extract_really_gives_pass(extract: Extract) -> None:
 
 
 def test_an_object_that_moved_in_the_extract_fails(
-        extract: Extract, world: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    extract: Extract, world: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     argv, (nodes, way, relations) = extract
     nodes[240042766] = ((8.84, 54.79), {})
     write_extract(world / "in.osm.pbf", nodes, {5: (way, {})}, relations)
@@ -138,7 +188,8 @@ def test_an_object_that_moved_in_the_extract_fails(
 
 
 def test_an_area_that_moved_in_the_extract_fails(
-        extract: Extract, world: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    extract: Extract, world: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     argv, (nodes, way, relations) = extract
     nodes[10] = ((8.7, 54.7), {})
     write_extract(world / "in.osm.pbf", nodes, {5: (way, {})}, relations)
@@ -147,37 +198,51 @@ def test_an_area_that_moved_in_the_extract_fails(
 
 
 def test_each_file_is_rebuilt_from_the_extracts_its_stamp_names(
-        extract: Extract, world: Path) -> None:
+    extract: Extract, world: Path
+) -> None:
     # the dialect areas come from the SH extract alone, the objects from SH + DK
     argv, _ = extract
     dk = write_extract(world / "denmark-latest.osm.pbf", nodes={7: ((8.4, 55.4), {})})
-    locate.main([argv[-1], str(dk), "--names", str(world / "places.csv"),
-                 "--out", str(world / "osm_objects.json")])
+    locate.main(
+        [
+            argv[-1],
+            str(dk),
+            "--names",
+            str(world / "places.csv"),
+            "--out",
+            str(world / "osm_objects.json"),
+        ]
+    )
     export_search_index.main(argv[:10] + ["--out", str(world / "names.json")])
     assert check_built.main(argv + [str(dk)]) == 0
 
 
 def test_an_extract_a_stamp_names_must_be_given(
-        extract: Extract, capsys: pytest.CaptureFixture[str]) -> None:
+    extract: Extract, capsys: pytest.CaptureFixture[str]
+) -> None:
     argv, _ = extract
     assert check_built.main(argv[:-1] + ["other.osm.pbf"]) == 1
     assert "in.osm.pbf" in capsys.readouterr().out
 
 
 def test_an_unstamped_file_names_no_extracts_to_rebuild_it_from(
-        extract: Extract, world: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    extract: Extract, world: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     argv, _ = extract
     (world / "dialect_areas.geojson").write_text(
-        json.dumps({"type": "FeatureCollection", "features": []}), encoding="utf-8")
+        json.dumps({"type": "FeatureCollection", "features": []}), encoding="utf-8"
+    )
     assert check_built.main(argv) == 1
     assert "dialect_areas.geojson names no extracts" in capsys.readouterr().out
 
 
 def test_a_rows_second_object_never_located_fails(
-        repo: list[str], world: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    repo: list[str], world: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     # the search entry lies at the first object, but the tile build needs both
     (world / "places.csv").write_text(
-        places_text([NAIBEL | {"osm": "node/240042766; node/99"}]), encoding="utf-8")
+        places_text([NAIBEL | {"osm": "node/240042766; node/99"}]), encoding="utf-8"
+    )
     assert check_built.main(repo) == 1
     out = capsys.readouterr().out
     assert "naibel" in out and "node/99" in out and "just objects" in out

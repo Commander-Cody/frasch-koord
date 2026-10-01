@@ -6,6 +6,7 @@ rows (frasch.nameindex), and the most plausible place of that name wins --
 the nearest to North Frisia, islands and villages first.  The historic
 Harden and a few spellings OSM does not know have fixed circles.
 """
+
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -14,9 +15,9 @@ from frasch.candidates import ISLAND_PLACES, Candidate
 from frasch.geo import NF_CENTRE, haversine
 from frasch.nameindex import NameIndex, norm
 
-HINT_KM = 8.0           # a village-sized hint
-HINT_KM_ISLAND = 10.0   # a Hallig / small island
-HINT_KM_LARGE = 25.0    # Sylt, Foehr, Eiderstedt, a Harde ...
+HINT_KM = 8.0  # a village-sized hint
+HINT_KM_ISLAND = 10.0  # a Hallig / small island
+HINT_KM_LARGE = 25.0  # Sylt, Foehr, Eiderstedt, a Harde ...
 
 # A hint's circle: lon, lat, radius in km.
 Circle = tuple[float, float, float]
@@ -38,8 +39,17 @@ HINT_FALLBACK: dict[str, Circle] = {
     "sankt peter": (8.640, 54.306, 10.0),
 }
 # big enough that "X lies on Y" only narrows things down to ~25 km
-LARGE_HINTS = {"sylt", "foehr", "amrum", "eiderstedt", "pellworm", "nordstrand",
-               "nordfriesland", "dithmarschen", "angeln"}
+LARGE_HINTS = {
+    "sylt",
+    "foehr",
+    "amrum",
+    "eiderstedt",
+    "pellworm",
+    "nordstrand",
+    "nordfriesland",
+    "dithmarschen",
+    "angeln",
+}
 
 
 class HintResolver:
@@ -57,9 +67,13 @@ class HintResolver:
         return self.cache[key]
 
     def _lookup(self, hint: str, key: str) -> Circle | None:
-        places = [(rec, lon, lat) for rec, _rank in self.index.lookup(hint)
-                  if (lon := rec["lon"]) is not None and (lat := rec["lat"]) is not None
-                  and _is_a_place(rec["tags"])]
+        places = [
+            (rec, lon, lat)
+            for rec, _rank in self.index.lookup(hint)
+            if (lon := rec["lon"]) is not None
+            and (lat := rec["lat"]) is not None
+            and _is_a_place(rec["tags"])
+        ]
         if not places:
             return None
         best, lon, lat = max(places, key=lambda place: _plausibility(place[0]))
@@ -67,8 +81,9 @@ class HintResolver:
 
 
 def _is_a_place(tags: Mapping[str, str]) -> bool:
-    return bool(tags.get("place") or tags.get("natural")
-                or tags.get("boundary") == "administrative")
+    return bool(
+        tags.get("place") or tags.get("natural") or tags.get("boundary") == "administrative"
+    )
 
 
 def _plausibility(rec: Candidate) -> float:
@@ -86,7 +101,10 @@ def _plausibility(rec: Candidate) -> float:
 def _radius(key: str, tags: Mapping[str, str]) -> float:
     if key in LARGE_HINTS:
         return HINT_KM_LARGE
-    if (tags.get("place") in ISLAND_PLACES or tags.get("place") == "region"
-            or tags.get("natural") in ("island", "islet", "peninsula")):
+    if (
+        tags.get("place") in ISLAND_PLACES
+        or tags.get("place") == "region"
+        or tags.get("natural") in ("island", "islet", "peninsula")
+    ):
         return HINT_KM_ISLAND
     return HINT_KM

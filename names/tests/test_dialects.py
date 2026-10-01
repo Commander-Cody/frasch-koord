@@ -1,5 +1,6 @@
 """dialects.py: the two name fallbacks (README "The shared name logic") and
 the "smallest area containing a point wins" rule of the area lookup."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -27,8 +28,9 @@ def row(**cells: str) -> dict[str, str]:
 # what the people there say (README "Dialect areas")
 HANSWARFT = row(kind="warft", mooring="Hanswärw", hallig="Hansweerf", de="Hanswarft")
 # Broderswarft, Fahretoft: a sub-dialect form in `local` with its variety
-BRODERSWARFT = row(kind="warft", mooring="Brouderswärw",
-                   local="Brouersweerw (Foortuftinge)", de="Broderswarft")
+BRODERSWARFT = row(
+    kind="warft", mooring="Brouderswärw", local="Brouersweerw (Foortuftinge)", de="Broderswarft"
+)
 
 
 # ---------------------------------------------------------- dialect_name ---
@@ -44,12 +46,15 @@ def test_dialect_name_is_the_primary_variant(reg: registry.Registry) -> None:
 
 def test_dialect_name_falls_back_to_local_in_the_areas_own_dialect(reg: registry.Registry) -> None:
     # the Foortuftinge form IS the name in the dialect spoken at Fahretoft
-    assert dialects.dialect_name(BRODERSWARFT, "frr-x-nordgoes", "frr-x-nordgoes",
-                                 reg) == "Brouersweerw"
+    assert (
+        dialects.dialect_name(BRODERSWARFT, "frr-x-nordgoes", "frr-x-nordgoes", reg)
+        == "Brouersweerw"
+    )
 
 
 def test_dialect_name_does_not_fall_back_to_local_for_another_dialect(
-        reg: registry.Registry) -> None:
+    reg: registry.Registry,
+) -> None:
     assert dialects.dialect_name(BRODERSWARFT, "frr-x-wieding", "frr-x-nordgoes", reg) == ""
 
 
@@ -59,8 +64,9 @@ def test_dialect_name_does_not_fall_back_outside_any_area(reg: registry.Registry
 
 def test_dialect_name_keeps_its_column_over_local(reg: registry.Registry) -> None:
     # the column wins even in the area's own dialect
-    assert dialects.dialect_name(BRODERSWARFT, "frr-x-mooring", "frr-x-mooring",
-                                 reg) == "Brouderswärw"
+    assert (
+        dialects.dialect_name(BRODERSWARFT, "frr-x-mooring", "frr-x-mooring", reg) == "Brouderswärw"
+    )
 
 
 # ------------------------------------------------------------ local_name ---
@@ -89,16 +95,21 @@ def test_local_name_is_empty_when_the_area_dialect_has_no_name(reg: registry.Reg
 # ------------------------------------------------------------- AreaIndex ---
 # Nested squares, like the Hamburger Hallig (Halligfriesisch) inside the
 # municipality Reußenköge (Mooring)
-OUTER = box(8.80, 54.55, 8.95, 54.65)       # Reußenköge
-INNER = box(8.82, 54.58, 8.86, 54.60)       # Hamburger Hallig
+OUTER = box(8.80, 54.55, 8.95, 54.65)  # Reußenköge
+INNER = box(8.82, 54.58, 8.86, 54.60)  # Hamburger Hallig
 
 
-@pytest.mark.parametrize("polygons", [
-    [("frr-x-mooring", OUTER), ("frr-x-hallig", INNER)],
-    [("frr-x-hallig", INNER), ("frr-x-mooring", OUTER)],
-], ids=["large-first", "small-first"])
+@pytest.mark.parametrize(
+    "polygons",
+    [
+        [("frr-x-mooring", OUTER), ("frr-x-hallig", INNER)],
+        [("frr-x-hallig", INNER), ("frr-x-mooring", OUTER)],
+    ],
+    ids=["large-first", "small-first"],
+)
 def test_the_smallest_area_containing_the_point_wins(
-        polygons: list[tuple[str, BaseGeometry]]) -> None:
+    polygons: list[tuple[str, BaseGeometry]],
+) -> None:
     areas = dialects.AreaIndex(polygons)
     assert areas.lookup(8.84, 54.59) == "frr-x-hallig"
 
@@ -133,8 +144,7 @@ def test_an_empty_index_knows_no_dialect() -> None:
 # curation.csv invents -- neither belongs in an OSM-boundary area list (#24).
 def test_area_rows_rejects_a_node_reference(tmp_path: Path, reg: registry.Registry) -> None:
     areas = tmp_path / "dialect_areas.csv"
-    areas.write_text("dialect,osm,name,note\n"
-                     "frr-x-mooring,node/1,A node,\n", encoding="utf-8")
+    areas.write_text("dialect,osm,name,note\nfrr-x-mooring,node/1,A node,\n", encoding="utf-8")
     rows, problems = dialects.area_rows(str(areas), reg)
     assert rows == []
     assert len(problems) == 1
@@ -146,8 +156,9 @@ def test_area_rows_rejects_a_node_reference(tmp_path: Path, reg: registry.Regist
 
 def test_area_rows_rejects_a_local_reference(tmp_path: Path, reg: registry.Registry) -> None:
     areas = tmp_path / "dialect_areas.csv"
-    areas.write_text("dialect,osm,name,note\n"
-                     "frr-x-mooring,local/some-slug,A local place,\n", encoding="utf-8")
+    areas.write_text(
+        "dialect,osm,name,note\nfrr-x-mooring,local/some-slug,A local place,\n", encoding="utf-8"
+    )
     rows, problems = dialects.area_rows(str(areas), reg)
     assert rows == []
     assert len(problems) == 1
@@ -156,11 +167,13 @@ def test_area_rows_rejects_a_local_reference(tmp_path: Path, reg: registry.Regis
     assert "local/some-slug" in reason
 
 
-def test_area_rows_still_accepts_way_and_relation_references(tmp_path: Path,
-                                                             reg: registry.Registry) -> None:
+def test_area_rows_still_accepts_way_and_relation_references(
+    tmp_path: Path, reg: registry.Registry
+) -> None:
     areas = tmp_path / "dialect_areas.csv"
-    areas.write_text("dialect,osm,name,note\n"
-                     "frr-x-mooring,way/1;relation/2,Fine,\n", encoding="utf-8")
+    areas.write_text(
+        "dialect,osm,name,note\nfrr-x-mooring,way/1;relation/2,Fine,\n", encoding="utf-8"
+    )
     rows, problems = dialects.area_rows(str(areas), reg)
     assert problems == []
     assert rows[0]["refs"] == [("w", 1), ("r", 2)]
@@ -169,11 +182,13 @@ def test_area_rows_still_accepts_way_and_relation_references(tmp_path: Path,
 # ------------------------------------------------------------- --export ---
 def test_the_frontend_gets_the_registry_without_the_notes(tmp_path: Path) -> None:
     registry = tmp_path / "dialects.csv"
-    registry.write_text("tag,column,label,status,view,note\n"
-                        "frr-x-mooring,mooring,Mooring,living,yes,Bökingharde\n",
-                        encoding="utf-8")
+    registry.write_text(
+        "tag,column,label,status,view,note\nfrr-x-mooring,mooring,Mooring,living,yes,Bökingharde\n",
+        encoding="utf-8",
+    )
     out = tmp_path / "generated" / "dialects.json"
     dialects.main(["--registry", str(registry), "--export", str(out)])
     assert out.read_text(encoding="utf-8") == (
         '[{"tag":"frr-x-mooring","column":"mooring","label":"Mooring",'
-        '"status":"living","view":"yes"}]\n')
+        '"status":"living","view":"yes"}]\n'
+    )

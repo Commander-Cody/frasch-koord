@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Launcher -- the code is frasch/dialects.py (`--help` for its usage)."""
+
 import sys
 
 from frasch.dialects import main

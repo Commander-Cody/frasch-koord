@@ -1,9 +1,9 @@
-import { StrictMode, Suspense, lazy } from 'react'
-import { createRoot } from 'react-dom/client'
-import './index.css'
-import './i18n'
-import App from './App.tsx'
-import type { DevTool } from './dev/DevApp.tsx'
+import { StrictMode, Suspense, lazy } from 'react';
+import { createRoot } from 'react-dom/client';
+import './index.css';
+import './i18n';
+import App from './App.tsx';
+import type { DevTool } from './dev/DevApp.tsx';
 
 /**
  * `?curate` opens the name-list curation review, `?areas` the dialect-area
@@ -13,17 +13,17 @@ import type { DevTool } from './dev/DevApp.tsx'
  * there the parameters do nothing.
  */
 function devTool(): DevTool | null {
-  if (!import.meta.env.DEV) return null
-  const params = new URLSearchParams(window.location.search)
-  if (params.has('curate')) return 'curate'
-  if (params.has('areas')) return 'areas'
-  return null
+  if (!import.meta.env.DEV) return null;
+  const params = new URLSearchParams(window.location.search);
+  if (params.has('curate')) return 'curate';
+  if (params.has('areas')) return 'areas';
+  return null;
 }
 
-const tool = devTool()
+const tool = devTool();
 // `import.meta.env.DEV &&` again right here, where the bundler can see it
 // fold to `false` and drop the import without following devTool().
-const DevApp = import.meta.env.DEV && tool ? lazy(() => import('./dev/DevApp.tsx')) : null
+const DevApp = import.meta.env.DEV && tool ? lazy(() => import('./dev/DevApp.tsx')) : null;
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -35,4 +35,4 @@ createRoot(document.getElementById('root')!).render(
       <App />
     )}
   </StrictMode>,
-)
+);

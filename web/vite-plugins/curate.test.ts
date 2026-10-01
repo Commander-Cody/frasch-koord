@@ -109,7 +109,14 @@ describe('createCurateMiddleware', () => {
       .map((line) => JSON.parse(line) as Record<string, unknown>);
   }
 
-  const validEntry = { id: 'alkersem', line: 3, kind: 'settlement', name: 'Alkersem', de: 'Alkersum', action: 'skip' };
+  const validEntry = {
+    id: 'alkersem',
+    line: 3,
+    kind: 'settlement',
+    name: 'Alkersem',
+    de: 'Alkersum',
+    action: 'skip',
+  };
   const jsonHeaders = { 'content-type': 'application/json' };
 
   it('rejects a non-JSON Content-Type with 415, and appends nothing', async () => {
@@ -161,7 +168,9 @@ describe('createCurateMiddleware', () => {
 
     const onDisk = await readPatchEntries();
     expect(onDisk).toHaveLength(1);
-    expect(Object.keys(onDisk[0]).sort()).toEqual(['action', 'at', 'de', 'id', 'kind', 'line', 'name', 'osm'].sort());
+    expect(Object.keys(onDisk[0]).sort()).toEqual(
+      ['action', 'at', 'de', 'id', 'kind', 'line', 'name', 'osm'].sort(),
+    );
   });
 
   it('keeps every field the patch schema defines, and sets `at` itself', async () => {

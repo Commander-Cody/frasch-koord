@@ -7,6 +7,7 @@ export read it.
   then        {"src","t","id","lon","lat","cls","tags":{...}}  per candidate
               (`read_records`)
 """
+
 from __future__ import annotations
 
 import json
@@ -25,6 +26,7 @@ class Candidate(TypedDict):
     """One candidate record.  `lon`/`lat` are None for an object the scan
     could not place; `cls` are the classes it was kept for (`place=village`,
     `wikidata`, ...); `tags` only the ones the pipeline reads."""
+
     src: str
     t: str
     id: int
@@ -81,6 +83,17 @@ def decisive_tags(rec: Candidate) -> str:
     """The tags that say what kind of thing a record is, `place=village;...`
     -- for the matcher's output and the curation view."""
     tags = rec["tags"]
-    keys = ("place", "natural", "water", "waterway", "boundary", "admin_level",
-            "landuse", "man_made", "historic", "highway", "type")
+    keys = (
+        "place",
+        "natural",
+        "water",
+        "waterway",
+        "boundary",
+        "admin_level",
+        "landuse",
+        "man_made",
+        "historic",
+        "highway",
+        "type",
+    )
     return ";".join(f"{k}={tags[k]}" for k in keys if k in tags)

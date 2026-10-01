@@ -102,10 +102,12 @@ function bboxOf(geometry: { coordinates: unknown }): Bounds | null {
     for (const child of node) walk(child);
   };
   walk(geometry.coordinates);
-  return minX === Infinity ? null : [
-    [minX, minY],
-    [maxX, maxY],
-  ];
+  return minX === Infinity
+    ? null
+    : [
+        [minX, minY],
+        [maxX, maxY],
+      ];
 }
 
 /* ------------------------------------------------------------------ misc */
@@ -182,9 +184,7 @@ export default function AreaPanel({ mapRef }: AreaPanelProps) {
   const groups = useMemo(() => {
     const counts = new Map<string, number>();
     for (const feature of features) {
-      const key = feature.properties.assigned
-        ? (feature.properties.dialect ?? '?')
-        : 'unassigned';
+      const key = feature.properties.assigned ? (feature.properties.dialect ?? '?') : 'unassigned';
       counts.set(key, (counts.get(key) ?? 0) + 1);
     }
     const rows = DIALECTS.map((dialect) => ({
@@ -223,9 +223,7 @@ export default function AreaPanel({ mapRef }: AreaPanelProps) {
     const order = new Map<string, number>(DIALECTS.map((d, i) => [d.tag, i]));
     const bucket = new Map<string, AreaFeature[]>();
     for (const feature of visible) {
-      const key = feature.properties.assigned
-        ? (feature.properties.dialect ?? '?')
-        : 'unassigned';
+      const key = feature.properties.assigned ? (feature.properties.dialect ?? '?') : 'unassigned';
       const list = bucket.get(key);
       if (list) list.push(feature);
       else bucket.set(key, [feature]);
@@ -234,10 +232,7 @@ export default function AreaPanel({ mapRef }: AreaPanelProps) {
       .sort((a, b) => (order.get(a[0]) ?? 99) - (order.get(b[0]) ?? 99))
       .map(([key, items]) => ({
         key,
-        label:
-          key === 'unassigned'
-            ? 'not assigned'
-            : (items[0].properties.label ?? key),
+        label: key === 'unassigned' ? 'not assigned' : (items[0].properties.label ?? key),
         color: key === 'unassigned' ? COLOR_UNASSIGNED : (DIALECT_COLORS[key] ?? COLOR_UNKNOWN),
         items: [...items].sort((a, b) => a.properties.name.localeCompare(b.properties.name, 'de')),
       }));
@@ -490,7 +485,9 @@ export default function AreaPanel({ mapRef }: AreaPanelProps) {
               <div>
                 <dt>row</dt>
                 <dd>
-                  <span className="dev-panel-mono">dialect_areas.csv:{selected.properties.line}</span>
+                  <span className="dev-panel-mono">
+                    dialect_areas.csv:{selected.properties.line}
+                  </span>
                 </dd>
               </div>
             )}
@@ -524,8 +521,8 @@ export default function AreaPanel({ mapRef }: AreaPanelProps) {
           ) : (
             <div className="area-add">
               <p className="dev-panel-hint">
-                No row claims this municipality, so nothing inside it gets a dialect. To add
-                it, paste this into <code>names/dialect_areas.csv</code>, re-run
+                No row claims this municipality, so nothing inside it gets a dialect. To add it,
+                paste this into <code>names/dialect_areas.csv</code>, re-run
                 <code> names/build_dialect_areas.py</code>, then press Reload.
               </p>
               <button
@@ -544,8 +541,8 @@ export default function AreaPanel({ mapRef }: AreaPanelProps) {
       {sections.map((section) => (
         <div key={section.key}>
           <p className="dev-panel-section">
-            <span className="area-swatch" style={{ background: section.color }} />{' '}
-            {section.label} ({section.items.length})
+            <span className="area-swatch" style={{ background: section.color }} /> {section.label} (
+            {section.items.length})
           </p>
           <ul className="area-list">
             {section.items.map((feature) => {

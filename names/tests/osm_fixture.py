@@ -1,4 +1,5 @@
 """A tiny OSM extract written with pyosmium, for the tests that read one."""
+
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
@@ -17,9 +18,13 @@ Relations = Mapping[int, tuple[Sequence[tuple[str, int, str]], Tags]]
 RingNodes = dict[int, tuple[LonLat, dict[str, str]]]
 
 
-def write_extract(path: Path, nodes: Nodes | None = None, ways: Ways | None = None,
-                  relations: Relations | None = None,
-                  timestamp: str | None = None) -> Path:
+def write_extract(
+    path: Path,
+    nodes: Nodes | None = None,
+    ways: Ways | None = None,
+    relations: Relations | None = None,
+    timestamp: str | None = None,
+) -> Path:
     """Write an extract to `path` in node/way/relation order, ids ascending.
 
     nodes      {id: ((lon, lat), {tags})}
@@ -30,8 +35,11 @@ def write_extract(path: Path, nodes: Nodes | None = None, ways: Ways | None = No
     header = osmium.io.Header()
     if timestamp:
         header.set("osmosis_replication_timestamp", timestamp)
-    Node, Way, Relation = (osmium.osm.mutable.Node, osmium.osm.mutable.Way,
-                           osmium.osm.mutable.Relation)
+    Node, Way, Relation = (
+        osmium.osm.mutable.Node,
+        osmium.osm.mutable.Way,
+        osmium.osm.mutable.Relation,
+    )
     w = osmium.SimpleWriter(str(path), overwrite=True, header=header)
     try:
         for i, (loc, tags) in sorted((nodes or {}).items()):
@@ -39,8 +47,7 @@ def write_extract(path: Path, nodes: Nodes | None = None, ways: Ways | None = No
         for i, (refs, tags) in sorted((ways or {}).items()):
             w.add_way(Way(id=i, version=1, visible=True, nodes=refs, tags=tags))
         for i, (members, tags) in sorted((relations or {}).items()):
-            w.add_relation(Relation(id=i, version=1, visible=True, members=members,
-                                    tags=tags))
+            w.add_relation(Relation(id=i, version=1, visible=True, members=members, tags=tags))
     finally:
         w.close()
     return path

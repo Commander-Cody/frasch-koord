@@ -6,7 +6,9 @@ const INDEX: BuiltFrom = {
   'places.csv': 'aaa',
   'dialects.csv': 'bbb',
   'dialect_areas.geojson': 'ccc',
-  extracts: [{ file: 'schleswig-holstein-latest.osm.pbf', replication_timestamp: '2026-09-22T20:22:59Z' }],
+  extracts: [
+    { file: 'schleswig-holstein-latest.osm.pbf', replication_timestamp: '2026-09-22T20:22:59Z' },
+  ],
 };
 
 describe('provenanceWarning', () => {

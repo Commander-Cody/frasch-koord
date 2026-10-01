@@ -42,7 +42,10 @@ describe('checkBuild', () => {
   });
 
   it('refuses a worker no chunk names', () => {
-    put('assets/index-Cd34.js', 'setWorkerUrl(new URL("/maplibre-gl-worker.mjs", import.meta.url));');
+    put(
+      'assets/index-Cd34.js',
+      'setWorkerUrl(new URL("/maplibre-gl-worker.mjs", import.meta.url));',
+    );
     expect(checkBuild(dist).problems).toEqual([`${WORKER} is emitted but no chunk refers to it`]);
   });
 
@@ -67,7 +70,9 @@ describe('checkBuild', () => {
 
   it('refuses a dev tool in a chunk', () => {
     put('assets/dev-Ef56.js', 'fetch("/__curate/worklist")');
-    expect(checkBuild(dist).problems).toEqual(['assets/dev-Ef56.js contains "__curate": a dev tool is in the build']);
+    expect(checkBuild(dist).problems).toEqual([
+      'assets/dev-Ef56.js contains "__curate": a dev tool is in the build',
+    ]);
   });
 
   it('refuses the dialect-area data, whatever it is called', () => {
@@ -78,7 +83,10 @@ describe('checkBuild', () => {
   });
 
   it('refuses the research notes of the area review inside a chunk', () => {
-    put('assets/areas-Gh78.js', 'const note = "municipality; low: no explicit source found, best-guess Bökingharde";');
+    put(
+      'assets/areas-Gh78.js',
+      'const note = "municipality; low: no explicit source found, best-guess Bökingharde";',
+    );
     expect(checkBuild(dist).problems).toEqual([
       'assets/areas-Gh78.js: the dialect-area research notes are in the build',
     ]);
@@ -86,6 +94,8 @@ describe('checkBuild', () => {
 
   it('refuses the review checklist', () => {
     put('review.md', '# Dialect-area review checklist (issue #2)');
-    expect(checkBuild(dist).problems).toEqual(['review.md: the dialect-area research notes are in the build']);
+    expect(checkBuild(dist).problems).toEqual([
+      'review.md: the dialect-area research notes are in the build',
+    ]);
   });
 });

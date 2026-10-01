@@ -6,6 +6,7 @@ member ways and node locations of the objects asked for.  The dialect areas
 and a place's point inside its own polygon (names/locate.py) both use this,
 so a place and the areas it is compared against are read out of OSM the
 same way."""
+
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
@@ -55,8 +56,13 @@ def _chain(cur: list[int], segments: list[list[int]]) -> list[int]:
     return cur
 
 
-def polygons_for(ref: OsmRef, rel: Mapping[int, Rings], ways: Mapping[int, Sequence[int]],
-                 nodes: Mapping[int, LonLat], problems: list[str]) -> list[BaseGeometry]:
+def polygons_for(
+    ref: OsmRef,
+    rel: Mapping[int, Rings],
+    ways: Mapping[int, Sequence[int]],
+    nodes: Mapping[int, LonLat],
+    problems: list[str],
+) -> list[BaseGeometry]:
     """The shapely polygon(s) of one referenced object: a way's own ring, a
     relation's outer rings minus its inner ones.
 
@@ -82,9 +88,14 @@ def polygons_for(ref: OsmRef, rel: Mapping[int, Rings], ways: Mapping[int, Seque
     return [geom]
 
 
-def _polygons(ref: OsmRef, way_ids: Iterable[int], what: str,
-              ways: Mapping[int, Sequence[int]], nodes: Mapping[int, LonLat],
-              problems: list[str]) -> list[BaseGeometry]:
+def _polygons(
+    ref: OsmRef,
+    way_ids: Iterable[int],
+    what: str,
+    ways: Mapping[int, Sequence[int]],
+    nodes: Mapping[int, LonLat],
+    problems: list[str],
+) -> list[BaseGeometry]:
     """The valid polygons of the closed rings the ways `way_ids` form."""
     from shapely.geometry import Polygon
 
@@ -98,8 +109,7 @@ def _polygons(ref: OsmRef, way_ids: Iterable[int], what: str,
     out: list[BaseGeometry] = []
     for ring in rings:
         if any(n not in nodes for n in ring):
-            problems.append(f"{where}: a {what} ring has nodes that are not in "
-                            f"the file -- skipped")
+            problems.append(f"{where}: a {what} ring has nodes that are not in the file -- skipped")
             continue
         poly = Polygon([nodes[n] for n in ring])
         out.append(poly if poly.is_valid else poly.buffer(0))

@@ -144,7 +144,8 @@
     max-height: 50vh;
     max-height: 50dvh;
     /* The unsafe edges are App.css's --safe-*. */
-    padding: 14px calc(16px + var(--safe-right)) calc(14px + var(--safe-bottom)) calc(16px + var(--safe-left));
+    padding: 14px calc(16px + var(--safe-right)) calc(14px + var(--safe-bottom))
+      calc(16px + var(--safe-left));
     border-radius: 12px 12px 0 0;
     box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.2);
     overscroll-behavior: contain;

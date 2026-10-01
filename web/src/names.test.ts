@@ -39,7 +39,9 @@ describe('useNames', () => {
     stubFetch(
       JSON.stringify({
         built_from: { 'places.csv': 'aaa' },
-        places: [{ id: 'naibel', names: {}, name_de: 'Niebüll', lon: 8, lat: 54, kind: 'settlement' }],
+        places: [
+          { id: 'naibel', names: {}, name_de: 'Niebüll', lon: 8, lat: 54, kind: 'settlement' },
+        ],
       }),
       { status: 200, headers: { 'Content-Type': 'application/json' } },
     );
@@ -105,7 +107,10 @@ describe('resolveName', () => {
 
   it("falls back to another dialect's name, reporting that dialect as the source", () => {
     const e = entry({ names: { 'frr-x-fering': 'Feering Name' } });
-    expect(resolveName(e, 'frr-x-mooring')).toEqual({ name: 'Feering Name', source: 'frr-x-fering' });
+    expect(resolveName(e, 'frr-x-mooring')).toEqual({
+      name: 'Feering Name',
+      source: 'frr-x-fering',
+    });
   });
 
   it('reports name:frr as source "frr"', () => {
@@ -133,7 +138,7 @@ describe('resolveName', () => {
     expect(resolveName(e, 'frr-x-local')).toEqual({ name: 'Niebüll', source: 'de' });
   });
 
-  it("reports OSM's generic name as source \"osm\" where it is no name the entry knows a language of", () => {
+  it('reports OSM\'s generic name as source "osm" where it is no name the entry knows a language of', () => {
     const e = entry({ name_osm: 'Tønder', name_de: 'Tondern' });
     expect(resolveName(e, 'frr-x-local')).toEqual({ name: 'Tønder', source: 'osm' });
   });
@@ -160,7 +165,10 @@ describe('resolveName', () => {
   });
 
   it('the local view falls back to German where there is no generic name', () => {
-    expect(resolveName(entry({ name_de: 'Tondern' }), 'frr-x-local')).toEqual({ name: 'Tondern', source: 'de' });
+    expect(resolveName(entry({ name_de: 'Tondern' }), 'frr-x-local')).toEqual({
+      name: 'Tondern',
+      source: 'de',
+    });
   });
 });
 
@@ -248,11 +256,11 @@ describe('cardEntry', () => {
     expect(cardEntry({ entry: e, props: { 'name:de': 'TileDE' } }).name_osm).toBe('EntryOSM');
   });
 
-  it("fills name_osm from the tile when the entry has none", () => {
+  it('fills name_osm from the tile when the entry has none', () => {
     expect(cardEntry({ entry: entry(), props: { name: 'TileOSM' } }).name_osm).toBe('TileOSM');
   });
 
-  it('falls back to the entry\'s name_nds when the tile has none', () => {
+  it("falls back to the entry's name_nds when the tile has none", () => {
     const e = entry({ name_nds: 'EntryNDS' });
     const props = { 'name:de': 'TileDE' }; // no name:nds on this tile
     expect(cardEntry({ entry: e, props }).name_nds).toBe('EntryNDS');
@@ -304,7 +312,9 @@ describe('osmUrl', () => {
   });
 
   it('links the first of several references', () => {
-    expect(osmUrl('way/1347936331; node/1332249790')).toBe('https://www.openstreetmap.org/way/1347936331');
+    expect(osmUrl('way/1347936331; node/1332249790')).toBe(
+      'https://www.openstreetmap.org/way/1347936331',
+    );
   });
 
   it('returns null for a synthetic local/ place', () => {
@@ -353,13 +363,15 @@ describe('entryLookup', () => {
 
 describe('placeOsmRef', () => {
   it("is the name-list entry's OSM reference", () => {
-    expect(placeOsmRef({ entry: entry({ id: 'naibel', osm: 'node/240042766' }), featureId: 33525413 })).toBe(
-      'node/240042766',
-    );
+    expect(
+      placeOsmRef({ entry: entry({ id: 'naibel', osm: 'node/240042766' }), featureId: 33525413 }),
+    ).toBe('node/240042766');
   });
 
   it("is the clicked feature's object when the name list does not have the place", () => {
-    expect(placeOsmRef({ props: { name: 'Bredstedt' }, featureId: 2400427661 })).toBe('node/240042766');
+    expect(placeOsmRef({ props: { name: 'Bredstedt' }, featureId: 2400427661 })).toBe(
+      'node/240042766',
+    );
   });
 });
 

@@ -6,6 +6,7 @@ Matching is exact after normalisation (`norm`): no fuzzy matching.  An OSM
 name value also counts without the annotations OSM adds to it
 (`split_name_values`), with a penalty so that a plain hit always wins.
 """
+
 from __future__ import annotations
 
 import collections
@@ -20,16 +21,36 @@ from frasch.candidates import Candidate, osm_key
 # otherwise the Danish village Holme (name:de=Holm) outranks the North Frisian
 # village Holm (name=Holm).
 NAME_FIELD_RANK = {
-    "name": 0, "name:de": 1, "official_name": 2, "name:da": 2,
-    "short_name": 2,        # Stadt Wyk auf Föhr: short_name=Wyk
-    "alt_name": 4, "old_name": 4,
+    "name": 0,
+    "name:de": 1,
+    "official_name": 2,
+    "name:da": 2,
+    "short_name": 2,  # Stadt Wyk auf Föhr: short_name=Wyk
+    "alt_name": 4,
+    "old_name": 4,
 }
 NAME_FIELDS = tuple(NAME_FIELD_RANK)
 
 # ----------------------------------------------------------- normalisation ---
-_UML = {"ä": "ae", "ö": "oe", "ü": "ue", "Ä": "ae", "Ö": "oe", "Ü": "ue",
-        "ß": "ss", "å": "aa", "Å": "aa", "ø": "oe", "Ø": "oe", "æ": "ae",
-        "Æ": "ae", "é": "e", "è": "e", "á": "a", "à": "a"}
+_UML = {
+    "ä": "ae",
+    "ö": "oe",
+    "ü": "ue",
+    "Ä": "ae",
+    "Ö": "oe",
+    "Ü": "ue",
+    "ß": "ss",
+    "å": "aa",
+    "Å": "aa",
+    "ø": "oe",
+    "Ø": "oe",
+    "æ": "ae",
+    "Æ": "ae",
+    "é": "e",
+    "è": "e",
+    "á": "a",
+    "à": "a",
+}
 
 
 def norm(s: str | None) -> str:
@@ -50,8 +71,7 @@ def norm(s: str | None) -> str:
 
 _PAREN_SUFFIX = re.compile(r"^(.+?)\s*\([^()]*\)\s*$")
 # generic type words OSM puts in front of the actual name
-_TYPE_PREFIX = re.compile(
-    r"^(?:Kreis|Amt|Stadt|Gemeinde|Hallig|Insel|Landkreis|Flecken)\s+(.+)$")
+_TYPE_PREFIX = re.compile(r"^(?:Kreis|Amt|Stadt|Gemeinde|Hallig|Insel|Landkreis|Flecken)\s+(.+)$")
 # the island OSM appends to a place name: `Wyk auf Föhr`, `List auf Sylt`,
 # `Norddorf auf Amrum` -- the list writes plain `Wyk`
 _AUF_SUFFIX = re.compile(r"^(.+?)\s+auf\s+\S.*$")

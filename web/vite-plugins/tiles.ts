@@ -74,11 +74,15 @@ async function fontProblem(root: string): Promise<string | undefined> {
     const dir = `public/fonts/${font}`;
     if (!(await stat(join(root, dir)).catch(() => undefined))?.isDirectory()) missing.push(dir);
   }
-  if (missing.length > 0) return `the glyphs are not fetched (${missing.join(', ')}): run \`npm run fetch-assets\``;
+  if (missing.length > 0)
+    return `the glyphs are not fetched (${missing.join(', ')}): run \`npm run fetch-assets\``;
 }
 
 /** What the build lacks, one line each, when it starts; empty when it has all it needs. */
-export async function assetProblems({ root, external }: Omit<TilesBuild, 'outDir'>): Promise<string[]> {
+export async function assetProblems({
+  root,
+  external,
+}: Omit<TilesBuild, 'outDir'>): Promise<string[]> {
   const problems = [await fontProblem(root), external ? undefined : await archiveProblem(root)];
   return problems.filter((p) => p !== undefined);
 }

@@ -28,9 +28,13 @@ function put(path: string, text: string): void {
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'tiles-plugin-'));
   outDir = join(root, 'dist');
-  put('tiles.lock', `ARCHIVE_URL=https://example.org/schleswig-holstein.pmtiles\nARCHIVE_SHA256=${PINNED_SHA256}\n`);
+  put(
+    'tiles.lock',
+    `ARCHIVE_URL=https://example.org/schleswig-holstein.pmtiles\nARCHIVE_SHA256=${PINNED_SHA256}\n`,
+  );
   put(`.cache/tiles/${PINNED_SHA256}.pmtiles`, PINNED);
-  for (const font of ['Noto Sans Regular', 'Noto Sans Italic', 'Noto Sans Bold']) put(`public/fonts/${font}/0-255.pbf`, '');
+  for (const font of ['Noto Sans Regular', 'Noto Sans Italic', 'Noto Sans Bold'])
+    put(`public/fonts/${font}/0-255.pbf`, '');
 });
 
 afterEach(() => {
@@ -70,7 +74,9 @@ describe('assetProblems', () => {
   it('refuses a lock that pins no archive', async () => {
     put('tiles.lock', 'ARCHIVE_URL=https://example.org/schleswig-holstein.pmtiles\n');
 
-    expect(await assetProblems({ root, external: false })).toEqual(['tiles.lock pins no sha256 (ARCHIVE_SHA256=)']);
+    expect(await assetProblems({ root, external: false })).toEqual([
+      'tiles.lock pins no sha256 (ARCHIVE_SHA256=)',
+    ]);
   });
 });
 
@@ -93,7 +99,10 @@ describe('a vite build with the plugin', () => {
 
     await viteBuild();
 
-    expect(readdirSync(join(outDir, 'tiles')).sort()).toEqual(['.gitkeep', 'schleswig-holstein.pmtiles']);
+    expect(readdirSync(join(outDir, 'tiles')).sort()).toEqual([
+      '.gitkeep',
+      'schleswig-holstein.pmtiles',
+    ]);
     expect(readFileSync(join(outDir, 'tiles/schleswig-holstein.pmtiles'), 'utf8')).toBe(PINNED);
   });
 

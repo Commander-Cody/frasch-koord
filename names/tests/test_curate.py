@@ -1,6 +1,7 @@
 """curate.py helpers: reading back match.py's `candidates` cell and reading
 the decision patch.  (`apply`
 itself is covered in test_curate_apply.py.)"""
+
 from __future__ import annotations
 
 import json
@@ -15,8 +16,15 @@ from conftest import places_text
 
 
 def rec(t: str, id: int, lon: float | None, lat: float | None, **tags: str) -> Candidate:
-    return {"src": "schleswig-holstein", "t": t, "id": id, "lon": lon, "lat": lat,
-            "cls": [], "tags": tags}
+    return {
+        "src": "schleswig-holstein",
+        "t": t,
+        "id": id,
+        "lon": lon,
+        "lat": lat,
+        "cls": [],
+        "tags": tags,
+    }
 
 
 KAMPEN_SYLT = rec("n", 240063898, 8.344065, 54.95377, name="Kampen (Sylt)", place="village")
@@ -34,8 +42,7 @@ def test_candidate_round_trips_through_fmt_cand() -> None:
 
 
 def test_candidate_class_falls_back_past_place() -> None:
-    peninsula = rec("n", 6337086093, 8.865555, 54.487371, name="Nordstrand",
-                    natural="peninsula")
+    peninsula = rec("n", 6337086093, 8.865555, 54.487371, name="Nordstrand", natural="peninsula")
     (c,) = curate.parse_candidates(match.fmt_cand(peninsula))
     assert (c["ref"], c["class"]) == ("node/6337086093", "peninsula")
 
@@ -60,7 +67,9 @@ def test_several_candidates_keep_their_order() -> None:
     ockholm = rec("n", 1333738478, 8.826992, 54.664965, name="Kirchwarft", place="hamlet")
     cell = ";".join([match.fmt_cand(hooge), match.fmt_cand(ockholm)])
     assert [c["ref"] for c in curate.parse_candidates(cell)] == [
-        "node/11711096159", "node/1333738478"]
+        "node/11711096159",
+        "node/1333738478",
+    ]
 
 
 def test_unreadable_candidate_is_skipped() -> None:
@@ -75,74 +84,101 @@ def test_empty_candidates_cell_is_no_candidate() -> None:
 
 # -------------------------------------------------------------- read_patch ---
 def write_patch(path: Path, *lines: str | dict[str, object]) -> None:
-    path.write_text("".join(
-        (x if isinstance(x, str) else json.dumps(x, ensure_ascii=False)) + "\n"
-        for x in lines), encoding="utf-8")
+    path.write_text(
+        "".join(
+            (x if isinstance(x, str) else json.dumps(x, ensure_ascii=False)) + "\n" for x in lines
+        ),
+        encoding="utf-8",
+    )
 
 
 IDS = {"Mursem": "mursem", "Hoonebel": "hoonebel"}
 
 
 def entry(line: int, name: str, de: str, **kw: str) -> dict[str, object]:
-    return {"id": IDS[name], "line": line, "kind": "settlement", "name": name,
-            "de": de, **kw}
+    return {"id": IDS[name], "line": line, "kind": "settlement", "name": name, "de": de, **kw}
 
 
 def test_last_decision_per_row_wins(tmp_path: Path) -> None:
     p = tmp_path / "curate-patch.jsonl"
-    write_patch(p, entry(2, "Mursem", "Morsum", action="skip"),
-                entry(2, "Mursem", "Morsum", action="osm", osm="node/1"))
+    write_patch(
+        p,
+        entry(2, "Mursem", "Morsum", action="skip"),
+        entry(2, "Mursem", "Morsum", action="osm", osm="node/1"),
+    )
     (e,) = curate.read_patch(p)
     assert (e.get("action"), e.get("osm")) == ("osm", "node/1")
 
 
 def test_patch_entries_come_back_in_line_order(tmp_path: Path) -> None:
     p = tmp_path / "curate-patch.jsonl"
-    write_patch(p, entry(7, "Hoonebel", "Hunnebüll", action="skip"),
-                entry(2, "Mursem", "Morsum", action="skip"))
+    write_patch(
+        p,
+        entry(7, "Hoonebel", "Hunnebüll", action="skip"),
+        entry(2, "Mursem", "Morsum", action="skip"),
+    )
     assert [e.get("line") for e in curate.read_patch(p)] == [2, 7]
 
 
 def test_same_line_but_another_row_is_a_separate_decision(tmp_path: Path) -> None:
     # the line does not identify a row: it moves when rows are added
     p = tmp_path / "curate-patch.jsonl"
-    write_patch(p, entry(2, "Mursem", "Morsum", action="skip"),
-                entry(2, "Hoonebel", "Hunnebüll", action="skip"))
+    write_patch(
+        p,
+        entry(2, "Mursem", "Morsum", action="skip"),
+        entry(2, "Hoonebel", "Hunnebüll", action="skip"),
+    )
     assert len(curate.read_patch(p)) == 2
 
 
 def test_same_row_at_another_line_is_the_same_decision(tmp_path: Path) -> None:
     p = tmp_path / "curate-patch.jsonl"
-    write_patch(p, entry(2, "Mursem", "Morsum", action="osm", osm="node/1"),
-                entry(3, "Mursem", "Morsum", action="clear"))
+    write_patch(
+        p,
+        entry(2, "Mursem", "Morsum", action="osm", osm="node/1"),
+        entry(3, "Mursem", "Morsum", action="clear"),
+    )
     (e,) = curate.read_patch(p)
     assert e.get("action") == "clear"
 
 
-def test_broken_and_blank_lines_are_ignored(tmp_path: Path,
-                                            capsys: pytest.CaptureFixture[str]) -> None:
+def test_broken_and_blank_lines_are_ignored(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     p = tmp_path / "curate-patch.jsonl"
-    write_patch(p, entry(2, "Mursem", "Morsum", action="skip"), "",
-                '{"line": 3, "kind": "sett',
-                entry(4, "Hoonebel", "Hunnebüll", action="skip"))
+    write_patch(
+        p,
+        entry(2, "Mursem", "Morsum", action="skip"),
+        "",
+        '{"line": 3, "kind": "sett',
+        entry(4, "Hoonebel", "Hunnebüll", action="skip"),
+    )
     assert [e.get("line") for e in curate.read_patch(p)] == [2, 4]
     assert ":3: not JSON" in capsys.readouterr().err
 
 
 def test_each_entry_knows_its_line_in_the_patch(tmp_path: Path) -> None:
     p = tmp_path / "curate-patch.jsonl"
-    write_patch(p, entry(2, "Mursem", "Morsum", action="skip"), "",
-                entry(4, "Hoonebel", "Hunnebüll", action="skip"))
+    write_patch(
+        p,
+        entry(2, "Mursem", "Morsum", action="skip"),
+        "",
+        entry(4, "Hoonebel", "Hunnebüll", action="skip"),
+    )
     assert [e["_patch_line"] for e in curate.read_patch(p)] == [1, 3]
 
 
 # ------------------------------------------------------------------- main ---
-@pytest.mark.parametrize("argv,hint", [
-    (["--dry-run"], "curate.py apply --dry-run"),
-    (["--names", "places.csv", "--keep"], "curate.py apply --names places.csv --keep"),
-])
+@pytest.mark.parametrize(
+    "argv,hint",
+    [
+        (["--dry-run"], "curate.py apply --dry-run"),
+        (["--names", "places.csv", "--keep"], "curate.py apply --names places.csv --keep"),
+    ],
+)
 def test_an_apply_option_without_a_subcommand_points_at_apply(
-        argv: list[str], hint: str, capsys: pytest.CaptureFixture[str]) -> None:
+    argv: list[str], hint: str, capsys: pytest.CaptureFixture[str]
+) -> None:
     with pytest.raises(SystemExit) as exc:
         curate.main(argv)
     assert exc.value.code == 2
@@ -150,9 +186,9 @@ def test_an_apply_option_without_a_subcommand_points_at_apply(
 
 
 def test_options_without_a_subcommand_mean_export(
-        tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     places = tmp_path / "places.csv"
     places.write_text(places_text([]), encoding="utf-8")
-    assert curate.main(["--names", str(places),
-                        "--matches", str(tmp_path / "matches.csv")]) == 1
+    assert curate.main(["--names", str(places), "--matches", str(tmp_path / "matches.csv")]) == 1
     assert "run names/match.py first" in capsys.readouterr().err

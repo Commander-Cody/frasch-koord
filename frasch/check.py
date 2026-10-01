@@ -11,6 +11,7 @@ reads all of them as raw CSV instead and lists every problem it finds, with
 the stricter rules of the name cells, so that one run shows everything a
 spreadsheet export or a hand edit broke.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -112,8 +113,13 @@ def check_curation(path: str, ids: Container[str]) -> tuple[list[Problem], set[s
     for e in entries:
         ref = e["tags"].get(placelist.REF_KEY)
         if ref is not None and ref not in ids:
-            problems.append((e["line"], f"{placelist.REF_KEY}={ref} names no row of the "
-                                        f"name list (it takes a row's `id`)"))
+            problems.append(
+                (
+                    e["line"],
+                    f"{placelist.REF_KEY}={ref} names no row of the "
+                    f"name list (it takes a row's `id`)",
+                )
+            )
     positioned = {e["local"] for e in entries if e["local"]}
     problems.sort(key=lambda p: p[0])
     return [Problem(path, n, what) for n, what in problems], positioned
@@ -123,8 +129,7 @@ def check_dialects(path: str) -> tuple[Registry | None, list[Problem]]:
     """-> (the sound rows of the dialect registry, names/dialects.csv -- None
     when there are none --, the problems in it)."""
     found, problems = registry.rows(path)
-    return (Registry(found) if found else None,
-            [Problem(path, n, what) for n, what in problems])
+    return (Registry(found) if found else None, [Problem(path, n, what) for n, what in problems])
 
 
 def check_dialect_areas(path: str, reg: Registry) -> list[Problem]:
@@ -134,27 +139,29 @@ def check_dialect_areas(path: str, reg: Registry) -> list[Problem]:
     return [Problem(path, n, what) for n, what in problems]
 
 
-def check_places(path: str, curation: str, positioned: Container[str],
-                 reg: Registry) -> list[Problem]:
+def check_places(
+    path: str, curation: str, positioned: Container[str], reg: Registry
+) -> list[Problem]:
     """The problems in the name list, whose columns `reg` says; `positioned`
     are the local references `curation` has a position for."""
     header, rows = _rows(path)
-    if (what := placelist.header_problem(header, reg)):
-        return [Problem(path, 1, what)]   # without its columns no row can be read
+    if what := placelist.header_problem(header, reg):
+        return [Problem(path, 1, what)]  # without its columns no row can be read
     problems: list[Problem] = []
     claimed: dict[str, int] = {}  # `way/1` or `Q1` -> line of the first row
-    ids: dict[str, int] = {}      # id -> line of the first row
+    ids: dict[str, int] = {}  # id -> line of the first row
     for n, cells in rows:
+
         def problem(message: str, n: int = n) -> None:
             problems.append(Problem(path, n, message))
 
-        if (what := files.cell_count_problem(cells, header)):
-            problem(what)   # its columns cannot be trusted, nothing else is
+        if what := files.cell_count_problem(cells, header):
+            problem(what)  # its columns cannot be trusted, nothing else is
             continue
         row = {k: v.strip() for k, v in zip(header, cells, strict=True)}
         for what in placelist.row_problems(row):
             problem(what)
-        if (what := placelist.id_problem(row, ids)):
+        if what := placelist.id_problem(row, ids):
             problem(what)
         ids.setdefault(row["id"], n)
         for column in variant_columns(reg):
@@ -166,7 +173,7 @@ def check_places(path: str, curation: str, positioned: Container[str],
             slug = placelist.local_ref(row["osm"])
             refs = placelist.claimed_refs(row)
         except errors.Invalid:
-            slug, refs = None, []                 # row_problems reported it
+            slug, refs = None, []  # row_problems reported it
         if slug and slug not in positioned:
             problem(f"local/{slug} has no row with `lat`/`lon` in {curation}")
         keys = [placelist.format_osm([ref]) for ref in refs]
@@ -174,8 +181,10 @@ def check_places(path: str, curation: str, positioned: Container[str],
             keys.append(row["wikidata"])
         for key in keys:
             if key in claimed:
-                problem(f"{key} is already claimed by line {claimed[key]} "
-                        f"-- only one name can go on the map")
+                problem(
+                    f"{key} is already claimed by line {claimed[key]} "
+                    f"-- only one name can go on the map"
+                )
             claimed.setdefault(key, n)
     return problems
 
@@ -186,23 +195,24 @@ def variant_columns(reg: Registry | None) -> list[str]:
     return placelist.name_columns(reg) + ["de", "da"]
 
 
-def check(places: StrPath = placelist.DEFAULT_PATH,
-          curation: StrPath = paths.CURATION,
-          dialects_csv: StrPath = paths.DIALECTS,
-          areas: StrPath = dialects.AREA_LIST_PATH) -> list[Problem]:
+def check(
+    places: StrPath = placelist.DEFAULT_PATH,
+    curation: StrPath = paths.CURATION,
+    dialects_csv: StrPath = paths.DIALECTS,
+    areas: StrPath = dialects.AREA_LIST_PATH,
+) -> list[Problem]:
     """Every problem in the name list `places`, the map curation `curation`,
     the dialect registry `dialects_csv` and the dialect area list `areas`,
     file by file, in file order.  The name list is checked against the sound
     rows of the registry (not at all when it has none, the registry's
     problems say why), the area list only against a sound registry."""
     places_path, curation_path, dialects_path, areas_path = (
-        os.fspath(path) for path in (places, curation, dialects_csv, areas))
+        os.fspath(path) for path in (places, curation, dialects_csv, areas)
+    )
     curation_problems, positioned = check_curation(curation_path, row_ids(places_path))
     reg, registry_problems = check_dialects(dialects_path)
-    place_problems = (check_places(places_path, curation_path, positioned, reg)
-                      if reg else [])
-    area_problems = (check_dialect_areas(areas_path, reg)
-                     if reg and not registry_problems else [])
+    place_problems = check_places(places_path, curation_path, positioned, reg) if reg else []
+    area_problems = check_dialect_areas(areas_path, reg) if reg and not registry_problems else []
     return place_problems + curation_problems + registry_problems + area_problems
 
 
@@ -214,7 +224,7 @@ def markdown(problems: Sequence[Problem]) -> str:
     out += [f"{len(problems)} problem(s):", "", "| where | problem |", "|---|---|"]
     for p in problems:
         path = os.path.relpath(p.path)
-        if path.startswith(".."):             # not under the working directory
+        if path.startswith(".."):  # not under the working directory
             path = os.path.abspath(p.path)
         message = p.message.replace("|", "\\|")
         out.append(f"| `{path}:{p.line}` | {message} |")
@@ -228,18 +238,24 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--curation", default=paths.CURATION)
     ap.add_argument("--dialects", default=paths.DIALECTS)
     ap.add_argument("--areas", default=dialects.AREA_LIST_PATH)
-    ap.add_argument("--fix", action="store_true",
-                    help="first give every row of the name list without an "
-                         "`id` one (placelist.fill_ids)")
-    ap.add_argument("--summary", metavar="FILE",
-                    help="also append the result as Markdown to FILE "
-                         "(CI passes $GITHUB_STEP_SUMMARY)")
+    ap.add_argument(
+        "--fix",
+        action="store_true",
+        help="first give every row of the name list without an `id` one (placelist.fill_ids)",
+    )
+    ap.add_argument(
+        "--summary",
+        metavar="FILE",
+        help="also append the result as Markdown to FILE (CI passes $GITHUB_STEP_SUMMARY)",
+    )
     a = ap.parse_args(argv)
     if a.fix:
         try:
             with placelist.lock(a.names):
-                print(f"gave {placelist.fill_ids(a.names, registry.read(a.dialects))} "
-                      f"row(s) an id", file=sys.stderr)
+                print(
+                    f"gave {placelist.fill_ids(a.names, registry.read(a.dialects))} row(s) an id",
+                    file=sys.stderr,
+                )
         except errors.PipelineError as exc:
             # the report below lists this problem and every other one
             print(f"no id given: {exc}", file=sys.stderr)
@@ -249,7 +265,5 @@ def main(argv: Sequence[str] | None = None) -> int:
     if a.summary:
         with open(a.summary, "a", encoding="utf-8") as fh:
             fh.write(markdown(problems))
-    print(f"{len(problems)} problem(s)" if problems else "no problems",
-          file=sys.stderr)
+    print(f"{len(problems)} problem(s)" if problems else "no problems", file=sys.stderr)
     return 1 if problems else 0
-

@@ -6,6 +6,7 @@ reads it in three passes that each keep only the objects asked for: the
 relations, then their and the referenced ways, then all of those ways'
 nodes.  names/locate.py and names/build_dialect_areas.py both do.  And the
 extract's header, without a pass at all."""
+
 from __future__ import annotations
 
 from collections.abc import Collection, Iterable
@@ -21,6 +22,7 @@ from frasch.paths import StrPath
 
 class Rings(TypedDict):
     """The member ways of a relation by role: way ids."""
+
     outer: list[int]
     inner: list[int]
 
@@ -59,25 +61,31 @@ def relations(pbf: StrPath, ids: Collection[int]) -> dict[int, Relation]:
     for r in _filtered(pbf, osmium.osm.RELATION, ids):
         if not isinstance(r, osmium.osm.Relation):
             continue
-        label = next((m.ref for m in r.members
-                      if m.type == "n" and m.role in ("label", "admin_centre")), None)
+        label = next(
+            (m.ref for m in r.members if m.type == "n" and m.role in ("label", "admin_centre")),
+            None,
+        )
         out[r.id] = {"rings": rings_of(r), "label": label, "tags": dict(r.tags)}
     return out
 
 
 def ways(pbf: StrPath, ids: Collection[int]) -> dict[int, Way]:
     """-> {id: {"nodes": [node ids], "tags": {...}}} for the ways with nodes."""
-    return {w.id: {"nodes": [n.ref for n in w.nodes], "tags": dict(w.tags)}
-            for w in _filtered(pbf, osmium.osm.WAY, ids)
-            if isinstance(w, osmium.osm.Way) and len(w.nodes)}
+    return {
+        w.id: {"nodes": [n.ref for n in w.nodes], "tags": dict(w.tags)}
+        for w in _filtered(pbf, osmium.osm.WAY, ids)
+        if isinstance(w, osmium.osm.Way) and len(w.nodes)
+    }
 
 
 def nodes(pbf: StrPath, ids: Collection[int]) -> dict[int, Node]:
     """-> {id: {"loc": (lon, lat), "tags": {...}}} for the nodes with a valid
     location."""
-    return {n.id: {"loc": (n.location.lon, n.location.lat), "tags": dict(n.tags)}
-            for n in _filtered(pbf, osmium.osm.NODE, ids)
-            if isinstance(n, osmium.osm.Node) and n.location.valid()}
+    return {
+        n.id: {"loc": (n.location.lon, n.location.lat), "tags": dict(n.tags)}
+        for n in _filtered(pbf, osmium.osm.NODE, ids)
+        if isinstance(n, osmium.osm.Node) and n.location.valid()
+    }
 
 
 def header(pbf: StrPath) -> osmium.io.Header:
@@ -89,8 +97,9 @@ def header(pbf: StrPath) -> osmium.io.Header:
         reader.close()
 
 
-def _filtered(pbf: StrPath, entity: osmium.osm.osm_entity_bits,
-              ids: Collection[int]) -> Iterable[OSMEntity]:
+def _filtered(
+    pbf: StrPath, entity: osmium.osm.osm_entity_bits, ids: Collection[int]
+) -> Iterable[OSMEntity]:
     if not ids:
         return iter(())
     return osmium.FileProcessor(str(pbf), entity).with_filter(osmium.filter.IdFilter(ids))

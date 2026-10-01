@@ -22,7 +22,9 @@ it("labels OSM's generic name in the local view with the language it is the name
   expect(screen.getByRole('heading').textContent).toBe('Ribe');
   expect(screen.getByText(i18n.t('card.danish'), { selector: '.place-card-meta' })).toBeDefined();
   // The German exonym is still on the card, as a line of its own.
-  expect(screen.getByText(i18n.t('card.german'), { selector: 'dt' }).nextSibling?.textContent).toBe('Ripen');
+  expect(screen.getByText(i18n.t('card.german'), { selector: 'dt' }).nextSibling?.textContent).toBe(
+    'Ripen',
+  );
 });
 
 it("names no language for OSM's generic name where the entry knows none it is the name in", () => {

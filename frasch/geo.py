@@ -1,6 +1,7 @@
 """Where North Frisia is, and how far apart two points are -- one box for
 the matcher, the candidate scan and the curation view, so that "in North
 Frisia" means the same everywhere."""
+
 from __future__ import annotations
 
 import math
@@ -8,7 +9,7 @@ import math
 # lon_min, lat_min, lon_max, lat_max: North Frisia including Helgoland, with
 # the Danish islands just across the border (Röm)
 NF_BBOX = (7.8, 54.15, 9.55, 55.12)
-NF_CENTRE = (8.9, 54.7)                 # lon, lat
+NF_CENTRE = (8.9, 54.7)  # lon, lat
 
 EARTH_RADIUS_KM = 6371.0
 
@@ -17,12 +18,17 @@ LonLat = tuple[float, float]
 
 def in_north_frisia(lon: float | None, lat: float | None) -> bool:
     """Whether a point lies in NF_BBOX; False for an unknown position."""
-    return (lon is not None and lat is not None
-            and NF_BBOX[0] <= lon <= NF_BBOX[2] and NF_BBOX[1] <= lat <= NF_BBOX[3])
+    return (
+        lon is not None
+        and lat is not None
+        and NF_BBOX[0] <= lon <= NF_BBOX[2]
+        and NF_BBOX[1] <= lat <= NF_BBOX[3]
+    )
 
 
-def haversine(lon1: float | None, lat1: float | None,
-              lon2: float | None, lat2: float | None) -> float | None:
+def haversine(
+    lon1: float | None, lat1: float | None, lon2: float | None, lat2: float | None
+) -> float | None:
     """The great-circle distance in km, None when a position is unknown."""
     if lon1 is None or lat1 is None or lon2 is None or lat2 is None:
         return None

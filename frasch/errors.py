@@ -1,6 +1,7 @@
 """What the pipeline raises when it cannot go on.  Library code only raises;
 a command's `main` (see frasch.cli) turns these into their message and exit
 status 1, anything else stays a crash with a traceback."""
+
 from __future__ import annotations
 
 

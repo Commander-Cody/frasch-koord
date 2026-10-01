@@ -5,9 +5,12 @@ import { useDeepLinkParam } from './useDeepLinkParam';
 
 function renderDeepLink(ready: boolean) {
   const open = vi.fn();
-  const hook = renderHook((props: { ready: boolean }) => useDeepLinkParam('row', props.ready, open), {
-    initialProps: { ready },
-  });
+  const hook = renderHook(
+    (props: { ready: boolean }) => useDeepLinkParam('row', props.ready, open),
+    {
+      initialProps: { ready },
+    },
+  );
   return { ...hook, open };
 }
 

@@ -1,10 +1,10 @@
 /// <reference types="vitest/config" />
-import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react';
+import { defineConfig } from 'vite';
 
-import areas from './vite-plugins/areas.ts'
-import curate from './vite-plugins/curate.ts'
-import tiles from './vite-plugins/tiles.ts'
+import areas from './vite-plugins/areas.ts';
+import curate from './vite-plugins/curate.ts';
+import tiles from './vite-plugins/tiles.ts';
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -26,7 +26,11 @@ export default defineConfig({
       output: {
         codeSplitting: {
           groups: [
-            { name: 'maplibre', test: /node_modules[\\/](maplibre-gl|@maplibre|pmtiles)[\\/]/, priority: 2 },
+            {
+              name: 'maplibre',
+              test: /node_modules[\\/](maplibre-gl|@maplibre|pmtiles)[\\/]/,
+              priority: 2,
+            },
             { name: 'vendor', test: /node_modules[\\/]/, priority: 1 },
           ],
         },
@@ -43,4 +47,4 @@ export default defineConfig({
     // middleware directly and has no business needing a DOM.
     include: ['src/**/*.test.{ts,tsx}', 'vite-plugins/**/*.test.ts', 'scripts/**/*.test.mjs'],
   },
-})
+});

@@ -62,8 +62,14 @@ export interface CurateWorklist {
  * The worklist and the decisions made so far, from the dev-server endpoints
  * in web/vite-plugins/curate.ts. Rejects with a message fit for the panel.
  */
-export async function fetchWorklist(): Promise<{ worklist: CurateWorklist; entries: PatchEntry[] }> {
-  const [wlRes, patchRes] = await Promise.all([fetch('/__curate/worklist'), fetch('/__curate/patch')]);
+export async function fetchWorklist(): Promise<{
+  worklist: CurateWorklist;
+  entries: PatchEntry[];
+}> {
+  const [wlRes, patchRes] = await Promise.all([
+    fetch('/__curate/worklist'),
+    fetch('/__curate/patch'),
+  ]);
   if (!wlRes.ok) {
     const body = (await wlRes.json().catch(() => null)) as { error?: string } | null;
     throw new Error(body?.error ?? `worklist: HTTP ${wlRes.status}`);
@@ -90,7 +96,11 @@ export interface RowFilter {
 
 export const NO_FILTER: RowFilter = { text: '', kind: '', result: 'all', hideDone: true };
 
-export function filterRows(rows: CurateRow[], filter: RowFilter, isDone: (id: string) => boolean): CurateRow[] {
+export function filterRows(
+  rows: CurateRow[],
+  filter: RowFilter,
+  isDone: (id: string) => boolean,
+): CurateRow[] {
   const needle = filter.text.trim().toLowerCase();
   return rows.filter((row) => {
     if (filter.kind && row.kind !== filter.kind) return false;

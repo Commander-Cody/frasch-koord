@@ -6,6 +6,7 @@ and the areas it is compared against are read out of OSM the same way.
 `assemble_rings`: a boundary relation's member ways, in whatever order and
 direction OSM keeps them, joined into closed rings.  Node ids stand in for
 the nodes; a ring is closed when it ends on the node it started with."""
+
 from __future__ import annotations
 
 import pytest
@@ -78,8 +79,16 @@ def test_the_input_ways_are_not_modified() -> None:
 
 
 # ----------------------------------------------------------- polygons_for ---
-SQUARE = {1: (8.0, 54.0), 2: (8.4, 54.0), 3: (8.4, 54.4), 4: (8.0, 54.4),
-          5: (8.1, 54.1), 6: (8.2, 54.1), 7: (8.2, 54.2), 8: (8.1, 54.2)}
+SQUARE = {
+    1: (8.0, 54.0),
+    2: (8.4, 54.0),
+    3: (8.4, 54.4),
+    4: (8.0, 54.4),
+    5: (8.1, 54.1),
+    6: (8.2, 54.1),
+    7: (8.2, 54.2),
+    8: (8.1, 54.2),
+}
 
 
 def test_a_closed_way_is_its_polygon() -> None:
@@ -98,8 +107,10 @@ def test_a_member_way_the_extract_lacks_is_reported() -> None:
     problems: list[str] = []
     rel: dict[int, Rings] = {20: {"outer": [10, 11], "inner": []}}
     assert osmgeom.polygons_for(("r", 20), rel, {10: [1, 2, 3]}, SQUARE, problems) == []
-    assert problems == ["relation/20: 1 outer way(s) not in the file",
-                        "relation/20: 1 unclosed outer ring(s) -- skipped"]
+    assert problems == [
+        "relation/20: 1 outer way(s) not in the file",
+        "relation/20: 1 unclosed outer ring(s) -- skipped",
+    ]
 
 
 def test_an_object_the_extract_lacks_has_no_polygon() -> None:

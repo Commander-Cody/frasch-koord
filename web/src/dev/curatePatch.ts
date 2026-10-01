@@ -38,7 +38,11 @@ export async function postPatchEntry(entry: PatchEntry): Promise<PatchEntry> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(entry),
   });
-  const body = (await res.json().catch(() => null)) as { ok?: boolean; entry?: PatchEntry; error?: string } | null;
+  const body = (await res.json().catch(() => null)) as {
+    ok?: boolean;
+    entry?: PatchEntry;
+    error?: string;
+  } | null;
   if (!res.ok || !body?.ok) throw new Error(body?.error ?? `HTTP ${res.status}`);
   return body.entry ?? entry;
 }

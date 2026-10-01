@@ -5,7 +5,16 @@
  */
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  readlinkSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -54,7 +63,9 @@ describe('fetch-tiles.sh', () => {
     const result = fetchTiles();
 
     expect(result.status, result.stderr).toBe(0);
-    expect(readFileSync(join(root, `.cache/tiles/${PUBLISHED_SHA256}.pmtiles`), 'utf8')).toBe(PUBLISHED);
+    expect(readFileSync(join(root, `.cache/tiles/${PUBLISHED_SHA256}.pmtiles`), 'utf8')).toBe(
+      PUBLISHED,
+    );
     expect(readlinkSync(join(root, LINK))).toBe(`../../.cache/tiles/${PUBLISHED_SHA256}.pmtiles`);
   });
 
@@ -80,7 +91,7 @@ describe('fetch-tiles.sh', () => {
 
   it('moves on from an earlier pinned archive, and drops it', () => {
     const OLD = `.cache/tiles/${'0'.repeat(64)}.pmtiles`;
-    put(root, OLD, 'last month\'s archive');
+    put(root, OLD, "last month's archive");
     symlinkSync(`../../${OLD}`, join(root, LINK));
 
     const result = fetchTiles();
