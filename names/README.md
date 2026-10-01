@@ -46,7 +46,7 @@ are gone from the tree; `git show b602a3f:names/bootstrap/` lists them.
 | `hint` | where the feature is, for matching: `Langeness`, `Ockholm`, `bei Leck`. Binding — a hint that matches nothing sends the row to review. |
 | `da` | Danish name(s). Used for matching when there is no German name. |
 | `osm` | the OSM object(s) that carry the label: `node/123`, `way/123`, `relation/123`. Several separated by `;` when OSM splits a river or dyke into pieces: `way/1; way/2`. A place **OSM does not have** carries a local reference instead: `local/<slug>` (lowercase ascii letters, digits, hyphens) alone in the cell, e.g. `local/westerheide-amrum` — never mixed with a real reference, never split by `;`. See *Places OSM does not have*. |
-| `wikidata` | Wikidata item. The injector also tags every OSM object with this `wikidata` tag; for the countries, which have no `osm`, it is the only key. Empty for a `local/` row. |
+| `wikidata` | Wikidata item. The injector also tags every place-like OSM object (`place`, `boundary`, `natural`, `water`, `waterway`) with this `wikidata` tag; for the countries, which have no `osm`, it is the only key. Empty for a `local/` row. |
 | `status` | `auto` — `match.py` filled `osm`/`wikidata` and will recompute them next run. `ok` — a human checked the row. `skip` — never put on the map. Empty — nothing decided yet (or, with `osm` filled by hand, simply yours). |
 | `note` | free text for you. `match.py` never writes here. The import put `uncertain` here for names the sheet marked with `?`. |
 | `id` | the row's own key, e.g. `naibel`, `schorkewarw-2`: lowercase ascii letters, digits, hyphens, unique. Everything else names the row by it — `work/matches.csv`, `REPORT.md`, the curation worklist and patch, the search index (`?place=` links) and the tiles (`frasch:ref`) — so adding, deleting or moving rows, or correcting a name, never changes another row's identity. **Leave it empty on a new row** and run `names/check.py --fix`, which fills it from the Frisian name (German, then Danish, when there is none; `-2`, `-3` on repeats). Never change an id once written: it would break the share links to that place. |
@@ -399,7 +399,8 @@ $PY tiles/inject_names.py tiles/data/schleswig-holstein-latest.osm.pbf /dev/null
 
 It lists how many names it writes per dialect, how many objects fall into each
 dialect area, ids that are not in the extract, rows that claim the same object
-twice (the first row in file order wins, per tag), QIDs it could not find, and
+twice (the first row in file order wins, per tag), QIDs it could not find,
+objects that carry a QID of the list but are not place-like (left alone), and
 the synthetic polygons it would add.
 
 ## Matching rules (v1)
@@ -448,7 +449,7 @@ the synthetic polygons it would add.
   which dialect it is does not matter for matching.
 * **Countries** are keyed by Wikidata QID only (via `wbsearchentities` +
   `wbgetentities`, filtered to country / sovereign-state classes);
-  `inject_names.py` tags whatever object carries that QID.
+  `inject_names.py` tags whatever place-like object carries that QID.
 
 ## Places OSM does not have
 
