@@ -295,8 +295,8 @@ git-ignored `work/matches.csv` — neither `places.csv` nor `REPORT.md`.
 unchanged too.
 
 `match.py` only ever rewrites the `osm`, `wikidata` and `status` cells of rows
-it owns: rows whose `osm` and `wikidata` are both empty, and rows it filled
-earlier (`status=auto`). A row you filled in, marked `ok` or `skip`, or a
+it owns: rows whose `osm`, `wikidata` and `status` are all empty, and rows it
+filled earlier (`status=auto`). A row you filled in, marked `ok` or `skip`, or a
 `not_a_place` row is never touched, so re-running is always safe. Undo a
 single row with `git checkout -p`.
 
@@ -307,8 +307,10 @@ damaged cache file stops the run (delete it to query again).
 
 `match.py` and `curate.py apply` write `places.csv` in one step, so an
 interrupted run never leaves it half written, and they refuse to write when
-the file changed on disk while they ran (a spreadsheet saved it, say): nothing
-is written, re-run. They also take `work/.lock`, so only one of them runs at
+the file changed on disk while they ran (a spreadsheet saved it, say):
+`places.csv` stays as it was, re-run. `match.py` writes `work/matches.csv`
+(in one step too) before `places.csv`, so a run that cannot write it leaves
+`places.csv` alone. They also take `work/.lock`, so only one of them runs at
 a time.
 
 **Review**: `names/REPORT.md` lists the *ambiguous* rows with their candidates

@@ -167,6 +167,7 @@ def test_a_record_without_location_is_a_cluster_of_its_own() -> None:
     ({"osm": "relation/1420394"}, False),                          # filled by hand
     ({"wikidata": "Q35", "kind": "country"}, False),
     ({"osm": "node/1331229597", "status": "ok"}, False),
+    ({"status": "ok"}, False),                                     # checked: no reference
     ({"status": "skip"}, False),
     ({"kind": "not_a_place"}, False),
 ])
