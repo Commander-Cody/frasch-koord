@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
-import '../i18n';
+import i18n from '../i18n';
 import type { NameEntry } from '../names';
 import SearchPanel from './SearchPanel';
 
@@ -68,6 +68,6 @@ it("finds a place by OSM's generic name, which the local view labels it with", (
 it('names the search field for screen readers, not only by its placeholder', () => {
   render(<SearchPanel entries={[]} status="ready" view="frr-x-mooring" onViewChange={() => {}} onSelect={() => {}} />);
 
-  // Mooring has no word for it yet, so it is the German one.
-  expect(screen.getByRole('combobox', { name: 'Ort suchen' })).toBeDefined();
+  // Without its label, the field would be named by the placeholder.
+  expect(screen.getByRole('combobox', { name: i18n.t('search.label') })).toBeDefined();
 });

@@ -579,11 +579,10 @@ One JSON file per dialect in `src/locales/`, same keys in each:
   and the OpenMapTiles `class` values a place outside the name list has). This
   is the fallback language (`fallbackLng: 'de'`). The map's attribution is not
   among them: it is a fixed licence notice (`src/style/localize.ts`).
-- `frr-x-mooring.json` — Mooring UI strings. Strings nobody has written yet
-  (`app.title`, `search.label`, `search.loading`, `search.error`, `errors.*`)
-  are left as **empty strings — never invented** — so the UI falls back to
+- `frr-x-mooring.json` — Mooring UI strings. A string nobody has written yet
+  is left as an **empty string — never invented** — so the UI falls back to
   German rather than showing blank text (`returnEmptyString: false` makes
-  i18next treat an empty string as "missing" for fallback purposes). Fill them
+  i18next treat an empty string as "missing" for fallback purposes). Fill it
   in once real Mooring wording exists.
 
 ## Not done / left as-is

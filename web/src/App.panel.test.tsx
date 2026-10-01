@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { LngLat, MapGeoJSONFeature } from 'maplibre-gl';
 
-import './i18n';
+import i18n from './i18n';
 import type { MapViewProps } from './components/Map';
 import type { NameEntry } from './names';
 import App from './App';
@@ -84,7 +84,7 @@ it('leaves the card open on Escape in the search field, and closes it on Escape 
   render(<App />);
   await serveNames();
   clickLabel('naibel', { 'name:frr-x-mooring': 'Naibel' });
-  const field = screen.getByRole('combobox', { name: 'Ort suchen' });
+  const field = screen.getByRole('combobox', { name: i18n.t('search.label') });
   fireEvent.change(field, { target: { value: 'Nai' } });
 
   // The first Escape closes the result list, a second one finds nothing
@@ -100,7 +100,7 @@ it('leaves the card open on Escape in the search field, and closes it on Escape 
 
 /** Picks Naibel in the search field from the keyboard; returns the field. */
 function pickNaibel(): HTMLElement {
-  const field = screen.getByRole('combobox', { name: 'Ort suchen' });
+  const field = screen.getByRole('combobox', { name: i18n.t('search.label') });
   field.focus();
   fireEvent.change(field, { target: { value: 'Naibel' } });
   fireEvent.keyDown(field, { key: 'Enter' });
@@ -144,7 +144,7 @@ it('returns focus to the search field when Escape closes the card it was in', as
 
 /** The card's ×. */
 function closeButton(): HTMLElement {
-  return screen.getByRole('button', { name: 'Tumååge' });
+  return screen.getByRole('button', { name: i18n.t('card.close') });
 }
 
 it('returns focus to the search field when × is pressed from the keyboard', async () => {
