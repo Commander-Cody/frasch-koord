@@ -199,7 +199,7 @@ OCKHOLM = cand(
     ],
 )
 def test_kind_ok(kind: str, tags: dict[str, str], ok: bool) -> None:
-    assert match.kind_ok(kind, tags, []) is ok
+    assert match.kind_ok(kind, tags) is ok
 
 
 # ---------------------------------------------------------------- cluster ---

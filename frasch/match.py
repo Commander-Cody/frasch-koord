@@ -123,7 +123,9 @@ SEPARATION_KM = 30.0  # a winner must be this far from every rival
 BOUNDARY_QID_KM = 10.0  # a boundary further from a place node is a namesake
 
 # `match_row`'s result for a row: its cells plus the MATCH_COLUMNS and
-# osm_type / osm_id -- a line of work/matches.csv
+# osm_type / osm_id -- a line of work/matches.csv.  Its `note` is the
+# matcher's remark, for matches.csv and the report only: it never goes into
+# places.csv, whose `note` column belongs to the owner.
 MatchResult = dict[str, str]
 
 
@@ -170,7 +172,7 @@ SETTLEMENT_PLACES = {
 }
 
 
-def kind_ok(kind: str, tags: Mapping[str, str], cls: Sequence[str]) -> bool:
+def kind_ok(kind: str, tags: Mapping[str, str]) -> bool:
     place = tags.get("place")
     nat = tags.get("natural")
     bnd = tags.get("boundary")
@@ -579,7 +581,7 @@ def _centred(members: list[Candidate]) -> Cluster:
     }
 
 
-def fmt_cand(rec: Candidate, hint_pt: Circle | None = None) -> str:
+def fmt_cand(rec: Candidate) -> str:
     tags = rec["tags"]
     place = (
         tags.get("place")
@@ -610,7 +612,7 @@ def fmt_cands(cands: Iterable[RankedCandidate]) -> str:
 
 
 def _decide(
-    kind: str, plaus: Iterable[Candidate], hint_pt: Circle | None
+    plaus: Iterable[Candidate], hint_pt: Circle | None
 ) -> tuple[PlacedCluster | None, str, list[PlacedCluster]]:
     """-> (winner cluster or None, reason, clusters)"""
     clusters = [_placed(cl, hint_pt) for cl in cluster(plaus)]
@@ -700,13 +702,13 @@ def match_row(
     out.update(osm_type="", osm_id="", match_name="", match_tags="", lon="", lat="", candidates="")
     if not any_name(row):
         out["status"] = "not_found"
-        out["note"] = _addnote(row, "no Frisian name")
+        out["note"] = "no Frisian name"
         return out
 
     queries = row_query_names(row)
     if not queries:
         out["status"] = "not_found"
-        out["note"] = _addnote(row, "no German/Danish name to match on")
+        out["note"] = "no German/Danish name to match on"
         return out
 
     best_rank: dict[OsmRef, int] = {}
@@ -723,18 +725,16 @@ def match_row(
     if not cands:
         out["status"] = "not_found"
         if taken:
-            out["note"] = _addnote(row, taken_note(taken, claimed))
+            out["note"] = taken_note(taken, claimed)
         return out
 
-    plaus_all = [c for c in cands if kind_ok(kind, c["tags"], c["cls"])]
+    plaus_all = [c for c in cands if kind_ok(kind, c["tags"])]
     if not plaus_all:
         # the German name exists in OSM, but only on streets / buildings /
         # bus stops -- the feature itself is not mapped.  Not a review task.
         out["status"] = "not_found"
         out["candidates"] = fmt_cands(cands)
-        out["note"] = _addnote(
-            row, f"{len(cands)} name match(es), none compatible with kind={kind}"
-        )
+        out["note"] = f"{len(cands)} name match(es), none compatible with kind={kind}"
         return out
     # set the boundaries aside first: canonical() would drop them, and their
     # wikidata is the fallback for a place node without one
@@ -745,11 +745,11 @@ def match_row(
 
     hint_pt = hints.resolve(row.get("hint", "").split(";")[0].strip())
 
-    winner, reason, clusters = _decide(kind, plaus, hint_pt)
+    winner, reason, clusters = _decide(plaus, hint_pt)
     if winner is not None and _suspicious(kind, winner) and len(plaus_all) > len(plaus):
         # the best-ranked name hit is implausible -- reconsider the weaker hits
         # (OSM disambiguators such as "Kampen (Sylt)", German exonyms, ...)
-        w2, r2, c2 = _decide(kind, plaus_all, hint_pt)
+        w2, r2, c2 = _decide(plaus_all, hint_pt)
         if w2 is not None and not _suspicious(kind, w2):
             winner, reason, clusters, plaus = w2, r2 + " (weaker name hit)", c2, plaus_all
 
@@ -764,13 +764,13 @@ def match_row(
     ):
         out["status"] = "ambiguous"
         out["candidates"] = fmt_cands(plaus_all)
-        out["note"] = _addnote(row, _ambiguous_reason(row, winner, hint_pt, clusters))
+        out["note"] = _ambiguous_reason(row, winner, hint_pt, clusters)
         return out
 
     held = [
         c
         for c in taken
-        if (kind_ok(kind, c["tags"], c["cls"]) or (kind == "water" and is_waterway_relation(c)))
+        if (kind_ok(kind, c["tags"]) or (kind == "water" and is_waterway_relation(c)))
         and len(cluster(winner["members"] + [c])) == 1
     ]
     if held:
@@ -779,7 +779,7 @@ def match_row(
         # free for a second name
         out["status"] = "not_found"
         out["candidates"] = fmt_cands(plaus_all)
-        out["note"] = _addnote(row, taken_note(held, claimed))
+        out["note"] = taken_note(held, claimed)
         return out
 
     best = max(
@@ -821,9 +821,7 @@ def match_row(
     )
     if len(winner["members"]) > 1 or len(clusters) > 1:
         out["candidates"] = fmt_cands(plaus)
-    out["note"] = (
-        _addnote(row, f"auto: {reason}") if reason != "single cluster" else _addnote(row, "")
-    )
+    out["note"] = f"auto: {reason}" if reason != "single cluster" else ""
     return out
 
 
@@ -834,12 +832,6 @@ def report_cands(cell: str, limit: int = 20) -> str:
     if len(parts) <= limit:
         return ";".join(parts)
     return ";".join(parts[:limit]) + f";... (+{len(parts) - limit} more)"
-
-
-def _addnote(row: Row, txt: str) -> str:
-    """Machine remarks go to work/matches.csv and the report, never into
-    places.csv (whose `note` column belongs to the owner)."""
-    return txt
 
 
 def taken_note(recs: Iterable[Candidate], claimed: Mapping[Ref, int]) -> str:
