@@ -66,7 +66,7 @@ import os
 import sys
 import time
 from collections.abc import Iterable, Mapping, Sequence
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, NamedTuple, TypedDict
 
 from frasch import candidates, cli, files, paths, placelist
 from frasch.candidates import ISLAND_PLACES, Candidate, decisive_tags, osm_key
@@ -691,26 +691,31 @@ def _ambiguous_reason(
     return f"best name hit is {distance}, a weaker one lies inside -- verify by hand"
 
 
-def match_row(
-    row: Row, index: NameIndex, hints: HintResolver, claimed: Mapping[Ref, int] | None = None
-) -> MatchResult:
-    """`claimed`: {(type, id): line} of the objects other rows hold that
-    are not the matcher's to give away (see `claimed_objects`)."""
-    claimed = claimed or {}
-    kind = row["kind"]
-    out = dict(row)
-    out.update(osm_type="", osm_id="", match_name="", match_tags="", lon="", lat="", candidates="")
-    if not any_name(row):
-        out["status"] = "not_found"
-        out["note"] = "no Frisian name"
-        return out
+class _Decision(NamedTuple):
+    """What `_decide_by_rank` made of a row's plausible candidates."""
 
-    queries = row_query_names(row)
-    if not queries:
-        out["status"] = "not_found"
-        out["note"] = "no German/Danish name to match on"
-        return out
+    winner: PlacedCluster | None
+    reason: str
+    clusters: list[PlacedCluster]
+    plaus: list[RankedCandidate]  # the candidates the decision was made among
 
+
+def _unfilled(row: Row) -> MatchResult:
+    """`row` as a MatchResult with empty match columns."""
+    return dict(
+        row, osm_type="", osm_id="", match_name="", match_tags="", lon="", lat="", candidates=""
+    )
+
+
+def _unmatched(out: MatchResult, status: str, note: str, candidates: str = "") -> MatchResult:
+    """`out` for a row the matcher gives no object: why, and the candidates
+    a reviewer should see."""
+    out.update(status=status, note=note, candidates=candidates)
+    return out
+
+
+def _ranked_candidates(index: NameIndex, queries: Iterable[str]) -> list[RankedCandidate]:
+    """Every record any of `queries` finds, with the best rank it found it with."""
     best_rank: dict[OsmRef, int] = {}
     recs: dict[OsmRef, Candidate] = {}
     for q in queries:
@@ -719,9 +724,136 @@ def match_row(
             recs[key] = rec
             if rank < best_rank.get(key, 99):
                 best_rank[key] = rank
-    cands: list[RankedCandidate] = [{**rec, "rank": best_rank[key]} for key, rec in recs.items()]
-    taken = [c for c in cands if osm_key(c) in claimed]
-    cands = [c for c in cands if osm_key(c) not in claimed]
+    return [{**rec, "rank": best_rank[key]} for key, rec in recs.items()]
+
+
+def _split_by_rank(
+    cands: list[RankedCandidate],
+) -> tuple[list[RankedCandidate], list[RankedCandidate]]:
+    """-> (the best-ranked name hits, the weaker ones)"""
+    top = min(c["rank"] for c in cands)
+    return [c for c in cands if c["rank"] == top], [c for c in cands if c["rank"] > top]
+
+
+def _decide_by_rank(
+    kind: str,
+    best_hits: list[RankedCandidate],
+    plaus_all: list[RankedCandidate],
+    hint_pt: Circle | None,
+) -> _Decision:
+    """`_decide` among the best name hits, and among all of them when the
+    best hits' winner is implausible."""
+    winner, reason, clusters = _decide(best_hits, hint_pt)
+    if winner is not None and _suspicious(kind, winner) and len(plaus_all) > len(best_hits):
+        # the best-ranked name hit is implausible -- reconsider the weaker hits
+        # (OSM disambiguators such as "Kampen (Sylt)", German exonyms, ...)
+        w2, r2, c2 = _decide(plaus_all, hint_pt)
+        if w2 is not None and not _suspicious(kind, w2):
+            return _Decision(w2, r2 + " (weaker name hit)", c2, plaus_all)
+    return _Decision(winner, reason, clusters, best_hits)
+
+
+def _needs_review(
+    kind: str, winner: PlacedCluster, weaker: Iterable[Candidate], hint_pt: Circle | None
+) -> bool:
+    """True if a winner is too doubtful to take: implausible for the list,
+    or a far-away pick over a weaker hit in North Frisia."""
+    if _suspicious(kind, winner):
+        return True
+    # a hint's pick is binding
+    return not hint_pt and _outranks_a_hit_in_north_frisia(winner, weaker)
+
+
+def _held(kind: str, taken: Iterable[Candidate], winner: PlacedCluster) -> list[Candidate]:
+    """The objects of `taken` that are part of the winner's feature."""
+    return [
+        c
+        for c in taken
+        if (kind_ok(kind, c["tags"]) or (kind == "water" and is_waterway_relation(c)))
+        and len(cluster(winner["members"] + [c])) == 1
+    ]
+
+
+def _best_member(kind: str, members: list[Candidate]) -> Candidate:
+    """The object of a cluster that gets the name."""
+    return max(
+        members,
+        key=lambda r: (
+            type_bonus(kind, r)
+            + (8 if r["tags"].get("wikidata") else 0)
+            + (4 if r["tags"].get("name:de") else 0)
+            - ((haversine(r["lon"], r["lat"], *NF_CENTRE) or 500) / 200)
+        ),
+    )
+
+
+def _member_qid(
+    best: Candidate, members: list[Candidate], boundaries: list[RankedCandidate]
+) -> str:
+    """The wikidata of the chosen object, else of a sibling, else of its
+    boundary relation."""
+    qid = best["tags"].get("wikidata", "")
+    if not qid:  # fall back to a sibling's / the boundary relation's wikidata
+        qid = next(
+            (r["tags"]["wikidata"] for r in members if r["tags"].get("wikidata")), ""
+        ) or boundary_qid(best, boundaries)
+    return qid
+
+
+def _member_ids(best: Candidate, members: list[Candidate]) -> list[str]:
+    """The ids the name goes on: the chosen object, and for a linear feature
+    every piece of it."""
+    # a linear feature (river, dyke, street) is split into many ways -- tag all
+    # of them, otherwise only a fragment of the river gets the Frisian label
+    if not is_linear(best):
+        return [str(best["id"])]
+    bn = norm(best["tags"].get("name", ""))
+    return sorted(
+        {
+            str(m["id"])
+            for m in members
+            if m["t"] == best["t"] and is_linear(m) and norm(m["tags"].get("name", "")) == bn
+        },
+        key=int,
+    )
+
+
+def _matched_cells(
+    kind: str, winner: PlacedCluster, boundaries: list[RankedCandidate]
+) -> MatchResult:
+    """The match columns, `wikidata` and `status` of a row the winner matches."""
+    members = winner["members"]
+    best = _best_member(kind, members)
+    return {
+        "osm_type": placelist.TYPE_NAME[best["t"]],
+        "osm_id": ";".join(_member_ids(best, members)),
+        "match_name": best["tags"].get("name") or best["tags"].get("name:de", ""),
+        "match_tags": decisive_tags(best),
+        "lon": "" if best["lon"] is None else f"{best['lon']:.6f}",
+        "lat": "" if best["lat"] is None else f"{best['lat']:.6f}",
+        "wikidata": _member_qid(best, members, boundaries),
+        "status": "matched",
+    }
+
+
+def match_row(
+    row: Row, index: NameIndex, hints: HintResolver, claimed: Mapping[Ref, int] | None = None
+) -> MatchResult:
+    """`claimed`: {(type, id): line} of the objects other rows hold that
+    are not the matcher's to give away (see `claimed_objects`)."""
+    claimed = claimed or {}
+    kind = row["kind"]
+    out = _unfilled(row)
+    if not any_name(row):
+        return _unmatched(out, "not_found", "no Frisian name")
+
+    queries = row_query_names(row)
+    if not queries:
+        return _unmatched(out, "not_found", "no German/Danish name to match on")
+
+    found = _ranked_candidates(index, queries)
+    taken = [c for c in found if osm_key(c) in claimed]
+    cands = [c for c in found if osm_key(c) not in claimed]
     if not cands:
         out["status"] = "not_found"
         if taken:
@@ -732,96 +864,33 @@ def match_row(
     if not plaus_all:
         # the German name exists in OSM, but only on streets / buildings /
         # bus stops -- the feature itself is not mapped.  Not a review task.
-        out["status"] = "not_found"
-        out["candidates"] = fmt_cands(cands)
-        out["note"] = f"{len(cands)} name match(es), none compatible with kind={kind}"
-        return out
+        note = f"{len(cands)} name match(es), none compatible with kind={kind}"
+        return _unmatched(out, "not_found", note, fmt_cands(cands))
     # set the boundaries aside first: canonical() would drop them, and their
     # wikidata is the fallback for a place node without one
     plaus_all, boundaries = absorb_boundaries(kind, plaus_all)
     plaus_all = canonical(kind, plaus_all)
-    top = min(c["rank"] for c in plaus_all)
-    plaus = [c for c in plaus_all if c["rank"] == top]
+    best_hits, weaker = _split_by_rank(plaus_all)
 
     hint_pt = hints.resolve(row.get("hint", "").split(";")[0].strip())
 
-    winner, reason, clusters = _decide(plaus, hint_pt)
-    if winner is not None and _suspicious(kind, winner) and len(plaus_all) > len(plaus):
-        # the best-ranked name hit is implausible -- reconsider the weaker hits
-        # (OSM disambiguators such as "Kampen (Sylt)", German exonyms, ...)
-        w2, r2, c2 = _decide(plaus_all, hint_pt)
-        if w2 is not None and not _suspicious(kind, w2):
-            winner, reason, clusters, plaus = w2, r2 + " (weaker name hit)", c2, plaus_all
+    decision = _decide_by_rank(kind, best_hits, plaus_all, hint_pt)
+    winner = decision.winner
+    if winner is None or _needs_review(kind, winner, weaker, hint_pt):
+        note = _ambiguous_reason(row, winner, hint_pt, decision.clusters)
+        return _unmatched(out, "ambiguous", note, fmt_cands(plaus_all))
 
-    weaker = [c for c in plaus_all if c["rank"] > top]
-    if (
-        winner is None
-        or _suspicious(kind, winner)
-        or (
-            not hint_pt  # a hint's pick is binding
-            and _outranks_a_hit_in_north_frisia(winner, weaker)
-        )
-    ):
-        out["status"] = "ambiguous"
-        out["candidates"] = fmt_cands(plaus_all)
-        out["note"] = _ambiguous_reason(row, winner, hint_pt, clusters)
-        return out
-
-    held = [
-        c
-        for c in taken
-        if (kind_ok(kind, c["tags"]) or (kind == "water" and is_waterway_relation(c)))
-        and len(cluster(winner["members"] + [c])) == 1
-    ]
+    held = _held(kind, taken, winner)
     if held:
         # another row holds part of this very feature (a piece of the same
         # river, or the relation that is the whole river): the rest is not
         # free for a second name
-        out["status"] = "not_found"
-        out["candidates"] = fmt_cands(plaus_all)
-        out["note"] = taken_note(held, claimed)
-        return out
+        return _unmatched(out, "not_found", taken_note(held, claimed), fmt_cands(plaus_all))
 
-    best = max(
-        winner["members"],
-        key=lambda r: (
-            type_bonus(kind, r)
-            + (8 if r["tags"].get("wikidata") else 0)
-            + (4 if r["tags"].get("name:de") else 0)
-            - ((haversine(r["lon"], r["lat"], *NF_CENTRE) or 500) / 200)
-        ),
-    )
-    qid = best["tags"].get("wikidata", "")
-    if not qid:  # fall back to a sibling's / the boundary relation's wikidata
-        qid = next(
-            (r["tags"]["wikidata"] for r in winner["members"] if r["tags"].get("wikidata")), ""
-        ) or boundary_qid(best, boundaries)
-    # a linear feature (river, dyke, street) is split into many ways -- tag all
-    # of them, otherwise only a fragment of the river gets the Frisian label
-    ids = [str(best["id"])]
-    if is_linear(best):
-        bn = norm(best["tags"].get("name", ""))
-        ids = sorted(
-            {
-                str(m["id"])
-                for m in winner["members"]
-                if m["t"] == best["t"] and is_linear(m) and norm(m["tags"].get("name", "")) == bn
-            },
-            key=int,
-        )
-    out.update(
-        osm_type=placelist.TYPE_NAME[best["t"]],
-        osm_id=";".join(ids),
-        match_name=best["tags"].get("name") or best["tags"].get("name:de", ""),
-        match_tags=decisive_tags(best),
-        lon="" if best["lon"] is None else f"{best['lon']:.6f}",
-        lat="" if best["lat"] is None else f"{best['lat']:.6f}",
-        wikidata=qid,
-        status="matched",
-    )
-    if len(winner["members"]) > 1 or len(clusters) > 1:
-        out["candidates"] = fmt_cands(plaus)
-    out["note"] = f"auto: {reason}" if reason != "single cluster" else ""
+    out.update(_matched_cells(kind, winner, boundaries))
+    if len(winner["members"]) > 1 or len(decision.clusters) > 1:
+        out["candidates"] = fmt_cands(decision.plaus)
+    out["note"] = f"auto: {decision.reason}" if decision.reason != "single cluster" else ""
     return out
 
 
@@ -934,58 +1003,64 @@ def check_extracts(candidates_path: str, state_path: str) -> list[ExtractStamp] 
 
 
 # ----------------------------------------------------------------- report ----
+# the columns of the report's counts table, in order
+REPORT_STATES = [
+    "auto",
+    "by hand",
+    "own point",
+    "ambiguous",
+    "not found",
+    "skip",
+    "no Frisian name",
+    "not a place",
+]
+
+
 def write_report(
     rows: Sequence[PlaceRow], results: Mapping[str, MatchResult], path: str = REPORT_PATH
 ) -> None:
     """`results` maps a row's id to its match_row() output (only for the rows
     the matcher owns).  The report depends on these alone -- no date, no run
     time -- so a run on unchanged inputs leaves the tracked file as it was."""
-
-    def state(r: Row) -> str:
-        if r["kind"] == "not_a_place":
-            return "not a place"
-        if r["status"] == "skip":
-            return "skip"
-        if not any_name(r):
-            return "no Frisian name"
-        if local_ref(r["osm"]):
-            return "own point"
-        if r["osm"] or r["wikidata"]:
-            return "auto" if r["status"] == "auto" else "by hand"
-        if r["status"] == "ok":
-            return "by hand"  # checked: OSM has nothing to name
-        res = results.get(r["id"])
-        return "ambiguous" if res and res["status"] == "ambiguous" else "not found"
-
-    states = [
-        "auto",
-        "by hand",
-        "own point",
-        "ambiguous",
-        "not found",
-        "skip",
-        "no Frisian name",
-        "not a place",
-    ]
-    by_kind: collections.defaultdict[str, collections.Counter[str]] = collections.defaultdict(
-        collections.Counter
+    lines = (
+        _report_intro(rows)
+        + _counts_section(rows, results)
+        + _ambiguous_section(rows, results)
+        + _duplicates_section(rows)
+        + _not_found_section(rows, results)
     )
-    total: collections.Counter[str] = collections.Counter()
-    for r in rows:
-        st = state(r)
-        by_kind[r["kind"]][st] += 1
-        total[st] += 1
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write("\n".join(lines))
 
-    def ref(r: PlaceRow) -> str:
-        return f"{r['id']} | {r.line} | {r['kind']} | {any_name(r)} | {primary(r['de']) or primary(r['da'])}"
 
-    L = []
-    L.append("# Name matching report\n")
-    L.append(
+def _report_state(r: Row, results: Mapping[str, MatchResult]) -> str:
+    """Which of the REPORT_STATES the row is in."""
+    if r["kind"] == "not_a_place":
+        return "not a place"
+    if r["status"] == "skip":
+        return "skip"
+    if not any_name(r):
+        return "no Frisian name"
+    if local_ref(r["osm"]):
+        return "own point"
+    if r["osm"] or r["wikidata"]:
+        return "auto" if r["status"] == "auto" else "by hand"
+    if r["status"] == "ok":
+        return "by hand"  # checked: OSM has nothing to name
+    res = results.get(r["id"])
+    return "ambiguous" if res and res["status"] == "ambiguous" else "not found"
+
+
+def _report_ref(r: PlaceRow) -> str:
+    """The id, line, kind, Frisian and German cells of a row's table line."""
+    return f"{r['id']} | {r.line} | {r['kind']} | {any_name(r)} | {primary(r['de']) or primary(r['da'])}"
+
+
+def _report_intro(rows: Sequence[PlaceRow]) -> list[str]:
+    return [
+        "# Name matching report\n",
         f"Generated by `names/match.py` from `names/places.csv` ({len(rows)} rows). "
-        "`id` is the row's `id` cell, `line` its line number in that file.\n"
-    )
-    L.append(
+        "`id` is the row's `id` cell, `line` its line number in that file.\n",
         "Hand-review worklist: for every **ambiguous** row below pick the right "
         "object and write it into the `osm` column of `names/places.csv` "
         "(`node/123`, `way/123`, `relation/123`); for the **not found** rows "
@@ -995,73 +1070,93 @@ def write_report(
         "rows with `status=auto` or with empty `osm`/`wikidata`/`status` cells. "
         "**own point** rows carry a local reference (`local/<slug>`, a place "
         "OSM does not have, positioned in `names/curation.csv`) and are never "
-        "touched.\n"
+        "touched.\n",
+    ]
+
+
+def _counts_section(rows: Sequence[PlaceRow], results: Mapping[str, MatchResult]) -> list[str]:
+    """The rows per kind and state."""
+    by_kind: collections.defaultdict[str, collections.Counter[str]] = collections.defaultdict(
+        collections.Counter
     )
-    L.append("## Counts\n")
-    L.append("| kind | " + " | ".join(states) + " | total |")
-    L.append("|---|" + "---:|" * (len(states) + 1))
+    total: collections.Counter[str] = collections.Counter()
+    for r in rows:
+        st = _report_state(r, results)
+        by_kind[r["kind"]][st] += 1
+        total[st] += 1
+    lines = ["## Counts\n"]
+    lines.append("| kind | " + " | ".join(REPORT_STATES) + " | total |")
+    lines.append("|---|" + "---:|" * (len(REPORT_STATES) + 1))
     for kind in dict.fromkeys(r["kind"] for r in rows):
         c = by_kind[kind]
-        L.append(
+        lines.append(
             f"| {kind} | "
-            + " | ".join(str(c.get(s, 0)) for s in states)
+            + " | ".join(str(c.get(s, 0)) for s in REPORT_STATES)
             + f" | {sum(c.values())} |"
         )
-    L.append(
+    lines.append(
         "| **total** | "
-        + " | ".join(f"**{total.get(s, 0)}**" for s in states)
+        + " | ".join(f"**{total.get(s, 0)}**" for s in REPORT_STATES)
         + f" | **{len(rows)}** |\n"
     )
+    return lines
 
-    amb = [r for r in rows if state(r) == "ambiguous"]
-    L.append(f"## Ambiguous ({len(amb)})\n")
-    L.append("`candidates` format: `type/id:name:class:km-from-NF-centre`\n")
-    L.append("| id | line | kind | Frisian | German | hint | why | candidates |")
-    L.append("|---|---:|---|---|---|---|---|---|")
+
+def _ambiguous_section(rows: Sequence[PlaceRow], results: Mapping[str, MatchResult]) -> list[str]:
+    amb = [r for r in rows if _report_state(r, results) == "ambiguous"]
+    lines = [f"## Ambiguous ({len(amb)})\n"]
+    lines.append("`candidates` format: `type/id:name:class:km-from-NF-centre`\n")
+    lines.append("| id | line | kind | Frisian | German | hint | why | candidates |")
+    lines.append("|---|---:|---|---|---|---|---|---|")
     for r in amb:
         res = results[r["id"]]
-        L.append(
-            f"| {ref(r)} | {r['hint']} | {res.get('note', '')} "
+        lines.append(
+            f"| {_report_ref(r)} | {r['hint']} | {res.get('note', '')} "
             f"| `{report_cands(res.get('candidates', ''))}` |"
         )
-    L.append("")
+    lines.append("")
+    return lines
 
+
+def _duplicates_section(rows: Sequence[PlaceRow]) -> list[str]:
     dups = find_duplicates(rows)
-    L.append(f"## Rows sharing one OSM object ({len(dups)})\n")
-    L.append(
+    lines = [f"## Rows sharing one OSM object ({len(dups)})\n"]
+    lines.append(
         "The list has these places twice (two spellings, or rows from two "
         "sheet sections). Only one name can be injected -- the first row wins; "
         "decide which, and `skip` the other.\n"
     )
-    L.append("| OSM object | rows (line) | Frisian names | German |")
-    L.append("|---|---|---|---|")
+    lines.append("| OSM object | rows (line) | Frisian names | German |")
+    lines.append("|---|---|---|---|")
     for key, g in sorted(dups.items(), key=lambda kv: kv[1][0].line):
-        L.append(
+        lines.append(
             f"| `{format_osm([key])}` | "
             + ", ".join(f"{x['id']} ({x.line})" for x in g)
             + " | "
             + ", ".join(any_name(x) for x in g)
             + f" | {primary(g[0]['de'])} |"
         )
-    L.append("")
+    lines.append("")
+    return lines
 
-    nf = [r for r in rows if state(r) == "not found"]
-    L.append(f"## Not found ({len(nf)})\n")
-    L.append(
+
+def _not_found_section(rows: Sequence[PlaceRow], results: Mapping[str, MatchResult]) -> list[str]:
+    nf = [r for r in rows if _report_state(r, results) == "not found"]
+    lines = [f"## Not found ({len(nf)})\n"]
+    lines.append(
         "Either the feature is not in OSM at all, or OSM spells it "
         "differently. `near misses` lists objects that do carry the German "
         "name but are the wrong kind of thing (a street, a bus stop, a "
         "building) -- occasionally one of them is still the right answer.\n"
     )
-    L.append("| id | line | kind | Frisian | German | note | near misses |")
-    L.append("|---|---:|---|---|---|---|---|")
+    lines.append("| id | line | kind | Frisian | German | note | near misses |")
+    lines.append("|---|---:|---|---|---|---|---|")
     for r in nf:
         res = results.get(r["id"], {})
         cands = f"`{res.get('candidates', '')[:200]}`" if res.get("candidates") else ""
-        L.append(f"| {ref(r)} | {res.get('note', '')} | {cands} |")
-    L.append("")
-    with open(path, "w", encoding="utf-8") as fh:
-        fh.write("\n".join(L))
+        lines.append(f"| {_report_ref(r)} | {res.get('note', '')} | {cands} |")
+    lines.append("")
+    return lines
 
 
 def write_matches(
@@ -1185,65 +1280,21 @@ def run(args: argparse.Namespace) -> int:
     results: dict[str, MatchResult] = {}
     changed: collections.Counter[str] = collections.Counter()
     for r in todo:
-        before = (r["osm"], r["wikidata"], r["status"])
+        before = _reference(r)
         if r["kind"] == "country" and primary(r["de"]) in wd_failed:
             # no answer is not "no country": leave the row as it is
             unresolved.append(r)
-            results[r["id"]] = dict(
-                r,
-                osm_type="",
-                osm_id="",
-                candidates="",
-                match_tags="",
-                match_name="",
-                lon="",
-                lat="",
-                status="lookup_failed",
-                note="Wikidata lookup failed -- row left unchanged",
-            )
+            results[r["id"]] = _lookup_failed(r)
             continue
         if r["kind"] == "country":
-            qid = qids.get(primary(r["de"]), "")
-            o = dict(
-                r,
-                osm_type="",
-                osm_id="",
-                candidates="",
-                match_tags="",
-                match_name="",
-                lon="",
-                lat="",
-            )
-            if qid:
-                o.update(
-                    wikidata=qid,
-                    status="matched",
-                    match_name=primary(r["de"]),
-                    match_tags="wikidata",
-                    note="auto: wikidata",
-                )
-            else:
-                o.update(wikidata="", status="not_found", note="no Wikidata country item found")
+            o = _country_result(r, qids)
         else:
             o = match_row(r, index, hints, claimed)
         results[r["id"]] = o
-        if o["status"] == "matched":
-            r["osm"] = format_osm(
-                parse_osm("; ".join(f"{o['osm_type']}/{i}" for i in o["osm_id"].split(";") if i))
-            )
-            r["wikidata"] = o["wikidata"]
-            r["status"] = "auto"
-        else:  # lost / never had a match
-            r["osm"], r["wikidata"], r["status"] = "", "", ""
-        after = (r["osm"], r["wikidata"], r["status"])
-        if after != before:
-            changed[
-                "filled"
-                if after[2] == "auto" and before[2] != "auto"
-                else "cleared"
-                if before[2] == "auto" and not after[2]
-                else "changed"
-            ] += 1
+        _write_back(r, o)
+        change = _change(before, _reference(r))
+        if change:
+            changed[change] += 1
 
     # matches.csv first: a run that cannot write it leaves places.csv as it was
     write_matches(rows, results, index, args.matches)
@@ -1274,3 +1325,59 @@ def run(args: argparse.Namespace) -> int:
         )
         return 1
     return 0
+
+
+def _lookup_failed(r: PlaceRow) -> MatchResult:
+    """The result of a country row Wikidata gave no answer for."""
+    return dict(
+        _unfilled(r), status="lookup_failed", note="Wikidata lookup failed -- row left unchanged"
+    )
+
+
+def _country_result(r: PlaceRow, qids: Mapping[str, str]) -> MatchResult:
+    """A country row's result: its Wikidata item (`wikidata_countries`), not
+    an OSM object."""
+    o = _unfilled(r)
+    qid = qids.get(primary(r["de"]), "")
+    if qid:
+        o.update(
+            wikidata=qid,
+            status="matched",
+            match_name=primary(r["de"]),
+            match_tags="wikidata",
+            note="auto: wikidata",
+        )
+    else:
+        o.update(wikidata="", status="not_found", note="no Wikidata country item found")
+    return o
+
+
+def _reference(r: PlaceRow) -> tuple[str, str, str]:
+    """The cells of a row the matcher writes."""
+    return r["osm"], r["wikidata"], r["status"]
+
+
+def _write_back(r: PlaceRow, o: MatchResult) -> None:
+    """Put a match into the row as `status=auto`; clear the row otherwise."""
+    if o["status"] == "matched":
+        r["osm"] = format_osm(
+            parse_osm("; ".join(f"{o['osm_type']}/{i}" for i in o["osm_id"].split(";") if i))
+        )
+        r["wikidata"] = o["wikidata"]
+        r["status"] = "auto"
+    else:  # lost / never had a match
+        r["osm"], r["wikidata"], r["status"] = "", "", ""
+
+
+def _change(before: tuple[str, str, str], after: tuple[str, str, str]) -> str | None:
+    """`filled`, `cleared` or `changed` -- what the run did to a row's
+    reference -- or None when it left it as it was."""
+    if after == before:
+        return None
+    return (
+        "filled"
+        if after[2] == "auto" and before[2] != "auto"
+        else "cleared"
+        if before[2] == "auto" and not after[2]
+        else "changed"
+    )
