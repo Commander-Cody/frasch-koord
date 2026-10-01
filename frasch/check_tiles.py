@@ -6,8 +6,10 @@ and compare every labelled feature with its entry in names.json.
                    [--zoom 14]
 
 A feature that carries a `frasch:ref` must say what that row's search entry
-says: the same `frasch:dialect`, the same `frasch:local` and -- for a node
--- the same position (a polygon's label point is Planetiler's own choice).  Only the feature of
+says: the same `frasch:dialect`, the same `frasch:local`, the same `name:de`
+where the list has a German name (the place card's German step reads the
+list's, the label the tile's, #61) and -- for a node -- the same position (a
+polygon's label point is Planetiler's own choice).  Only the feature of
 the entry's own object is held to that (the first reference of the row's
 `osm` cell, or its local reference): a row's other objects lie elsewhere and
 may lie in another dialect area, and objects found through a Wikidata QID
@@ -67,7 +69,7 @@ def compare(entries: Mapping[str, SearchEntry], features: Sequence[Label]) -> li
         if entry is None or not _is_entry_object(entry, f):
             continue
         where = f"{ref} ({f['osm'] or 'added by the injector'})"
-        for key, prop in (("dialect", "frasch:dialect"), ("local", "frasch:local")):
+        for key, prop in _repeated_fields(entry):
             if entry.get(key) != f["props"].get(prop):
                 problems.append(
                     f"{where}: tiles {prop}={f['props'].get(prop)!r}, "
@@ -82,6 +84,16 @@ def compare(entries: Mapping[str, SearchEntry], features: Sequence[Label]) -> li
                 f"names.json at {entry['lat']:.5f}, {entry['lon']:.5f}"
             )
     return problems
+
+
+def _repeated_fields(entry: SearchEntry) -> list[tuple[str, str]]:
+    """The entry's fields its feature must repeat, each with the tile property
+    it is in: the dialect, the local name and -- where the list has one -- the
+    German name.  Where the list has none the tiles keep OSM's (#61)."""
+    fields = [("dialect", "frasch:dialect"), ("local", "frasch:local")]
+    if entry["name_de"]:
+        fields.append(("name_de", "name:de"))
+    return fields
 
 
 def checked_entries(entries: Mapping[str, SearchEntry], features: Sequence[Label]) -> set[str]:

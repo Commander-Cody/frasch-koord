@@ -54,6 +54,19 @@ def test_another_dialect_on_the_map_is_reported() -> None:
     assert "frr-x-nordgoes" in problems[0] and "Steerdebel" in problems[1]
 
 
+def test_another_german_name_on_the_map_is_reported() -> None:
+    # the card's German step reads the list's `de`, the label OSM's (#61)
+    listed = STIARDEBEL | {"name_de": "Stadum"}
+    osms = AGREEING | {"props": AGREEING["props"] | {"name:de": "Stadum (Nordfriesland)"}}
+    (problem,) = check_tiles.compare({"stiardebel": listed}, [osms])
+    assert "Stadum (Nordfriesland)" in problem and "'Stadum'" in problem
+
+
+def test_osms_german_name_may_stand_where_the_list_has_none() -> None:
+    osms = AGREEING | {"props": AGREEING["props"] | {"name:de": "Stadum"}}
+    assert check_tiles.compare({"stiardebel": STIARDEBEL}, [osms]) == []
+
+
 def test_a_label_somewhere_else_is_reported() -> None:
     moved = AGREEING | {"lon": 9.26}
     assert len(check_tiles.compare({"stiardebel": STIARDEBEL}, [moved])) == 1
