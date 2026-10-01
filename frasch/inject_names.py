@@ -91,6 +91,7 @@ import collections
 import os
 import time
 from collections.abc import Container, Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from typing import NamedTuple, NotRequired, TypedDict
 
 import osmium
@@ -428,77 +429,92 @@ class Injector:
         (t='r': before the first relation)."""
         if t == "w" and not self.flushed["n"]:
             self.flushed["n"] = True
-            for key, p in self.points.items():
-                rows = self.by_id.get(key)
-                if rows is None:
-                    continue  # no name-list row uses it (reported in run)
-                lon, lat = p["lon"], p["lat"]
-                area_tag = locate.dialect_at({"lon": lon, "lat": lat}, self.areas)
-                tags = point_tags(rows, area_tag, self.reg, p["tags"], p["where"])
-                self.seen_keys.add(key)
-                for k in tags:
-                    if k.startswith("name:"):
-                        self.tag_hits[k] += 1
-                if DIALECT_KEY in tags:
-                    self.area_hits[tags[DIALECT_KEY]] += 1
-                if LOCAL_KEY in tags:
-                    self.local_hits += 1
-                if p["km2"] is not None:
-                    # an area-like place: only the label square, no node
-                    self.pending.append(
-                        {
-                            "key": key,
-                            "label": p["label"],
-                            "km2": p["km2"],
-                            "lon": lon,
-                            "lat": lat,
-                            "tags": tags,
-                        }
-                    )
-                    continue
-                self.hits["n"] += 1
-                self.max_id["n"] += 1
-                if self.w is not None:
-                    self.w.add_node(
-                        osmium.osm.mutable.Node(
-                            id=self.max_id["n"],
-                            version=1,
-                            visible=True,
-                            location=(lon, lat),
-                            tags=tags,
-                        )
-                    )
-                self.added_points.append((self.max_id["n"], key, p["label"], lon, lat, tags))
-            for square in self.pending:
-                ids: list[int] = []
-                for lon, lat in square_around(square["lon"], square["lat"], square["km2"]):
-                    self.max_id["n"] += 1
-                    ids.append(self.max_id["n"])
-                    if self.w is not None:
-                        self.w.add_node(
-                            osmium.osm.mutable.Node(
-                                id=ids[-1], version=1, visible=True, location=(lon, lat)
-                            )
-                        )
-                square["node_ids"] = ids
+            self._add_local_points()
+            self._add_square_nodes()
         elif t == "r" and not self.flushed["w"]:
             self.flush("w")
             self.flushed["w"] = True
-            for square in self.pending:
-                self.max_id["w"] += 1
+            self._add_square_ways()
+
+    def _add_local_points(self) -> None:
+        """The node of every local reference a name-list row uses -- or,
+        for an area-like place, its pending square."""
+        for key, p in self.points.items():
+            rows = self.by_id.get(key)
+            if rows is None:
+                continue  # no name-list row uses it (reported in run)
+            lon, lat = p["lon"], p["lat"]
+            area_tag = locate.dialect_at({"lon": lon, "lat": lat}, self.areas)
+            tags = point_tags(rows, area_tag, self.reg, p["tags"], p["where"])
+            self.seen_keys.add(key)
+            self._count_names(tags)
+            if p["km2"] is not None:
+                # an area-like place: only the label square, no node
+                self.pending.append(
+                    _PendingSquare(
+                        key=key, label=p["label"], km2=p["km2"], lon=lon, lat=lat, tags=tags
+                    )
+                )
+                continue
+            self._add_point_node(key, p, tags)
+
+    def _add_point_node(self, key: Ref, p: LocalPoint, tags: dict[str, str]) -> None:
+        self.hits["n"] += 1
+        self.max_id["n"] += 1
+        if self.w is not None:
+            self.w.add_node(
+                osmium.osm.mutable.Node(
+                    id=self.max_id["n"],
+                    version=1,
+                    visible=True,
+                    location=(p["lon"], p["lat"]),
+                    tags=tags,
+                )
+            )
+        self.added_points.append((self.max_id["n"], key, p["label"], p["lon"], p["lat"], tags))
+
+    def _add_square_nodes(self) -> None:
+        """The (untagged) corner nodes of every pending square."""
+        for square in self.pending:
+            ids: list[int] = []
+            for lon, lat in square_around(square["lon"], square["lat"], square["km2"]):
+                self.max_id["n"] += 1
+                ids.append(self.max_id["n"])
                 if self.w is not None:
-                    self.w.add_way(
-                        osmium.osm.mutable.Way(
-                            id=self.max_id["w"],
-                            version=1,
-                            visible=True,
-                            nodes=square["node_ids"] + square["node_ids"][:1],
-                            tags=square["tags"],
+                    self.w.add_node(
+                        osmium.osm.mutable.Node(
+                            id=ids[-1], version=1, visible=True, location=(lon, lat)
                         )
                     )
-                self.created.append(
-                    (self.max_id["w"], square["node_ids"], square["label"], square["km2"])
+            square["node_ids"] = ids
+
+    def _add_square_ways(self) -> None:
+        """The closed way of every pending square, through its corner nodes."""
+        for square in self.pending:
+            self.max_id["w"] += 1
+            if self.w is not None:
+                self.w.add_way(
+                    osmium.osm.mutable.Way(
+                        id=self.max_id["w"],
+                        version=1,
+                        visible=True,
+                        nodes=square["node_ids"] + square["node_ids"][:1],
+                        tags=square["tags"],
+                    )
                 )
+            self.created.append(
+                (self.max_id["w"], square["node_ids"], square["label"], square["km2"])
+            )
+
+    def _count_names(self, tags: Mapping[str, str]) -> None:
+        """Count an object's name tags, dialect and local name for the report."""
+        for k in tags:
+            if k.startswith("name:"):
+                self.tag_hits[k] += 1
+        if DIALECT_KEY in tags:
+            self.area_hits[tags[DIALECT_KEY]] += 1
+        if LOCAL_KEY in tags:
+            self.local_hits += 1
 
     def finish(self) -> None:
         """For files that end before any way / relation."""
@@ -513,24 +529,7 @@ class Injector:
         if t != "n":
             self.flush(t)
         synth = self._synthetic_at(key, o)
-        hit = self.by_id.get(key)  # [row, ...]
-        area_key = key
-        if hit is not None:
-            self.seen_keys.add(key)
-        if hit is None and self.members:
-            mem = self.members.get(key)
-            if mem is not None:
-                rel_key, rel_name = mem
-                own = o.tags.get("name")
-                if own and (own == rel_name or o.tags.get("name:de") == rel_name):
-                    hit = self.by_id.get(rel_key) or []
-                    area_key = rel_key  # the member inherits the river's area
-                    self.member_hits += 1
-        if hit is None and self.by_qid:
-            qid = o.tags.get("wikidata")
-            if qid and qid in self.by_qid:
-                hit = self.by_qid[qid]
-                self.qid_hits[qid] += 1
+        hit, area_key = self._rows_for(key, o)  # [row, ...]
         cur = self.curation.get(key)
         if cur is not None:
             self.seen_cur.add(key)
@@ -543,41 +542,51 @@ class Injector:
         if hit is not None:
             self.hits[t] += 1
             new = name_tags(hit, self.area_of(area_key, o), self.reg)
-            for k in new:
-                if k.startswith("name:"):
-                    self.tag_hits[k] += 1
-            if DIALECT_KEY in new:
-                self.area_hits[new[DIALECT_KEY]] += 1
-            if LOCAL_KEY in new:
-                self.local_hits += 1
+            self._count_names(new)
             tags.update(new)
         if cur is not None:
             # curation runs last and wins: it may override frasch:kind or place
             tags.update(cur["tags"])
         if synth is not None:
-            # the polygon inherits the node's (curated) names and dialect, then
-            # the row's tags
-            square, (lon, lat) = synth
-            ptags = {
-                k: v
-                for k, v in tags.items()
-                if k == "name"
-                or k.startswith("name:")
-                or k in (DIALECT_KEY, LOCAL_KEY, VARIETY_KEY, REF_KEY)
-            }
-            ptags.update(square["tags"])
-            self.pending.append(
-                {
-                    "key": key,
-                    "label": square["label"],
-                    "km2": square["km2"],
-                    "lon": lon,
-                    "lat": lat,
-                    "tags": ptags,
-                }
-            )
+            self.pending.append(_square_with_names(key, synth, tags))
         if self.w is not None:
             self.w.add(o.replace(tags=tags))
+
+    def _rows_for(self, key: OsmRef, o: _OsmObject) -> tuple[Sequence[PlaceRow] | None, OsmRef]:
+        """The name-list rows that claim this object (None for none) -- by
+        its own id, as a same-named member way of a claimed waterway
+        relation, or by its QID -- and the key whose position gives its
+        dialect."""
+        hit = self.by_id.get(key)
+        if hit is not None:
+            self.seen_keys.add(key)
+            return hit, key
+        member = self._member_rows(key, o)
+        if member is not None:
+            return member
+        return self._qid_rows(o), key
+
+    def _member_rows(self, key: OsmRef, o: _OsmObject) -> tuple[Sequence[PlaceRow], OsmRef] | None:
+        """The rows of the waterway relation this way is a member of, if it
+        carries the relation's name, and the relation's key."""
+        mem = self.members.get(key)
+        if mem is None:
+            return None
+        rel_key, rel_name = mem
+        own = o.tags.get("name")
+        if not (own and (own == rel_name or o.tags.get("name:de") == rel_name)):
+            return None
+        self.member_hits += 1
+        # the member inherits the river's area
+        return self.by_id.get(rel_key) or [], rel_key
+
+    def _qid_rows(self, o: _OsmObject) -> Sequence[PlaceRow] | None:
+        """The row whose `wikidata` QID this object carries, if any."""
+        qid = o.tags.get("wikidata")
+        if not qid or qid not in self.by_qid:
+            return None
+        self.qid_hits[qid] += 1
+        return self.by_qid[qid]
 
     def _synthetic_at(self, key: OsmRef, o: _OsmObject) -> tuple[Square, LonLat] | None:
         """The synthetic square curation puts around this node, and where the
@@ -585,6 +594,37 @@ class Injector:
         if not isinstance(o, osmium.osm.Node) or (square := self.synthetic.get(key)) is None:
             return None
         return square, (o.location.lon, o.location.lat)
+
+
+def _square_with_names(
+    key: Ref, synth: tuple[Square, LonLat], tags: Mapping[str, str]
+) -> _PendingSquare:
+    """The pending square around a curated node: it inherits the node's
+    (curated) names and dialect, then the row's tags."""
+    square, (lon, lat) = synth
+    ptags = {
+        k: v
+        for k, v in tags.items()
+        if k == "name"
+        or k.startswith("name:")
+        or k in (DIALECT_KEY, LOCAL_KEY, VARIETY_KEY, REF_KEY)
+    }
+    ptags.update(square["tags"])
+    return _PendingSquare(
+        key=key, label=square["label"], km2=square["km2"], lon=lon, lat=lat, tags=ptags
+    )
+
+
+@dataclass(frozen=True)
+class _Inputs:
+    """Everything `run` merges into the extract, loaded and checked."""
+
+    reg: Registry
+    names: NameList
+    areas: dialects.AreaIndex | None
+    curation: curationlist.Curation
+    objects: dict[OsmRef, LocatedObject]
+    members: dict[OsmRef, tuple[OsmRef, str]]
 
 
 def run(
@@ -600,57 +640,101 @@ def run(
     objects_json: str = DEFAULT_OBJECTS,
 ) -> int:
     reg = registry.read(dialects_csv)
-    by_id, by_qid, used, conflicts, duplicate_qids = load_names(names_csv, reg)
-    local_keys = sorted(k for k in by_id if k[0] == placelist.LOCAL_TYPE)
+    names = load_names(names_csv, reg)
+    _print_names(names, names_csv, dialects_csv, reg)
+    areas = _load_areas(areas_geojson, areas_required)
+    curation = _read_curation(curation_csv, curation_required)
+    _check_local_refs(names.by_id, curation.points, reg, names_csv, curation_csv)
+    objects = _load_objects(areas, names.by_id, reg, names_csv, objects_json)
+    members = scan_waterways(inp, names.by_id)
+    if members:
+        print(f"waterways : {len(members)} member ways of matched waterway relations")
+    inputs = _Inputs(reg, names, areas, curation, objects, members)
+
+    t0 = time.time()
+    inj = _inject(inp, None if dry_run else out, inputs)
+    _print_report(inj, inputs, inp, time.time() - t0)
+    if dry_run:
+        print("\n(dry run -- nothing written)")
+    else:
+        print(f"\nwrote {out} ({os.path.getsize(out) / 1e6:.1f} MB)")
+    return 0
+
+
+def _local_keys(by_id: Iterable[Ref]) -> list[Ref]:
+    return sorted(k for k in by_id if k[0] == placelist.LOCAL_TYPE)
+
+
+def _print_names(names: NameList, names_csv: str, dialects_csv: str, reg: Registry) -> None:
+    """What the name list holds, and which rows claim an object or a QID twice."""
+    local_keys = _local_keys(names.by_id)
     print(f"name list : {names_csv}")
     print(f"dialects  : {dialects_csv} -> {len(reg)} columns ({', '.join(reg.tags)})")
     print(
-        f"usable    : {used} rows -> {len(by_id) - len(local_keys)} OSM ids + "
-        f"{len(by_qid)} wikidata QIDs"
+        f"usable    : {names.used} rows -> {len(names.by_id) - len(local_keys)} OSM ids + "
+        f"{len(names.by_qid)} wikidata QIDs"
         + (f" + {len(local_keys)} local reference(s)" if local_keys else "")
     )
-    for ckey, column, kept, kept_line, dropped, line in conflicts:
+    for ckey, column, kept, kept_line, dropped, line in names.conflicts:
         print(
             f"  ! {placelist.format_osm([ckey])} claimed twice in `{column}`: "
             f"keeping {kept!r} (line {kept_line}), ignoring {dropped!r} "
             f"(places.csv line {line})"
         )
-    for qid, kept_line, line in duplicate_qids:
+    for qid, kept_line, line in names.duplicate_qids:
         print(f"  ! {qid} claimed twice: keeping line {kept_line}, ignoring places.csv line {line}")
 
-    areas: dialects.AreaIndex | None = None
+
+def _load_areas(areas_geojson: str | None, required: bool) -> dialects.AreaIndex | None:
+    """The dialect areas, or None (with a warning) when there are none --
+    unless the file was named explicitly (`required`)."""
     if areas_geojson and os.path.exists(areas_geojson):
         areas = dialects.AreaIndex.from_geojson(areas_geojson)
         print(f"areas     : {areas_geojson} -> {len(areas)} polygon(s): {areas.summary()}")
-    elif areas_required:
+        return areas
+    if required:
         raise PipelineError(f"dialect area file not found: {areas_geojson}")
-    else:
-        print(
-            f"areas     : {areas_geojson or 'off'} (no {DIALECT_KEY}; "
-            f"{LOCAL_KEY} only from the `local` column). "
-            f"Build it with names/build_dialect_areas.py"
-        )
-
-    curation, synthetic, points = (
-        load_curation(curation_csv, curation_required)
-        if curation_csv
-        else curationlist.Curation({}, {}, {})
+    print(
+        f"areas     : {areas_geojson or 'off'} (no {DIALECT_KEY}; "
+        f"{LOCAL_KEY} only from the `local` column). "
+        f"Build it with names/build_dialect_areas.py"
     )
-    if curation:
+    return None
+
+
+def _read_curation(curation_csv: str | None, required: bool) -> curationlist.Curation:
+    """The curation (none when it is switched off), and what it holds."""
+    curation = (
+        load_curation(curation_csv, required) if curation_csv else curationlist.Curation({}, {}, {})
+    )
+    objects = curation.objects
+    if objects:
         print(
-            f"curation  : {curation_csv} -> {len(curation)} OSM ids "
-            f"({sum(1 for c in curation.values() if MINZOOM_KEY in c['tags'])} with "
+            f"curation  : {curation_csv} -> {len(objects)} OSM ids "
+            f"({sum(1 for c in objects.values() if MINZOOM_KEY in c['tags'])} with "
             f"{MINZOOM_KEY}, "
-            f"{sum(1 for c in curation.values() if MAXZOOM_KEY in c['tags'])} with "
+            f"{sum(1 for c in objects.values() if MAXZOOM_KEY in c['tags'])} with "
             f"{MAXZOOM_KEY})"
         )
-    if synthetic:
-        print(f"synthetic : {len(synthetic)} polygon(s) to add around nodes")
-    if points:
-        print(f"local     : {len(points)} local reference(s) positioned in {curation_csv}")
+    if curation.squares:
+        print(f"synthetic : {len(curation.squares)} polygon(s) to add around nodes")
+    if curation.points:
+        print(f"local     : {len(curation.points)} local reference(s) positioned in {curation_csv}")
+    return curation
+
+
+def _check_local_refs(
+    by_id: Mapping[Ref, Sequence[PlaceRow]],
+    points: Mapping[Ref, LocalPoint],
+    reg: Registry,
+    names_csv: str,
+    curation_csv: str | None,
+) -> None:
+    """Stop on a local reference without a position, validate the others
+    (`check_local`), and warn about positions no row uses."""
     # a local reference is only as good as its curation row: the position
     # lives there, so a missing one stops the build
-    unplaced = [k for k in local_keys if k not in points]
+    unplaced = [k for k in _local_keys(by_id) if k not in points]
     if unplaced:
         lines = "\n".join(
             f"  {placelist.format_osm([k])}  "
@@ -673,43 +757,82 @@ def run(
             f"-- nothing added"
         )
 
-    objects: dict[OsmRef, LocatedObject] = {}
-    if areas:
-        objects = locate.read_objects(objects_json).by_ref
-        missing = unlocated(by_id, objects)
-        if missing:
-            lines = "\n".join(
-                f"  {placelist.format_osm([k])}  {placelist.describe(by_id[k][0], reg)}"
-                for k in missing
-            )
-            raise PipelineError(
-                f"{len(missing)} object(s) of {names_csv} are not in "
-                f"{objects_json} -- run `just objects` "
-                f"(names/locate.py) to locate them:\n{lines}"
-            )
-        print(f"objects   : {objects_json} -> {len(objects)} located object(s)")
-    members = scan_waterways(inp, by_id)
-    if members:
-        print(f"waterways : {len(members)} member ways of matched waterway relations")
 
+def _load_objects(
+    areas: dialects.AreaIndex | None,
+    by_id: Mapping[Ref, Sequence[PlaceRow]],
+    reg: Registry,
+    names_csv: str,
+    objects_json: str,
+) -> dict[OsmRef, LocatedObject]:
+    """Where the name list's objects lie -- needed only with dialect areas,
+    and then for every one of them."""
+    if not areas:
+        return {}
+    objects = locate.read_objects(objects_json).by_ref
+    missing = unlocated(by_id, objects)
+    if missing:
+        lines = "\n".join(
+            f"  {placelist.format_osm([k])}  {placelist.describe(by_id[k][0], reg)}"
+            for k in missing
+        )
+        raise PipelineError(
+            f"{len(missing)} object(s) of {names_csv} are not in "
+            f"{objects_json} -- run `just objects` "
+            f"(names/locate.py) to locate them:\n{lines}"
+        )
+    print(f"objects   : {objects_json} -> {len(objects)} located object(s)")
+    return objects
+
+
+def _inject(inp: str, out: str | None, inputs: _Inputs) -> Injector:
+    """Copy `inp` to `out` with the tags added (`out` None: a dry run that
+    only counts) and return the injector, which holds the counts."""
     writer: osmium.SimpleWriter | None = None
-    if not dry_run:
+    if out is not None:
         # copy the input header so the extract bounds survive (Planetiler uses
         # them; without bounds it renders low-zoom tiles for the whole world)
         writer = osmium.SimpleWriter(out, overwrite=True, header=osmscan.header(inp))
-    inj = Injector(writer, by_id, by_qid, reg, areas, objects, curation, members, synthetic, points)
-
-    t0 = time.time()
+    names, curation = inputs.names, inputs.curation
+    inj = Injector(
+        writer,
+        names.by_id,
+        names.by_qid,
+        inputs.reg,
+        inputs.areas,
+        inputs.objects,
+        curation.objects,
+        inputs.members,
+        curation.squares,
+        curation.points,
+    )
     for o in osmium.FileProcessor(inp):
         if isinstance(o, (osmium.osm.Node, osmium.osm.Way, osmium.osm.Relation)):
             inj.handle(o, o.type_str())
     inj.finish()
     if writer is not None:
         writer.close()
+    return inj
 
-    missing = sorted(k for k in set(by_id) - inj.seen_keys if k[0] != placelist.LOCAL_TYPE)
+
+# ---------------------------------------------------------------- report ----
+def _print_report(inj: Injector, inputs: _Inputs, inp: str, seconds: float) -> None:
+    """What the scan tagged, added and curated, and what it did not find."""
+    in_file = os.path.basename(inp)
+    _print_tagged(inj, inputs, seconds)
+    _print_dialects(inj, inputs.reg, inputs.areas)
+    _print_added_points(inj, inputs.names.by_id, inputs.reg)
+    _print_not_found(inj, inputs.names, inputs.reg, in_file)
+    if inputs.curation.objects:
+        _print_curated(inj, inputs.curation.objects, in_file)
+    if inputs.curation.squares or inj.created:
+        _print_synthetic(inj, inputs.curation.squares, in_file)
+
+
+def _print_tagged(inj: Injector, inputs: _Inputs, seconds: float) -> None:
+    by_qid = inputs.names.by_qid
     total = sum(inj.hits.values())
-    print(f"\nscanned {inj.n_objects:,} objects in {time.time() - t0:.0f}s")
+    print(f"\nscanned {inj.n_objects:,} objects in {seconds:.0f}s")
     print(
         f"tagged  {total} objects: "
         f"{inj.hits['n']} nodes, {inj.hits['w']} ways, {inj.hits['r']} relations"
@@ -719,8 +842,16 @@ def run(
             if by_qid
             else ""
         )
-        + (f"; {inj.member_hits} same-named member ways of waterway relations" if members else "")
+        + (
+            f"; {inj.member_hits} same-named member ways of waterway relations"
+            if inputs.members
+            else ""
+        )
     )
+
+
+def _print_dialects(inj: Injector, reg: Registry, areas: dialects.AreaIndex | None) -> None:
+    """The names written per dialect and the objects per dialect area."""
     print("names written per dialect:")
     for d in reg:
         n = inj.tag_hits["name:" + d["tag"]]
@@ -733,62 +864,68 @@ def run(
             print(f"  {DIALECT_KEY}={tag:<15} {n:>5}")
         if not inj.area_hits:
             print("  (none -- no tagged object lies in a dialect area)")
-    if inj.added_points:
-        print(f"\nadded {len(inj.added_points)} node(s) for places that are not in OSM:")
-        for nid, key, _label, lon, lat, tags in inj.added_points:
-            print(
-                f"  node/{nid}  {placelist.format_osm([key])} "
-                f"{placelist.describe(by_id[key][0], reg)} at {lat:.5f}, {lon:.5f}: "
-                + ", ".join(f"{a}={b}" for a, b in sorted(tags.items()) if not a.startswith("name"))
-            )
+
+
+def _print_added_points(
+    inj: Injector, by_id: Mapping[Ref, Sequence[PlaceRow]], reg: Registry
+) -> None:
+    if not inj.added_points:
+        return
+    print(f"\nadded {len(inj.added_points)} node(s) for places that are not in OSM:")
+    for nid, key, _label, lon, lat, tags in inj.added_points:
+        print(
+            f"  node/{nid}  {placelist.format_osm([key])} "
+            f"{placelist.describe(by_id[key][0], reg)} at {lat:.5f}, {lon:.5f}: "
+            + ", ".join(f"{a}={b}" for a, b in sorted(tags.items()) if not a.startswith("name"))
+        )
+
+
+def _print_not_found(inj: Injector, names: NameList, reg: Registry, in_file: str) -> None:
+    """The ids and QIDs of the name list that the extract does not have."""
+    by_id, by_qid = names.by_id, names.by_qid
+    missing = sorted(k for k in set(by_id) - inj.seen_keys if k[0] != placelist.LOCAL_TYPE)
     if missing:
-        print(f"\n{len(missing)} rows reference ids that are not in {os.path.basename(inp)}:")
+        print(f"\n{len(missing)} rows reference ids that are not in {in_file}:")
         for key in missing:
             print(f"  {placelist.format_osm([key])}  {placelist.any_name(by_id[key][0], reg)}")
-    if by_qid:
-        nf = [q for q in by_qid if not inj.qid_hits[q]]
-        if nf:
-            print(
-                f"\n{len(nf)} wikidata QIDs not present in the file: "
-                + ", ".join(f"{q} ({placelist.any_name(by_qid[q][0], reg)})" for q in sorted(nf))
-            )
-
-    if curation:
-        cur_total = sum(inj.cur_hits.values())
+    nf = [q for q in by_qid if not inj.qid_hits[q]]
+    if nf:
         print(
-            f"\ncurated {cur_total} objects: {inj.cur_hits['n']} nodes, "
-            f"{inj.cur_hits['w']} ways, {inj.cur_hits['r']} relations"
+            f"\n{len(nf)} wikidata QIDs not present in the file: "
+            + ", ".join(f"{q} ({placelist.any_name(by_qid[q][0], reg)})" for q in sorted(nf))
         )
-        for k in sorted(inj.seen_cur):
-            print(
-                f"  {k[0]}/{k[1]}  {curation[k]['label'] or '?'}: "
-                + ", ".join(f"{a}={b}" for a, b in sorted(curation[k]["tags"].items()))
-            )
-        cur_missing = sorted(set(curation) - inj.seen_cur)
-        if cur_missing:
-            print(
-                f"\n{len(cur_missing)} curation rows reference ids that are not in "
-                f"{os.path.basename(inp)}:"
-            )
-            for t, i in cur_missing:
-                print(f"  {t}/{i}  {curation[(t, i)]['label'] or '?'}")
-    if synthetic or inj.created:
-        print(f"\nadded {len(inj.created)} synthetic polygon(s):")
-        for wid, nids, label, km2 in inj.created:
-            print(f"  way/{wid} (nodes {nids[0]}..{nids[-1]})  {label or '?'}: {km2:g} km²")
-        synth_missing = sorted(
-            set(synthetic) - {p["key"] for p in inj.pending if p["key"][0] != placelist.LOCAL_TYPE}
+
+
+def _print_curated(inj: Injector, curation: Mapping[Ref, Tuning], in_file: str) -> None:
+    cur_total = sum(inj.cur_hits.values())
+    print(
+        f"\ncurated {cur_total} objects: {inj.cur_hits['n']} nodes, "
+        f"{inj.cur_hits['w']} ways, {inj.cur_hits['r']} relations"
+    )
+    for k in sorted(inj.seen_cur):
+        print(
+            f"  {k[0]}/{k[1]}  {curation[k]['label'] or '?'}: "
+            + ", ".join(f"{a}={b}" for a, b in sorted(curation[k]["tags"].items()))
         )
-        for t, i in synth_missing:
-            print(
-                f"  ! {t}/{i} {synthetic[(t, i)]['label'] or '?'}: node not in "
-                f"{os.path.basename(inp)}, no polygon added"
-            )
-    if dry_run:
-        print("\n(dry run -- nothing written)")
-    else:
-        print(f"\nwrote {out} ({os.path.getsize(out) / 1e6:.1f} MB)")
-    return 0
+    cur_missing = sorted(set(curation) - inj.seen_cur)
+    if cur_missing:
+        print(f"\n{len(cur_missing)} curation rows reference ids that are not in {in_file}:")
+        for t, i in cur_missing:
+            print(f"  {t}/{i}  {curation[(t, i)]['label'] or '?'}")
+
+
+def _print_synthetic(inj: Injector, synthetic: Mapping[Ref, Square], in_file: str) -> None:
+    print(f"\nadded {len(inj.created)} synthetic polygon(s):")
+    for wid, nids, label, km2 in inj.created:
+        print(f"  way/{wid} (nodes {nids[0]}..{nids[-1]})  {label or '?'}: {km2:g} km²")
+    synth_missing = sorted(
+        set(synthetic) - {p["key"] for p in inj.pending if p["key"][0] != placelist.LOCAL_TYPE}
+    )
+    for t, i in synth_missing:
+        print(
+            f"  ! {t}/{i} {synthetic[(t, i)]['label'] or '?'}: node not in "
+            f"{in_file}, no polygon added"
+        )
 
 
 @cli.command
