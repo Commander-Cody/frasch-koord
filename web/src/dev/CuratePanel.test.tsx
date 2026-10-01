@@ -77,6 +77,9 @@ function answerPost(i: number) {
 }
 
 beforeEach(() => {
+  // The panel writes `?row=` and opens what it finds there: without this, a
+  // test would start on the row the previous one ended on.
+  window.history.replaceState(null, '', '/');
   // jsdom lays nothing out; CurateList keeps the selected row in view.
   Element.prototype.scrollIntoView = () => {};
   posts = [];
