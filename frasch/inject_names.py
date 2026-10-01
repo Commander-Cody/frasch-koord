@@ -27,8 +27,11 @@ that is not `skip` tags the object(s) in its `osm` column with
                      the row's entry in the search index, so that the frontend
                      can go from a clicked label back to the name-list row
 
-Rows with a `wikidata` QID additionally tag every object whose `wikidata` tag
-equals that QID; for the countries, which have no `osm`, that is the only key.
+Rows with a `wikidata` QID additionally tag every place-like object (one with
+a `place`, `boundary`, `natural`, `water` or `waterway` tag, or a waterway
+relation) whose `wikidata` tag equals that QID; for the countries, which have
+no `osm`, that is the only key.  Any other object carrying the QID -- a shop
+mis-tagged with its town's (#55) -- is left alone and reported.
 
 A row whose `osm` is a *local reference* (`local/<slug>`) is a place OSM does
 not have (Waasterhias on Amrum, Harden, most Köge).  The same reference keys
@@ -123,6 +126,9 @@ DIALECT_KEY = "frasch:dialect"
 LOCAL_KEY = "frasch:local"
 VARIETY_KEY = "frasch:variety"
 REF_KEY = placelist.REF_KEY
+# an object found only through a row's QID is tagged only if it has one of
+# these keys (or is a waterway relation): a shop may carry its town's QID (#55)
+PLACE_LIKE_KEYS = ("place", "boundary", "natural", "water", "waterway")
 
 # an object of the extract the injector copies
 _OsmObject = osmium.osm.Node | osmium.osm.Way | osmium.osm.Relation
@@ -338,6 +344,12 @@ def unlocated(by_id: Iterable[Ref], objects: Container[OsmRef]) -> list[Ref]:
 
 
 # -------------------------------------------------------------- injector ----
+def is_place_like(tags: osmium.osm.TagList) -> bool:
+    """Whether an object is a place, an area or a water -- not a shop, a
+    building or anything else that may carry a place's QID."""
+    return tags.get("type") == "waterway" or any(k in tags for k in PLACE_LIKE_KEYS)
+
+
 class _PendingSquare(TypedDict):
     """A synthetic polygon waiting to be written (see `Injector.flush`);
     `node_ids` once its corner nodes are."""
@@ -400,6 +412,9 @@ class Injector:
         self.local_hits = 0
         self.seen_keys: set[Ref] = set()
         self.qid_hits: collections.Counter[str] = collections.Counter()
+        # (object, its name, QID) of the objects that carry a row's QID but
+        # are not place-like, for the report
+        self.skipped_carriers: list[tuple[OsmRef, str, str]] = []
         self.cur_hits: collections.Counter[str] = collections.Counter()
         self.seen_cur: set[Ref] = set()
         self.n_objects = 0
@@ -555,7 +570,7 @@ class Injector:
         member = self._member_rows(key, o)
         if member is not None:
             return member
-        return self._qid_rows(o), key
+        return self._qid_rows(key, o), key
 
     def _member_rows(self, key: OsmRef, o: _OsmObject) -> tuple[Sequence[PlaceRow], OsmRef] | None:
         """The rows of the waterway relation this way is a member of, if it
@@ -571,10 +586,14 @@ class Injector:
         # the member inherits the river's area
         return self.by_id.get(rel_key) or [], rel_key
 
-    def _qid_rows(self, o: _OsmObject) -> Sequence[PlaceRow] | None:
-        """The row whose `wikidata` QID this object carries, if any."""
+    def _qid_rows(self, key: OsmRef, o: _OsmObject) -> Sequence[PlaceRow] | None:
+        """The row whose `wikidata` QID this object carries, if any and if
+        the object is place-like."""
         qid = o.tags.get("wikidata")
         if not qid or qid not in self.by_qid:
+            return None
+        if not is_place_like(o.tags):
+            self.skipped_carriers.append((key, o.tags.get("name") or "?", qid))
             return None
         self.qid_hits[qid] += 1
         return self.by_qid[qid]
@@ -814,6 +833,7 @@ def _print_report(inj: Injector, inputs: _Inputs, inp: str, seconds: float) -> N
     _print_dialects(inj, inputs.reg, inputs.areas)
     _print_added_points(inj, inputs.names.by_id, inputs.reg)
     _print_not_found(inj, inputs.names, inputs.reg, in_file)
+    _print_skipped_carriers(inj, inputs.names.by_qid, inputs.reg)
     if inputs.curation.objects:
         _print_curated(inj, inputs.curation.objects, in_file)
     if inputs.curation.squares or inj.created:
@@ -879,12 +899,27 @@ def _print_not_found(inj: Injector, names: NameList, reg: Registry, in_file: str
         print(f"\n{len(missing)} rows reference ids that are not in {in_file}:")
         for key in missing:
             print(f"  {placelist.format_osm([key])}  {placelist.any_name(by_id[key][0], reg)}")
-    nf = [q for q in by_qid if not inj.qid_hits[q]]
+    skipped = {qid for _, _, qid in inj.skipped_carriers}
+    nf = [q for q in by_qid if not inj.qid_hits[q] and q not in skipped]
     if nf:
         print(
             f"\n{len(nf)} wikidata QIDs not present in the file: "
             + ", ".join(f"{q} ({placelist.any_name(by_qid[q][0], reg)})" for q in sorted(nf))
         )
+
+
+def _print_skipped_carriers(
+    inj: Injector, by_qid: Mapping[str, Sequence[PlaceRow]], reg: Registry
+) -> None:
+    """The objects that carry a row's QID but are left alone (#55)."""
+    if not inj.skipped_carriers:
+        return
+    print(
+        f"\n{len(inj.skipped_carriers)} objects carry a QID of the list "
+        "but are not place-like -- not tagged:"
+    )
+    for (t, i), name, qid in inj.skipped_carriers:
+        print(f"  {t}/{i}  {name}: {qid} ({placelist.any_name(by_qid[qid][0], reg)})")
 
 
 def _print_curated(inj: Injector, curation: Mapping[Ref, Tuning], in_file: str) -> None:
