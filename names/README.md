@@ -525,7 +525,10 @@ a separate file with its own identity: the OSM reference, nothing else. A row
 keyed by a local reference (`local/<slug>`, the same one in `places.csv`'s
 `osm` column) instead *creates* the object it tunes — a node or, with
 `polygon_km2`, a square — at the row's `lat`/`lon`; see *Places OSM does not
-have* above.
+have* above. One row per object: a second row for the same reference is an
+error. The one exception is a node with a
+`polygon_km2` row, which can have a second row of its own that tunes the node
+rather than the square (see below).
 
 | column | meaning |
 |---|---|
@@ -533,9 +536,9 @@ have* above.
 | `name` | free-text label so a human can read the row — **not** written to the data |
 | `lat`, `lon` | decimal degrees — mandatory for a local reference (the position of the node/square it creates), empty for a real OSM reference |
 | `set_tags` | `k=v` pairs separated by `;`, e.g. `place=island;frasch:kind=island` |
-| `minzoom` | integer, or empty |
-| `maxzoom` | integer, or empty — the last zoom (inclusive) the label is shown at |
-| `polygon_km2` | number, or empty — add a synthetic label polygon of this area around the node in `osm` (see below) |
+| `minzoom` | integer 0–24, or empty |
+| `maxzoom` | integer 0–24, not below `minzoom`, or empty — the last zoom (inclusive) the label is shown at |
+| `polygon_km2` | positive number, or empty — add a synthetic label polygon of this area around the node in `osm` (see below) |
 | `note` | why the row exists |
 
 ### The two columns do very different things

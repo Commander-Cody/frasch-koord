@@ -68,8 +68,14 @@ def test_local_reference_row_positions_a_place(tmp_path: Path) -> None:
     ({"osm": "node/85929111", "lat": "54.48", "lon": "8.86"}, "only go with a local"),
     ({"osm": "local/westerheide-amrum"}, "needs `lat` and `lon`"),
     ({"osm": "node/355956234", "minzoom": "ten"}, "not an integer"),
+    ({"osm": "node/355956234", "minzoom": "--5"}, "not an integer"),
+    ({"osm": "node/355956234", "minzoom": "-5"}, r"minzoom '-5' is not a zoom \(0-24\)"),
+    ({"osm": "node/355956234", "maxzoom": "99"}, r"maxzoom '99' is not a zoom \(0-24\)"),
+    ({"osm": "node/355956234", "minzoom": "12", "maxzoom": "10"},
+     "maxzoom 10 is below minzoom 12"),
     ({"osm": "node/85929111", "polygon_km2": "0"}, "not a positive number"),
     ({"osm": "node/85929111", "polygon_km2": "fifty"}, "not a positive number"),
+    ({"osm": "node/85929111", "polygon_km2": "inf"}, "not a positive number"),
     ({"osm": "way/177387348", "polygon_km2": "5"}, "exactly one node"),
     ({"osm": "node/1; node/2", "polygon_km2": "5"}, "exactly one node"),
 ])
@@ -89,6 +95,23 @@ def test_second_polygon_for_one_node_stops_the_build(tmp_path: Path) -> None:
     row = {"osm": "node/85929111", "polygon_km2": "50"}
     with pytest.raises(ValidationError, match="second polygon_km2"):
         curationlist.read(curation_file(tmp_path, row, row))
+
+
+@pytest.mark.parametrize("first", ["way/44051131", "way/44051130; way/44051131"])
+def test_second_row_for_one_osm_object_stops_the_build(tmp_path: Path, first: str) -> None:
+    path = curation_file(tmp_path, {"osm": first, "set_tags": "waterway=river"},
+                         {"osm": "way/44051131", "maxzoom": "12"})
+    with pytest.raises(ValidationError) as exc:
+        curationlist.read(path)
+    assert exc.value.problems == [f"{path}:3: second row for way/44051131 (line 2)"]
+
+
+def test_a_node_with_a_square_may_have_a_row_of_its_own(tmp_path: Path) -> None:
+    path = curation_file(tmp_path, {"osm": "node/85929111", "polygon_km2": "50"},
+                         {"osm": "node/85929111", "minzoom": "12"})
+    by_id, synthetic, _ = curationlist.read(path)
+    assert by_id[("n", 85929111)]["tags"] == {"frasch:minzoom": "12"}
+    assert set(synthetic) == {("n", 85929111)}
 
 
 def test_every_broken_row_is_reported_at_once(tmp_path: Path) -> None:

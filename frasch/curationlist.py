@@ -20,8 +20,9 @@ from __future__ import annotations
 
 import csv
 import io
+import math
 import os
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from typing import NamedTuple, TypedDict
 
 from frasch import files, paths
@@ -34,6 +35,7 @@ COLUMNS = ["osm", "name", "lat", "lon", "set_tags", "minzoom", "maxzoom",
            "polygon_km2", "note"]
 MINZOOM_KEY = "frasch:minzoom"
 MAXZOOM_KEY = "frasch:maxzoom"
+MAX_ZOOM = 24                           # the deepest zoom a map style knows
 
 # The default `place=` of the node the injector adds for a local reference, by
 # the row's kind.  Only kinds whose OSM equivalent is unambiguous are listed;
@@ -89,10 +91,24 @@ def parse_set_tags(spec: str | None, where: str = "") -> dict[str, str]:
 
 
 def _zoom(row: Mapping[str, str], column: str, found: list[str]) -> int | None:
-    z = row.get(column, "")
-    if z and not z.lstrip("-").isdigit():
-        found.append(f"{column} {z!r} is not an integer")
-    return int(z) if z.lstrip("-").isdigit() else None
+    cell = row.get(column, "")
+    if not cell:
+        return None
+    try:
+        zoom = int(cell)
+    except ValueError:
+        found.append(f"{column} {cell!r} is not an integer")
+        return None
+    if not 0 <= zoom <= MAX_ZOOM:
+        found.append(f"{column} {cell!r} is not a zoom (0-{MAX_ZOOM})")
+    return zoom
+
+
+def _zooms(row: Mapping[str, str], found: list[str]) -> tuple[int | None, int | None]:
+    minzoom, maxzoom = _zoom(row, "minzoom", found), _zoom(row, "maxzoom", found)
+    if minzoom is not None and maxzoom is not None and maxzoom < minzoom:
+        found.append(f"maxzoom {maxzoom} is below minzoom {minzoom}")
+    return minzoom, maxzoom
 
 
 def _km2(row: Mapping[str, str], found: list[str]) -> float | None:
@@ -103,7 +119,7 @@ def _km2(row: Mapping[str, str], found: list[str]) -> float | None:
         km2 = float(cell)
     except ValueError:
         km2 = 0.0
-    if not km2 > 0:
+    if not 0 < km2 < math.inf:
         found.append(f"polygon_km2 {cell!r} is not a positive number")
     return km2
 
@@ -111,11 +127,21 @@ def _km2(row: Mapping[str, str], found: list[str]) -> float | None:
 # ------------------------------------------------------------------- rows ---
 class _Seen:
     """What the rows above have claimed: one row per local reference, one
-    square per node."""
+    square per node, one tuning row (neither of those) per OSM object."""
 
     def __init__(self) -> None:
         self.positioned: set[str] = set()
         self.squares: set[Ref] = set()
+        self.tuned: dict[Ref, int] = {}         # -> the line of its row
+
+    def tune(self, n: int, refs: Sequence[Ref]) -> list[str]:
+        """Claim `refs` for the tuning row on line `n`; -> the objects an
+        earlier tuning row claimed already."""
+        found = [f"second row for {format_osm([ref])} (line {self.tuned[ref]})"
+                 for ref in refs if ref in self.tuned]
+        for ref in refs:
+            self.tuned.setdefault(ref, n)
+        return found
 
 
 class Entry(TypedDict):
@@ -154,7 +180,7 @@ def _entry(n: int, row: Mapping[str, str], seen: _Seen) -> tuple[Entry | None, l
         tags = parse_set_tags(row.get("set_tags"))
     except Invalid as exc:
         found.append(exc.reason)
-    minzoom, maxzoom = _zoom(row, "minzoom", found), _zoom(row, "maxzoom", found)
+    minzoom, maxzoom = _zooms(row, found)
     km2 = _km2(row, found)
     if km2 is not None:
         if len(refs) != 1 or refs[0][0] not in ("n", LOCAL_TYPE):
@@ -163,6 +189,8 @@ def _entry(n: int, row: Mapping[str, str], seen: _Seen) -> tuple[Entry | None, l
         elif not local and refs[0] in seen.squares:
             found.append(f"second polygon_km2 row for {format_osm(refs)}")
         seen.squares.add(refs[0])
+    elif not local:
+        found += seen.tune(n, refs)
     if local:
         seen.positioned.add(local)
     if found:
@@ -261,9 +289,8 @@ def read(path: str = DEFAULT_PATH) -> Curation:
         elif km2 is not None:
             curation.squares[ref] = {"km2": km2, "tags": tags, "label": label}
         elif tags:                            # else nothing to apply yet
-            for ref in e["refs"]:
-                curation.objects.setdefault(ref, {"tags": {}, "label": label})
-                curation.objects[ref]["tags"].update(tags)
+            for ref in e["refs"]:             # one row per object (`rows`)
+                curation.objects[ref] = {"tags": dict(tags), "label": label}
     return curation
 
 
