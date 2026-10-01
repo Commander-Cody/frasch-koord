@@ -428,3 +428,102 @@ def test_a_line_that_is_no_object_says_so(w: World, capsys: pytest.CaptureFixtur
     append(w.patch, [1, 2])
     assert w.apply() == 1
     assert "not a JSON object" in capsys.readouterr().out
+
+
+# ------------------------------------------------------- what apply prints ---
+def mixed_patch(w: World) -> None:
+    """Two decisions apply takes, two it refuses."""
+    append(
+        w.patch,
+        entry(2, action="local", slug="taarep", lat=54.6, lon=8.9, polygon_km2=1.5),
+        entry(3, action="osm", osm="node/1", wikidata="Q5"),
+        entry(4, action="skip"),  # decided by hand
+        {"id": "nai", "action": "skip"},  # no such row
+    )
+
+
+def test_apply_logs_each_decision_and_sums_up(w: World, capsys: pytest.CaptureFixture[str]) -> None:
+    mixed_patch(w)
+    assert w.apply() == 1
+    (snapshot,) = archived(w)
+    assert capsys.readouterr().out == (
+        # an entry without a `line` comes first
+        f"  refused patch line 4 (None / None): no row with id 'nai' in {w.places} "
+        "(deleted since the export?)\n"
+        f"  {w.places}:2 Taarep (Dorf): osm = local/taarep, status = ok; "
+        f"{w.curation} += 54.6/8.9, polygon_km2 = 1.5\n"
+        f"  {w.places}:3 Uurd (Ort): osm = node/1, wikidata = Q5, status = ok\n"
+        f"  refused patch line 3 (Hüs / Haus): {w.places}:4 is not the matcher's "
+        "to fill (status=ok, osm=node/9)\n"
+        f"patch applied, moved to {snapshot}\n"
+        f"2 refused entries kept in {w.patch}\n"
+        f"2 row(s) written to {w.places}, 1 appended to {w.curation}, 2 refused\n"
+    )
+    assert w.curation.read_text(encoding="utf-8") == (
+        CURATION_HEADER + "local/taarep,Dorf,54.6,8.9,place=island,,,1.5,\n"
+    )
+
+
+def test_dry_run_says_what_would_change(w: World, capsys: pytest.CaptureFixture[str]) -> None:
+    mixed_patch(w)
+    assert w.apply("--dry-run") == 1
+    out = capsys.readouterr().out
+    assert out.endswith(
+        "dry run: 2 row(s) would change, 1 curation row(s) would be appended, "
+        "2 refused -- nothing written\n"
+    )
+    assert out.count("\n") == 5  # the four decisions above, then the sum
+
+
+def test_keep_applies_without_archiving_or_appending_back(
+    w: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    mixed_patch(w)
+    patch_before = w.patch.read_bytes()
+    assert w.apply("--keep") == 1
+    assert capsys.readouterr().out.splitlines()[-1] == (
+        f"2 row(s) written to {w.places}, 1 appended to {w.curation}, 2 refused"
+    )
+    assert w.patch.read_bytes() == patch_before
+
+
+def test_a_refused_entry_decided_again_meanwhile_is_counted_apart(
+    w: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    append(w.patch, entry(4, action="osm", osm="node/5"), {"id": "nai", "action": "skip"})
+    during_read(monkeypatch, lambda: append(w.patch, entry(4, action="clear")))
+    assert w.apply() == 1
+    assert (
+        f"1 refused entry kept in {w.patch} (1 decided again in the browser meanwhile)\n"
+        in capsys.readouterr().out
+    )
+
+
+def test_a_local_slug_of_another_row_is_taken(w: World, capsys: pytest.CaptureFixture[str]) -> None:
+    koog = {"id": "koog", "kind": "koog", "mooring": "Kuuch", "osm": "local/taarep"}
+    w.places.write_text(places_text(ROWS + [koog]), encoding="utf-8")
+    append(w.patch, entry(2, action="local", slug="taarep", lat=54.6, lon=8.9))
+    assert w.apply() == 1
+    assert "local/taarep is already taken" in capsys.readouterr().out
+    assert w.curation.read_text(encoding="utf-8") == CURATION_HEADER
+
+
+def test_no_patch_is_an_error(w: World, capsys: pytest.CaptureFixture[str]) -> None:
+    before = w.places.read_bytes()
+    assert w.apply() == 1
+    assert capsys.readouterr().err == (
+        f"{w.patch} not found -- decide some rows in the browser first (web/, `?curate`)\n"
+    )
+    assert w.places.read_bytes() == before
+
+
+def test_a_failed_apply_says_the_patch_is_restored(
+    w: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    append(w.patch, entry(2, action="skip"))
+    theirs = places_text(ROWS + [{"kind": "settlement", "mooring": "Nai", "de": "Neu"}])
+    during_read(monkeypatch, lambda: w.places.write_text(theirs, encoding="utf-8"))
+    assert w.apply() == 1
+    err = capsys.readouterr().err
+    assert err.startswith(f"nothing applied -- {w.patch} restored\n")
+    assert "changed on disk" in err
