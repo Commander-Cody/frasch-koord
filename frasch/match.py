@@ -821,6 +821,8 @@ def write_report(rows: Sequence[PlaceRow], results: Mapping[str, MatchResult],
             return "own point"
         if r["osm"] or r["wikidata"]:
             return "auto" if r["status"] == "auto" else "by hand"
+        if r["status"] == "ok":
+            return "by hand"                   # checked: OSM has nothing to name
         res = results.get(r["id"])
         return "ambiguous" if res and res["status"] == "ambiguous" else "not found"
 
@@ -847,7 +849,7 @@ def write_report(rows: Sequence[PlaceRow], results: Mapping[str, MatchResult],
              "look the feature up on openstreetmap.org yourself. Put `ok` in "
              "`status` when you have checked a row (or leave it empty), `skip` when "
              "the row must never be put on the map. `match.py` only ever rewrites "
-             "rows with `status=auto` or with empty `osm`/`wikidata` cells. "
+             "rows with `status=auto` or with empty `osm`/`wikidata`/`status` cells. "
              "**own point** rows carry a local reference (`local/<slug>`, a place "
              "OSM does not have, positioned in `names/curation.csv`) and are never "
              "touched.\n")
@@ -908,7 +910,7 @@ def write_matches(rows: Iterable[PlaceRow], results: Mapping[str, MatchResult],
     """work/matches.csv: one line per places.csv row, with the match details
     (and lon/lat also for rows a human filled in, looked up by id)."""
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8", newline="") as fh:
+    with files.replacing(path, text=True) as fh:
         w = csv.DictWriter(fh, fieldnames=MATCH_COLUMNS, lineterminator="\n")
         w.writeheader()
         for r in rows:
@@ -928,7 +930,7 @@ def write_matches(rows: Iterable[PlaceRow], results: Mapping[str, MatchResult],
                 rec["result"] = "skip" if r["status"] == "skip" else \
                     "not a place" if r["kind"] == "not_a_place" else \
                     "own point" if local_ref(r["osm"]) else \
-                    "by hand" if (r["osm"] or r["wikidata"]) else ""
+                    "by hand" if (r["osm"] or r["wikidata"] or r["status"] == "ok") else ""
                 if hit is not None:
                     rec.update(match_name=hit["tags"].get("name", ""),
                                match_tags=decisive_tags(hit),
@@ -1022,12 +1024,13 @@ def run(args: argparse.Namespace) -> int:
                     else "cleared" if before[2] == "auto" and not after[2]
                     else "changed"] += 1
 
+    # matches.csv first: a run that cannot write it leaves places.csv as it was
+    write_matches(rows, results, index, args.matches)
     if not args.dry_run:
         placelist.write(rows, args.names, fields)
         write_report(rows, results, args.report)
         if extracts is not None:
             record_used_extracts(args.extracts_state, extracts)
-    write_matches(rows, results, index, args.matches)
 
     cnt = collections.Counter(o["status"] for o in results.values())
     print(f"matcher owns {len(todo)} of {len(rows)} rows: "

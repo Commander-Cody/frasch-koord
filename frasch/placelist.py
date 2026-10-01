@@ -192,7 +192,7 @@ def owned_by_matcher(row: Row) -> bool:
     filled itself (`auto`) or one with nothing in it yet."""
     if local_ref(row["osm"]):
         return False              # a local reference: OSM has no object for it
-    if row["kind"] == "not_a_place" or row["status"] == "skip":
+    if row["kind"] == "not_a_place" or row["status"] in ("ok", "skip"):
         return False
     if row["status"] == "auto":
         return True

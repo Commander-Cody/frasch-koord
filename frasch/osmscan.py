@@ -4,7 +4,8 @@ The dev machine has no memory for a location cache of a whole extract (let
 alone for pyosmium to build every area of it), so whatever needs geometry
 reads it in three passes that each keep only the objects asked for: the
 relations, then their and the referenced ways, then all of those ways'
-nodes.  names/locate.py and names/build_dialect_areas.py both do."""
+nodes.  names/locate.py and names/build_dialect_areas.py both do.  And the
+extract's header, without a pass at all."""
 from __future__ import annotations
 
 from collections.abc import Collection, Iterable
@@ -77,6 +78,15 @@ def nodes(pbf: StrPath, ids: Collection[int]) -> dict[int, Node]:
     return {n.id: {"loc": (n.location.lon, n.location.lat), "tags": dict(n.tags)}
             for n in _filtered(pbf, osmium.osm.NODE, ids)
             if isinstance(n, osmium.osm.Node) and n.location.valid()}
+
+
+def header(pbf: StrPath) -> osmium.io.Header:
+    """The extract's header (its bounds, its replication timestamp)."""
+    reader = osmium.io.Reader(str(pbf))
+    try:
+        return reader.header()
+    finally:
+        reader.close()
 
 
 def _filtered(pbf: StrPath, entity: osmium.osm.osm_entity_bits,

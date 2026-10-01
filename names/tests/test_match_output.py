@@ -8,6 +8,8 @@ import hashlib
 import re
 from pathlib import Path
 
+import pytest
+
 from frasch import match
 from conftest import cand, places_text, write_candidates
 
@@ -72,3 +74,30 @@ def test_the_report_carries_no_date_or_run_time(world: Path) -> None:
     run_match(world)
     report = (world / "REPORT.md").read_text(encoding="utf-8")
     assert not re.search(r"\d{4}-\d\d-\d\d|\d+s\b", report)
+
+
+def test_an_ok_row_without_a_reference_is_left_alone_and_counted_by_hand(world: Path) -> None:
+    rows = ROWS + [{"id": "aphusem-3", "kind": "settlement", "mooring": "Aphüsem",
+                    "de": "Uphusum", "status": "ok"}]
+    (world / "places.csv").write_text(places_text(rows), encoding="utf-8")
+    write_candidates(world / "work" / "candidates.jsonl", TOFTUM, *UPHUSUM)
+    match_main(world)
+    with open(world / "places.csv", encoding="utf-8", newline="") as fh:
+        checked = [r for r in csv.DictReader(fh) if r["id"] == "aphusem-3"]
+    assert [(r["osm"], r["status"]) for r in checked] == [("", "ok")]
+    report = (world / "REPORT.md").read_text(encoding="utf-8")
+    assert "| **total** | **1** | **1** | **0** | **1** | **0** |" in report
+    assert "| aphusem-3 |" not in report.split("## Not found")[1]
+    with open(world / "work" / "matches.csv", encoding="utf-8", newline="") as fh:
+        assert [m["result"] for m in csv.DictReader(fh) if m["id"] == "aphusem-3"] \
+            == ["by hand"]
+
+
+def test_a_run_that_cannot_write_matches_csv_leaves_places_csv_alone(world: Path) -> None:
+    # matches.csv goes first: places.csv and the worklist never disagree
+    write_inputs(world)
+    (world / "work" / "matches.csv").mkdir()            # cannot be replaced
+    before = (world / "places.csv").read_bytes()
+    with pytest.raises(OSError):
+        match_main(world)
+    assert (world / "places.csv").read_bytes() == before

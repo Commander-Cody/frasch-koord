@@ -117,6 +117,17 @@ def test_name_tags_refer_to_the_rows_id(reg: Registry) -> None:
 
 # ------------------------------------------------------------- load_curation ---
 # (the file's rules are frasch.curationlist's, see names/tests/test_curationlist.py)
+def test_a_second_row_with_the_same_qid_is_reported(tmp_path: Path, reg: Registry) -> None:
+    path = tmp_path / "places.csv"
+    path.write_text(places_csv([
+        {"id": "daanemark", "kind": "country", "mooring": "Däänemark", "wikidata": "Q35"},
+        {"id": "daanemoark", "kind": "country", "mooring": "Däänemoark", "wikidata": "Q35"},
+    ]), encoding="utf-8")
+    names = inject_names.load_names(str(path), reg)
+    assert [r["id"] for r in names.by_qid["Q35"]] == ["daanemark"]
+    assert names.duplicate_qids == [("Q35", 2, 3)]
+
+
 def test_missing_curation_file_is_nothing_curated(tmp_path: Path) -> None:
     assert inject_names.load_curation(str(tmp_path / "absent.csv")) == ({}, {}, {})
 
