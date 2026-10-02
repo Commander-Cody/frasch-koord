@@ -11,14 +11,15 @@ context.
 source ~/.nvm/nvm.sh   # Node 24 via nvm; not on PATH in non-interactive shells
 nvm use                # picks up 24 from .nvmrc
 npm ci
-npm run fetch-assets   # the glyphs and the pinned tile archive, not in git (~225 MB, once)
+npm run fetch-assets   # the glyphs and the pinned tile archive, not in git (~130 MB, once)
 npm run dev
 ```
 
 That is all a fresh clone needs, for the dev server and for `npm run build`:
 no Java, Python or OSM downloads. `npm run fetch-assets` runs
 `scripts/fetch-fonts.sh` and `scripts/fetch-tiles.sh` (see
-[Tile hosting](#tile-hosting)); both skip what is already there. At the repo
+[Tile hosting](#tile-hosting) and [Glyphs and sprites](#glyphs-and-sprites-served-locally-not-from-a-third-party));
+both skip what is already there. At the repo
 root, `uv run just setup` does the same, plus the Python side and the smoke
 test's browser.
 
@@ -56,9 +57,12 @@ npm run build   # ends with check-build: dist/ has the worker the bundle names; 
 npm run smoke   # build, then vite preview + headless Chromium: map loads, search, card
 ```
 
-`npm run build` stops at its start, naming what is missing, when the glyphs
-or the pinned tile archive have not been fetched (`npm run fetch-assets`);
-the archive only when `VITE_TILES_URL` is not set. `npm run smoke` needs
+`npm run build` stops at its start, naming what is wrong, when
+`public/fonts/` does not hold exactly the glyph ranges `fonts.lock` lists, or
+the pinned tile archive has not been fetched (`npm run fetch-assets`); the
+archive only when `VITE_TILES_URL` is not set. It also stops when a label of
+the pinned archive needs a glyph range `fonts.lock` does not list (see
+[Glyphs and sprites](#glyphs-and-sprites-served-locally-not-from-a-third-party)). `npm run smoke` needs
 Playwright's headless Chromium, once: `npx playwright install
 chromium-headless-shell` (plus `sudo npx playwright install-deps` for the
 system libraries on a bare Linux).
@@ -70,8 +74,9 @@ domain root or under a sub-path, e.g. a GitHub Pages project site:
 `npx vite build --base /frasch-koord/`.
 
 **What `dist/` holds.** Vite copies `public/` as it is: the name list, the
-sprites and the ~100 MB of glyphs in `public/fonts/` (the style always loads
-them from the site). The tiles are the exception (`vite-plugins/tiles.ts`):
+sprites and the ~2.6 MB of glyphs in `public/fonts/` (the style always loads
+them from the site), which `vite-plugins/glyphs.ts` checks are exactly the
+ranges `fonts.lock` lists. The tiles are the exception (`vite-plugins/tiles.ts`):
 whatever `public/tiles/` links to is left out, and `dist/tiles/` gets the
 ~125 MB archive `tiles.lock` pins, checked against its sha256 — or no archive
 at all with `VITE_TILES_URL` set, when the tiles live elsewhere. So a build
@@ -365,15 +370,34 @@ single Warft (which in any case doesn't render before `place-warft`'s
 
 - `public/sprites/` — `sprite.json`, `sprite.png`, `sprite@2x.json`,
   `sprite@2x.png`, downloaded from
-  https://openmaptiles.github.io/osm-bright-gl-style/. ~136 KB total.
-- `public/fonts/` — **not in git** (~100 MB); `npm run fetch-assets` (or `npm run fetch-fonts`) fetches them once after cloning, pinned by the zip's sha256. PBF glyph ranges for the three fontstacks OSM Bright's
-  style.json actually uses: `Noto Sans Regular`, `Noto Sans Italic`,
-  `Noto Sans Bold`. Sourced pre-built from the `noto-sans.zip` asset of the
-  [openmaptiles/fonts v2.0 release](https://github.com/openmaptiles/fonts/releases/tag/v2.0)
-  (extracted as-is — that asset already contains exactly these three
-  stacks, all Unicode ranges, nothing extra). **~102 MB** on disk (256
-  range files × 3 stacks). All ranges are kept; trim to Latin/Latin-Extended
-  if the deployment size becomes a problem.
+  https://openmaptiles.github.io/osm-bright-gl-style/: byte for byte the
+  files of `openmaptiles/osm-bright-gl-style`'s `gh-pages` branch at
+  [`286b174`](https://github.com/openmaptiles/osm-bright-gl-style/tree/286b174adbd6e8693887841d6cfdf7445cd5f8c0)
+  (2026-08-04). ~136 KB total.
+- `public/fonts/` — **not in git** (~2.6 MB); `npm run fetch-assets` (or
+  `npm run fetch-fonts`) fetches them. PBF glyph ranges of the three font
+  stacks the style uses, `Noto Sans Regular`, `Noto Sans Italic` and
+  `Noto Sans Bold`, from the `noto-sans.zip` asset of the
+  [openmaptiles/fonts v2.0 release](https://github.com/openmaptiles/fonts/releases/tag/v2.0),
+  which has all 256 ranges of each (~102 MB).
+
+  **Only the ranges `fonts.lock` lists are kept** (issue #29): 10 of the
+  256, the same for every stack, with a comment on what each covers. They are
+  the Latin blocks and punctuation, and whatever else the labels of the
+  tile archive use. `fonts.lock` also pins the zip (URL and sha256) and
+  names the stacks. `scripts/fetch-fonts.sh` makes `public/fonts/` hold
+  exactly those files: an earlier, fuller fetch is pruned without a
+  download, a missing range fetches the zip again.
+
+  **The build checks the labels against the list.** `vite-plugins/glyphs.ts`
+  builds the style for every view (`buildStyle()`, loaded through Vite), reads
+  off which tile properties each symbol layer can show, takes every such
+  string from the pinned archive and stops the build when one has a character
+  outside the listed ranges; for a layer with `text-transform: uppercase`,
+  the upper-case form counts. The message names the character, the label and
+  the range: add the range to `RANGES` and run `npm run fetch-fonts`. With
+  `VITE_TILES_URL` set and no fetched archive the build only warns that it
+  checked no labels.
 
 ## Search
 

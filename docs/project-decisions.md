@@ -528,6 +528,36 @@ three more, and CI listed each again. The same tool was called three ways
 (`.venv/bin/…`, `uv run just …`, `npm run …`), and `just --list` put the
 routine recipes and the pipeline's internals side by side.
 
+## Decided 2026-10-02: ship only the glyph ranges the labels need (issue #29)
+
+`dist/fonts/` held all 256 ranges of each of the three Noto Sans stacks,
+102 MB, almost all of it scripts no label of the map uses. Now it holds the
+10 ranges `web/fonts.lock` lists, ~2.6 MB.
+
+- **A committed list, checked by the build** (owner's choice over deriving
+  the ranges from the archive at every build): what `dist/` ships is
+  reviewed in git, and the build stops when a label of the pinned archive
+  needs a range the list lacks.
+- **The list is the Latin blocks and punctuation plus what a survey of the
+  archive found** (owner's choice over the survey alone): 0–1023, Latin
+  Extended Additional, General Punctuation, and the survey's Number Forms,
+  Miscellaneous Symbols, CJK punctuation and variation selectors. Mooring
+  ä ö ü å and Sölring đ ā are in the first two (owner's requirement).
+- **Every code point counts** (owner's choice over mirroring MapLibre): MapLibre
+  draws CJK punctuation and multi-code-point clusters itself and does not
+  request their range, but that is its internals; the check requires a range
+  for every character a label has.
+- **`fetch-fonts.sh` keeps only the listed ranges** (owner's choice over
+  trimming them in the build): the dev server serves what production
+  serves. The list lives in `web/fonts.lock` with the zip's URL and sha256
+  (owner's choice over a separate ranges file).
+- **With `VITE_TILES_URL`** the fetched archive is checked if there is one,
+  else the build warns (owner's choice over requiring the archive).
+
+**Why**: every deploy uploaded 102 MB of glyphs, and a range that is missing
+shows: MapLibre then draws the glyph locally in another font, and the smoke
+check reports the 404.
+
 ## Remaining open questions
 1. Hosting provider for the site (R2 + Pages proposed, nothing set up yet); the tiles are GitHub release assets for now (issue #28).
 2. When to do the planet build (needs the VM; only after the North Frisia build looks right).

@@ -15,7 +15,7 @@ import tiles, { assetProblems } from './tiles.ts';
 const PINNED = 'the published archive';
 const PINNED_SHA256 = createHash('sha256').update(PINNED).digest('hex');
 
-/** A web/ checkout: the lock, the fetched archive in the cache, the glyphs. */
+/** A web/ checkout: the lock and the fetched archive in the cache. */
 let root: string;
 let outDir: string;
 
@@ -33,8 +33,6 @@ beforeEach(() => {
     `ARCHIVE_URL=https://example.org/schleswig-holstein.pmtiles\nARCHIVE_SHA256=${PINNED_SHA256}\n`,
   );
   put(`.cache/tiles/${PINNED_SHA256}.pmtiles`, PINNED);
-  for (const font of ['Noto Sans Regular', 'Noto Sans Italic', 'Noto Sans Bold'])
-    put(`public/fonts/${font}/0-255.pbf`, '');
 });
 
 afterEach(() => {
@@ -43,7 +41,7 @@ afterEach(() => {
 });
 
 describe('assetProblems', () => {
-  it('passes a checkout with the glyphs and the pinned archive', async () => {
+  it('passes a checkout with the pinned archive', async () => {
     expect(await assetProblems({ root, external: false })).toEqual([]);
   });
 
@@ -60,14 +58,6 @@ describe('assetProblems', () => {
 
     expect(await assetProblems({ root, external: false })).toEqual([
       `.cache/tiles/${PINNED_SHA256}.pmtiles does not match tiles.lock: run \`npm run fetch-assets\` again`,
-    ]);
-  });
-
-  it('refuses a build without the glyphs, wherever the tiles come from', async () => {
-    rmSync(join(root, 'public/fonts/Noto Sans Italic'), { recursive: true });
-
-    expect(await assetProblems({ root, external: true })).toEqual([
-      'the glyphs are not fetched (public/fonts/Noto Sans Italic): run `npm run fetch-assets`',
     ]);
   });
 

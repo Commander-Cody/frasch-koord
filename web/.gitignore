@@ -30,7 +30,7 @@ dist-ssr
 # Tile archives are hosted separately (tiles.lock); only .gitkeep is tracked here
 public/tiles/*.pmtiles
 
-# Glyphs are ~100 MB; fetch with scripts/fetch-fonts.sh
+# Glyphs: the ranges fonts.lock lists (~2.6 MB), fetched by scripts/fetch-fonts.sh
 public/fonts
 
 # The pinned tile archive, fetched by scripts/fetch-tiles.sh

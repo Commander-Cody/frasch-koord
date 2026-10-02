@@ -4,6 +4,7 @@ import { defineConfig } from 'vite';
 
 import areas from './vite-plugins/areas.ts';
 import curate from './vite-plugins/curate.ts';
+import glyphs from './vite-plugins/glyphs.ts';
 import tiles from './vite-plugins/tiles.ts';
 
 // https://vite.dev/config/
@@ -13,8 +14,8 @@ export default defineConfig({
   // `areas` hands the dialect-area review its geometry from names/
   // (read-only). `vite preview` loads them too, since Vite resolves it as
   // 'serve' as well, but they only add dev-server endpoints, so there they do
-  // nothing. `tiles` only runs on a build.
-  plugins: [react(), curate(), areas(), tiles()],
+  // nothing. `tiles` and `glyphs` only run on a build.
+  plugins: [react(), curate(), areas(), tiles(), glyphs()],
   // MapLibre's worker is bundled on its own (see src/components/Map.tsx) and
   // started as a module worker, so it is built as an ES module too.
   worker: { format: 'es' },

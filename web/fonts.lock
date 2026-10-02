@@ -1,0 +1,26 @@
+# The glyphs the website ships (issue #29): scripts/fetch-fonts.sh puts
+# exactly these into public/fonts/, and vite-plugins/glyphs.ts checks them.
+#
+# The Noto Sans glyphs of openmaptiles/fonts v2.0, pinned by the zip's sha256.
+FONTS_URL=https://github.com/openmaptiles/fonts/releases/download/v2.0/noto-sans.zip
+FONTS_SHA256=d117316544b43a5dde7ee761b36e17701e9f85574e181d76a74814240fdbaf34
+# The font stacks src/style/frasch-bright.json names, comma-separated.
+STACKS=Noto Sans Regular,Noto Sans Italic,Noto Sans Bold
+# Of the 256 ranges of each stack, those the labels need, the same for every
+# stack: the Latin blocks and punctuation whether or not a label uses them
+# today, and what the survey of the tile archive found besides.
+#   0-255        Basic Latin, Latin-1 Supplement (Mooring ä ö ü å)
+#   256-511      Latin Extended-A, start of -B (Sölring đ ā)
+#   512-767      rest of Latin Extended-B, IPA, spacing modifiers
+#   768-1023     combining diacritics, Greek
+#   7680-7935    Latin Extended Additional (ḃ in a Low Saxon name)
+#   8192-8447    General Punctuation, currency signs (– „ “ €)
+#   8448-8703    Letterlike Symbols, Number Forms (Ⅱ in a route name)
+#   9728-9983    Miscellaneous Symbols (♥ ♿ in POI names)
+#   12288-12543  CJK Symbols and Punctuation (《 》 in a POI name)
+#   65024-65279  variation selectors (U+FE0F after a symbol)
+# MapLibre draws the last two itself and does not request them today; they
+# are listed because the build's check requires every character a label
+# has. A build fails when a label of the pinned tile archive needs a range
+# this list lacks: add it here then, and run `npm run fetch-fonts`.
+RANGES=0-255 256-511 512-767 768-1023 7680-7935 8192-8447 8448-8703 9728-9983 12288-12543 65024-65279
