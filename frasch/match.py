@@ -850,10 +850,8 @@ def match_row(
     taken = [c for c in found if osm_key(c) in claimed]
     cands = [c for c in found if osm_key(c) not in claimed]
     if not cands:
-        out["status"] = "not_found"
-        if taken:
-            out["note"] = taken_note(taken, claimed)
-        return out
+        note = taken_note(taken, claimed) if taken else "no name match in OSM"
+        return _unmatched(out, "not_found", note)
 
     plaus_all = [c for c in cands if kind_ok(kind, c["tags"])]
     if not plaus_all:
@@ -1148,7 +1146,7 @@ def _not_found_section(rows: Sequence[PlaceRow], results: Mapping[str, MatchResu
     lines.append("|---|---:|---|---|---|---|---|")
     for r in nf:
         res = results.get(r["id"], {})
-        cands = f"`{res.get('candidates', '')[:200]}`" if res.get("candidates") else ""
+        cands = f"`{report_cands(res['candidates'])}`" if res.get("candidates") else ""
         lines.append(f"| {_report_ref(r)} | {res.get('note', '')} | {cands} |")
     lines.append("")
     return lines
