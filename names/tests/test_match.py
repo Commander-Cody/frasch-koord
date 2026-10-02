@@ -305,6 +305,14 @@ def test_only_streets_of_that_name_is_not_found(tmp_path: Path) -> None:
     assert out["osm_id"] == ""
 
 
+def test_a_name_nothing_in_osm_carries_is_not_found_with_the_matchers_note(
+    tmp_path: Path,
+) -> None:
+    owners = row(kind="settlement", mooring="Hulm", de="Holm", note="ask the Heimatverein")
+    out = run(tmp_path, owners, MORSUM_SYLT)
+    assert (out["status"], out["note"]) == ("not_found", "no name match in OSM")
+
+
 def test_two_equal_villages_in_north_frisia_are_ambiguous(tmp_path: Path) -> None:
     out = run(
         tmp_path,
