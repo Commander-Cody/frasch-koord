@@ -47,10 +47,11 @@ Invoke the `tdd` skill and follow it: vertical slices, red before green, one agr
 
 Once the behaviour is complete, do a refactoring pass with the tests green: clear names, short functions, coherent modules, no duplication, nothing speculative, consistent with the existing architecture. Keep new code looking like the code around it.
 
-Before any review, every check in `.github/workflows/ci.yml` must pass locally. Read that file for the current list; at the time of writing:
+Before any review, every check in `.github/workflows/ci.yml` must pass locally. Read that file for the current list; at the time of writing, from the repo root with Node on `PATH` (`source ~/.nvm/nvm.sh && nvm use "$(cat web/.nvmrc)"`):
 
-- Python (repo root): `uv sync --locked`, `uv run ruff check .`, `uv run mypy`, `uv run pytest`, `uv run python names/check.py`
-- Web (`web/`, after `source ~/.nvm/nvm.sh && nvm use`): `npm ci`, `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`, `npm run check:build`
+- `uv sync --locked`, then `uv run just setup` (once per worktree, and after a lockfile change)
+- `uv run just check`: every lint, format, type check and test, Python and web
+- `uv run just smoke`: the production build (checked), then the smoke test
 
 Fix failures; never skip, delete or weaken a test to get green. A test may only be removed if removing that functionality is part of the task.
 
