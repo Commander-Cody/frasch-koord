@@ -9,7 +9,7 @@
  * file quotes the research notes (`low: … best-guess Bökingharde`) about
  * assignments the owner has not confirmed yet. The file and the notes are no
  * secret — they are in the repository — but the map should not present them
- * as fact. `npm run check:build` fails when either reaches dist/.
+ * as fact. `npm run build` fails when either reaches dist/ (check-build.mjs).
  *
  * Read-only, unlike vite-plugins/curate.ts: the review writes nothing back,
  * `names/dialect_areas.csv` is edited by hand.
