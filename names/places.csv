@@ -98,8 +98,8 @@ settlement,Wiilbärj,,,,,,,,,,,,Wielberg,,,,,,,wiilbarj
 settlement,Klasbel,,,Kläsbel,,,,,,,,,Klixbüll,,,node/240087485,Q506044,auto,,klasbel
 settlement,Såhoulm,,,Såhulm,,,,,,,,,Soholm,,,node/1574331830,Q97624876,auto,,sahoulm
 settlement,Snootebel,,,,,,,,,,,,Schnatebüll,,,,,,,snootebel
-settlement,Weestersnootebel,,,,,,,,,,,,Wester Schnatebüll,,,,,,,weestersnootebel
-settlement,Ååstersnootebel,,,,,,,,,,,,Oster-Schnatebüll,,,,,,,aastersnootebel
+settlement,Weestersnootebel,,,,,,,,,,,,Wester-Schnatebüll,,,node/14195485778,,auto,,weestersnootebel
+settlement,Ååstersnootebel,,,,,,,,,,,,Oster-Schnatebüll,,,node/14195485779,,auto,,aastersnootebel
 settlement,Klantem,,,Kläntem,,,,,,,,,Klintum,,,node/701278773,,,,klantem
 settlement,Peerebel,,,,,,,,,,,,Perebüll,,,,,,,peerebel
 settlement,Hulteeker,,,,,,,,,,,,Holzacker,,Holtager,node/4361759266,,auto,,hulteeker
@@ -236,7 +236,7 @@ settlement,Råntrem,,,,,,,,,,,,Rantrum,,,node/300363691,Q21019,auto,,rantrem
 settlement,,,e Wäsk,,,,,,,,,,Wisch,,Visk,node/7807525478; node/240113074,Q572977,ok,,e-wask
 settlement,Heme,,,,,,,,,,,,Hemme,,,,,,,heme
 settlement,Mälst,,,,,,,,,,,,Mildstedt,,,node/240096695,Q21011,auto,,malst
-settlement,Ååstenfälj,,,,,,Aastenfeel,,,,,,Ostenfeld,,,,,,,aastenfalj
+settlement,Ååstenfälj,,,,,,Aastenfeel,,,,,,Ostenfeld (Husum),,,,,,,aastenfalj
 settlement,Winert,,,,,,,,,,,,Winnert,,,node/240099714,Q573057,auto,,winert
 settlement,Outrem,,,,,,,,,,,,Autrum,,,,,,,outrem
 settlement,Swåbstää,,,,,,,,,,,,Schwabstedt,,Svavsted,node/240026736,Q28050,auto,,swabstaa
@@ -516,7 +516,7 @@ warft,Bounenswärw,Bounensweerw,,,,,,,,,,,Bahnenswarft,Fahretoft,,node/159472106
 warft,Tuunswärw,Tuunsweerw,,,,,,,,,,,Tudenswarft,Fahretoft,,node/1594588996,,auto,,tuunswarw
 warft,Goobrielswärw,Goobrielsweerw,,,,,,,,,,,Gabrielswarft,Fahretoft,,node/1594735507,,auto,,goobrielswarw
 warft,Jåkebswärw,Jakebsweerw,,,,,,,,,,,Jakobswarft,Fahretoft,,,,,,jakebswarw
-warft,Moienswärw,Moiensweerw,,,,,,,,,,,Maienswarft,Fahretoft,,,,,,moienswarw-2
+warft,Moienswärw,Moiensweerw,,,,,,,,,,,Maienswarft,Fahretoft,,node/14204794497,,auto,,moienswarw-2
 warft,Rouerdswärw,Rouerdsweerw,,,,,,,,,,,Richardswarft,Fahretoft,,node/1594588994,,auto,,rouerdswarw
 warft,Bungsil,Bongsil,,,,,,,,,,,Bongsiel,,,node/1332249556,,auto,,bungsil
 warft,Slütsil,,,,,,,,,,,,Schlüttsiel,,,node/430830801,,auto,,slutsil
@@ -532,14 +532,14 @@ settlement,Doogebel Schörk,,,,,,,,,,,,Dagebüll Kirche,,,node/430316327,,auto,,
 warft,Jänswärw,Jänsweerw,,,,,,,,,,,Jenswarft,Dagebüll,,node/14204794483,,ok,,janswarw
 warft,Kuuchwärw,Kuuchweerw,,,,,,,,,,,Koogswarft,Dagebüll,Kogvarf,node/14204794482,,ok,,kuuchwarw
 warft,Naiwärw,Naiweerw,,,,,,,,,,,Neuwarft,Dagebüll,,node/14204794485,,ok,,naiwarw-2
-warft,Döinswärw,Döinsweerw,,,,,,,,,,,Dyenswarf,Dagebüll,,way/188786561,,auto,,doinswarw
+warft,Döinswärw,Döinsweerw,,,,,,,,,,,Dyenswarf,Dagebüll,,node/14204794484,,auto,,doinswarw
 warft,Paderswärw,Paadersweerw,,,,,,,,,,,Peterswarft,Dagebüll,,node/14204794487,,ok,,paderswarw-2
-warft,Nommenswärw,Nommensweerw,,,,,,,,,,,Nommenswarft,Dagebüll,,way/188798430,,auto,,nommenswarw
-warft,Meelenwärw,Meelenweerw,,,,,,,,,,,Mühlenwarft,Dagebüll,,way/188808096,,auto,,meelenwarw
-warft,Söschenswärw,Söschensweerw,,,,,,,,,,,Söschenswarft,Dagebüll,,way/188800479,,auto,,soschenswarw
+warft,Nommenswärw,Nommensweerw,,,,,,,,,,,Nommenswarft,Dagebüll,,node/14204794486,,auto,,nommenswarw
+warft,Meelenwärw,Meelenweerw,,,,,,,,,,,Mühlenwarft,Dagebüll,,node/14204794488,,auto,,meelenwarw
+warft,Söschenswärw,Söschensweerw,,,,,,,,,,,Söschenswarft,Dagebüll,,node/14204794490,,auto,,soschenswarw
 warft,Schörkewärw,Schörkeweerw,,,,,,,,,,,Kirchwarft,Dagebüll,,node/14204794491,,,,schorkewarw-3
 warft,Piitjens,,,,,,,,,,,,Piitjens,Dagebüll,,,,,,piitjens
-warft,Latj Hüs,,,,,,,,,,,,Lütt Hus,Dagebüll,,way/188809786,,auto,,latj-hus
+warft,Latj Hüs,,,,,,,,,,,,Lütt Hus,Dagebüll,,node/14204794492,,auto,,latj-hus
 warft,e Borj,,,,,,,,,,,,Deezbüll Burg,,,,,,,e-borj
 warft,Frisenhuuwen,,,,,,,,,,,,Fresenhagen,,,node/4361759265,Q1455665,auto,,frisenhuuwen
 warft,,,Rikesbel,,,,,,,,,,Rickelsbüll,,,node/12895604368,,auto,uncertain,rikesbel
@@ -563,7 +563,7 @@ warft,Eekenswärw,,,,Eekensweerw,,,,,,,,Eggerswarft,Ockholm,,node/1331341983,,ok
 warft,Latje Guurd,,,,Läitje Guurd,,,,,,,,Kleine Gaarde,Ockholm,,node/1333738474,,auto,,latje-guurd
 warft,Grute Guurd,,,,Gråte Guurd,,,,,,,,Große Gaarde,Ockholm,,node/1333738476,,auto,,grute-guurd
 warft,Gräinewärw,,,,Greeneweerw,,,,,,,,Grünewarft,Ockholm,,node/1331340281,,ok,,grainewarw
-warft,Schörkewärw,,,,Schörkeweerw,,,,,,,,Kirchwarft,Ockholm,,node/1333738478,,auto,,schorkewarw-5
+warft,Schörkewärw,,,,Schörkeweerw,,,,,,,,Kirchwarft,Ockholm,,node/1333738478,,ok,,schorkewarw-5
 warft,Nordwärw,,,,Noordweerw,,,,,,,,Nordwarft,Ockholm,,way/1347936331; node/1332249790,,ok,,nordwarw
 warft,Sööderwärw,,,,Sårweerw,,,,,,,,Süderwarft,Ockholm,,node/1333738472,,auto,,sooderwarw
 warft,Paderswärw,,,,Päidersweerw,,,,,,,,Peterswarft,Ockholm,,node/1333738470,,auto,,paderswarw-3
@@ -630,7 +630,7 @@ warft,Beergem Bärj,,,,Beerch,,,,,,,,Bargum Barg,,,node/1574063551,,auto,,beerge
 warft,Bolingwärw,,,,,,,,,,,,Bollingwarft,,,way/146175325,,ok,,bolingwarw
 warft,Brünbärj,,,,,,,,,,,,Braunberg,,,,,,,brunbarj
 warft,Bruwäi,,,,,,,,,,,,Broweg,,,node/2419309443,,auto,,bruwai
-warft,e Borj,,,,,,,,,,,,Burg (Fahretoft),,,,,,,e-borj-2
+warft,e Borj,,,,,,,,,,,,Burg (Fahretoft),,,node/14204794498,,auto,,e-borj-2
 warft,Deesbeldik,,,,,,,,,,,,Deezbüll Deich,,,way/55824588,,auto,,deesbeldik
 warft,Deesbeljarn,,,,,,,,,,,,Deezbülleck,,,node/10158150149,,auto,,deesbeljarn
 warft,Diksheern,,,,,,,,,,,,Deichshörn,,,,,,,diksheern
