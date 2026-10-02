@@ -575,7 +575,7 @@ class Injector:
     def _note_qid(self, o: _OsmObject) -> None:
         """Remember the row QID this object carries, if any, as present."""
         qid = o.tags.get("wikidata")
-        if qid in self.by_qid:
+        if qid is not None and qid in self.by_qid:
             self.present_qids.add(qid)
 
     def _rows_for(self, key: OsmRef, o: _OsmObject) -> tuple[Sequence[PlaceRow] | None, OsmRef]:
