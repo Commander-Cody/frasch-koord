@@ -67,225 +67,225 @@ Either the feature is not in OSM at all, or OSM spells it differently. `near mis
 
 | id | line | kind | Frisian | German | note | near misses |
 |---|---:|---|---|---|---|---|
-| fiilatj | 11 | settlement | Fiilätj | Verlath |  |  |
-| gralsbel | 28 | settlement | Grälsbel | Grellsbüll |  |  |
-| feersbel | 38 | settlement | Feersbel | Feddersbüll |  |  |
-| sooder-feersbel | 39 | settlement | Sööder-Feersbel | Südfeddersbüll |  |  |
-| toftiinj | 44 | settlement | Toftiinj | Toftende |  |  |
-| ulehusem | 49 | settlement | Ülehüsem | Olfhusum | uncertain |  |
-| damhus | 53 | settlement | Damhüs | Dammhusum |  |  |
-| dukensweerw | 54 | settlement | Dükensweerw | Dükenswarft |  |  |
-| nordheesbel | 56 | settlement | Nordheesbel | Nordhesbüll |  |  |
-| klant | 61 | settlement | Klant | Klindt |  |  |
+| fiilatj | 11 | settlement | Fiilätj | Verlath | no name match in OSM |  |
+| gralsbel | 28 | settlement | Grälsbel | Grellsbüll | no name match in OSM |  |
+| feersbel | 38 | settlement | Feersbel | Feddersbüll | no name match in OSM |  |
+| sooder-feersbel | 39 | settlement | Sööder-Feersbel | Südfeddersbüll | no name match in OSM |  |
+| toftiinj | 44 | settlement | Toftiinj | Toftende | no name match in OSM |  |
+| ulehusem | 49 | settlement | Ülehüsem | Olfhusum | no name match in OSM |  |
+| damhus | 53 | settlement | Damhüs | Dammhusum | no name match in OSM |  |
+| dukensweerw | 54 | settlement | Dükensweerw | Dükenswarft | no name match in OSM |  |
+| nordheesbel | 56 | settlement | Nordheesbel | Nordhesbüll | no name match in OSM |  |
+| klant | 61 | settlement | Klant | Klindt | no name match in OSM |  |
 | dikshood | 72 | settlement | Dikshood | Deichskopf | 1 name match(es), none compatible with kind=settlement | `w/145300390:Deichskopf:primary:11` |
-| e-moore | 77 | settlement | e Moore | Risummoor |  |  |
+| e-moore | 77 | settlement | e Moore | Risummoor | no name match in OSM |  |
 | e-lungbarj | 88 | settlement | e Lungbärj | Langenberg | 1 name match(es), none compatible with kind=settlement | `w/42288578:Langenberg:unclassified:65` |
-| anggroif | 92 | settlement | Änggröif | Engruf |  |  |
-| naiham | 93 | settlement | Naihåm | Naihåm |  |  |
-| huuchhulm | 94 | settlement | Huuchhulm | Hyholm |  |  |
+| anggroif | 92 | settlement | Änggröif | Engruf | no name match in OSM |  |
+| naiham | 93 | settlement | Naihåm | Naihåm | no name match in OSM |  |
+| huuchhulm | 94 | settlement | Huuchhulm | Hyholm | no name match in OSM |  |
 | kulsmark | 95 | settlement | Külsmårk | Karlsmark | 1 name match(es), none compatible with kind=settlement | `w/95739643:Karlsmark:unclassified:9` |
 | e-runel | 96 | settlement | e Rünel | Ründel | 1 name match(es), none compatible with kind=settlement | `w/222712401:Ründel:primary:10` |
 | wiilbarj | 97 | settlement | Wiilbärj | Wielberg | way/95746028 is taken by line 621 |  |
-| snootebel | 100 | settlement | Snootebel | Schnatebüll |  |  |
-| weestersnootebel | 101 | settlement | Weestersnootebel | Wester Schnatebüll |  |  |
-| aastersnootebel | 102 | settlement | Ååstersnootebel | Oster-Schnatebüll |  |  |
-| peerebel | 104 | settlement | Peerebel | Perebüll |  |  |
-| schardebel | 109 | settlement | Schårdebel | Schardebüll |  |  |
-| orerslaach | 111 | settlement | Orerslääch | Adersleben |  |  |
-| dang-hii | 115 | settlement | Däng Hii | Engerheide |  |  |
-| e-eekre | 116 | settlement | e Eekre | Ackern |  |  |
-| kling | 117 | settlement | Kling | Kling |  |  |
+| snootebel | 100 | settlement | Snootebel | Schnatebüll | no name match in OSM |  |
+| weestersnootebel | 101 | settlement | Weestersnootebel | Wester Schnatebüll | no name match in OSM |  |
+| aastersnootebel | 102 | settlement | Ååstersnootebel | Oster-Schnatebüll | no name match in OSM |  |
+| peerebel | 104 | settlement | Peerebel | Perebüll | no name match in OSM |  |
+| schardebel | 109 | settlement | Schårdebel | Schardebüll | no name match in OSM |  |
+| orerslaach | 111 | settlement | Orerslääch | Adersleben | no name match in OSM |  |
+| dang-hii | 115 | settlement | Däng Hii | Engerheide | no name match in OSM |  |
+| e-eekre | 116 | settlement | e Eekre | Ackern | no name match in OSM |  |
+| kling | 117 | settlement | Kling | Kling | no name match in OSM |  |
 | daagel | 118 | settlement | Däägel | Degel | 3 name match(es), none compatible with kind=settlement | `w/339429901:Degel:track:5;w/339586824:Degel:residential:6;w/572171902:Degel:residential:6` |
-| horninge-hii | 144 | settlement | Horninge Hii | Langenhorner Heide |  |  |
-| toorpemfalj | 157 | settlement | Toorpemfälj | Dörpumfeld |  |  |
+| horninge-hii | 144 | settlement | Horninge Hii | Langenhorner Heide | no name match in OSM |  |
+| toorpemfalj | 157 | settlement | Toorpemfälj | Dörpumfeld | no name match in OSM |  |
 | huugelonj | 170 | settlement | Huugelönj | Hogelund | 5 name match(es), none compatible with kind=settlement | `w/440463568:Hogelund:service:12;w/134572370:Hogelund:unclassified:12;w/36460182:Hogelund:unclassified:13;w/410295744:Hogelund:unclassified:13;w/35983402:Hogelund:unclassified:13` |
-| toorpshii | 175 | settlement | Toorpshii | Dorfheide |  |  |
-| feeshoulem | 183 | settlement | Feeshoulem | Fehsholm |  |  |
-| bakenshult | 208 | settlement | Bakenshult | Backensholz |  |  |
+| toorpshii | 175 | settlement | Toorpshii | Dorfheide | no name match in OSM |  |
+| feeshoulem | 183 | settlement | Feeshoulem | Fehsholm | no name match in OSM |  |
+| bakenshult | 208 | settlement | Bakenshult | Backensholz | no name match in OSM |  |
 | eelemaning | 210 | settlement | Eelemäning | Elemenning | 2 name match(es), none compatible with kind=settlement | `w/172266091:Elemenning:track:20;w/669545351:Elemenning:track:20` |
 | alerbel | 211 | settlement | Älerbel | Ellerbüll | 4 name match(es), none compatible with kind=settlement | `w/27730771:Ellerbüll:unclassified:17;w/27616970:Ellerbüll:unclassified:17;w/39893883:Ellerbüll:unclassified:17;w/255667471:Ellerbüll:unclassified:17` |
 | buunelonj | 217 | settlement | Buunelönj | Bohnenland | 3 name match(es), none compatible with kind=settlement | `w/27775516:Bohnenland:unclassified:17;w/255667466:Bohnenland:unclassified:18;w/255667465:Bohnenland:unclassified:18` |
 | e-moose | 230 | settlement | e Moose | Maas | 3 name match(es), none compatible with kind=settlement | `w/23385778:Maas:residential:25;w/23385777:Maas:residential:25;w/110854928:Maas:residential:25` |
-| outrem | 241 | settlement | Outrem | Autrum |  |  |
-| huuchbuum | 258 | settlement | Huuchbuum | Hochbohm |  |  |
+| outrem | 241 | settlement | Outrem | Autrum | no name match in OSM |  |
+| huuchbuum | 258 | settlement | Huuchbuum | Hochbohm | no name match in OSM |  |
 | hulkenbel | 261 | settlement | Hülkenbel | Hülkenbüll | 3 name match(es), none compatible with kind=settlement | `w/122457192:Hülkenbüll:unclassified:43;w/147470383:Hülkenbüll:unclassified:43;w/255246005:Hülkenbüll:unclassified:43` |
-| haawereeker | 264 | settlement | Hääwereeker | Haferacker |  |  |
-| kiifhuk | 275 | settlement | Kiifhuk | Kiefshuck |  |  |
-| aidem | 281 | settlement | Aidem | Eidum |  |  |
-| abuurt | 285 | settlement | Abuurt | Abort |  |  |
-| gurt-muasem | 290 | settlement | Gurt Muasem | Groß-Morsum |  |  |
-| litj-muasem | 291 | settlement | Litj Muasem | Klein-Morsum |  |  |
-| klaampshorn | 293 | settlement | Klaampshörn | Klaampshörn | 8 name match(es), none compatible with kind=settlement | `w/212488888:Klaampshörn:residential:37;w/212488887:Klaampshörn:residential:37;w/202929576:Klaampshörn:residential:37;w/40331801:Klaampshörn:residential:37;w/203930427:Klaampshörn:residential:37;w/2124` |
+| haawereeker | 264 | settlement | Hääwereeker | Haferacker | no name match in OSM |  |
+| kiifhuk | 275 | settlement | Kiifhuk | Kiefshuck | no name match in OSM |  |
+| aidem | 281 | settlement | Aidem | Eidum | no name match in OSM |  |
+| abuurt | 285 | settlement | Abuurt | Abort | no name match in OSM |  |
+| gurt-muasem | 290 | settlement | Gurt Muasem | Groß-Morsum | no name match in OSM |  |
+| litj-muasem | 291 | settlement | Litj Muasem | Klein-Morsum | no name match in OSM |  |
+| klaampshorn | 293 | settlement | Klaampshörn | Klaampshörn | 8 name match(es), none compatible with kind=settlement | `w/212488888:Klaampshörn:residential:37;w/212488887:Klaampshörn:residential:37;w/202929576:Klaampshörn:residential:37;w/40331801:Klaampshörn:residential:37;w/203930427:Klaampshörn:residential:37;w/212488894:Klaampshörn:residential:37;w/203930430:Klaampshörn:track:37;w/203930431:Klaampshörn:track:37` |
 | klapholtdaal | 299 | settlement | Klapholtdääl | Klappholttal | way/28006828 is taken by line 671 |  |
 | uthorn | 301 | settlement | Uthörn | Uthörn | 1 name match(es), none compatible with kind=settlement | `r/3787133:Uthörn:islet:48` |
-| wriakhorn | 327 | settlement | Wriakhörn | Wriakhörn |  |  |
-| balem | 331 | settlement | Bålem | Ballum | uncertain |  |
-| lon-n | 349 | settlement | Lon'n | London |  |  |
-| tros | 350 | settlement | Trös | Cuxhaven | unsorted other-dialect name: Tres |  |
-| breamen | 351 | settlement | Breämen | Bremen |  |  |
-| breamerhoawen | 352 | settlement | Breämerhoawen | Bremerhaven |  |  |
-| wullemshoawen | 353 | settlement | Wüllemshoawen | Wilhelmshaven |  |  |
+| wriakhorn | 327 | settlement | Wriakhörn | Wriakhörn | no name match in OSM |  |
+| balem | 331 | settlement | Bålem | Ballum | no name match in OSM |  |
+| lon-n | 349 | settlement | Lon'n | London | no name match in OSM |  |
+| tros | 350 | settlement | Trös | Cuxhaven | no name match in OSM |  |
+| breamen | 351 | settlement | Breämen | Bremen | no name match in OSM |  |
+| breamerhoawen | 352 | settlement | Breämerhoawen | Bremerhaven | no name match in OSM |  |
+| wullemshoawen | 353 | settlement | Wüllemshoawen | Wilhelmshaven | no name match in OSM |  |
 | runghoolt | 354 | settlement | Runghoolt | Rungholt | 2 name match(es), none compatible with kind=settlement | `n/11010578491:Rungholt:-:27;w/174651877:Rungholt:farmyard:44` |
-| deesblinge-koornkuuch | 356 | koog | Deesblinge Koornkuuch | Deezbüller Kornkoog |  |  |
+| deesblinge-koornkuuch | 356 | koog | Deesblinge Koornkuuch | Deezbüller Kornkoog | no name match in OSM |  |
 | braistinge-kuuch | 357 | koog | Bräistinge Kuuch | Bredstedter Koog | 2 name match(es), none compatible with kind=koog | `w/27447670:Bredstedter Koog:secondary:10;w/365401131:Bredstedter Koog:secondary:11` |
-| gutskuuch | 358 | koog | Gutskuuch | Gotteskoog |  |  |
-| bookinghiirder-gutskuuch | 361 | koog | Böökinghiirder Gutskuuch | Bökingharder Gotteskoog |  |  |
-| karhiirder-gutskuuch | 362 | koog | Kårhiirder Gutskuuch | Karrharder Gotteskoog |  |  |
-| uulje-krisen-albrechen-kuuch | 363 | koog | Üülje Krisen-Albrechen-Kuuch | Alter Christian-Albrechts-Koog |  |  |
-| naie-krisen-albrechen-kuuch | 364 | koog | Naie Krisen-Albrechen-Kuuch | Neuer Christian-Albrechts-Koog |  |  |
-| stortewarkskuuch | 365 | koog | Störtewärkskuuch | Störtewerkerkoog |  |  |
+| gutskuuch | 358 | koog | Gutskuuch | Gotteskoog | no name match in OSM |  |
+| bookinghiirder-gutskuuch | 361 | koog | Böökinghiirder Gutskuuch | Bökingharder Gotteskoog | no name match in OSM |  |
+| karhiirder-gutskuuch | 362 | koog | Kårhiirder Gutskuuch | Karrharder Gotteskoog | no name match in OSM |  |
+| uulje-krisen-albrechen-kuuch | 363 | koog | Üülje Krisen-Albrechen-Kuuch | Alter Christian-Albrechts-Koog | no name match in OSM |  |
+| naie-krisen-albrechen-kuuch | 364 | koog | Naie Krisen-Albrechen-Kuuch | Neuer Christian-Albrechts-Koog | no name match in OSM |  |
+| stortewarkskuuch | 365 | koog | Störtewärkskuuch | Störtewerkerkoog | no name match in OSM |  |
 | mariienkuuch | 366 | koog | Mariienkuuch | Marienkoog | 1 name match(es), none compatible with kind=koog | `w/24448362:Marienkoog:unclassified:14` |
-| steerdebelinge-uulje-kuuch | 367 | koog | Steerdebelinge Üülje Kuuch | Alter Sterdebüller Koog |  |  |
-| steerdebelinge-naie-kuuch | 368 | koog | Steerdebelinge Naie Kuuch | Neuer Sterdebüller Koog |  |  |
-| bluumenkuuch | 369 | koog | Bluumenkuuch | Blumenkoog |  |  |
-| bruunodenkuuch | 371 | koog | Bruunodenkuuch | Brunottenkoog |  |  |
-| latje-kooldoomer-kuuch | 372 | koog | Latje Kooldoomer Kuuch | Kleiner Kohldammer Koog |  |  |
-| grute-kooldoomer-kuuch | 373 | koog | Grute Kooldoomer Kuuch | Großer Kohldammer Koog |  |  |
-| hiirnekuuch | 374 | koog | Hiirnekuuch | Herrenkoog |  |  |
-| hunebelinge-kuuch | 375 | koog | Hünebelinge kuuch | Hundebüllerkoog |  |  |
-| doogblinge-kuuch | 376 | koog | Doogblinge Kuuch | Dagebüller Koog |  |  |
-| klasblinge-kuuch | 379 | koog | Klasblinge Kuuch | Klixbüller Koog |  |  |
-| kornkuuch | 380 | koog | Kornkuuch | Kornkoog | uncertain |  |
-| horninge-uulje-kuuch | 381 | koog | Horninge Üülje Kuuch | Langenhorner Alter Koog |  |  |
-| horninge-naie-kuuch | 382 | koog | Horninge Naie Kuuch | Langenhorner Neuer Koog |  |  |
-| norderkuuch | 383 | koog | Norderkuuch | Norderkoog |  |  |
+| steerdebelinge-uulje-kuuch | 367 | koog | Steerdebelinge Üülje Kuuch | Alter Sterdebüller Koog | no name match in OSM |  |
+| steerdebelinge-naie-kuuch | 368 | koog | Steerdebelinge Naie Kuuch | Neuer Sterdebüller Koog | no name match in OSM |  |
+| bluumenkuuch | 369 | koog | Bluumenkuuch | Blumenkoog | no name match in OSM |  |
+| bruunodenkuuch | 371 | koog | Bruunodenkuuch | Brunottenkoog | no name match in OSM |  |
+| latje-kooldoomer-kuuch | 372 | koog | Latje Kooldoomer Kuuch | Kleiner Kohldammer Koog | no name match in OSM |  |
+| grute-kooldoomer-kuuch | 373 | koog | Grute Kooldoomer Kuuch | Großer Kohldammer Koog | no name match in OSM |  |
+| hiirnekuuch | 374 | koog | Hiirnekuuch | Herrenkoog | no name match in OSM |  |
+| hunebelinge-kuuch | 375 | koog | Hünebelinge kuuch | Hundebüllerkoog | no name match in OSM |  |
+| doogblinge-kuuch | 376 | koog | Doogblinge Kuuch | Dagebüller Koog | no name match in OSM |  |
+| klasblinge-kuuch | 379 | koog | Klasblinge Kuuch | Klixbüller Koog | no name match in OSM |  |
+| kornkuuch | 380 | koog | Kornkuuch | Kornkoog | no name match in OSM |  |
+| horninge-uulje-kuuch | 381 | koog | Horninge Üülje Kuuch | Langenhorner Alter Koog | no name match in OSM |  |
+| horninge-naie-kuuch | 382 | koog | Horninge Naie Kuuch | Langenhorner Neuer Koog | no name match in OSM |  |
+| norderkuuch | 383 | koog | Norderkuuch | Norderkoog | no name match in OSM |  |
 | oosewulder-kuuch | 384 | koog | Oosewulder Kuuch | Osewoldter Koog | 5 name match(es), none compatible with kind=koog | `w/36946881:Osewoldter-Koog:tertiary:10;w/255943303:Osewoldter-Koog:tertiary:10;w/37109135:Osewoldter-Koog:unclassified:11;w/24422551:Osewoldter-Koog:tertiary:11;w/256680712:Osewoldter-Koog:track:11` |
-| sooderkuuch | 386 | koog | Sööderkuuch | Süderkoog |  |  |
-| weester-snootebel-kuuch | 387 | koog | Weester Snootebel Kuuch | Westerschnatebüller Koog |  |  |
-| wisinghiirder-uulje-kuuch | 388 | koog | Wisinghiirder Üülje Kuuch | Wiedingharder Alter Koog |  |  |
+| sooderkuuch | 386 | koog | Sööderkuuch | Süderkoog | no name match in OSM |  |
+| weester-snootebel-kuuch | 387 | koog | Weester Snootebel Kuuch | Westerschnatebüller Koog | no name match in OSM |  |
+| wisinghiirder-uulje-kuuch | 388 | koog | Wisinghiirder Üülje Kuuch | Wiedingharder Alter Koog | no name match in OSM |  |
 | wisinghiirder-naie-kuuch | 389 | koog | Wisinghiirder Naie Kuuch | Wiedingharder Neuer Koog | 2 name match(es), none compatible with kind=koog | `w/28137444:Wiedingharder-Neuer-Koog:unclassified:23;w/263646004:Wiedingharder-Neuer-Koog:unclassified:24` |
-| uulje-augustenkuuch | 390 | koog | Üülje Augustenkuuch | Alter Augustenkoog |  |  |
-| naie-augustenkuuch | 391 | koog | Naie Augustenkuuch | Neuer Augustenkoog |  |  |
+| uulje-augustenkuuch | 390 | koog | Üülje Augustenkuuch | Alter Augustenkoog | no name match in OSM |  |
+| naie-augustenkuuch | 391 | koog | Naie Augustenkuuch | Neuer Augustenkoog | no name match in OSM |  |
 | baartuft-kuuch | 393 | koog | Bäärtuft Kuuch | Bevertoft Koog | 3 name match(es), none compatible with kind=koog | `w/109786915:Bevertoft-Koog:unclassified:22;w/109786919:Bevertoft-Koog:unclassified:23;w/109786973:Bevertoft-Koog:service:23` |
-| braakleme-kuuch | 394 | koog | Brääkleme Kuuch | Breklumer Koog | 14 name match(es), none compatible with kind=koog | `w/28012263:Breklumer Koog:unclassified:12;w/11931591:Breklumer Koog:residential:12;w/395046078:Breklumer Koog:unclassified:12;w/39466919:Breklumer Koog:unclassified:12;w/39466918:Breklumer Koog:unclas` |
-| bruunodenkuuch-2 | 395 | koog | Bruunodenkuuch | Brunottenkoog |  |  |
-| bupheewerkuuch | 396 | koog | Bupheewerkuuch | Buphever Koog |  |  |
-| cecilienkuuch | 397 | koog | Cecilienkuuch | Cecilienkuuch |  |  |
-| deljekuuch | 398 | koog | Deljekuuch | Deljekoog |  |  |
-| gamsbelkuuch | 402 | koog | Gamsbelkuuch | Galmbüllkuuch |  |  |
-| grute-kuuch | 403 | koog | Grute Kuuch | Großer Koog |  |  |
+| braakleme-kuuch | 394 | koog | Brääkleme Kuuch | Breklumer Koog | 14 name match(es), none compatible with kind=koog | `w/28012263:Breklumer Koog:unclassified:12;w/11931591:Breklumer Koog:residential:12;w/395046078:Breklumer Koog:unclassified:12;w/39466919:Breklumer Koog:unclassified:12;w/39466918:Breklumer Koog:unclassified:12;w/28784234:Breklumer Koog:unclassified:12;w/11253606:Breklumer Koog:unclassified:12;w/36062338:Breklumer Koog:unclassified:12;w/36062337:Breklumer Koog:unclassified:12;w/27732936:Breklumer Koog:unclassified:13;w/119882815:Breklumer Koog:secondary:15;w/244555686:Breklumer Koog:secondary:15;w/244555687:Breklumer Koog:secondary:15;w/27777040:Breklumer Koog:secondary:15` |
+| bruunodenkuuch-2 | 395 | koog | Bruunodenkuuch | Brunottenkoog | no name match in OSM |  |
+| bupheewerkuuch | 396 | koog | Bupheewerkuuch | Buphever Koog | no name match in OSM |  |
+| cecilienkuuch | 397 | koog | Cecilienkuuch | Cecilienkuuch | no name match in OSM |  |
+| deljekuuch | 398 | koog | Deljekuuch | Deljekoog | no name match in OSM |  |
+| gamsbelkuuch | 402 | koog | Gamsbelkuuch | Galmbüllkuuch | no name match in OSM |  |
+| grute-kuuch | 403 | koog | Grute Kuuch | Großer Koog | no name match in OSM |  |
 | hatstinge-kuuch | 405 | koog | Håtstinge Kuuch | Hattstedter Koog | 1 name match(es), none compatible with kind=koog | `w/55483154:Hattstedter Koog:unclassified:16` |
-| hatstinge-naie-kuuch | 406 | koog | Håtstinge Naie Kuuch | Hattstedter Neuer Koog |  |  |
-| heewerkuuch | 408 | koog | Heewerkuuch | Heverkoog |  |  |
-| hulmkuuch | 409 | koog | Hulmkuuch | Holmkoog |  |  |
-| hunenkuuch | 410 | koog | Hunenkuuch | Hunnenkoog |  |  |
-| johann-heimreichen-kuuch | 411 | koog | Johann-Heimreichen-Kuuch | Johann-Heimreichs-Koog |  |  |
-| junkernkuuch | 412 | koog | Junkernkuuch | Junkernkoog |  |  |
-| karhiirder-uulje-kuuch | 413 | koog | Kårhiirder Üülje Kuuch | Karrharder Alter Koog |  |  |
-| latje-kuuch | 414 | koog | Latje Kuuch | Kleiner Koog |  |  |
-| latje-norderkuuch | 415 | koog | Latje Norderkuuch | Kleiner Norderkoog |  |  |
-| liimrikkuuch | 416 | koog | Liimrikkuuch | Lehmrickkoog |  |  |
+| hatstinge-naie-kuuch | 406 | koog | Håtstinge Naie Kuuch | Hattstedter Neuer Koog | no name match in OSM |  |
+| heewerkuuch | 408 | koog | Heewerkuuch | Heverkoog | no name match in OSM |  |
+| hulmkuuch | 409 | koog | Hulmkuuch | Holmkoog | no name match in OSM |  |
+| hunenkuuch | 410 | koog | Hunenkuuch | Hunnenkoog | no name match in OSM |  |
+| johann-heimreichen-kuuch | 411 | koog | Johann-Heimreichen-Kuuch | Johann-Heimreichs-Koog | no name match in OSM |  |
+| junkernkuuch | 412 | koog | Junkernkuuch | Junkernkoog | no name match in OSM |  |
+| karhiirder-uulje-kuuch | 413 | koog | Kårhiirder Üülje Kuuch | Karrharder Alter Koog | no name match in OSM |  |
+| latje-kuuch | 414 | koog | Latje Kuuch | Kleiner Koog | no name match in OSM |  |
+| latje-norderkuuch | 415 | koog | Latje Norderkuuch | Kleiner Norderkoog | no name match in OSM |  |
+| liimrikkuuch | 416 | koog | Liimrikkuuch | Lehmrickkoog | no name match in OSM |  |
 | mjarschkuuch | 419 | koog | Mjarschkuuch | Marschkoog | 2 name match(es), none compatible with kind=koog | `w/95262154:Marschkoog:unclassified:38;w/95262147:Marschkoog:unclassified:38` |
-| madelste-kuuch | 420 | koog | Madelste Kuuch | Mittelster Koog |  |  |
-| obenskuuch | 424 | koog | Obenskuuch | Obbenskoog |  |  |
-| houlme-kuuch | 425 | koog | Houlme Kuuch | Ockholmer Koog |  |  |
-| uulje-kuuch | 426 | koog | Üülje Kuuch | Oldenkoog |  |  |
-| siiwersfleeter-kuuch | 431 | koog | Siiwersfleeter Kuuch | Sieversflether Koog |  |  |
-| siimensbarjer-kuuch | 432 | koog | Siimensbärjer Kuuch | Simonsbergerkoog |  |  |
-| sofiien-samerkuuch | 435 | koog | Sofiien-Samerkuuch | Sophien-Sommerkoog |  |  |
-| ulwesbelinge-kuuch | 440 | koog | Ülwesbelinge Kuuch | Uelvesbüller Koog |  |  |
-| walsblinge-kuuch | 441 | koog | Wålsblinge Kuuch | Wallsbüller Koog |  |  |
-| karhiird | 444 | harde | Kårhiird | Karrharde |  |  |
-| wisinghiird | 445 | harde | Wisinghiird | Wiedingharde |  |  |
-| bookinghiird | 446 | harde | Böökinghiird | Bökingharde |  |  |
-| nordergooshiird | 447 | harde | Nordergooshiird | Nordergoesharde |  |  |
-| soodergooshiird | 448 | harde | Söödergooshiird | Südergoesharde |  |  |
-| wirikshiird | 449 | harde | Wirikshiird | Wiedrichsharde |  |  |
-| edomshiird | 450 | harde | Edomshiird | Edomsharde |  |  |
-| baltringhiird | 451 | harde | Bältringhiird | Beltringharde | uncertain |  |
-| kruschenshali | 462 | hallig | Krüschenshåli | Christianshallig |  |  |
-| beenshali | 471 | hallig | Beenshåli | Beenshallig | uncertain |  |
-| haienshali | 472 | hallig | Haienshåli | Hainshallig |  |  |
-| swinereeg | 478 | sand | Swinereeg | Schweinerücken |  |  |
-| buunehali | 485 | hallig | Buunehåli | Bohnenhallig |  |  |
-| gruthali | 486 | hallig | Gruthåli | Großhallig |  |  |
+| madelste-kuuch | 420 | koog | Madelste Kuuch | Mittelster Koog | no name match in OSM |  |
+| obenskuuch | 424 | koog | Obenskuuch | Obbenskoog | no name match in OSM |  |
+| houlme-kuuch | 425 | koog | Houlme Kuuch | Ockholmer Koog | no name match in OSM |  |
+| uulje-kuuch | 426 | koog | Üülje Kuuch | Oldenkoog | no name match in OSM |  |
+| siiwersfleeter-kuuch | 431 | koog | Siiwersfleeter Kuuch | Sieversflether Koog | no name match in OSM |  |
+| siimensbarjer-kuuch | 432 | koog | Siimensbärjer Kuuch | Simonsbergerkoog | no name match in OSM |  |
+| sofiien-samerkuuch | 435 | koog | Sofiien-Samerkuuch | Sophien-Sommerkoog | no name match in OSM |  |
+| ulwesbelinge-kuuch | 440 | koog | Ülwesbelinge Kuuch | Uelvesbüller Koog | no name match in OSM |  |
+| walsblinge-kuuch | 441 | koog | Wålsblinge Kuuch | Wallsbüller Koog | no name match in OSM |  |
+| karhiird | 444 | harde | Kårhiird | Karrharde | no name match in OSM |  |
+| wisinghiird | 445 | harde | Wisinghiird | Wiedingharde | no name match in OSM |  |
+| bookinghiird | 446 | harde | Böökinghiird | Bökingharde | no name match in OSM |  |
+| nordergooshiird | 447 | harde | Nordergooshiird | Nordergoesharde | no name match in OSM |  |
+| soodergooshiird | 448 | harde | Söödergooshiird | Südergoesharde | no name match in OSM |  |
+| wirikshiird | 449 | harde | Wirikshiird | Wiedrichsharde | no name match in OSM |  |
+| edomshiird | 450 | harde | Edomshiird | Edomsharde | no name match in OSM |  |
+| baltringhiird | 451 | harde | Bältringhiird | Beltringharde | no name match in OSM |  |
+| kruschenshali | 462 | hallig | Krüschenshåli | Christianshallig | no name match in OSM |  |
+| beenshali | 471 | hallig | Beenshåli | Beenshallig | no name match in OSM |  |
+| haienshali | 472 | hallig | Haienshåli | Hainshallig | no name match in OSM |  |
+| swinereeg | 478 | sand | Swinereeg | Schweinerücken | no name match in OSM |  |
+| buunehali | 485 | hallig | Buunehåli | Bohnenhallig | no name match in OSM |  |
+| gruthali | 486 | hallig | Gruthåli | Großhallig | no name match in OSM |  |
 | leenshali | 488 | hallig | Leenshåli | Lehnshallig | 1 name match(es), none compatible with kind=hallig | `w/45177862:Lehnshallig:-:17` |
-| haasehali | 490 | hallig | Hååsehåli | Hasenhallig |  |  |
-| poonshali | 491 | hallig | Poonshåli | Pohnshallig |  |  |
-| swinehali | 492 | hallig | Swinehåli | Schweinehallig |  |  |
-| jakebswarw | 518 | warft | Jåkebswärw | Jakobswarft |  |  |
+| haasehali | 490 | hallig | Hååsehåli | Hasenhallig | no name match in OSM |  |
+| poonshali | 491 | hallig | Poonshåli | Pohnshallig | no name match in OSM |  |
+| swinehali | 492 | hallig | Swinehåli | Schweinehallig | no name match in OSM |  |
+| jakebswarw | 518 | warft | Jåkebswärw | Jakobswarft | no name match in OSM |  |
 | moienswarw-2 | 519 | warft | Moienswärw | Maienswarft | 1 name match(es), none compatible with kind=warft | `w/231699173:Maienswarft:unclassified:6` |
-| aaster-bulhus | 525 | warft | Ååster-Bulhüs | Oster-Bollhaus |  |  |
-| weester-bulhus | 526 | warft | Weester-Bulhüs | Wester-Bollhaus |  |  |
+| aaster-bulhus | 525 | warft | Ååster-Bulhüs | Oster-Bollhaus | no name match in OSM |  |
+| weester-bulhus | 526 | warft | Weester-Bulhüs | Wester-Bollhaus | no name match in OSM |  |
 | piitjens | 541 | warft | Piitjens | Piitjens | 1 name match(es), none compatible with kind=warft | `w/188914727:Piitjens:grass:12` |
 | e-borj | 543 | warft | e Borj | Deezbüll Burg | 2 name match(es), none compatible with kind=warft | `w/36978640:Deezbüll Burg:residential:10;w/36978642:Deezbüll Burg:residential:10` |
-| hunerthusem | 546 | warft | Hunerthüsem | Hunwerthusum |  |  |
-| oibarj | 559 | warft | Oibärj | Eiberg |  |  |
+| hunerthusem | 546 | warft | Hunerthüsem | Hunwerthusum | no name match in OSM |  |
+| oibarj | 559 | warft | Oibärj | Eiberg | no name match in OSM |  |
 | e-hangst | 579 | warft | e Hängst | Hengst | 2 name match(es), none compatible with kind=warft | `w/575176139::reef:88;w/223031936:Lange Anna:bare_rock:88` |
-| dracht | 580 | warft | Dracht | Hestendragt |  |  |
-| amesbel-marke | 587 | warft | Ämesbel Mårke | Mark |  |  |
-| aaster-hoogelfalj | 596 | warft | Ååster-Höögelfälj | Ost-Högelfeld |  |  |
-| schiirl | 606 | warft | Schiirl | Schirl |  |  |
-| haakstfeel | 607 | warft | Hååkstfeel | Hackstedtfeld |  |  |
-| stub | 613 | warft | Stub | Stubb |  |  |
-| flii | 616 | warft | Flii | Vlie |  |  |
-| e-wang | 617 | warft | e Wång | Wange |  |  |
-| uulje-gaardingdik | 625 | warft | Üülje Gaardingdik | Alt Gardingdeich |  |  |
-| borig | 627 | warft | Borig | Alter Burgwall |  |  |
-| brunbarj | 631 | warft | Brünbärj | Braunberg |  |  |
-| diksheern | 636 | warft | Diksheern | Deichshörn |  |  |
-| dikjen-deel | 638 | warft | Dikjen-Deel | Dikjen-Deel |  |  |
-| grainhus | 645 | warft | Gräinhüs | Grünhaus |  |  |
-| huuchtoorp | 653 | warft | Huuchtoorp | Hochdorf |  |  |
-| holerem | 656 | warft | Holerem | Holerem |  |  |
-| jakebswarw-2 | 663 | warft | Jåkebswärw | Jacobswarft | uncertain | wo? |  |
-| kaamp-2 | 665 | warft | Kaamp | Kaamp |  |  |
-| kalfslun | 666 | warft | Kalfslün | Kalfslund |  |  |
-| kooldoomerdik | 678 | warft | Kooldoomerdik | Kohldammerdeich |  |  |
-| lungendik | 683 | warft | Lungendik | Langedeich |  |  |
-| aasterhorningerfalj | 684 | warft | Ååsterhorningerfälj | Oster-Langenhornfeld |  |  |
-| weesterhorningerfalj | 685 | warft | Weesterhorningerfälj | Wester-Langenhornfeld |  |  |
-| lunhamfalj | 687 | warft | Lunhamfälj | Lindholmfeld |  |  |
-| lehiifalj | 688 | warft | Lehiifälj | Loheiderfeld |  |  |
-| latjenhornfalj | 693 | warft | Latjenhornfälj | Lütjenhornfeld |  |  |
-| madfalj | 699 | warft | Madfälj | Mittelfeld |  |  |
-| mankebelfalj | 700 | warft | Mänkebelfälj | Mönkebüllfeld |  |  |
-| naisjosbel-madfail | 704 | warft | Naisjösbel Mädfäil | Neukirchen Mittelfeld |  |  |
-| naisjosbel-oasterfail | 705 | warft | Naisjösbel Oasterfäil | Neukirchen Osterfeld |  |  |
-| naisjosbel-sorfail | 706 | warft | Naisjösbel Sörfäil | Neukirchen Südfeld |  |  |
+| dracht | 580 | warft | Dracht | Hestendragt | no name match in OSM |  |
+| amesbel-marke | 587 | warft | Ämesbel Mårke | Mark | no name match in OSM |  |
+| aaster-hoogelfalj | 596 | warft | Ååster-Höögelfälj | Ost-Högelfeld | no name match in OSM |  |
+| schiirl | 606 | warft | Schiirl | Schirl | no name match in OSM |  |
+| haakstfeel | 607 | warft | Hååkstfeel | Hackstedtfeld | no name match in OSM |  |
+| stub | 613 | warft | Stub | Stubb | no name match in OSM |  |
+| flii | 616 | warft | Flii | Vlie | no name match in OSM |  |
+| e-wang | 617 | warft | e Wång | Wange | no name match in OSM |  |
+| uulje-gaardingdik | 625 | warft | Üülje Gaardingdik | Alt Gardingdeich | no name match in OSM |  |
+| borig | 627 | warft | Borig | Alter Burgwall | no name match in OSM |  |
+| brunbarj | 631 | warft | Brünbärj | Braunberg | no name match in OSM |  |
+| diksheern | 636 | warft | Diksheern | Deichshörn | no name match in OSM |  |
+| dikjen-deel | 638 | warft | Dikjen-Deel | Dikjen-Deel | no name match in OSM |  |
+| grainhus | 645 | warft | Gräinhüs | Grünhaus | no name match in OSM |  |
+| huuchtoorp | 653 | warft | Huuchtoorp | Hochdorf | no name match in OSM |  |
+| holerem | 656 | warft | Holerem | Holerem | no name match in OSM |  |
+| jakebswarw-2 | 663 | warft | Jåkebswärw | Jacobswarft | no name match in OSM |  |
+| kaamp-2 | 665 | warft | Kaamp | Kaamp | no name match in OSM |  |
+| kalfslun | 666 | warft | Kalfslün | Kalfslund | no name match in OSM |  |
+| kooldoomerdik | 678 | warft | Kooldoomerdik | Kohldammerdeich | no name match in OSM |  |
+| lungendik | 683 | warft | Lungendik | Langedeich | no name match in OSM |  |
+| aasterhorningerfalj | 684 | warft | Ååsterhorningerfälj | Oster-Langenhornfeld | no name match in OSM |  |
+| weesterhorningerfalj | 685 | warft | Weesterhorningerfälj | Wester-Langenhornfeld | no name match in OSM |  |
+| lunhamfalj | 687 | warft | Lunhamfälj | Lindholmfeld | no name match in OSM |  |
+| lehiifalj | 688 | warft | Lehiifälj | Loheiderfeld | no name match in OSM |  |
+| latjenhornfalj | 693 | warft | Latjenhornfälj | Lütjenhornfeld | no name match in OSM |  |
+| madfalj | 699 | warft | Madfälj | Mittelfeld | no name match in OSM |  |
+| mankebelfalj | 700 | warft | Mänkebelfälj | Mönkebüllfeld | no name match in OSM |  |
+| naisjosbel-madfail | 704 | warft | Naisjösbel Mädfäil | Neukirchen Mittelfeld | no name match in OSM |  |
+| naisjosbel-oasterfail | 705 | warft | Naisjösbel Oasterfäil | Neukirchen Osterfeld | no name match in OSM |  |
+| naisjosbel-sorfail | 706 | warft | Naisjösbel Sörfäil | Neukirchen Südfeld | no name match in OSM |  |
 | noordmoark | 710 | warft | Noordmoark | Nordmark | 2 name match(es), none compatible with kind=warft | `w/23125396:Nordmark:industrial:124;n/5864988024:Nordmark:quarter:235` |
-| norstfalj | 711 | warft | Norstfälj | Norstedtfeld |  |  |
-| uurstfalj | 712 | warft | Uurstfälj | Ohrstedtfeld |  |  |
-| aldropfalj | 713 | warft | Åldropfälj | Olderupfeld |  |  |
-| aastenoufalj | 714 | warft | Ååstenoufälj | Ostenaufeld |  |  |
-| aastenfaljfalj | 715 | warft | Ååstenfäljfälj | Ostenfeldfeld |  |  |
-| aasterfalj | 717 | warft | Ååsterfälj | Osterfeld | 11 name match(es), none compatible with kind=warft | `w/397157384:Osterfeld:unclassified:17;w/295734103:Osterfeld:residential:20;w/37090121:Osterfeld:service:20;w/22774048:Osterfeld:unclassified:24;w/464732550:Osterfeld:unclassified:25;w/76619031:Osterfe` |
-| rantremfalj | 724 | warft | Råntremfälj | Rantrumfeld |  |  |
-| schardebelfalj | 733 | warft | Schårdebelfälj | Schardebüllfeld |  |  |
-| schoobelfalj | 735 | warft | Schööbelfälj | Schobüllfeld |  |  |
+| norstfalj | 711 | warft | Norstfälj | Norstedtfeld | no name match in OSM |  |
+| uurstfalj | 712 | warft | Uurstfälj | Ohrstedtfeld | no name match in OSM |  |
+| aldropfalj | 713 | warft | Åldropfälj | Olderupfeld | no name match in OSM |  |
+| aastenoufalj | 714 | warft | Ååstenoufälj | Ostenaufeld | no name match in OSM |  |
+| aastenfaljfalj | 715 | warft | Ååstenfäljfälj | Ostenfeldfeld | no name match in OSM |  |
+| aasterfalj | 717 | warft | Ååsterfälj | Osterfeld | 11 name match(es), none compatible with kind=warft | `w/397157384:Osterfeld:unclassified:17;w/295734103:Osterfeld:residential:20;w/37090121:Osterfeld:service:20;w/22774048:Osterfeld:unclassified:24;w/464732550:Osterfeld:unclassified:25;w/76619031:Osterfeld:unclassified:30;w/488709245:Osterfeld:unclassified:30;w/751791069:Osterfeld:residential:32;w/37022899:Osterfeld:unclassified:45;w/36494431:Osterfeld:residential:45;w/36494350:Osterfeld:unclassified:45` |
+| rantremfalj | 724 | warft | Råntremfälj | Rantrumfeld | no name match in OSM |  |
+| schardebelfalj | 733 | warft | Schårdebelfälj | Schardebüllfeld | no name match in OSM |  |
+| schoobelfalj | 735 | warft | Schööbelfälj | Schobüllfeld | no name match in OSM |  |
 | swiisingfalj | 736 | warft | Swiisingfälj | Schwesingfeld | 4 name match(es), none compatible with kind=warft | `w/112285458:Schwesingfeld:tertiary:25;w/308733732:Schwesingfeld:residential:27;w/26683734:Schwesingfeld:residential:27;w/116528336:Schwesingfeld:track:27` |
-| smeerkrouf | 742 | warft | Smeerkrouf | Smeerkroog |  |  |
-| sahoulmfalj | 743 | warft | Såhoulmfälj | Soholmfeld |  |  |
-| staasemfalj | 748 | warft | Stååsemfälj | Stadumfeld |  |  |
-| laigemfalj | 753 | warft | Läigemfälj | Süderlügumfeld |  |  |
-| alhoodfalj | 759 | warft | Älhoodfälj | Ellhöftfeld |  |  |
-| trinermjarsch | 768 | warft | Trinermjarsch | Trendermarsch |  |  |
-| fjaalfalj | 769 | warft | Fjåålfälj | Viölfeld |  |  |
-| faalstfalj | 770 | warft | Fåålstfälj | Vollstedtfeld |  |  |
-| e-wong | 771 | warft | e Wong | Wange |  |  |
-| weestrefalj | 774 | warft | Weestrefälj | Westrefeld |  |  |
+| smeerkrouf | 742 | warft | Smeerkrouf | Smeerkroog | no name match in OSM |  |
+| sahoulmfalj | 743 | warft | Såhoulmfälj | Soholmfeld | no name match in OSM |  |
+| staasemfalj | 748 | warft | Stååsemfälj | Stadumfeld | no name match in OSM |  |
+| laigemfalj | 753 | warft | Läigemfälj | Süderlügumfeld | no name match in OSM |  |
+| alhoodfalj | 759 | warft | Älhoodfälj | Ellhöftfeld | no name match in OSM |  |
+| trinermjarsch | 768 | warft | Trinermjarsch | Trendermarsch | no name match in OSM |  |
+| fjaalfalj | 769 | warft | Fjåålfälj | Viölfeld | no name match in OSM |  |
+| faalstfalj | 770 | warft | Fåålstfälj | Vollstedtfeld | no name match in OSM |  |
+| e-wong | 771 | warft | e Wong | Wange | no name match in OSM |  |
+| weestrefalj | 774 | warft | Weestrefälj | Westrefeld | no name match in OSM |  |
 | winertfalj | 775 | warft | Winertfälj | Winnertfeld | 3 name match(es), none compatible with kind=warft | `w/64454533:Winnertfeld:unclassified:37;w/121085662:Winnertfeld:unclassified:37;w/64454444:Winnertfeld:unclassified:38` |
-| e-gaast | 778 | landscape | e gååst | Die Geest |  |  |
-| e-hiis | 779 | landscape | e hiis | Die Heide |  |  |
-| dat-buterlonj | 780 | landscape | dåt Büterlönj | Uthlande | Halligen und Inseln |  |
+| e-gaast | 778 | landscape | e gååst | Die Geest | no name match in OSM |  |
+| e-hiis | 779 | landscape | e hiis | Die Heide | no name match in OSM |  |
+| dat-buterlonj | 780 | landscape | dåt Büterlönj | Uthlande | no name match in OSM |  |
 | brandenborj | 783 | landscape | Brandenborj | Brandenburg | 3 name match(es), none compatible with kind=landscape | `w/110361701:Brandenburg:track:29;w/308733699:Brandenburg:residential:30;w/305676817:Brandenburg:residential:30` |
-| holonj | 786 | landscape | Holönj | Holland |  |  |
-| e-heege | 790 | water | e Heege | Der Heeg | Google maps: der Hegd, ehemals großer Priel auf Nordmarsch bei Rixwarf |  |
-| oowentuft-siie | 801 | water | Oowentuft Siie | Aventofter See |  |  |
-| diksluutj | 804 | water | Dikslüütj | Deichschlott |  |  |
-| grute-riinsluutj | 805 | water | Grute Riinslüütj | Großer Rienschlot |  |  |
-| huuder-diip | 806 | water | Huuder Diip | Hoyer Tief |  |  |
-| naie-tooch | 813 | water | Naie Tooch | Neuer Sielzug |  |  |
-| aaster-lai | 815 | water | Ååster Lai | Oster Ley |  |  |
-| pan-er-diip | 816 | water | Pan'er Diip | Pander Tief |  |  |
-| rubel-diip | 819 | water | Rübel Diip | Ruttebüller Tief |  |  |
-| bunesguurdsiie | 828 | water | Bünesguurdsiie | Bundesgaarder See |  |  |
-| gutskuuchsiie | 829 | water | Gutskuuchsiie | Gotteskoogsee |  |  |
-| haaselun-ou | 831 | water | Hååselün Ou | Haselund Au |  |  |
-| heesbelsiie | 832 | water | Heesbelsiie | Hesbüll Feld | uncertain |  |
+| holonj | 786 | landscape | Holönj | Holland | no name match in OSM |  |
+| e-heege | 790 | water | e Heege | Der Heeg | no name match in OSM |  |
+| oowentuft-siie | 801 | water | Oowentuft Siie | Aventofter See | no name match in OSM |  |
+| diksluutj | 804 | water | Dikslüütj | Deichschlott | no name match in OSM |  |
+| grute-riinsluutj | 805 | water | Grute Riinslüütj | Großer Rienschlot | no name match in OSM |  |
+| huuder-diip | 806 | water | Huuder Diip | Hoyer Tief | no name match in OSM |  |
+| naie-tooch | 813 | water | Naie Tooch | Neuer Sielzug | no name match in OSM |  |
+| aaster-lai | 815 | water | Ååster Lai | Oster Ley | no name match in OSM |  |
+| pan-er-diip | 816 | water | Pan'er Diip | Pander Tief | no name match in OSM |  |
+| rubel-diip | 819 | water | Rübel Diip | Ruttebüller Tief | no name match in OSM |  |
+| bunesguurdsiie | 828 | water | Bünesguurdsiie | Bundesgaarder See | no name match in OSM |  |
+| gutskuuchsiie | 829 | water | Gutskuuchsiie | Gotteskoogsee | no name match in OSM |  |
+| haaselun-ou | 831 | water | Hååselün Ou | Haselund Au | no name match in OSM |  |
+| heesbelsiie | 832 | water | Heesbelsiie | Hesbüll Feld | no name match in OSM |  |
 | e-smeerle | 833 | water | e Smeerle | Schmale | way/145819821 is taken by line 608; way/836479122 is taken by line 608; relation/18140519 is taken by line 608 |  |
-| uaa | 834 | water | Uáá | Oste | Nebenfluss der Elbe |  |
-| waiser | 835 | water | Waiser | Weser |  |  |
+| uaa | 834 | water | Uáá | Oste | no name match in OSM |  |
+| waiser | 835 | water | Waiser | Weser | no name match in OSM |  |
 | schiirlbosch | 856 | road | Schiirlbosch | Eichkratt Schirlbusch | 1 name match(es), none compatible with kind=road | `w/118020694:Eichkratt Schirlbusch:protected_area:15` |
-| bru | 857 | helgoland | Bru | Helgoländer Felswatt |  |  |
-| ruusik | 883 | road | Ruusik | Rodesiek |  |  |
+| bru | 857 | helgoland | Bru | Helgoländer Felswatt | no name match in OSM |  |
+| ruusik | 883 | road | Ruusik | Rodesiek | no name match in OSM |  |
