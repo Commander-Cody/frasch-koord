@@ -882,3 +882,34 @@ road,,,,,,Uule Loonstraat,,,,,,,Alte Landstraße,,,,,,,uule-loonstraat
 road,,,,,,Täiswååd,,,,,,,Tayswatt,,,way/35321342,,auto,,taiswaad
 road,,,,,,Ruusik,,,,,,,Rodesiek,,,,,,,ruusik
 road,,,,,,,Oastermäärsch,,,,,,Ostermarsch,,,way/27775517; way/33711014; way/112386516; way/255667474; way/255667475; way/255667476; way/435195586; way/668410441; way/668410442,,auto,,oastermaarsch
+settlement,,,,,,,,Dunsem,,,,,Dunsum,Föhr,,node/240042233,,,name:frr from OSM,dunsem
+settlement,,,,,,,,Söleraanj,,,,,Süderende,Föhr,,node/1349599297,,,name:frr from OSM,soleraanj
+settlement,,,,,,,,,,Kairem,,,Keitum,Sylt,,node/873657925,Q20767,,name:frr from OSM,kairem
+warft,,,,,,,,,,,Ual-Padersweerew,,Alte Peterswarft,Langeness,,node/7545909038,,,name:frr from OSM,ual-padersweerew
+warft,,,,,,,,,,,Nai-Padersweerew,,Neu-Peterswarf,Langeness,,node/7538193723,,,name:frr from OSM,nai-padersweerew
+warft,,,,,,,,,,,Naiweerew,,Neu-Peterswarft,Gröde,,node/2197605878,,,name:frr from OSM,naiweerew
+warft,,Janensweerw,,,,,,,,,,,Jannenswarft,Dagebüll,,node/14204794495,,,name:frr from OSM,janensweerw
+warft,,Schörkeweerw,,,,,,,,,,,Kirchwarft,Fahretoft,,node/14204794496,,,name:frr from OSM,schorkeweerw
+koog,Galmsbelkuuch,,,,,,,,,,,,Galmsbüllkoog,Galmsbüll,,node/6268414191,,,name:frr from OSM,galmsbelkuuch
+koog,,,,,Ceciilienkuuch,,,,,,,,Cecilienkoog,Reußenköge,,node/844930205,,,name:frr from OSM,ceciilienkuuch
+settlement,,,,,Aaster Boorlemfeel,,,,,,,,Ost-Bordelumfeld,Bordelum,,node/3000308223,,,name:frr from OSM,aaster-boorlemfeel
+settlement,,,,,,Baamstinger Feel,,,,,,,Bohmstedtfeld,Bohmstedt,,node/6267571273,,,name:frr from OSM,baamstinger-feel
+settlement,,,,,,Freéensborj,,,,,,,Friedensburg,Sönnebüll,,node/6268347881,,,name:frr from OSM,freeensborj
+settlement,,,,,,,Fädersborj,,,,,,Feddersburg,Hattstedtermarsch,,node/6268347878,,,name:frr from OSM,fadersborj
+koog,Uule Kuuch,,,,,,,,,,,,Alter Koog,Nordstrand,,node/311120740,,,name:frr from OSM,uule-kuuch
+warft,Amaalienweerew,,,,,,,,,,,,Amalienwarft,Nordstrand,,node/8541283959,,,name:frr from OSM,amaalienweerew
+warft,Hualew-Wai,,,,,,,,,,,,Halberwegwarft,Nordstrand,,node/8541283958,,,name:frr from OSM,hualew-wai
+warft,Naiweerew,,,,,,,,,,,,Neuwarft,Nordstrand,,node/8541295356,,,name:frr from OSM,naiweerew-2
+koog,Augustenkuuch,,,,,,,,,,,,Augustenkoog,Osterhever,,node/240121883,,,name:frr from OSM,augustenkuuch
+settlement,Eesing,,,,,,,,,,,,Esing,Tating,,node/277749514,,,name:frr from OSM,eesing
+settlement,Finkhüs,,,,,,,,,,,,Finkhaus,Simonsberg,,node/6268347879,,,name:frr from OSM,finkhus
+settlement,Finkhüshali,,,,,,,,,,,,Finkhaushallig,Simonsberg,,node/6268347880,,,name:frr from OSM,finkhushali
+settlement,Frienwale,,,,,,,,,,,,Freienwill,Sprakebüll,,node/1602173782,,,name:frr from OSM,frienwale
+settlement,Frisendelf,,,,,,,,,,,,Fresendelf,,,node/240073361,Q20786,,name:frr from OSM,frisendelf
+settlement,Rousedeel,,,,,,,,,,,,Rosendahl,Mildstedt,,node/1268396951,Q114700737,,name:frr from OSM,rousedeel
+settlement,Pinebärj,,,,,,,,,,,,Pinneberg,,,node/31167256,Q7074,,name:frr from OSM,pinebarj
+settlement,Kolün,,,,,,,,,,,,Kollund,,Kollund,node/10083172307,Q1964129,,"name:frr from OSM; the Danish Kollund on the Flensburg Fjord, not the one of row kolun",kolun-2
+settlement,Fäägetas,,,,,,,,,,,,Fegetasch,,,node/2777157133,,,"name:frr from OSM; near Kappeln, not the Fegetasch of row feegetas",faagetas
+sand,Japsöön,,,,,,,,,,,,Japsand,,,relation/5713403,Q20633,,name:frr from OSM,japsoon
+sand,Saruug-Söön,,,,,,,,,,,,Süderoogsand,,,relation/5713606,Q20643,,name:frr from OSM,saruug-soon
+sand,Jongnaamen,,,,,,,,,,,,Jungnamensand,,,relation/12353150,Q20630,,name:frr from OSM,jongnaamen
