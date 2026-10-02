@@ -289,13 +289,22 @@ def check_local(
 # -------------------------------------------------------------- curation ----
 def load_curation(path: str, required: bool = False) -> curationlist.Curation:
     """The curation (curationlist.read), or none when the file is absent --
-    unless it was named explicitly (`required`)."""
+    unless it was named explicitly (`required`); says which it is."""
     if not os.path.exists(path):
         if required:
             raise PipelineError(f"curation file not found: {path}")
         print(f"curation  : {path} (absent -- nothing curated)")
         return curationlist.Curation({}, {}, {})
-    return curationlist.read(path)
+    curation = curationlist.read(path)
+    objects = curation.objects
+    print(
+        f"curation  : {path} -> {len(objects)} OSM ids "
+        f"({sum(1 for c in objects.values() if MINZOOM_KEY in c['tags'])} with "
+        f"{MINZOOM_KEY}, "
+        f"{sum(1 for c in objects.values() if MAXZOOM_KEY in c['tags'])} with "
+        f"{MAXZOOM_KEY})"
+    )
+    return curation
 
 
 def square_around(lon: float, lat: float, km2: float) -> list[LonLat]:
@@ -459,6 +468,7 @@ class Injector:
             self._count_names(tags)
             if p["km2"] is not None:
                 # an area-like place: only the label square, no node
+                self.hits["w"] += 1
                 self.pending.append(
                     _PendingSquare(
                         key=key, label=p["label"], km2=p["km2"], lon=lon, lat=lat, tags=tags
@@ -727,15 +737,6 @@ def _read_curation(curation_csv: str | None, required: bool) -> curationlist.Cur
     curation = (
         load_curation(curation_csv, required) if curation_csv else curationlist.Curation({}, {}, {})
     )
-    objects = curation.objects
-    if objects:
-        print(
-            f"curation  : {curation_csv} -> {len(objects)} OSM ids "
-            f"({sum(1 for c in objects.values() if MINZOOM_KEY in c['tags'])} with "
-            f"{MINZOOM_KEY}, "
-            f"{sum(1 for c in objects.values() if MAXZOOM_KEY in c['tags'])} with "
-            f"{MAXZOOM_KEY})"
-        )
     if curation.squares:
         print(f"synthetic : {len(curation.squares)} polygon(s) to add around nodes")
     if curation.points:

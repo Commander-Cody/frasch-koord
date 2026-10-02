@@ -844,7 +844,7 @@ def test_report_of_rows_and_curation_rows_that_do_not_fit(
         "waterways : 2 member ways of matched waterway relations",
         "",
         "scanned 9 objects in 0s",
-        "tagged  4 objects: 2 nodes, 1 ways, 1 relations (of these 1 matched by wikidata: "
+        "tagged  5 objects: 2 nodes, 2 ways, 1 relations (of these 1 matched by wikidata: "
         "2 of 2 QIDs present); 1 same-named member ways of waterway relations",
         "names written per dialect:",
         "  name:frr-x-mooring       5  Mooring",
@@ -868,6 +868,17 @@ def test_report_of_rows_and_curation_rows_that_do_not_fit(
         "",
         "(dry run -- nothing written)",
     ]
+
+
+def test_report_names_a_curation_file_without_osm_ids(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # only the Sophien-Koog's label square
+    report_run(tmp_path, REPORT_PLACES[5:], REPORT_CURATION[3:4])
+    lines = normalized(capsys.readouterr().out, tmp_path).splitlines()
+    assert (
+        "curation  : <dir>/curation.csv -> 0 OSM ids (0 with frasch:minzoom, 0 with frasch:maxzoom)"
+    ) in lines
 
 
 def test_dry_run_writes_nothing(tmp_path: Path) -> None:
