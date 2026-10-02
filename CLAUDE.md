@@ -15,3 +15,11 @@ Try to use the /tdd skill where you can. Always make sure to ask the user about 
 # Code Quality
 
 Follow standard code quality guidelines. This includes in particular, a clear naming of variables and functions, short function bodies and coherent classes/abstractions.
+
+# Testing
+
+The code should be thoroghly tested. For any added functionality also add corresponding tests. Follow best pracitices for unit testing, among others this includes:
+
+* don't test the same thing over and over again
+* never have tests depend on configuration like locale data
+* every test focuses on checking exactly one thing

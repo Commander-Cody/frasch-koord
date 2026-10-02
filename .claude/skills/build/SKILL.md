@@ -1,6 +1,6 @@
 ---
 name: build
-description: Implement a task test-first on one branch and PR, loop it through the pr-reviewer agent (max 3 reviews) until approved, never merge.
+description: Implement a task test-first on one branch and PR, loop it through the pr-reviewer agent (max 4 reviews) until approved, never merge.
 argument-hint: <issue number or task description>
 disable-model-invocation: true
 ---
@@ -39,7 +39,7 @@ git fetch origin
 git worktree add -b claude/<short-slug> .claude/worktrees/<short-slug> origin/main
 ```
 
-If this session already runs in a fresh worktree on its own branch with no commits beyond `origin/main`, use that one instead. Either way, this is the only branch of the run. Note its path; you pass it to the reviewer.
+If this session already runs in a fresh worktree on its own branch with no commits beyond `origin/main`, use that one instead, but make sure it's updated to the latest state of `origin/main`. Either way, this is the only branch of the run. Note its path; you pass it to the reviewer.
 
 ## Phase 3 — Implement test-first
 
@@ -61,14 +61,14 @@ If part of the task turns out to be impossible to do in this task, ask the user 
 
 Commit in logical steps with clear messages, push the branch, and open the PR with `gh pr create`. The description says what changed and why, lists the decisions from phase 1, names deferred work with its issue links, and references the task issue (`Closes #<N>` when the PR completes it).
 
-## Phase 5 — Review loop (at most 3 reviews)
+## Phase 5 — Review loop (at most 4 reviews)
 
-For round = 1, 2, 3:
+For round = 1, 2, 3, 4:
 
 1. Run the `pr-reviewer` agent in the foreground (`Agent` with `subagent_type: pr-reviewer`, `run_in_background: false`). Give it: the PR number, the task issue number, the worktree path (so it reviews there instead of checking out again), the round number, and from round 2 on the previous round's fix list with how you handled each item.
 2. **APPROVED** → go to phase 6.
 3. **CHANGES REQUESTED** →
-   - after round 3: go to phase 7.
+   - after round 4: go to phase 7.
    - otherwise: work through the fix list on the same branch, test-first where behaviour changes (a bug fix starts with a failing test that reproduces it). If you disagree with an item, don't silently skip it: explain why in your reply to the reviewer in the next round, and if it touches a real decision, ask the user. Get every CI check green again, commit, push to the same branch (the PR updates itself), and add a short PR comment listing what this round changed. Then start the next round.
 
 ## Phase 6 — Approved: report to the user
@@ -86,6 +86,6 @@ Return to the user with:
 
 End by stating that the PR is ready for the user to merge; do not merge it.
 
-## Phase 7 — Not approved after 3 reviews: escalate
+## Phase 7 — Not approved after 4 reviews: escalate
 
 Stop implementing. Tell the user what was done, what the third review still requires (its fix list), which items you disagree with and why, and what keeps recurring across rounds. Then ask with `AskUserQuestion` how to continue, for example: another fix-and-review round, a decision on the disputed points, moving the remaining items into issues and leaving the PR as it is, or stopping. Do what the user decides; the no-merge rule still applies.
