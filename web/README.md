@@ -31,6 +31,10 @@ them even after one fails, and lists the failed ones at the end
 `ignorePatterns` of `.oxfmtrc.json`), `npm test` (Vitest,
 `src/**/*.test.ts(x)`). `npm run build` and `npm run smoke` are below.
 
+`tsc` is TypeScript 7, the native compiler. It has no stable JS API yet, so a
+tool that needs the compiler API (e.g. type-aware typescript-eslint) would
+need `@typescript/typescript6` alongside it; none in `web/` does today.
+
 ## Production build
 
 `npm run build` type-checks with `tsc -b`, builds `dist/` with Vite, and
