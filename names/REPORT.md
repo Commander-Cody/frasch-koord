@@ -8,21 +8,21 @@ Hand-review worklist: for every **ambiguous** row below pick the right object an
 
 | kind | auto | by hand | own point | ambiguous | not found | skip | no Frisian name | not a place | total |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| settlement | 245 | 23 | 21 | 8 | 59 | 0 | 0 | 0 | 356 |
+| settlement | 247 | 23 | 21 | 8 | 57 | 0 | 0 | 0 | 356 |
 | koog | 28 | 0 | 0 | 2 | 59 | 0 | 0 | 0 | 89 |
 | harde | 0 | 0 | 0 | 0 | 8 | 0 | 0 | 0 | 8 |
 | island | 7 | 3 | 0 | 0 | 0 | 0 | 0 | 0 | 10 |
 | hallig | 12 | 1 | 2 | 0 | 9 | 0 | 0 | 0 | 24 |
 | sand | 6 | 1 | 0 | 0 | 1 | 0 | 0 | 0 | 8 |
-| warft | 115 | 64 | 35 | 4 | 62 | 0 | 0 | 0 | 280 |
+| warft | 116 | 65 | 35 | 3 | 61 | 0 | 0 | 0 | 280 |
 | landscape | 7 | 0 | 0 | 0 | 5 | 0 | 0 | 0 | 12 |
 | water | 26 | 7 | 0 | 0 | 16 | 0 | 0 | 0 | 49 |
 | country | 18 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 18 |
 | road | 10 | 0 | 0 | 11 | 2 | 0 | 0 | 0 | 23 |
 | helgoland | 5 | 0 | 0 | 0 | 1 | 0 | 0 | 0 | 6 |
-| **total** | **479** | **99** | **58** | **25** | **222** | **0** | **0** | **0** | **883** |
+| **total** | **482** | **100** | **58** | **24** | **219** | **0** | **0** | **0** | **883** |
 
-## Ambiguous (25)
+## Ambiguous (24)
 
 `candidates` format: `type/id:name:class:km-from-NF-centre`
 
@@ -38,12 +38,11 @@ Hand-review worklist: for every **ambiguous** row below pick the right object an
 | hamborj | 348 | settlement | Hamborj | Hamburg |  | only match is 87 km from North Frisia (settlement) -- verify by hand | `n/10202530820:Hamburg:isolated_dwelling:87` |
 | soodergutskuuch | 360 | koog | Söödergutskuuch | Südergotteskoog |  | 2 plausible candidates | `n/10158150188:Südergotteskoog:hamlet:14;n/10158150148:Südergotteskoog:hamlet:15` |
 | norderheewerkuuch | 423 | koog | Norderheewerkuuch | Norderheverkoog |  | 2 plausible candidates | `n/687713017:Norderheverkoog:hamlet:34;n/5846096835:Norderheverkoog:hamlet:34` |
-| e-borj-2 | 633 | warft | e Borj | Burg |  | only match is 55 km from North Frisia (warft) -- verify by hand | `n/723967016:Burg:village:55` |
 | dikhusem | 637 | warft | Dikhüsem | Diekhusen |  | only match is 85 km from North Frisia (warft) -- verify by hand | `n/13495486923:Diekhusen:village:85` |
 | e-lun-2 | 691 | warft | e Lün | Lund | Bordelum | location hint 'Bordelum' matched no cluster | `n/2697526527:Lund:hamlet:30;n/1245801856:Lund:hamlet:50;n/9082006142:Lund:village:144;n/11280917902:Lund:hamlet:187;n/9758757094:Lund:hamlet:208;n/13763781712:Lund:hamlet:213;n/5814257354:Lund:hamlet:219;n/10003575113:Lund:hamlet:225;n/3128159903:Lund:hamlet:305;n/11298606364:Lund:neighbourhood:319;n/2718998797:Lunde:hamlet:45` |
 | soonkrouf | 732 | warft | Soonkrouf | Sandkrug |  | 2 plausible candidates | `n/358006129:Sandkrug:locality:67;n/7234334925:Sandkrug:hamlet:180` |
-| toorpstroote | 863 | road | Toorpstroote | Dorfstraße |  | 48 plausible candidates | `w/475630032:Dorfstraße:secondary:3;w/1209502029:Dorfstraße:secondary:3;w/1209502030:Dorfstraße:secondary:3;w/1209502032:Dorfstraße:secondary:3;w/1209502031:Dorfstraße:secondary:3;w/969295787:Dorfstraße:secondary:3;w/1209845130:Dorfstraße:secondary:3;w/1209845129:Dorfstraße:secondary:3;w/238506449:Dorfstraße:secondary:3;w/1209845131:Dorfstraße:secondary:3;w/1209845132:Dorfstraße:secondary:3;w/475630004:Dorfstraße:secondary:3;w/1209845127:Dorfstraße:secondary:3;w/1209502047:Dorfstraße:secondary:3;w/1209502046:Dorfstraße:secondary:3;w/1209845125:Dorfstraße:secondary:3;w/238506448:Dorfstraße:secondary:4;w/447081007:Dorfstraße:secondary:4;w/446647234:Dorfstraße:secondary:4;w/1459130210:Dorfstraße:secondary:4;... (+533 more)` |
-| hoodstroote | 864 | road | Hoodstroote | Hauptstraße |  | 36 plausible candidates | `w/939897125:Hauptstraße:secondary:8;w/969266125:Hauptstraße:secondary:8;w/132695025:Hauptstraße:secondary:8;w/132695024:Hauptstraße:secondary:8;w/939897126:Hauptstraße:secondary:8;w/394931189:Hauptstraße:secondary:8;w/315498957:Hauptstraße:primary:9;w/96396758:Hauptstraße:primary:9;w/315498956:Hauptstraße:primary:9;w/19116674:Hauptstraße:primary:9;w/315498958:Hauptstraße:primary:9;w/315498960:Hauptstraße:primary:9;w/971763106:Hauptstraße:primary:9;w/315498959:Hauptstraße:primary:9;w/1227246086:Hauptstraße:primary:10;w/145344625:Hauptstraße:primary:10;w/31052624:Hauptstraße:secondary:10;w/37216801:Hauptstraße:residential:11;w/146948761:Hauptstraße:primary:11;w/117393450:Hauptstraße:residential:11;... (+531 more)` |
+| toorpstroote | 863 | road | Toorpstroote | Dorfstraße |  | 56 plausible candidates | `w/475630032:Dorfstraße:secondary:3;w/1209502029:Dorfstraße:secondary:3;w/1209502030:Dorfstraße:secondary:3;w/1209502032:Dorfstraße:secondary:3;w/1209502031:Dorfstraße:secondary:3;w/969295787:Dorfstraße:secondary:3;w/1209845130:Dorfstraße:secondary:3;w/1209845129:Dorfstraße:secondary:3;w/238506449:Dorfstraße:secondary:3;w/1209845131:Dorfstraße:secondary:3;w/1209845132:Dorfstraße:secondary:3;w/475630004:Dorfstraße:secondary:3;w/1209845127:Dorfstraße:secondary:3;w/1209502047:Dorfstraße:secondary:3;w/1209502046:Dorfstraße:secondary:3;w/1209845125:Dorfstraße:secondary:3;w/238506448:Dorfstraße:secondary:4;w/447081007:Dorfstraße:secondary:4;w/446647234:Dorfstraße:secondary:4;w/1459130210:Dorfstraße:secondary:4;... (+676 more)` |
+| hoodstroote | 864 | road | Hoodstroote | Hauptstraße |  | 38 plausible candidates | `w/939897125:Hauptstraße:secondary:8;w/969266125:Hauptstraße:secondary:8;w/132695025:Hauptstraße:secondary:8;w/132695024:Hauptstraße:secondary:8;w/939897126:Hauptstraße:secondary:8;w/394931189:Hauptstraße:secondary:8;w/315498957:Hauptstraße:primary:9;w/96396758:Hauptstraße:primary:9;w/315498956:Hauptstraße:primary:9;w/19116674:Hauptstraße:primary:9;w/315498958:Hauptstraße:primary:9;w/315498960:Hauptstraße:primary:9;w/971763106:Hauptstraße:primary:9;w/315498959:Hauptstraße:primary:9;w/1227246086:Hauptstraße:primary:10;w/145344625:Hauptstraße:primary:10;w/31052624:Hauptstraße:secondary:10;w/37216801:Hauptstraße:residential:11;w/146948761:Hauptstraße:primary:11;w/117393450:Hauptstraße:residential:11;... (+654 more)` |
 | sooderwai | 869 | road | Sööderwäi | Süderweg |  | 20 plausible candidates | `w/113035771:Süderweg:secondary:6;w/40972117:Süderweg:secondary:6;w/134701790:Süderweg:unclassified:10;w/237670446:Süderweg:residential:12;w/242487831:Süderweg:residential:12;w/11659367:Süderweg:residential:12;w/31052487:Süderweg:unclassified:13;w/60982778:Süderweg:unclassified:13;w/959571275:Süderweg:unclassified:14;w/816313069:Süderweg:unclassified:14;w/816313068:Süderweg:unclassified:14;w/959571274:Süderweg:unclassified:14;w/251618456:Süderweg:residential:14;w/251618453:Süderweg:residential:14;w/52469200:Süderweg:unclassified:14;w/35285759:Süderweg:residential:14;w/27667158:Süderweg:residential:14;w/52469201:Süderweg:unclassified:14;w/251618452:Süderweg:residential:14;w/132041377:Süderweg:residential:15;... (+38 more)` |
 | aasterwai | 870 | road | Ååsterwäi | Osterweg |  | 12 plausible candidates | `w/37127019:Osterweg:unclassified:2;w/36988560:Osterweg:residential:10;w/1237480045:Osterweg:residential:10;w/36990053:Osterweg:tertiary:11;w/34416325:Osterweg:track:12;w/24458044:Osterweg:residential:13;w/17528897:Osterweg:residential:14;w/35285756:Osterweg:unclassified:14;w/27749984:Osterweg:residential:14;w/1076060173:Osterweg:residential:16;w/263374013:Osterweg:residential:16;w/100026036:Osterweg:unclassified:18;w/52335778:Osterweg:residential:19;w/190760027:Osterweg:residential:19;w/26205162:Osterweg:residential:30;w/205613671:Osterweg:unclassified:30;w/352880628:Osterweg:unclassified:31;w/352880629:Osterweg:unclassified:31;w/24499907:Osterweg:unclassified:31;w/352106541:Osterweg:unclassified:31;... (+16 more)` |
 | weesterwai | 871 | road | Weesterwäi | Westerweg |  | 12 plausible candidates | `w/635923166:Westerweg:secondary:3;w/635923165:Westerweg:secondary:3;w/30782015:Westerweg:secondary:4;w/188339376:Westerweg:unclassified:12;w/112390461:Westerweg:residential:13;w/24448361:Westerweg:service:14;w/27479946:Westerweg:residential:14;w/112390462:Westerweg:residential:14;w/237670447:Westerweg:residential:14;w/261247010:Westerweg:service:16;w/443365525:Westerweg:unclassified:17;w/98286340:Westerweg:unclassified:21;w/27073523:Westerweg:residential:22;w/1228786702:Westerweg:tertiary:23;w/29319664:Westerweg:tertiary:23;w/1228786703:Westerweg:tertiary:24;w/1212739586:Westerweg:tertiary:24;w/1228786705:Westerweg:tertiary:24;w/26983935:Westerweg:residential:24;w/113266345:Westerweg:tertiary:24;... (+25 more)` |
@@ -51,8 +50,8 @@ Hand-review worklist: for every **ambiguous** row below pick the right object an
 | kosterwai | 874 | road | Kösterwäi | Küsterweg |  | 3 plausible candidates | `w/36978636:Küsterweg:residential:10;w/36988561:Küsterweg:residential:10;w/170116195:Küsterweg:residential:23;w/836348986:Küsterweg:residential:24` |
 | norddik-2 | 875 | road | Norddik | Norddeich |  | 4 plausible candidates | `w/30778866:Norddeich:secondary:4;w/28137527:Norddeich:secondary:5;w/262436947:Norddeich:secondary:11;w/113047479:Norddeich:dyke:12;w/31052808:Norddeich:dyke:12;w/262365213:Norddeich:dyke:12;w/1297135558:Norddeich:secondary:12;w/1297135554:Norddeich:secondary:13;w/111432621:Norddeich:secondary:13;w/1009286724:Norddeich:secondary:13;w/1009286723:Norddeich:secondary:13;w/81953307:Norddeich:unclassified:25;w/970610981:Norddeich:unclassified:27;w/837678748:Norddeich:tertiary:27;w/970610979:Norddeich:tertiary:28;w/970610980:Norddeich:unclassified:28;w/27879292:Norddeich:unclassified:32;w/24499852:Norddeich:tertiary:33;w/24499863:Norddeich:tertiary:34;w/26205315:Norddeich:tertiary:35` |
 | de-schesee | 878 | road | de Schesee | Am Forst |  | 3 plausible candidates | `w/928270642:Am Forst:residential:6;w/36460176:Am Forst:unclassified:11;w/34837925:Am Forst:secondary:15;w/1162819362:Am Forst:secondary:15;w/1125745864:Am Forst:secondary:16;w/396262270:Am Forst:secondary:16;w/1162819361:Am Forst:secondary:16;w/710356144:Am Forst:secondary:17` |
-| schorkwai | 879 | road | Schörkwäi | Karkenweg |  | 3 plausible candidates | `w/27527579:Karkenweg:residential:8;w/111312901:Karkenweg:residential:8;w/17240112:Karkenweg:residential:14;w/87454163:Karkenweg:residential:52` |
-| uule-loonstraat | 881 | road | Uule Loonstraat | Alte Landstraße |  | 5 plausible candidates | `w/110942243:Alte Landstraße:tertiary:17;w/1135808840:Alte Landstraße:tertiary:17;w/110942242:Alte Landstraße:tertiary:17;w/18303155:Alte Landstraße:tertiary:17;w/205730139:Alte Landstraße:residential:22;w/440734728:Alte Landstraße:residential:22;w/205490658:Alte Landstraße:unclassified:22;w/205490654:Alte Landstraße:unclassified:22;w/27775501:Alte Landstraße:unclassified:24;w/27775500:Alte Landstraße:unclassified:24;w/131703225:Alte Landstraße:secondary:30;w/1023905698:Alte Landstraße:secondary:30;w/27807641:Alte Landstraße:secondary:32;w/18589682:Alte Landstraße:secondary:32;w/143192654:Alte Landstraße:service:41` |
+| schorkwai | 879 | road | Schörkwäi | Karkenweg |  | 4 plausible candidates | `w/27527579:Karkenweg:residential:8;w/111312901:Karkenweg:residential:8;w/17240112:Karkenweg:residential:14;w/87454163:Karkenweg:residential:52;w/381559775:Karkenweg:unclassified:57;w/26334817:Karkenweg:unclassified:57;w/441979759:Karkenweg:residential:57;w/1205903205:Karkenweg:residential:57;w/26312550:Karkenweg:residential:57` |
+| uule-loonstraat | 881 | road | Uule Loonstraat | Alte Landstraße |  | 8 plausible candidates | `w/110942243:Alte Landstraße:tertiary:17;w/1135808840:Alte Landstraße:tertiary:17;w/110942242:Alte Landstraße:tertiary:17;w/18303155:Alte Landstraße:tertiary:17;w/205730139:Alte Landstraße:residential:22;w/440734728:Alte Landstraße:residential:22;w/205490658:Alte Landstraße:unclassified:22;w/205490654:Alte Landstraße:unclassified:22;w/27775501:Alte Landstraße:unclassified:24;w/27775500:Alte Landstraße:unclassified:24;w/131703225:Alte Landstraße:secondary:30;w/1023905698:Alte Landstraße:secondary:30;w/27807641:Alte Landstraße:secondary:32;w/18589682:Alte Landstraße:secondary:32;w/143192654:Alte Landstraße:service:41;w/1149356082:Alte Landstraße:unclassified:41;w/1149356081:Alte Landstraße:unclassified:41;w/28248754:Alte Landstraße:unclassified:42;w/1191915355:Alte Landstraße:unclassified:48;w/53797291:Alte Landstraße:unclassified:48;... (+9 more)` |
 
 ## Rows sharing one OSM object (0)
 
@@ -61,7 +60,7 @@ The list has these places twice (two spellings, or rows from two sheet sections)
 | OSM object | rows (line) | Frisian names | German |
 |---|---|---|---|
 
-## Not found (222)
+## Not found (219)
 
 Either the feature is not in OSM at all, or OSM spells it differently. `near misses` lists objects that do carry the German name but are the wrong kind of thing (a street, a bus stop, a building) -- occasionally one of them is still the right answer.
 
@@ -87,8 +86,6 @@ Either the feature is not in OSM at all, or OSM spells it differently. `near mis
 | e-runel | 96 | settlement | e Rünel | Ründel | 1 name match(es), none compatible with kind=settlement | `w/222712401:Ründel:primary:10` |
 | wiilbarj | 97 | settlement | Wiilbärj | Wielberg | way/95746028 is taken by line 621 |  |
 | snootebel | 100 | settlement | Snootebel | Schnatebüll | no name match in OSM |  |
-| weestersnootebel | 101 | settlement | Weestersnootebel | Wester Schnatebüll | no name match in OSM |  |
-| aastersnootebel | 102 | settlement | Ååstersnootebel | Oster-Schnatebüll | no name match in OSM |  |
 | peerebel | 104 | settlement | Peerebel | Perebüll | no name match in OSM |  |
 | schardebel | 109 | settlement | Schårdebel | Schardebüll | no name match in OSM |  |
 | orerslaach | 111 | settlement | Orerslääch | Adersleben | no name match in OSM |  |
@@ -204,7 +201,6 @@ Either the feature is not in OSM at all, or OSM spells it differently. `near mis
 | poonshali | 491 | hallig | Poonshåli | Pohnshallig | no name match in OSM |  |
 | swinehali | 492 | hallig | Swinehåli | Schweinehallig | no name match in OSM |  |
 | jakebswarw | 518 | warft | Jåkebswärw | Jakobswarft | no name match in OSM |  |
-| moienswarw-2 | 519 | warft | Moienswärw | Maienswarft | 1 name match(es), none compatible with kind=warft | `w/231699173:Maienswarft:unclassified:6` |
 | aaster-bulhus | 525 | warft | Ååster-Bulhüs | Oster-Bollhaus | no name match in OSM |  |
 | weester-bulhus | 526 | warft | Weester-Bulhüs | Wester-Bollhaus | no name match in OSM |  |
 | piitjens | 541 | warft | Piitjens | Piitjens | 1 name match(es), none compatible with kind=warft | `w/188914727:Piitjens:grass:12` |
@@ -249,7 +245,7 @@ Either the feature is not in OSM at all, or OSM spells it differently. `near mis
 | aldropfalj | 713 | warft | Åldropfälj | Olderupfeld | no name match in OSM |  |
 | aastenoufalj | 714 | warft | Ååstenoufälj | Ostenaufeld | no name match in OSM |  |
 | aastenfaljfalj | 715 | warft | Ååstenfäljfälj | Ostenfeldfeld | no name match in OSM |  |
-| aasterfalj | 717 | warft | Ååsterfälj | Osterfeld | 11 name match(es), none compatible with kind=warft | `w/397157384:Osterfeld:unclassified:17;w/295734103:Osterfeld:residential:20;w/37090121:Osterfeld:service:20;w/22774048:Osterfeld:unclassified:24;w/464732550:Osterfeld:unclassified:25;w/76619031:Osterfeld:unclassified:30;w/488709245:Osterfeld:unclassified:30;w/751791069:Osterfeld:residential:32;w/37022899:Osterfeld:unclassified:45;w/36494431:Osterfeld:residential:45;w/36494350:Osterfeld:unclassified:45` |
+| aasterfalj | 717 | warft | Ååsterfälj | Osterfeld | 27 name match(es), none compatible with kind=warft | `w/397157384:Osterfeld:unclassified:17;w/295734103:Osterfeld:residential:20;w/37090121:Osterfeld:service:20;w/22774048:Osterfeld:unclassified:24;w/464732550:Osterfeld:unclassified:25;w/76619031:Osterfeld:unclassified:30;w/488709245:Osterfeld:unclassified:30;w/751791069:Osterfeld:residential:32;w/24967091:Osterfeld:unclassified:42;w/38807839:Osterfeld:unclassified:42;w/453706297:Osterfeld:unclassified:43;w/38807379:Osterfeld:unclassified:43;w/453706286:Osterfeld:unclassified:43;w/445024489:Osterfeld:unclassified:43;w/453706289:Osterfeld:unclassified:43;w/26265120:Osterfeld:unclassified:43;w/26312914:Osterfeld:residential:43;w/38807380:Osterfeld:unclassified:43;w/1553608481:Osterfeld:unclassified:43;w/24967092:Osterfeld:unclassified:43;... (+7 more)` |
 | rantremfalj | 724 | warft | Råntremfälj | Rantrumfeld | no name match in OSM |  |
 | schardebelfalj | 733 | warft | Schårdebelfälj | Schardebüllfeld | no name match in OSM |  |
 | schoobelfalj | 735 | warft | Schööbelfälj | Schobüllfeld | no name match in OSM |  |
