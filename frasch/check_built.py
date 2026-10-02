@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Are the committed build outputs what the committed inputs give?
 
-    names/check_built.py                         # `just check`, run in CI
+    names/check_built.py                         # `just check-outputs`, run in CI
     names/check_built.py --extracts <pbf> ...    # `just check-full`
 
 Five generated files are committed, because the site and the tile build need
