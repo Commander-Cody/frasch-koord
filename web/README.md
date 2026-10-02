@@ -18,20 +18,24 @@ npm run dev
 That is all a fresh clone needs, for the dev server and for `npm run build`:
 no Java, Python or OSM downloads. `npm run fetch-assets` runs
 `scripts/fetch-fonts.sh` and `scripts/fetch-tiles.sh` (see
-[Tile hosting](#tile-hosting)); both skip what is already there.
+[Tile hosting](#tile-hosting)); both skip what is already there. At the repo
+root, `uv run just setup` does the same, plus the Python side and the smoke
+test's browser.
 
-Other scripts: `npm run build` (type-checks with `tsc -b` then builds with
-Vite), `npm run typecheck` (`tsc -b` only; `npx tsc --noEmit` checks nothing,
-the root tsconfig has `files: []`), `npm run lint` (oxlint), `npm run format`
-(oxfmt, `format:check` only checks; generated and vendored files are in
-`ignorePatterns` of `.oxfmtrc.json`), `npm test`
-(Vitest, `src/**/*.test.ts(x)`), and the two checks of a production build
-below.
+`npm run check` runs `lint`, `format:check`, `typecheck` and `test`, all of
+them even after one fails, and lists the failed ones at the end
+(`../scripts/run-all.sh`); CI runs it. Each on its own: `npm run typecheck`
+(`tsc -b` only; `npx tsc --noEmit` checks nothing, the root tsconfig has
+`files: []`), `npm run lint` (oxlint), `npm run format` (oxfmt,
+`format:check` only checks; generated and vendored files are in
+`ignorePatterns` of `.oxfmtrc.json`), `npm test` (Vitest,
+`src/**/*.test.ts(x)`). `npm run build` and `npm run smoke` are below.
 
 ## Production build
 
-`npm run build` writes `dist/`, which `npm run preview` serves. Two things
-make a build differ from `npm run dev`, and each has a check:
+`npm run build` type-checks with `tsc -b`, builds `dist/` with Vite, and
+checks the result (`scripts/check-build.mjs`); `npm run preview` serves it.
+Two things make a build differ from `npm run dev`, and each has a check:
 
 - **The MapLibre worker.** MapLibre 6 looks for `maplibre-gl-worker.mjs` next
   to its own module, a file Vite never emits; a production build would get
@@ -43,11 +47,9 @@ make a build differ from `npm run dev`, and each has a check:
   `src/main.tsx` behind `import.meta.env.DEV`, so the build leaves them and
   `src/dev/` out entirely; there the parameters open the public map.
 
-After a build:
-
 ```sh
-npm run check:build   # dist/ has the worker the bundle names; no dev tool, no dialect-area review data or notes
-npm run smoke         # vite preview + headless Chromium: map loads, search, card
+npm run build   # ends with check-build: dist/ has the worker the bundle names; no dev tool, no dialect-area review data or notes
+npm run smoke   # build, then vite preview + headless Chromium: map loads, search, card
 ```
 
 `npm run build` stops at its start, naming what is missing, when the glyphs

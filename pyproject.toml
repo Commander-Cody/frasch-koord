@@ -37,7 +37,7 @@ module-name = "frasch"
 module-root = ""
 
 [tool.pytest.ini_options]
-testpaths = ["names/tests", "tiles/tests"]
+testpaths = ["names/tests", "tiles/tests", "scripts/tests"]
 
 [tool.ruff]
 target-version = "py312"
@@ -52,7 +52,7 @@ select = ["F", "E9", "B", "PLR0915"]
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["frasch", "names", "tiles"]
+files = ["frasch", "names", "tiles", "scripts"]
 mypy_path = "names/tests"
 # pmtiles ships py.typed, but its functions are not annotated
 untyped_calls_exclude = ["pmtiles"]

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Checks the output of `npm run build` for what broke deployments before
-// (issue #20), and for what must not be published. Run it after a build:
-// `npm run check:build`.
+// (issue #20), and for what must not be published. `npm run build` ends with
+// it, so every build is checked.
 //
 //  - The bundle points MapLibre at a worker file that dist/ really contains.
 //    MapLibre's own default (`maplibre-gl-worker.mjs` next to its module) is

@@ -25,9 +25,11 @@ names/work/matches.csv   generated details of the last match run (git-ignored)
         |  tiles/inject_names.py   ->  tags in the OSM extract  ->  tiles
 ```
 
-Every step is a recipe of the root `justfile` (`uv run just --list`):
-`extracts`, `candidates`, `match`, `objects`, `areas`, `index`, `dialects`,
-`tiles`, and the checks `check` (CI), `check-full` and `check-tiles`.
+Every step is a recipe of the root `justfile` (`uv run just` lists them):
+`update` runs the name part in one go (see [Workflow](#workflow)); the single
+steps are `extracts`, `candidates`, `match`, `objects`, `areas`, `index`,
+`dialects` and `tiles`, and the checks `check-outputs` (CI), `check-full` and
+`check-tiles`.
 
 `names/bootstrap/sheet-export.csv` is the export of the original Google Sheet
 the list was imported from (September 2026). The sheet is history; do not
@@ -239,8 +241,8 @@ the run before anything else is written), the decisions of the curation view
 are applied (`work/curate-patch.jsonl`, if there is one), the matcher runs,
 the objects are located, the dialect areas and the search index are rebuilt,
 the rows left for review are exported for the view (`work/curate.json`), and
-`just check` proves the result. It ends with the files it changed and how
-many rows are left to curate. Then curate those (`npm run dev` in `web/`,
+`just check-outputs` proves the result. It ends with the files it changed and
+how many rows are left to curate. Then curate those (`npm run dev` in `web/`,
 open `/?curate`), edit more, and run it again, or review with `git diff` and
 commit.
 
@@ -345,12 +347,12 @@ back to it. Re-run `match.py` afterwards and export again.
 **Build**:
 
 ```bash
-uv run just extracts   # download + verify the SH and DK extracts (REFRESH=1: again)
-uv run just objects    # after a row got a new `osm` reference (result is committed)
-uv run just areas      # only when dialect_areas.csv changed (result is committed)
-uv run just index      # -> web/public/data/names.json + web/src/generated/dialects.json
-uv run just tiles      # injects places.csv + objects + areas + curation.csv, runs Planetiler
-uv run just check      # the committed outputs match their inputs (CI runs this)
+uv run just extracts        # download + verify the SH and DK extracts (REFRESH=1: again)
+uv run just objects         # after a row got a new `osm` reference (result is committed)
+uv run just areas           # only when dialect_areas.csv changed (result is committed)
+uv run just index           # -> web/public/data/names.json + web/src/generated/dialects.json
+uv run just tiles           # injects places.csv + objects + areas + curation.csv, runs Planetiler
+uv run just check-outputs   # the committed outputs match their inputs (CI runs this)
 ```
 
 ### Where the objects are
@@ -385,10 +387,10 @@ extracts the objects were located in. The frontend warns in the console when
 the two differ. `dialect_areas*.geojson` record the hashes of
 `dialect_areas.csv` and `dialects.csv` and their extract.
 
-`just check` (`check_built.py`, run in CI) proves the committed outputs match
-the committed inputs: it rebuilds `names.json` and `dialects.json` into a
-temporary directory and compares them byte for byte, and checks the stamps
-of the dialect areas — those, and `osm_objects.json`, need an extract to
+`just check-outputs` (`check_built.py`, run in CI) proves the committed
+outputs match the committed inputs: it rebuilds `names.json` and
+`dialects.json` into a temporary directory and compares them byte for byte,
+and checks the stamps of the dialect areas — those, and `osm_objects.json`, need an extract to
 rebuild. `just check-full` rebuilds them from the local extracts as well.
 
 Dry-run the injection alone:
@@ -615,7 +617,7 @@ references: coordinates and tag fixes belong in `curation.csv` and the build.
 | `locate.py` | OSM extract(s) → `osm_objects.json`: where each object of the name list is |
 | `osm_objects.json` | generated, **committed**: the located objects (see "Where the objects are") |
 | `provenance.py` | prints the tiles' `built_from` stamp |
-| `check_built.py` | `just check`: the committed outputs match their inputs |
+| `check_built.py` | `just check-outputs`: the committed outputs match their inputs |
 | `build_candidates.py` | OSM extract(s) → `work/candidates.jsonl` |
 | `match.py` | fills `osm`/`wikidata` in `places.csv`; writes `work/matches.csv` and `REPORT.md` (`--dry-run`: only `work/matches.csv`) |
 | `build_dialect_areas.py` | `dialect_areas.csv` + OSM extract → `dialect_areas.geojson` + `dialect_areas_parts.geojson` |

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Smoke check of the production build: serves dist/ with `vite preview`,
 // opens it in headless Chromium and checks that the map loads, search finds a
-// place and its card opens, and that the dev tools stay off. Run after a
-// build: `npm run smoke`. The build needs the fetched assets (`npm run
+// place and its card opens, and that the dev tools stay off. `npm run smoke`
+// builds first, then runs this. The build needs the fetched assets (`npm run
 // fetch-assets`, or VITE_TILES_URL for the tiles), see README.md.
 //
 // Browser: Playwright's headless Chromium (`npx playwright install

@@ -12,27 +12,11 @@ jobs:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.2.0
       - run: uv sync --locked
-      - run: uv run ruff check .
-      - run: uv run ruff format --check .
-      - run: uv run mypy
-      # Both also write a Markdown overview to the run's summary page (as
-      # Vitest does by itself); the annotate-failures plugin marks failing
-      # tests in the diff.
-      - run: >-
-          uv run pytest --md-report --md-report-flavor gfm
-          --md-report-color never --md-report-zeros empty
-          --md-report-output "$GITHUB_STEP_SUMMARY"
-      - name: Check the name files
-        if: ${{ !cancelled() }}
-        run: uv run python names/check.py --summary "$GITHUB_STEP_SUMMARY"
-      # The committed build outputs (names.json, dialects.json, the dialect
-      # areas, the objects file) must be what the committed inputs give.
-      - name: Check the build outputs against their inputs
-        if: ${{ !cancelled() }}
-        run: uv run just check
-      - name: Shellcheck
-        if: ${{ !cancelled() }}
-        run: uv run shellcheck tiles/*.sh web/scripts/*.sh
+      # Every Python-side check, all of them even after a failure (the
+      # justfile lists them). pytest and names/check.py also write a Markdown
+      # overview to the run's summary page (as Vitest does by itself); the
+      # annotate-failures plugin marks failing tests in the diff.
+      - run: uv run just check-python
 
   web:
     name: Web app
@@ -48,10 +32,8 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
-      - run: npm run lint
-      - run: npm run format:check
-      - run: npm run typecheck
-      - run: npm test
+      # lint, format, types and tests, all of them even after a failure
+      - run: npm run check
       # The glyphs and the pinned tile archive (~225 MB), kept between runs
       # under a key that changes with whatever pins them.
       - uses: actions/cache@v6
@@ -61,7 +43,6 @@ jobs:
             web/.cache/tiles
           key: web-assets-${{ hashFiles('web/tiles.lock', 'web/scripts/fetch-fonts.sh') }}
       - run: npm run fetch-assets
-      - run: npm run build
-      - run: npm run check:build
       - run: npx playwright install --with-deps chromium-headless-shell
+      # builds the site (checking dist/), then smoke-tests it
       - run: npm run smoke

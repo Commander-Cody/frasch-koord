@@ -1,4 +1,4 @@
-"""names/check_built.py (`just check`, run in CI): are the committed build
+"""names/check_built.py (`just check-outputs`, run in CI): are the committed build
 outputs what their committed inputs give?  (#24: names.json was once built
 from an uncommitted places.csv.)"""
 

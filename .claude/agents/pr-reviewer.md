@@ -25,12 +25,13 @@ In this order: the issue(s) the caller named; `closingIssuesReferences` and `#N`
 
 ## 3. Run the checks
 
-`.github/workflows/ci.yml` is the source of truth for which checks exist; read it and run every lint, type-check and test step it lists, locally, in the reviewed checkout. At the time of writing that is:
+`.github/workflows/ci.yml` is the source of truth for which checks exist; read it and run what it runs, locally, in the reviewed checkout. At the time of writing that is, from the repo root with Node on `PATH` (`source ~/.nvm/nvm.sh && nvm use "$(cat web/.nvmrc)"`):
 
-- Python (repo root): `uv sync --locked`, `uv run ruff check .`, `uv run mypy`, `uv run pytest`, `uv run python names/check.py`
-- Web (`web/`): `source ~/.nvm/nvm.sh && nvm use`, `npm ci`, `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`, `npm run check:build`
+- `uv sync --locked`, then `uv run just setup` (web packages, the fetched glyphs and tiles, the smoke test's browser)
+- `uv run just check`: every lint, format, type check and test, Python and web; it runs them all and ends with the list of the failed ones (`run-all: failed: …`)
+- `uv run just smoke`: the production build (checked), then the smoke test in headless Chromium
 
-Also look at `gh pr checks <N>`. Any failing check, local or in CI, blocks approval. If a check cannot run for an environmental reason (not because of the PR), say which one and why, and fall back to the CI result for it. Do not run `npm run smoke`; it needs system libraries this machine lacks.
+Also look at `gh pr checks <N>`. Any failing check, local or in CI, blocks approval. If a check cannot run for an environmental reason (not because of the PR), say which one and why, and fall back to the CI result for it.
 
 ## 4. Review with the code-review skill
 

@@ -326,7 +326,7 @@ trimmed to their last complete clause — no re-research, nothing added.
 *(Resolved 2026-09-30: the review first found 23 municipalities in the
 committed geojson that no CSV row claimed any more. The owner had removed
 those rows on purpose; the geojson was rebuilt from the CSV on 2026-09-27, and
-`just check` now fails when the two disagree.)*
+`just check-outputs` now fails when the two disagree.)*
 
 ## Decided 2026-09-27: every `places.csv` row has a stable id (issue #23)
 
@@ -385,8 +385,8 @@ plus the objects' extracts) in the PMTiles `description`. The frontend warns
 in the console when they differ. The dialect areas record the hashes of
 `dialect_areas.csv` and `dialects.csv` and their extract.
 
-**Drift check.** `just check` runs in CI: it regenerates `names.json` and
-`dialects.json` and diffs them, and checks the stamps of the extract-derived
+**Drift check.** `just check-outputs` runs in CI: it regenerates `names.json`
+and `dialects.json` and diffs them, and checks the stamps of the extract-derived
 files (CI has no extract; `-latest` changes daily anyway). `just check-full`
 rebuilds those from local extracts too; `just check-tiles` compares a built
 archive with `names.json`, label by label.
@@ -455,8 +455,8 @@ record of which one.
 
 Adding a place meant knowing which of `check.py --fix`, `curate.py apply`,
 `just candidates`, `match.py`, `just objects`, `just areas`, `just index`
-(with `just dialects`), `curate.py export` and `just check` to run, and in
-which order. `uv run just update`
+(with `just dialects`), `curate.py export` and `just check-outputs` to run, and
+in which order. `uv run just update`
 (`frasch/update.py`) now runs all of them in that order and ends with the
 files it changed and the rows left to curate. Owner's choices:
 
@@ -496,6 +496,37 @@ than OSM. The other option was to carry OSM's `name:de` in names.json beside
 the list's (as `name_osm` does for `name`, #32). That would have kept OSM's
 German names on the map. It changes 5 objects today, e.g. *Norddorf auf
 Amrum* → *Norddorf* and *Glücksburg (Ostsee)* → *Glücksburg*.
+
+## Decided 2026-10-02: one command per routine task (issue #74)
+
+The root `justfile` is the one entry point, `uv run just` (owner's choice
+over a global `just`, which would no longer be pinned by `uv.lock`). Its
+recipes are grouped: **everyday** (`setup`, `dev`, `check`, `check-python`,
+`format`, `build`, `smoke`), **name pipeline** (`update`, `check-outputs`,
+which was `check` before), **tiles**, and **pipeline steps**, the single steps
+`update` runs, kept for running one by hand (owner's choice over hiding or
+removing them). Commands that take arguments (`check.py --fix`, `curate.py`,
+`match.py --dry-run`) stay as they are.
+
+- **`check` runs every check and lists the failed ones at the end** (owner's
+  choice over stopping at the first), through `scripts/run-all.sh`. One
+  runner serves both sides; `web/` calls it as `../scripts/run-all.sh`.
+- **`web/` still needs no Python** (#28): `npm run check`, `npm run build` and
+  `npm run smoke` hold the web side's steps, and the `just` recipes only call
+  them.
+- **Every build is checked**: `npm run build` ends with `check-build.mjs`
+  (owner's choice), and `npm run smoke` builds first.
+- **CI calls the composite commands** (`just check-python`, `npm run check`,
+  `npm run smoke`), so CI and a local run cannot drift. The price is one CI
+  step per side instead of one per check: a failure is found in the log
+  (`run-all:` marks each command and lists the failed ones), not by the
+  step's name. In CI `check-python` writes pytest's and `names/check.py`'s
+  overviews to the run's summary page, as the separate steps did.
+
+**Why**: checking before a push took 11 commands, building and smoke-testing
+three more, and CI listed each again. The same tool was called three ways
+(`.venv/bin/…`, `uv run just …`, `npm run …`), and `just --list` put the
+routine recipes and the pipeline's internals side by side.
 
 ## Remaining open questions
 1. Hosting provider for the site (R2 + Pages proposed, nothing set up yet); the tiles are GitHub release assets for now (issue #28).

@@ -15,7 +15,7 @@ this runs the pipeline's commands in their order:
   dialect registry    web/src/generated/dialects.json
   search index        web/public/data/names.json
   curation worklist   `curate.py export`: what is left for the view
-  check               the committed outputs match their inputs (`just check`)
+  check               the committed outputs match their inputs (`just check-outputs`)
 
 and ends with the files it changed and the rows left to curate.  The slow
 steps are skipped when their output was built from what is there now (see
