@@ -482,7 +482,7 @@ def test_report_of_a_run(injected_run: tuple[Path, str]) -> None:
         "",
         "scanned 17 objects in 0s",
         "tagged  5 objects: 2 nodes, 1 ways, 2 relations "
-        "(of these 0 matched by wikidata: 0 of 1 QIDs present)",
+        "(of these 0 matched by wikidata: 1 of 1 QIDs present)",
         "names written per dialect:",
         "  name:frr-x-mooring       4  Mooring",
         "  name:frr-x-nordgoes      2  Nordergoesharder",
@@ -497,9 +497,6 @@ def test_report_of_a_run(injected_run: tuple[Path, str]) -> None:
         f"  node/{MAX_NODE + 1}  local/westerheide-amrum Waasterhias (Westerheide) "
         "at 54.65097, 8.34019: frasch:dialect=frr-x-oomrang, frasch:kind=settlement, "
         "frasch:local=Waasterhias, frasch:ref=waasterhias, place=hamlet",
-        "",
-        # Holm carries the QID, but it was matched by its id first
-        "1 wikidata QIDs not present in the file: Q559369 (Hulm)",
         "",
         "curated 3 objects: 2 nodes, 0 ways, 1 relations",
         f"  n/{NORDSTRAND}  Nordstrand (village node): frasch:minzoom=12, "
@@ -848,7 +845,7 @@ def test_report_of_rows_and_curation_rows_that_do_not_fit(
         "",
         "scanned 9 objects in 0s",
         "tagged  4 objects: 2 nodes, 1 ways, 1 relations (of these 1 matched by wikidata: "
-        "1 of 2 QIDs present); 1 same-named member ways of waterway relations",
+        "2 of 2 QIDs present); 1 same-named member ways of waterway relations",
         "names written per dialect:",
         "  name:frr-x-mooring       5  Mooring",
         "  frasch:local             0  local form",
@@ -999,6 +996,32 @@ def test_a_place_like_qid_carrier_gets_the_rows_names(
     tmp_path: Path, t: str, tags: dict[str, str]
 ) -> None:
     assert carrier_tags_after_run(tmp_path, t, tags)["name:frr-x-mooring"] == "Nordsiie"
+
+
+def test_a_qid_counts_as_present_whatever_matched_its_carrier(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Holm is matched by its id and carries its row's QID; no object
+    # carries the North Sea's
+    hulm = REPORT_PLACES[0] | {"osm": "node/1"}
+    (tmp_path / "places.csv").write_text(places_csv([hulm, NORDSIIE]), encoding="utf-8")
+    holm = {"place": "village", "name": "Holm", "wikidata": "Q559369"}
+    write_osm(tmp_path / "in.osm.pbf", nodes={1: ((8.9, 54.6), holm)})
+    inject_names.run(
+        str(tmp_path / "in.osm.pbf"),
+        str(tmp_path / "out.osm.pbf"),
+        str(tmp_path / "places.csv"),
+        paths.DIALECTS,
+        None,
+        dry_run=True,
+        curation_csv=curation_file(tmp_path),
+    )
+    lines = capsys.readouterr().out.splitlines()
+    assert (
+        "tagged  1 objects: 1 nodes, 0 ways, 0 relations "
+        "(of these 0 matched by wikidata: 1 of 2 QIDs present)"
+    ) in lines
+    assert "1 wikidata QIDs not present in the file: Q1693 (Nordsiie)" in lines
 
 
 @pytest.mark.parametrize(

@@ -412,6 +412,9 @@ class Injector:
         self.local_hits = 0
         self.seen_keys: set[Ref] = set()
         self.qid_hits: collections.Counter[str] = collections.Counter()
+        # the rows' QIDs that some object of the file carries, whatever
+        # matched that object
+        self.present_qids: set[str] = set()
         # (object, its name, QID) of the objects that carry a row's QID but
         # are not place-like, for the report
         self.skipped_carriers: list[tuple[OsmRef, str, str]] = []
@@ -530,6 +533,7 @@ class Injector:
     def handle(self, o: _OsmObject, t: str) -> None:
         """`t` is the OSM type letter (n/w/r), not a name-list kind."""
         self.n_objects += 1
+        self._note_qid(o)
         key = (t, o.id)
         self.max_id[t] = max(self.max_id[t], o.id)
         if t != "n":
@@ -557,6 +561,12 @@ class Injector:
             self.pending.append(_square_with_names(key, synth, tags))
         if self.w is not None:
             self.w.add(o.replace(tags=tags))
+
+    def _note_qid(self, o: _OsmObject) -> None:
+        """Remember the row QID this object carries, if any, as present."""
+        qid = o.tags.get("wikidata")
+        if qid in self.by_qid:
+            self.present_qids.add(qid)
 
     def _rows_for(self, key: OsmRef, o: _OsmObject) -> tuple[Sequence[PlaceRow] | None, OsmRef]:
         """The name-list rows that claim this object (None for none) -- by
@@ -849,7 +859,7 @@ def _print_tagged(inj: Injector, inputs: _Inputs, seconds: float) -> None:
         f"{inj.hits['n']} nodes, {inj.hits['w']} ways, {inj.hits['r']} relations"
         + (
             f" (of these {sum(inj.qid_hits.values())} matched by wikidata: "
-            f"{len(inj.qid_hits)} of {len(by_qid)} QIDs present)"
+            f"{len(inj.present_qids)} of {len(by_qid)} QIDs present)"
             if by_qid
             else ""
         )
@@ -899,8 +909,7 @@ def _print_not_found(inj: Injector, names: NameList, reg: Registry, in_file: str
         print(f"\n{len(missing)} rows reference ids that are not in {in_file}:")
         for key in missing:
             print(f"  {placelist.format_osm([key])}  {placelist.any_name(by_id[key][0], reg)}")
-    skipped = {qid for _, _, qid in inj.skipped_carriers}
-    nf = [q for q in by_qid if not inj.qid_hits[q] and q not in skipped]
+    nf = [q for q in by_qid if q not in inj.present_qids]
     if nf:
         print(
             f"\n{len(nf)} wikidata QIDs not present in the file: "
