@@ -49,7 +49,8 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
   const [entries, setEntries] = useState<PatchEntry[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  // For a save that resolves later: has the user moved on meanwhile?
+  // For a save that resolves later (has the user moved on meanwhile?) and for
+  // the deep link (has the user chosen a row before it could open?).
   const selectedIdNow = useRef<string | null>(null);
   const [filter, setFilter] = useState(NO_FILTER);
 
@@ -108,7 +109,8 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
     },
     [rows, goTo],
   );
-  useDeepLinkParam('row', rows.length > 0, openLinkedRow);
+  const hasSelection = useCallback(() => selectedIdNow.current !== null, []);
+  useDeepLinkParam('row', rows.length > 0, openLinkedRow, hasSelection);
   useListNavigation(visibleIds, selectedId, goTo);
 
   /* ------------------------------------------------------------- saving */

@@ -3,15 +3,17 @@ import { renderHook } from '@testing-library/react';
 
 import { useDeepLinkParam } from './useDeepLinkParam';
 
+/** `selection.made` stands in for the panel's selection, as it is when the effect runs. */
 function renderDeepLink(ready: boolean) {
   const open = vi.fn();
+  const selection = { made: false };
   const hook = renderHook(
-    (props: { ready: boolean }) => useDeepLinkParam('row', props.ready, open),
+    (props: { ready: boolean }) => useDeepLinkParam('row', props.ready, open, () => selection.made),
     {
       initialProps: { ready },
     },
   );
-  return { ...hook, open };
+  return { ...hook, open, selection };
 }
 
 beforeEach(() => {
@@ -38,6 +40,23 @@ describe('useDeepLinkParam', () => {
     window.history.replaceState(null, '', '/?curate&row=alkersem');
     rerender({ ready: true });
     expect(open).toHaveBeenCalledWith('schorkewarw-2');
+  });
+
+  it('leaves a selection the user made before the data arrived', () => {
+    const { open, rerender, selection } = renderDeepLink(false);
+    selection.made = true;
+    rerender({ ready: true });
+    expect(open).not.toHaveBeenCalled();
+  });
+
+  it('does not open the link later, once the user has chosen without it', () => {
+    const { open, rerender, selection } = renderDeepLink(false);
+    selection.made = true;
+    rerender({ ready: true });
+    selection.made = false;
+    rerender({ ready: false });
+    rerender({ ready: true });
+    expect(open).not.toHaveBeenCalled();
   });
 
   it('opens nothing without the parameter', () => {
