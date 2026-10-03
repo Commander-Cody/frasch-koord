@@ -152,6 +152,28 @@ const LISTED_SCENARIOS: Record<string, ClickedLabel & { entry: NameEntry }> = {
       name: 'Hamburger Hallig',
     },
   },
+  // A row with two objects: the entry stands for the first (the way on the
+  // Hallig, whose local name is OSM's), the clicked one lies in another area.
+  'the second object of a listed row, in another dialect area': {
+    entry: listed({
+      id: 'nordwarw',
+      names: { 'frr-x-mooring': 'Nordwärw', 'frr-x-nordgoes': 'Noordweerw' },
+      name_de: 'Nordwarft',
+      name_osm: 'Nordwarft',
+      local: 'Nöördweerew',
+      dialect: 'frr-x-hallig',
+      kind: 'warft',
+    }),
+    props: {
+      'frasch:ref': 'nordwarw',
+      'frasch:local': 'Noordweerw',
+      'frasch:dialect': 'frr-x-nordgoes',
+      'name:frr-x-mooring': 'Nordwärw',
+      'name:frr-x-nordgoes': 'Noordweerw',
+      'name:de': 'Nordwarft',
+      name: 'Nordwarft',
+    },
+  },
 };
 
 const CASES: [string, ClickedLabel][] = [

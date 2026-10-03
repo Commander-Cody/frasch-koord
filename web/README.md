@@ -272,8 +272,8 @@ OpenMapTiles schema plus our extras, injected by the `tiles/` build
   place use themselves — the area dialect's name, or the `local` column of
   `names/places.csv` where a sub-dialect differs (Fahretoft). Where the list
   has neither, or does not have the place at all, it is OSM's `name:frr`
-  inside a dialect area (issue #81), so it is the one `frasch:*` attribute a
-  feature outside our name list can carry. Drives the local view.
+  inside a dialect area (issue #81), so a feature outside our name list can
+  carry it too. Drives the local view.
 - `frasch:variety` (string, rare): the sub-dialect the local name belongs to,
   e.g. `Foortuftinge`. Shown by the place card; nothing in the style reads it.
 - `frasch:ref` (string, only on features from our name list): which row of
@@ -487,7 +487,10 @@ Where the data comes from (`src/names.ts`):
 - The feature's `frasch:ref` looks the row up with `find`. `cardEntry` then
   merges the two: the name-list entry wins field by field, the tile fills what
   the list does not have — which is how Föhr shows a Danish name (OSM's
-  `name:da`) although our own `da` column is empty there.
+  `name:da`) although our own `da` column is empty there. The local name is
+  the exception: the clicked feature's own `frasch:local` wins. A row may
+  have several objects in different dialect areas, and the entry only knows
+  the first one's local name.
 - A feature with no row in the list (a plain German village, or an object only
   `names/curation.csv` touches) still gets a card, built from the tile
   attributes alone, with the OSM link decoded from the tile feature id

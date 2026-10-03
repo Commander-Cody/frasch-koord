@@ -1037,6 +1037,46 @@ def test_the_member_ways_of_a_matched_waterway_relation_are_found(tmp_path: Path
     }
 
 
+def test_a_member_way_inherits_the_frisian_name_of_its_waterway_relation(tmp_path: Path) -> None:
+    # the row has a Mooring name only; the river starts in the Nordergoesharde
+    # box of AREAS, so OSM's name:frr of the relation is the local name (#81)
+    arlau = dict(id="arlou", kind="water", mooring="Arlou", de="Arlau", osm="relation/20")
+    (tmp_path / "places.csv").write_text(places_csv([arlau]), encoding="utf-8")
+    (tmp_path / "areas.geojson").write_text(json.dumps(AREAS), encoding="utf-8")
+    write_osm(
+        tmp_path / "in.osm.pbf",
+        nodes={1: ((8.80, 54.66), {}), 2: ((8.82, 54.66), {})},
+        ways={10: ([1, 2], {"waterway": "river", "name": "Arlau"})},
+        relations={
+            20: (
+                [("w", 10, "main_stream")],
+                {"type": "waterway", "name": "Arlau", "name:frr": "Arluu"},
+            )
+        },
+    )
+    with contextlib.redirect_stdout(io.StringIO()):
+        locate.main(
+            [
+                str(tmp_path / "in.osm.pbf"),
+                "--names",
+                str(tmp_path / "places.csv"),
+                "--out",
+                str(tmp_path / "osm_objects.json"),
+            ]
+        )
+        inject_names.run(
+            str(tmp_path / "in.osm.pbf"),
+            str(tmp_path / "out.osm.pbf"),
+            str(tmp_path / "places.csv"),
+            paths.DIALECTS,
+            str(tmp_path / "areas.geojson"),
+            curation_csv=curation_file(tmp_path),
+            objects_json=str(tmp_path / "osm_objects.json"),
+        )
+    tags = {(o[0], o[1]): o[2] for o in read_extract(tmp_path / "out.osm.pbf")}
+    assert tags[("w", 10)]["frasch:local"] == "Arluu"
+
+
 # --------------------------------------------------------- QID carriers ---
 # a QID reaches more than the row's own object: the place node next to a
 # matched boundary, the offshore sea node -- and, mis-tagged in OSM, a shop

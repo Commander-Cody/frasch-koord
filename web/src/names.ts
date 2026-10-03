@@ -324,7 +324,10 @@ export function cardEntry(selection: PlaceSelection): NameEntry {
   return {
     ...entry,
     names: { ...tile.names, ...entry.names },
-    local: entry.local ?? tile.local,
+    // The tile's own value first: the entry lies where the first object of
+    // its row lies, and the clicked one may be another object of that row,
+    // in another dialect area and with another local name (Nordwarft).
+    local: tile.local ?? entry.local,
     dialect: entry.dialect ?? tile.dialect,
     variety: entry.variety ?? tile.variety,
     name_frr: tile.name_frr,

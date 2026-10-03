@@ -597,9 +597,17 @@ selected dialect and without a local name from the list used to show another
 dialect's list name; inside an area it now shows OSM's `name:frr` first.
 
 In the Schleswig-Holstein extract of 2026-09-22, 532 objects carry
-`name:frr`; 168 of them lie in a dialect area and have no row (64 town signs,
-which no tile layer labels, 28 streets, 19 stations, 11 Warften mapped as
-`landuse`, about 37 places, boundaries and waters).
+`name:frr`; 397 of them lie in a dialect area. The injector gives 167 objects
+no row claims their local name from it (mostly town signs, which no tile
+layer labels, then streets, stations, Warften mapped as `landuse`, places,
+boundaries and waters) and 21 objects of the list.
+
+The place card follows: for a clicked feature its own `frasch:local` now
+wins over the entry's `local` (`cardEntry` in `web/src/names.ts`). An entry
+lies where the first object of its row lies, so its local name may be that
+object's OSM name, while a second object of the row lies in another area and
+has a list name there (Nordwarft: the way on the Hallig, the node in the
+Nordergoesharde).
 
 ## Remaining open questions
 1. Hosting provider for the site (R2 + Pages proposed, nothing set up yet); the tiles are GitHub release assets for now (issue #28).
