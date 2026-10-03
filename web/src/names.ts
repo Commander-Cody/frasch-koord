@@ -20,7 +20,11 @@ export interface NameEntry {
   osm?: string;
   /** Dialect names by registry tag, e.g. { "frr-x-mooring": "Naibel" }. */
   names: Record<string, string>;
-  /** Name used by the people of the place itself (tile attribute `frasch:local`). */
+  /**
+   * Name used by the people of the place itself (tile attribute
+   * `frasch:local`): the name list's, else OSM's `name:frr` where the place
+   * lies in a dialect area (issue #81).
+   */
   local?: string;
   /** Dialect area the place lies in, e.g. "frr-x-fering". */
   dialect?: string;
@@ -310,7 +314,9 @@ export function entryFromTile(props: TileProps): NameEntry {
 /**
  * What the card renders: the name-list entry wins field by field — it is the
  * curated source — and the clicked tile feature fills whatever the list does
- * not have. Without an entry the tile alone carries the card.
+ * not have. The exceptions are what depends on the clicked object itself:
+ * its local name with the dialect area it lies in, and OSM's own names.
+ * Without an entry the tile alone carries the card.
  */
 export function cardEntry(selection: PlaceSelection): NameEntry {
   const tile = selection.props ? entryFromTile(selection.props) : undefined;
@@ -320,8 +326,12 @@ export function cardEntry(selection: PlaceSelection): NameEntry {
   return {
     ...entry,
     names: { ...tile.names, ...entry.names },
-    local: entry.local ?? tile.local,
-    dialect: entry.dialect ?? tile.dialect,
+    // The tile's own local name first, and with it the tile's dialect area:
+    // the entry lies where the first object of its row lies, and the clicked
+    // one may be another object of that row, in another dialect area and
+    // with another local name (Nordwarft).
+    local: tile.local ?? entry.local,
+    dialect: tile.local ? tile.dialect : (entry.dialect ?? tile.dialect),
     variety: entry.variety ?? tile.variety,
     name_frr: tile.name_frr,
     // The tile's own value first: it is what the label the user just clicked

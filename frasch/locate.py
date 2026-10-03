@@ -96,7 +96,10 @@ def object_facts(tags: Mapping[str, str]) -> Facts:
                  the place card must name the place as its label does
     name         its generic name, for the same reason: the local view labels
                  a place without a local or Low Saxon name with it, and north
-                 of the border it is the Danish name, not the list's German"""
+                 of the border it is the Danish name, not the list's German
+    name_frr     its Frisian name of no stated dialect: inside a dialect area
+                 it is the local name of a place the list gives none
+                 (`dialects.osm_local_name`)"""
     facts: Facts = {}
     level = tags.get("admin_level", "")
     if tags.get("boundary") == "administrative" and level.isdigit():
@@ -105,6 +108,8 @@ def object_facts(tags: Mapping[str, str]) -> Facts:
         facts["name_nds"] = tags["name:nds"]
     if tags.get("name"):
         facts["name"] = tags["name"]
+    if tags.get("name:frr"):
+        facts["name_frr"] = tags["name:frr"]
     return facts
 
 

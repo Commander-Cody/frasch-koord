@@ -112,6 +112,16 @@ def test_an_objects_low_saxon_name_is_recorded(run_locate: RunLocate, tmp_path: 
     assert objects["objects"][f"node/{NAIBEL}"]["name_nds"] == "Niböl"
 
 
+def test_an_objects_frisian_name_is_recorded(run_locate: RunLocate, tmp_path: Path) -> None:
+    husum = 240085119
+    pbf = write_extract(
+        tmp_path / "in.osm.pbf",
+        nodes={husum: ((9.0510, 54.4764), {"name": "Husum", "name:frr": "Hüsem"})},
+    )
+    objects = run_locate([{"kind": "settlement", "mooring": "Hüsem", "osm": f"node/{husum}"}], pbf)
+    assert objects["objects"][f"node/{husum}"]["name_frr"] == "Hüsem"
+
+
 def test_an_objects_generic_name_is_recorded(run_locate: RunLocate, tmp_path: Path) -> None:
     ribe = 597643755
     pbf = write_extract(

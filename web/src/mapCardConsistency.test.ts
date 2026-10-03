@@ -73,6 +73,13 @@ const SCENARIOS: Record<string, TileProps> = {
   // Issue #32: north of the border OSM's own name is the Danish one, and the
   // local view labels with it rather than with German.
   'a Danish place with a German exonym': { 'name:de': 'Ripen', 'name:da': 'Ribe', name: 'Ribe' },
+  // Issue #81: a place the name list does not have, inside a dialect area.
+  // The injector writes OSM's `name:frr` as its `frasch:local`.
+  'OSM’s Frisian name as the local one, inside a dialect area': {
+    'frasch:local': 'Schörkeweerw',
+    'name:frr': 'Schörkeweerw',
+    name: 'Kirchwarft',
+  },
 };
 
 /** A names.json entry with the fields no scenario here is about filled in. */
@@ -121,6 +128,50 @@ const LISTED_SCENARIOS: Record<string, ClickedLabel & { entry: NameEntry }> = {
       'name:frr-x-mooring': 'Sätj',
       'name:frr-x-wieding': 'Säit',
       'name:de': 'Seth',
+    },
+  },
+  // Issue #81: the row has no name in the dialect of its area, so both sides
+  // take OSM's `name:frr` as the local name, ahead of another dialect's.
+  'a listed place whose local name is OSM’s Frisian one': {
+    entry: listed({
+      id: 'hamborjer-hali',
+      names: { 'frr-x-mooring': 'Hamborjer Håli' },
+      name_de: 'Hamburger Hallig',
+      name_osm: 'Hamburger Hallig',
+      local: 'Hamborjer Hali',
+      dialect: 'frr-x-nordgoes',
+      kind: 'hallig',
+    }),
+    props: {
+      'frasch:ref': 'hamborjer-hali',
+      'frasch:local': 'Hamborjer Hali',
+      'frasch:dialect': 'frr-x-nordgoes',
+      'name:frr-x-mooring': 'Hamborjer Håli',
+      'name:frr': 'Hamborjer Hali',
+      'name:de': 'Hamburger Hallig',
+      name: 'Hamburger Hallig',
+    },
+  },
+  // A row with two objects: the entry stands for the first (the way on the
+  // Hallig, whose local name is OSM's), the clicked one lies in another area.
+  'the second object of a listed row, in another dialect area': {
+    entry: listed({
+      id: 'nordwarw',
+      names: { 'frr-x-mooring': 'Nordwärw', 'frr-x-nordgoes': 'Noordweerw' },
+      name_de: 'Nordwarft',
+      name_osm: 'Nordwarft',
+      local: 'Nöördweerew',
+      dialect: 'frr-x-hallig',
+      kind: 'warft',
+    }),
+    props: {
+      'frasch:ref': 'nordwarw',
+      'frasch:local': 'Noordweerw',
+      'frasch:dialect': 'frr-x-nordgoes',
+      'name:frr-x-mooring': 'Nordwärw',
+      'name:frr-x-nordgoes': 'Noordweerw',
+      'name:de': 'Nordwarft',
+      name: 'Nordwarft',
     },
   },
 };

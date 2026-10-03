@@ -12,7 +12,9 @@ The places are the kinds that disagreed before: an island whose vertex
 average lies in the sea (Sylt, Amrum), a node near a dialect border
 (Stiardebel), a Kreis, a place whose inside point misses its area while its
 outline hits it (Oland), and a row with two objects in two areas
-(Nordwärw)."""
+(Nordwärw).  And the places whose local name may be OSM's own `name:frr`
+(#81): one in an area whose row has no local name (Slütsil), one whose row
+has one (Oland), one outside every area (Kil)."""
 
 from __future__ import annotations
 
@@ -55,13 +57,15 @@ NODES = (
         2: ((9.35, 54.5), {"name": "Nordwarft"}),  # Nordwärw's node
         3: ((9.15, 54.5), {"place": "village", "name": "Ockholm", "wikidata": "Q1"}),  # only by QID
         4: ((9.15, 54.45), {}),  # Nordwärw's way starts here
+        5: ((9.12, 54.5), {"name": "Schlüttsiel", "name:frr": "Slütsiil"}),
+        6: ((10.0, 54.0), {"name": "Kiel", "name:frr": "Kil"}),
     }
     | SYLT_NODES
     | OLAND_NODES
 )
 WAYS = {
     10: (SYLT_RING, {"natural": "coastline"}),
-    11: (OLAND_RING, {"place": "island"}),
+    11: (OLAND_RING, {"place": "island", "name:frr": "Ualöön"}),
     12: ([4, 2], {"landuse": "residential"}),
 }  # Nordwärw's way
 RELATIONS = {
@@ -105,6 +109,8 @@ ROWS = [
         "osm": "way/12; node/2",
     },
     {"id": "hulm", "kind": "settlement", "mooring": "Hulm", "wikidata": "Q1"},
+    {"id": "slutsil", "kind": "warft", "mooring": "Slütsil", "osm": "node/5"},
+    {"id": "kil", "kind": "settlement", "mooring": "Kil", "osm": "node/6"},
 ]
 
 
@@ -206,9 +212,11 @@ def test_every_row_on_the_map_is_checked(built: Built) -> None:
         "olun",
         "nordwarw",
         "hulm",
+        "slutsil",
+        "kil",
     }
     # keyed by its QID alone: on the map, but without a position to search
-    assert set(entries) == {"sol", "stiardebel", "kris", "olun", "nordwarw"}
+    assert set(entries) == {"sol", "stiardebel", "kris", "olun", "nordwarw", "slutsil", "kil"}
 
 
 @pytest.mark.parametrize(
@@ -219,6 +227,8 @@ def test_every_row_on_the_map_is_checked(built: Built) -> None:
         ("kris", None, None),
         ("olun", "frr-x-hallig", "Ualöönj"),
         ("nordwarw", "frr-x-nordgoes", "Noordweerw"),
+        ("slutsil", "frr-x-nordgoes", "Slütsiil"),
+        ("kil", None, None),
     ],
 )
 def test_the_search_entry_has_the_dialect_of_where_the_place_is(
