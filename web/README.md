@@ -487,10 +487,11 @@ Where the data comes from (`src/names.ts`):
 - The feature's `frasch:ref` looks the row up with `find`. `cardEntry` then
   merges the two: the name-list entry wins field by field, the tile fills what
   the list does not have — which is how Föhr shows a Danish name (OSM's
-  `name:da`) although our own `da` column is empty there. The local name is
-  the exception: the clicked feature's own `frasch:local` wins. A row may
-  have several objects in different dialect areas, and the entry only knows
-  the first one's local name.
+  `name:da`) although our own `da` column is empty there. The local name and
+  its dialect area are the exception: the clicked feature's own
+  `frasch:local` wins and brings its `frasch:dialect` along. A row may have
+  several objects in different dialect areas, and the entry only knows the
+  first one's.
 - A feature with no row in the list (a plain German village, or an object only
   `names/curation.csv` touches) still gets a card, built from the tile
   attributes alone, with the OSM link decoded from the tile feature id

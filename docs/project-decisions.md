@@ -581,7 +581,7 @@ always the local form. Owner's choices:
   `places.csv` with only a Mooring name would take its Frisian label away.
   `osm_objects.json` records `name_frr` for this, and `names.json`'s `local`
   follows the same rule (`dialects.osm_local_name`), so map, card and search
-  agree. 20 objects of the list (18 rows) changed, e.g. Husum → *Hüsem*.
+  agree. 18 search entries gained a `local` this way, e.g. Husum → *Hüsem*.
 - **The objects without a row are located by a pre-pass of the injector**
   over the extract it is tagging (owner's choice over recording them in
   `osm_objects.json`): a new `name:frr` in OSM is on the map with the next
@@ -600,10 +600,14 @@ In the Schleswig-Holstein extract of 2026-09-22, 532 objects carry
 `name:frr`; 397 of them lie in a dialect area. The injector gives 167 objects
 no row claims their local name from it (mostly town signs, which no tile
 layer labels, then streets, stations, Warften mapped as `landuse`, places,
-boundaries and waters) and 21 objects of the list.
+boundaries and waters) and 21 objects the list claims. 20 of those are
+referenced by a row itself (19 rows), which is what `osm_objects.json`
+shows; an entry stands for the first object of its row, hence the 18 search
+entries above.
 
 The place card follows: for a clicked feature its own `frasch:local` now
-wins over the entry's `local` (`cardEntry` in `web/src/names.ts`). An entry
+wins over the entry's `local` and brings its `frasch:dialect` along
+(`cardEntry` in `web/src/names.ts`). An entry
 lies where the first object of its row lies, so its local name may be that
 object's OSM name, while a second object of the row lies in another area and
 has a list name there (Nordwarft: the way on the Hallig, the node in the

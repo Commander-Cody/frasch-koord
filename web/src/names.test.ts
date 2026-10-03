@@ -197,7 +197,6 @@ describe('cardEntry', () => {
   it('lets the entry win field by field over the tile', () => {
     const e = entry({
       names: { 'frr-x-mooring': 'EntryMooring' },
-      dialect: 'entry-dialect',
       variety: 'EntryVariety',
       name_de: 'EntryDE',
       name_da: 'EntryDA',
@@ -205,7 +204,6 @@ describe('cardEntry', () => {
     });
     const props = {
       'name:frr-x-mooring': 'TileMooring',
-      'frasch:dialect': 'tile-dialect',
       'frasch:variety': 'TileVariety',
       'name:de': 'TileDE',
       'name:da': 'TileDA',
@@ -213,7 +211,6 @@ describe('cardEntry', () => {
     };
     const result = cardEntry({ entry: e, props });
     expect(result.names['frr-x-mooring']).toBe('EntryMooring');
-    expect(result.dialect).toBe('entry-dialect');
     expect(result.variety).toBe('EntryVariety');
     expect(result.name_de).toBe('EntryDE');
     expect(result.name_da).toBe('EntryDA');
@@ -243,6 +240,18 @@ describe('cardEntry', () => {
     const e = entry({ local: 'EntryLocal' });
     const props = { 'frasch:local': 'TileLocal' };
     expect(cardEntry({ entry: e, props }).local).toBe('TileLocal');
+  });
+
+  it('takes the dialect area from the tile together with its local name', () => {
+    const e = entry({ local: 'EntryLocal', dialect: 'entry-dialect' });
+    const props = { 'frasch:local': 'TileLocal', 'frasch:dialect': 'tile-dialect' };
+    expect(cardEntry({ entry: e, props }).dialect).toBe('tile-dialect');
+  });
+
+  it("keeps the entry's dialect area when the tile has no local name", () => {
+    const e = entry({ local: 'EntryLocal', dialect: 'entry-dialect' });
+    const props = { 'frasch:dialect': 'tile-dialect' };
+    expect(cardEntry({ entry: e, props }).dialect).toBe('entry-dialect');
   });
 
   it("falls back to the entry's local name when the tile has none", () => {

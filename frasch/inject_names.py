@@ -68,8 +68,8 @@ Inside a dialect area OSM's own `name:frr` is almost always the local form,
 outside it is a Frisian exonym (Pinneberg -> Pinebärj).  So an object in an
 area whose rows give it no local name gets its `name:frr` as `frasch:local`
 (#81), from names/osm_objects.json like its position.  And so does every
-object there *no row claims* -- a Warft, a street, a station -- as the only
-tag it gets: a pre-pass finds the objects of the extract that carry
+object there *no row claims* -- a Warft, a street, a station -- and nothing
+else from this rule: a pre-pass finds the objects of the extract that carry
 `name:frr` and locates them (`scan_osm_local`), so a new Frisian name in OSM
 is on the map with the next build.
 

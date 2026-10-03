@@ -314,7 +314,9 @@ export function entryFromTile(props: TileProps): NameEntry {
 /**
  * What the card renders: the name-list entry wins field by field — it is the
  * curated source — and the clicked tile feature fills whatever the list does
- * not have. Without an entry the tile alone carries the card.
+ * not have. The exceptions are what depends on the clicked object itself:
+ * its local name with the dialect area it lies in, and OSM's own names.
+ * Without an entry the tile alone carries the card.
  */
 export function cardEntry(selection: PlaceSelection): NameEntry {
   const tile = selection.props ? entryFromTile(selection.props) : undefined;
@@ -324,11 +326,12 @@ export function cardEntry(selection: PlaceSelection): NameEntry {
   return {
     ...entry,
     names: { ...tile.names, ...entry.names },
-    // The tile's own value first: the entry lies where the first object of
-    // its row lies, and the clicked one may be another object of that row,
-    // in another dialect area and with another local name (Nordwarft).
+    // The tile's own local name first, and with it the tile's dialect area:
+    // the entry lies where the first object of its row lies, and the clicked
+    // one may be another object of that row, in another dialect area and
+    // with another local name (Nordwarft).
     local: tile.local ?? entry.local,
-    dialect: entry.dialect ?? tile.dialect,
+    dialect: tile.local ? tile.dialect : (entry.dialect ?? tile.dialect),
     variety: entry.variety ?? tile.variety,
     name_frr: tile.name_frr,
     // The tile's own value first: it is what the label the user just clicked
