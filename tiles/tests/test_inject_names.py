@@ -5,7 +5,9 @@ The extract mirrors real places (ids and positions from the
 Schleswig-Holstein extract; ring nodes made up): the village Holm, the
 Nordwarft way on Ockholm, the Hamburger Hallig relation, the Nordstrand
 village node that carries the synthetic island square, Tammensiel (curated,
-not in the name list), and Westerheide on Amrum, a place OSM does not have."""
+not in the name list), Westerheide on Amrum, a place OSM does not have, and
+the Kirchwarft, which no row claims but OSM names in Frisian (#81; moved into
+the Mooring box of AREAS)."""
 
 from __future__ import annotations
 
@@ -182,18 +184,28 @@ HOLM = 240102263
 NORDSTRAND = 85929111
 TAMMENSIEL = 355956234
 UNTOUCHED_NODE = 240000001
+JENSWARFT = 188786563
 NORDWARFT = 1347936331
 HALLIG_RING = 500000001
 UNTOUCHED_WAY = 600000001
 HAMBURGER_HALLIG = 5615880
 KREIS = 27019
+KIRCHWARFT = 14204794496
+PINNEBERG = 240033277
 
-# closed rings: the Nordwarft on Ockholm, the Hamburger Hallig's outline
+# closed rings: the Nordwarft on Ockholm, the Jenswarft (moved into the
+# Mooring box of AREAS, like the Kirchwarft), the Hamburger Hallig's outline
 NORDWARFT_NODES = {
     9000000001: (8.826, 54.668),
     9000000002: (8.830, 54.668),
     9000000003: (8.830, 54.671),
     9000000004: (8.826, 54.671),
+}
+JENSWARFT_NODES = {
+    9000000011: (8.900, 54.570),
+    9000000012: (8.904, 54.570),
+    9000000013: (8.904, 54.572),
+    9000000014: (8.900, 54.572),
 }
 HALLIG_NODES = {
     9100000001: (8.825, 54.585),
@@ -201,7 +213,7 @@ HALLIG_NODES = {
     9100000003: (8.850, 54.600),
     9100000004: (8.825, 54.600),
 }
-MAX_NODE = 9100000004
+MAX_NODE = KIRCHWARFT
 MAX_WAY = NORDWARFT
 
 PLACES = [
@@ -318,8 +330,14 @@ def write_extract(path: Path) -> None:
         HOLM: ((8.866668, 54.833305), {"place": "village", "name": "Holm", "wikidata": "Q559369"}),
         UNTOUCHED_NODE: ((8.9, 54.6), {"place": "village", "name": "Bredstedt"}),
         TAMMENSIEL: ((8.7033, 54.7433), {"place": "hamlet", "name": "Tammensiel"}),
+        KIRCHWARFT: (
+            (8.88, 54.56),
+            {"place": "hamlet", "name": "Kirchwarft", "name:frr": "Schörkeweerw"},
+        ),
+        PINNEBERG: ((9.80, 53.66), {"place": "town", "name": "Pinneberg", "name:frr": "Pinebärj"}),
     }
     nodes.update({i: (loc, {}) for i, loc in NORDWARFT_NODES.items()})
+    nodes.update({i: (loc, {}) for i, loc in JENSWARFT_NODES.items()})
     nodes.update({i: (loc, {}) for i, loc in HALLIG_NODES.items()})
     w = osmium.SimpleWriter(str(path))
     try:
@@ -327,6 +345,16 @@ def write_extract(path: Path) -> None:
             loc, tags = nodes[nid]
             w.add_node(Node(id=nid, version=1, visible=True, location=loc, tags=tags))
         # ways in ascending id order, like any extract
+        ring = list(JENSWARFT_NODES)
+        w.add_way(
+            Way(
+                id=JENSWARFT,
+                version=1,
+                visible=True,
+                nodes=ring + ring[:1],
+                tags={"name": "Jenswarft", "name:frr": "Jenswäärw", "landuse": "residential"},
+            )
+        )
         ring = list(HALLIG_NODES)
         w.add_way(
             Way(
@@ -353,7 +381,7 @@ def write_extract(path: Path) -> None:
                 version=1,
                 visible=True,
                 nodes=ring + ring[:1],
-                tags={"name": "Nordwarft", "landuse": "residential"},
+                tags={"name": "Nordwarft", "name:frr": "Nöördweerew", "landuse": "residential"},
             )
         )
         w.add_relation(
@@ -368,6 +396,7 @@ def write_extract(path: Path) -> None:
                     "admin_level": "6",
                     "name": "Kreis Nordfriesland",
                     "name:de": "Nordfriesland",
+                    "name:frr": "Nuurdfresklun",
                 },
             )
         )
@@ -382,6 +411,7 @@ def write_extract(path: Path) -> None:
                     "boundary": "administrative",
                     "admin_level": "10",
                     "name": "Hamburger Hallig",
+                    "name:frr": "Hamborjer Hali",
                 },
             )
         )
@@ -479,15 +509,17 @@ def test_report_of_a_run(injected_run: tuple[Path, str]) -> None:
         "synthetic : 1 polygon(s) to add around nodes",
         "local     : 1 local reference(s) positioned in <dir>/curation.csv",
         "objects   : <dir>/osm_objects.json -> 4 located object(s)",
+        "name:frr  : 4 object(s) in a dialect area have one in OSM",
         "",
-        "scanned 17 objects in 0s",
+        "scanned 24 objects in 0s",
         "tagged  5 objects: 2 nodes, 1 ways, 2 relations "
         "(of these 0 matched by wikidata: 1 of 1 QIDs present)",
         "names written per dialect:",
         "  name:frr-x-mooring       4  Mooring",
         "  name:frr-x-nordgoes      2  Nordergoesharder",
         "  name:frr-x-oomrang       1  Öömrang",
-        "  frasch:local             2  local form",
+        "  frasch:local             3  local form (1 of them OSM's name:frr)",
+        "  frasch:local             2  OSM's name:frr on objects no row claims",
         "objects per dialect area:",
         "  frasch:dialect=frr-x-oomrang       1",
         "  frasch:dialect=frr-x-nordgoes      1",
@@ -569,6 +601,7 @@ def test_matched_way_gets_the_dialect_of_its_area(injected: Injected) -> None:
     tags, _ = by_key[("w", NORDWARFT)]
     assert tags == {
         "name": "Nordwarft",
+        "name:frr": "Nöördweerew",
         "landuse": "residential",
         "name:frr-x-mooring": "Nordwärw",
         "name:frr-x-nordgoes": "Noordweerw",
@@ -588,10 +621,12 @@ def test_matched_relation_gets_the_smallest_area_and_its_curation(injected: Inje
         "boundary": "administrative",
         "admin_level": "10",
         "name": "Hamburger Hallig",
+        "name:frr": "Hamborjer Hali",
         "name:frr-x-mooring": "Hamborjer Håli",
         "name:de": "Hamburger Hallig",
         "frasch:kind": "hallig",
         "frasch:dialect": "frr-x-hallig",
+        "frasch:local": "Hamborjer Hali",
         "frasch:ref": "hamborjer-hali",
         "place": "island",
         "frasch:minzoom": "12",
@@ -654,6 +689,47 @@ def test_curation_tags_win_over_the_original_tags(injected: Injected) -> None:
         "frasch:ref": "relation/1420555",
         "frasch:minzoom": "12",
     }
+
+
+# ------------------------------------------- OSM's own Frisian name (#81) ---
+def test_an_object_no_row_claims_gets_osms_frisian_name_as_its_local_one(
+    injected: Injected,
+) -> None:
+    _, by_key = injected
+    assert by_key[("n", KIRCHWARFT)][0] == {
+        "place": "hamlet",
+        "name": "Kirchwarft",
+        "name:frr": "Schörkeweerw",
+        "frasch:local": "Schörkeweerw",
+    }
+
+
+def test_outside_every_dialect_area_osms_frisian_name_is_no_local_name(
+    injected: Injected,
+) -> None:
+    # a Frisian exonym: Frisian was never spoken in Pinneberg
+    _, by_key = injected
+    assert by_key[("n", PINNEBERG)][0] == {
+        "place": "town",
+        "name": "Pinneberg",
+        "name:frr": "Pinebärj",
+    }
+
+
+def test_a_way_no_row_claims_is_asked_where_its_polygon_lies(injected: Injected) -> None:
+    _, by_key = injected
+    assert by_key[("w", JENSWARFT)][0]["frasch:local"] == "Jenswäärw"
+
+
+def test_the_lists_local_name_wins_over_osms_frisian_one(injected: Injected) -> None:
+    _, by_key = injected
+    assert by_key[("w", NORDWARFT)][0]["frasch:local"] == "Noordweerw"
+
+
+def test_a_row_without_a_local_name_gets_osms_frisian_one(injected: Injected) -> None:
+    # the row has a Mooring name only, the Hallig lies in the Halligfriesisch area
+    _, by_key = injected
+    assert by_key[("r", HAMBURGER_HALLIG)][0]["frasch:local"] == "Hamborjer Hali"
 
 
 def new_objects(
@@ -1033,6 +1109,32 @@ def test_a_qid_counts_as_present_whatever_matched_its_carrier(
         "(of these 0 matched by wikidata: 1 of 2 QIDs present)"
     ) in lines
     assert "1 wikidata QIDs not present in the file: Q1693 (Nordsiie)" in lines
+
+
+def test_a_node_found_by_its_qid_is_asked_for_its_own_frisian_name(tmp_path: Path) -> None:
+    # no reference, so the objects file does not know it: like its dialect,
+    # its Frisian name is the node's own
+    hulm = dict(id="hulm", kind="settlement", mooring="Hulm", de="Holm", wikidata="Q559369")
+    (tmp_path / "places.csv").write_text(places_csv([hulm]), encoding="utf-8")
+    (tmp_path / "areas.geojson").write_text(json.dumps(AREAS), encoding="utf-8")
+    (tmp_path / "osm_objects.json").write_text(
+        objects_json(Objects({}, {"extracts": []})), encoding="utf-8"
+    )
+    holm = {"place": "village", "name": "Holm", "name:frr": "Hoolm", "wikidata": "Q559369"}
+    # in the Nordergoesharde box of AREAS
+    write_osm(tmp_path / "in.osm.pbf", nodes={1: ((8.85, 54.66), holm)})
+    with contextlib.redirect_stdout(io.StringIO()):
+        inject_names.run(
+            str(tmp_path / "in.osm.pbf"),
+            str(tmp_path / "out.osm.pbf"),
+            str(tmp_path / "places.csv"),
+            paths.DIALECTS,
+            str(tmp_path / "areas.geojson"),
+            curation_csv=curation_file(tmp_path),
+            objects_json=str(tmp_path / "osm_objects.json"),
+        )
+    ((_, _, tags, _),) = read_extract(tmp_path / "out.osm.pbf")
+    assert tags["frasch:local"] == "Hoolm"
 
 
 @pytest.mark.parametrize(

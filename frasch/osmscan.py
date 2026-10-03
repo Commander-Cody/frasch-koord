@@ -4,8 +4,9 @@ The dev machine has no memory for a location cache of a whole extract (let
 alone for pyosmium to build every area of it), so whatever needs geometry
 reads it in three passes that each keep only the objects asked for: the
 relations, then their and the referenced ways, then all of those ways'
-nodes.  frasch.locate and frasch.build_dialect_areas both do.  And the
-extract's header, without a pass at all."""
+nodes.  frasch.locate and frasch.build_dialect_areas both do.  Besides
+those: the objects that carry a tag (`tagged`), and the extract's header,
+without a pass at all."""
 
 from __future__ import annotations
 
@@ -18,6 +19,7 @@ from osmium.osm.types import OSMEntity
 
 from frasch.geo import LonLat
 from frasch.paths import StrPath
+from frasch.placelist import OsmRef
 
 
 class Rings(TypedDict):
@@ -91,6 +93,17 @@ def nodes(pbf: StrPath, ids: Collection[int]) -> dict[int, Node]:
         n.id: {"loc": (n.location.lon, n.location.lat), "tags": dict(n.tags)}
         for n in _filtered(pbf, osmium.osm.NODE, ids)
         if isinstance(n, osmium.osm.Node) and n.location.valid()
+    }
+
+
+def tagged(pbf: StrPath, key: str) -> dict[OsmRef, str]:
+    """-> {('n', id): value} for every node, way and relation whose tag
+    `key` has a value -- one pass, but only the tagged objects are kept."""
+    scan = osmium.FileProcessor(str(pbf)).with_filter(osmium.filter.KeyFilter(key))
+    return {
+        (o.type_str(), o.id): o.tags[key]
+        for o in scan
+        if isinstance(o, (osmium.osm.Node, osmium.osm.Way, osmium.osm.Relation)) and o.tags.get(key)
     }
 
 

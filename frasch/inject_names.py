@@ -21,7 +21,9 @@ that is not `skip` tags the object(s) in its `osm` column with
                      OSM's stays where the list has none
     frasch:kind      the row's kind (island, hallig, sand, settlement, ...)
     frasch:dialect   the dialect spoken where the object lies
-    frasch:local     what the people of the place themselves call it
+    frasch:local     what the people of the place themselves call it; where
+                     the list has no such name, OSM's own `name:frr` inside a
+                     dialect area (see the dialect areas below)
     frasch:variety   the name of that local variety, e.g. `Foortuftinge`
     frasch:ref       the row's `id` (`naibel`, `schorkewarw-2`) -- the id of
                      the row's entry in the search index, so that the frontend
@@ -61,6 +63,15 @@ and its search entry cannot disagree (#24).  An object of the name list the
 file does not know stops the build.  Objects matched only through their
 Wikidata QID are not in it: a node is asked at its own location, a way or
 relation gets no dialect.
+
+Inside a dialect area OSM's own `name:frr` is almost always the local form,
+outside it is a Frisian exonym (Pinneberg -> Pinebärj).  So an object in an
+area whose rows give it no local name gets its `name:frr` as `frasch:local`
+(#81), from names/osm_objects.json like its position.  And so does every
+object there *no row claims* -- a Warft, a street, a station -- as the only
+tag it gets: a pre-pass finds the objects of the extract that carry
+`name:frr` and locates them (`scan_osm_local`), so a new Frisian name in OSM
+is on the map with the next build.
 
 `names/curation.csv` (per-feature map tuning) -- for every listed object the
 `set_tags` (`k=v` pairs separated by `;`) are applied *verbatim*, after the
@@ -106,6 +117,7 @@ from frasch import (
     cli,
     curationlist,
     dialects,
+    locate,
     osmscan,
     paths,
     placelist,
@@ -119,6 +131,7 @@ from frasch.placelist import OsmRef, PlaceRow, Ref, Row
 from frasch.registry import Registry
 
 GERMAN_KEY = "name:de"
+FRISIAN_KEY = "name:frr"
 KIND_KEY = "frasch:kind"
 MINZOOM_KEY = curationlist.MINZOOM_KEY
 MAXZOOM_KEY = curationlist.MAXZOOM_KEY
@@ -345,6 +358,28 @@ def scan_waterways(path: str, by_id: Iterable[Ref]) -> dict[OsmRef, tuple[OsmRef
     return members
 
 
+# ---------------------------------------------------- OSM's Frisian names ----
+def scan_osm_local(path: str, areas: dialects.AreaIndex | None) -> dict[OsmRef, str]:
+    """OSM's own Frisian name (`name:frr`) of every object of the extract
+    that lies in a dialect area -- there it is the local name of an object
+    the name list gives none (dialects.osm_local_name, #81).
+
+    One pass finds the objects that carry the tag, whatever they are (a
+    place, a street, a station); frasch.locate then says where each lies,
+    as it does for the objects of the name list: a node at its own location,
+    a way or relation inside its polygon, else at its outline point.
+
+    -> {('w', id): the name}"""
+    if areas is None:
+        return {}
+    names = osmscan.tagged(path, FRISIAN_KEY)
+    local = {
+        ref: dialects.osm_local_name(names[ref], dialect_at(obj, areas))
+        for ref, obj in locate.locate_in(path, set(names)).items()
+    }
+    return {ref: name for ref, name in local.items() if name}
+
+
 def unlocated(by_id: Iterable[Ref], objects: Container[OsmRef]) -> list[Ref]:
     """The OSM references of the name list that the objects file does not
     know -- without a position they would get no dialect, and the search
@@ -387,8 +422,12 @@ class Injector:
         members: Mapping[OsmRef, tuple[OsmRef, str]] | None = None,
         synthetic: Mapping[Ref, Square] | None = None,
         points: Mapping[Ref, LocalPoint] | None = None,
+        osm_local: Mapping[OsmRef, str] | None = None,
     ):
         self.members = members or {}
+        # OSM's own Frisian name of the objects in a dialect area, the local
+        # name of those no row claims (see `scan_osm_local`)
+        self.osm_local = osm_local or {}
         # local references (places OSM has no object for): a node of their
         # own, or a synthetic polygon, written with the synthetic polygon
         # nodes (see `flush`)
@@ -419,6 +458,9 @@ class Injector:
             collections.Counter()
         )  # frasch:dialect -> objects
         self.local_hits = 0
+        # the objects whose local name is OSM's `name:frr`: those rows claim
+        # (counted in `local_hits` too), and those no row claims
+        self.osm_local_hits: collections.Counter[str] = collections.Counter()
         self.seen_keys: set[Ref] = set()
         self.qid_hits: collections.Counter[str] = collections.Counter()
         # the rows' QIDs that some object of the file carries, whatever
@@ -441,6 +483,14 @@ class Injector:
         if isinstance(o, osmium.osm.Node) and o.location.valid():
             return dialect_at({"lon": o.location.lon, "lat": o.location.lat}, self.areas)
         return None
+
+    def name_frr_of(self, key: OsmRef, o: _OsmObject) -> str:
+        """OSM's own Frisian name of this object: from the objects file,
+        like its area (`area_of`).  An object found only through its QID is
+        asked itself."""
+        if key in self.objects:
+            return self.objects[key].get("name_frr", "")
+        return o.tags.get(FRISIAN_KEY) or ""
 
     def flush(self, t: str) -> None:
         """Write the synthetic nodes (t='w': before the first way) or ways
@@ -554,16 +604,20 @@ class Injector:
         if cur is not None:
             self.seen_cur.add(key)
             self.cur_hits[t] += 1
-        if hit is None and cur is None and synth is None:
+        unclaimed_local = self.osm_local.get(key, "") if hit is None else ""
+        if hit is None and cur is None and synth is None and not unclaimed_local:
             if self.w is not None:
                 self.w.add(o)
             return
         tags = dict(o.tags)
         if hit is not None:
             self.hits[t] += 1
-            new = name_tags(hit, self.area_of(area_key, o), self.reg)
+            new = self._row_tags(hit, area_key, o)
             self._count_names(new)
             tags.update(new)
+        elif unclaimed_local:
+            self.osm_local_hits["unclaimed"] += 1
+            tags[LOCAL_KEY] = unclaimed_local
         if cur is not None:
             # curation runs last and wins: it may override frasch:kind or place
             tags.update(cur["tags"])
@@ -571,6 +625,20 @@ class Injector:
             self.pending.append(_square_with_names(key, synth, tags))
         if self.w is not None:
             self.w.add(o.replace(tags=tags))
+
+    def _row_tags(
+        self, rows: Sequence[PlaceRow], area_key: OsmRef, o: _OsmObject
+    ) -> dict[str, str]:
+        """The tags the rows claiming this object give it (`name_tags`).
+        Where no row has a local name, OSM's own Frisian name is it, inside
+        a dialect area (dialects.osm_local_name)."""
+        area_tag = self.area_of(area_key, o)
+        tags = name_tags(rows, area_tag, self.reg)
+        osm_local = dialects.osm_local_name(self.name_frr_of(area_key, o), area_tag)
+        if LOCAL_KEY not in tags and osm_local:
+            self.osm_local_hits["claimed"] += 1
+            tags[LOCAL_KEY] = osm_local
+        return tags
 
     def _note_qid(self, o: _OsmObject) -> None:
         """Remember the row QID this object carries, if any, as present."""
@@ -655,6 +723,7 @@ class _Inputs:
     curation: curationlist.Curation
     objects: dict[OsmRef, LocatedObject]
     members: dict[OsmRef, tuple[OsmRef, str]]
+    osm_local: dict[OsmRef, str]
 
 
 def run(
@@ -679,7 +748,10 @@ def run(
     members = scan_waterways(inp, names.by_id)
     if members:
         print(f"waterways : {len(members)} member ways of matched waterway relations")
-    inputs = _Inputs(reg, names, areas, curation, objects, members)
+    osm_local = scan_osm_local(inp, areas)
+    if osm_local:
+        print(f"{FRISIAN_KEY}  : {len(osm_local)} object(s) in a dialect area have one in OSM")
+    inputs = _Inputs(reg, names, areas, curation, objects, members, osm_local)
 
     t0 = time.time()
     inj = _inject(inp, None if dry_run else out, inputs)
@@ -826,6 +898,7 @@ def _inject(inp: str, out: str | None, inputs: _Inputs) -> Injector:
         inputs.members,
         curation.squares,
         curation.points,
+        inputs.osm_local,
     )
     for o in osmium.FileProcessor(inp):
         if isinstance(o, (osmium.osm.Node, osmium.osm.Way, osmium.osm.Relation)):
@@ -879,7 +952,13 @@ def _print_dialects(inj: Injector, reg: Registry, areas: dialects.AreaIndex | No
         n = inj.tag_hits["name:" + d["tag"]]
         if n:
             print(f"  name:{d['tag']:<15} {n:>5}  {d['label']}")
-    print(f"  {LOCAL_KEY:<20} {inj.local_hits:>5}  local form")
+    claimed, unclaimed = inj.osm_local_hits["claimed"], inj.osm_local_hits["unclaimed"]
+    print(
+        f"  {LOCAL_KEY:<20} {inj.local_hits:>5}  local form"
+        + (f" ({claimed} of them OSM's {FRISIAN_KEY})" if claimed else "")
+    )
+    if unclaimed:
+        print(f"  {LOCAL_KEY:<20} {unclaimed:>5}  OSM's {FRISIAN_KEY} on objects no row claims")
     if areas:
         print("objects per dialect area:")
         for tag, n in inj.area_hits.most_common():

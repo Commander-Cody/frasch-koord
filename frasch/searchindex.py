@@ -19,6 +19,9 @@ search results have to agree with it.  The generic name (`name_osm`) is the
 object's OSM `name`, for the same reason: it is the chain's generic step
 near its end, and north of the border it is the Danish name, not the list's
 German one.  A local reference gets the `name` the injector gives its point.
+The local name (`local`) of a row that has none is the object's OSM
+`name:frr` inside a dialect area (`dialects.osm_local_name`), as the injector
+writes it into `frasch:local` (#81).
 
 A row with an OSM reference the objects file does not know stops the export
 -- it is on the map, and would be missing from search.  Re-run
@@ -123,7 +126,9 @@ def entry(row: Row, obj: LocatedObject, areas: dialects.AreaIndex, reg: Registry
         "lat": round(float(obj["lat"]), 5),
         "kind": row["kind"],
     }
-    if local := dialects.local_name(row, area_tag, reg):
+    if local := dialects.local_name(row, area_tag, reg) or dialects.osm_local_name(
+        obj.get("name_frr"), area_tag
+    ):
         out["local"] = local
     if area_tag:
         out["dialect"] = area_tag
