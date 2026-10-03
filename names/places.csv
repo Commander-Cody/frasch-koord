@@ -171,7 +171,7 @@ settlement,Gälün,,,,Gelün,,,,,,,,Goldelund,,,node/240038807,Q528786,auto,unce
 settlement,Linewit,,,,,,,,,,,,Lindewitt,,,node/240072892,Q551480,auto,,linewit
 settlement,Jåålönj,,,,,Jalün,,,,,,,Joldelund,,,node/240065127,Q522937,auto,,jaalonj
 settlement,Huugelönj,,,,Huugelün,,,,,,,,Hogelund,,Højlund,,,,,huugelonj
-settlement,Riserup,,,,Rööderup; Rääderup,,,,,,,,Riddorf,,,node/3808216055,Q121029115,auto,,riserup
+settlement,Riserup,,,,,Rööderup; Rääderup,,,,,,,Riddorf,,,node/3808216055,Q121029115,auto,,riserup
 settlement,Brääklem,,,,,Brääklem,,,,,,,Breklum,,,node/158615820,Q559468,auto,,braaklem
 settlement,Buursbel,,,,Borsbel,,,,,,,,Borsbüll,,,node/158618274,,auto,,buursbel
 settlement,Wålsbel,,,,Waalsbel,,,,,,,,Wallsbüll,Bredstedt,,,,,,walsbel
@@ -546,11 +546,11 @@ warft,Bungsil,Bongsil,,,,,,,,,,,Bongsiel,,,node/1332249556,,auto,,bungsil
 warft,Slütsil,,,,,,,,,,,,Schlüttsiel,,,node/430830801,,auto,,slutsil
 warft,Waiguurdinge Dik,Woiguurdinge Dik,,,,,,,,,,,Waygaard Deich,,,node/1594588997,,auto,,waiguurdinge-dik
 settlement,Bulhüs,,,,,,,,,,Bolhus,,Bollhaus,,,node/1594588149,,auto,,bulhus
-warft,Ååster-Bulhüs,,,,,,,,,,Bolhus,,Oster-Bollhaus,,,,,,,aaster-bulhus
-warft,Weester-Bulhüs,,,,,,,,,,Bolhus,,Wester-Bollhaus,,,,,,,weester-bulhus
+warft,Ååster-Bulhüs,,,,,,,,,,Uaster-Bolhus,,Oster-Bollhaus,,,local/oster-bollhaus,,ok,,aaster-bulhus
+warft,Weester-Bulhüs,,,,,,,,,,Wäster-Bolhus,,Wester-Bollhaus,,,local/wester-bollhaus,,ok,,weester-bulhus
 warft,Norder-Waiguurd,Noorder-Woiguurd,,,,,,,,,,,Norder-Waygaard,,,node/1594588153,,ok,,norder-waiguurd
 warft,Sööder-Waiguurd,Sööder-Woiguurd,,,,,,,,,,,Süder-Waygaard,,,node/1594588995,,ok,,sooder-waiguurd
-warft,Bluksbärj,Bloksbärj,,,,,,,,,,,Blocksberg,Dagebüll,,node/1801903762,,auto,,bluksbarj
+warft,Bluksbärj,Bloksbeerj,,,,,,,,,,,Blocksberg,Dagebüll,,node/1801903762,,auto,,bluksbarj
 settlement,Doogebel Huuwen,,,,,,,,,,,,Dagebüll Hafen,,,node/44961505,,auto,,doogebel-huuwen
 settlement,Doogebel Schörk,,,,,,,,,,,,Dagebüll Kirche,,,node/430316327,,auto,,doogebel-schork
 warft,Jänswärw,Jänsweerw,,,,,,,,,,,Jenswarft,Dagebüll,,node/14204794483,,ok,,janswarw
@@ -562,9 +562,9 @@ warft,Nommenswärw,Nommensweerw,,,,,,,,,,,Nommenswarft,Dagebüll,,node/142047944
 warft,Meelenwärw,Meelenweerw,,,,,,,,,,,Mühlenwarft,Dagebüll,,node/14204794488,,auto,,meelenwarw
 warft,Söschenswärw,Söschensweerw,,,,,,,,,,,Söschenswarft,Dagebüll,,node/14204794490,,auto,,soschenswarw
 warft,Schörkewärw,Schörkeweerw,,,,,,,,,,,Kirchwarft,Dagebüll,,node/14204794491,,,,schorkewarw-3
-warft,Piitjens,,,,,,,,,,,,Piitjens,Dagebüll,,,,,,piitjens
+warft,Piitjens,,,,,,,,,,,,Piitjens,Dagebüll,,way/188914727,,ok,,piitjens
 warft,Latj Hüs,,,,,,,,,,,,Lütt Hus,Dagebüll,,node/14204794492,,auto,,latj-hus
-warft,e Borj,,,,,,,,,,,,Deezbüll Burg,,,,,,,e-borj
+warft,e Borj,,,,,,,,,,,,Deezbüll Burg,,,local/deezbuell-burg,,ok,,e-borj
 warft,Frisenhuuwen,,,,,,,,,,,,Fresenhagen,,,node/4361759265,Q1455665,auto,,frisenhuuwen
 warft,,,Rikesbel,,,,,,,,,,Rickelsbüll,,,node/12895604368,,auto,uncertain,rikesbel
 warft,Hunerthüsem,,Honwerthüsem,,,,,,,,,,Hunwerthusum,,,,,,,hunerthusem
@@ -801,7 +801,7 @@ warft,,,e Wong,,,,,,,,,,Wange,Wisinghiird,,,,,,e-wong
 warft,Wormheern,,,,,,,,,,,,Warmhörn,,,local/warmhoern,,ok,,wormheern
 warft,Weesterdik,,,,Weesterdik,,,,,,,,Westerdeich,,,node/1333738471; node/6188639238,,ok,,weesterdik
 warft,Weestrefälj,,,,,,,,,,,,Westrefeld,,,,,,,weestrefalj
-warft,Winertfälj,,,,,,Winertfeel,,,,,,Winnertfeld,,,,,,,winertfalj
+warft,Winertfälj,,,,,,Winertfeel,,,,,,Winnertfeld,,,way/64454533; way/121085662; way/64454444,,ok,,winertfalj
 warft,Witlönj,,,,,,Witlöön,,,,,,Wittland,,,way/33885102; way/33885103; way/255391288; way/391127653; way/1419428502; way/1419428503,,ok,,witlonj
 landscape,Ääderstää,,Irestäär,,Ääjerstää,,,,,,,,Eiderstedt,,,relation/1573499,Q20861,auto,,aaderstaa
 landscape,e gååst,,,,,,,,,,,,Die Geest,,,,,,,e-gaast
@@ -814,7 +814,8 @@ landscape,Slaswik-Holstiinj,,,,,,,,,,,,Schleswig-Holstein,,,node/473890961,Q1194
 landscape,Ungel,,,Ungel,,,,,,,,,Angeln,,,relation/14658378,Q506043,auto,,ungel
 landscape,Holönj,,,,,,,,,,,,Holland,,,,,,,holonj
 water,Weestsiie,,Weerstersäie,,,,,,,,,,Nordsee,,,relation/9051063,Q1693,auto,,weestsiie
-water,et heef,,,,,,,,,,,,Wattenmeer,,,relation/12921913,Q26080,auto,,et-heef
+water,et Heef,,,,,,,,,,,,Wattenmeer,,,relation/12921913,Q26080,auto,,et-heef
+water,Fääding,,,,,,,,Feeting,,Fääding,,Fething,,,way/100442463,,auto,,faading
 water,e Iilew,,,e Jalw,,,,,,,di Ialew,,Elbe/Ilef,,,way/87315907,,ok,"Google Maps: der Jelf, Priel an der Kirchhofwarf auf Nordmarsch",e-iilew
 water,e Heege,,,,,,,,,,di Heege,,Der Heeg,,,,,,"Google maps: der Hegd, ehemals großer Priel auf Nordmarsch bei Rixwarf",e-heege
 water,Weesterwäile,,,,,,,,,,Wästerweel,,Westerwehl,Butweel,,way/87317104,,auto,,weesterwaile
@@ -857,7 +858,7 @@ water,Bungsiler Naie Kanool,Bongsiler Naie Kanool,,,,,,,,,,,Neuer Bongsieler Kan
 water,Bungsiler Priil,Bongsiler Priil,,,,,,,,,,,Bongsieler Priel,,,way/116245865,,auto,,bungsiler-priil
 water,Bünesguurdsiie,,Boinjesguurdsäie,,,,,,,,,,Bundesgaarder See,,,,,,,bunesguurdsiie
 water,Gutskuuchsiie,,Gotskuuchsäie,,,,,,,,,,Gotteskoogsee,,,,,,,gutskuuchsiie
-water,Iilew,,,e Jalw,,,,,Ialew,,,,Elbe,,Elben,relation/123822,Q1644,auto,,iilew
+water,Iilew,,,Jalw,,,,,Ialew,,Ialew,,Elbe,,Elben,relation/123822,Q1644,auto,,iilew
 water,Hååselün Ou,,,,,Haaselün Uu,,,,,,,Haselund Au,,,,,,,haaselun-ou
 water,Heesbelsiie,,Hjisbelsäie,,,,,,,,,,Hesbüll Feld,,,,,,uncertain,heesbelsiie
 water,e Smeerle,,,,,,,,,,,,Schmale,,,,,,,e-smeerle
@@ -901,8 +902,10 @@ road,Ååsterwäi,,,,,Ååsterwai,,,,Uasterwai,,,Osterweg,,,,,,,aasterwai
 road,Weesterwäi,,Weersterwäi,,,Wäästerwai,,,,Weesterwai,,,Westerweg,,,,,,,weesterwai
 road,Weesterstich,,,,,,,,,,,,Westersteig,,,way/37216804; way/37216805,,auto,,weesterstich
 road,Ååsterdik,,Oasterdik,,,,,,,,,,Osterdeich,,,,,,,aasterdik-2
+road,Tunersche Dik,,,,,,,,,,,,Tondernscher Deich,,,way/36946893,,auto,,tunersche-dik
 road,Kösterwäi,,,,,,,,,,,,Küsterweg,,,,,,,kosterwai
 road,Norddik,,,,,,,,,,,,Norddeich,,,,,,,norddik-2
+road,Heefdik,,,,,,,,,,,,Haffdeich,,,way/24422564; way/88196670; way/177290106; way/1185940769,,auto,,heefdik
 road,Doogebel Doom,,,,,,,,,,,,Dagebülldamm,,,way/61814027; way/61814028,,auto,,doogebel-doom
 road,Paderswäi,Paaderswäi,,,,,,,,,,,Petersweg,,,way/36892478; way/36892480,,auto,,paderswai
 road,,,,,,de Schesee,,,,,,,Am Forst,,,way/34837925; way/1162819362; way/1125745864; way/396262270; way/1162819361; way/710356144,,ok,,de-schesee
