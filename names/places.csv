@@ -490,7 +490,7 @@ hallig,Haienshåli,,,,,,,,,,,,Hainshallig,,,,,,,haienshali
 hallig,Hamborjer Håli,,,,,,,,,,,,Hamburger Hallig,,,relation/5615880,,ok,confirmed onto the admin_level=10 relation; curation.csv turns it into the island polygon (the isolated_dwelling node only appears at z14),hamborjer-hali
 hallig,Latj Moos,,,,,,,,,,Lidj Muur; Lidj Möör,,Lütt Moor; Nordstrandischmoor,,,relation/3788045,Q20686,auto,,latj-moos
 hallig,Norderuug,,,,,,,,,,Noorderuuch,,Norderoog,,Nørreog,way/1472528449,Q20700,auto,,norderuug
-hallig,Sööderuug,,,,,,,,,,Saruug; Saaruuch,,Süderoog,,,way/1472528447,Q20707,auto,,sooderuug
+hallig,Sööderuug,,,,,,,,,,Saaruuch,,Süderoog,,,way/1472528447,Q20707,auto,,sooderuug
 hallig,Söödfål,,,,,,Süürfåål,,,,Sufaol,,Südfall,,,way/1472528446,Q20699,auto,,soodfal
 sand,Swinereeg,,,,,,,,,,,,Schweinerücken,,,,,,,swinereeg
 sand,Jardsönj,,,,,,,,,Joortsön,,,Jordsand,,Jordsand,way/207101712,Q16514240,auto,,jardsonj
@@ -498,9 +498,9 @@ sand,Jardsönj Flåk,,,,,,,,,Joortsön's Flak,,,Jordsands Flak,,Jordsand Flak,wa
 sand,Ruchelai Sönj,,,,,,,,,,Rochelai Söön,,Rocheley Sand,,,relation/4107990,,auto,uncertain,ruchelai-sonj
 sand,Runghult Sönj,,,,,,,,,,Rongholt Söön,,Rungholtsand,,,way/307147277,,ok,,runghult-sonj
 sand,Knipsönj,,,,,,,,Knip,,,,Kniepsand,,Knipsand,way/144075839,Q20624,auto,,knipsonj
-sand,Norderuug Sönj,,,,,,,,,,Noorderuuch Söön,,Norderoogsand,,Nørreogsand,relation/5713604,Q20631,auto,,norderuug-sonj
 sand,Jåpsönj,,,,,,,,,,Japsöön,,Japsand,,,relation/5713403,Q20633,,,japsoon
-sand,Sööderuug-Sönj,,,,,,,,,,Saruug-Söön,,Süderoogsand,,,relation/5713606,Q20643,,,saruug-soon
+sand,Norderuug-Sönj,,,,,,,,,,Noorderuuch-Söön,,Norderoogsand,,Nørreogsand,relation/5713604,Q20631,auto,,norderuug-sonj
+sand,Sööderuug-Sönj,,,,,,,,,,Saruuch-Söön,,Süderoogsand,,,relation/5713606,Q20643,,,saruug-soon
 sand,Jungnååmen-Sönj,,,,,,,,Jongnaamen,,,,Jungnamensand,,,relation/12353150,Q20630,,,jongnaamen
 hallig,Buunehåli,,Buunehali,,,,,,,,,,Bohnenhallig,,,,,,,buunehali
 hallig,Gruthåli,,Grothali,,,,,,,,,,Großhallig,,Storehallig,,,,,gruthali
