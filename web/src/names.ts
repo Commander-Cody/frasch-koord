@@ -20,7 +20,11 @@ export interface NameEntry {
   osm?: string;
   /** Dialect names by registry tag, e.g. { "frr-x-mooring": "Naibel" }. */
   names: Record<string, string>;
-  /** Name used by the people of the place itself (tile attribute `frasch:local`). */
+  /**
+   * Name used by the people of the place itself (tile attribute
+   * `frasch:local`): the name list's, else OSM's `name:frr` where the place
+   * lies in a dialect area (issue #81).
+   */
   local?: string;
   /** Dialect area the place lies in, e.g. "frr-x-fering". */
   dialect?: string;

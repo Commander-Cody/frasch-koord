@@ -230,8 +230,11 @@ Local view (`tag = LOCAL_TAG`):
 coalesce(frasch:local, name:nds, name:latin, name, name:de)
 ```
 
-Deliberately **no `name:frr`**, because that is some other dialect's name,
-which is exactly what this view avoids. `name:de` comes **only at the very
+Deliberately **no `name:frr`**: outside the dialect areas that is a Frisian
+exonym or some other dialect's name, which is exactly what this view avoids.
+Inside a dialect area it is the local form, and there the injector has
+already written it into `frasch:local` wherever the name list gives no local
+name (issue #81, see `tiles/README.md`). `name:de` comes **only at the very
 end**, for a feature without a generic `name`. German usually arrives
 through `name:latin`/`name` anyway, but only after Low Saxon has had its turn.
 North of the border that generic name is the Danish one (Ribe, not Ripen).
@@ -267,8 +270,10 @@ OpenMapTiles schema plus our extras, injected by the `tiles/` build
   style today; it is what `frasch:local` was computed from.
 - `frasch:local` (string, only where known): the name the people of the
   place use themselves — the area dialect's name, or the `local` column of
-  `names/places.csv` where a sub-dialect differs (Fahretoft). Drives the
-  local view.
+  `names/places.csv` where a sub-dialect differs (Fahretoft). Where the list
+  has neither, or does not have the place at all, it is OSM's `name:frr`
+  inside a dialect area (issue #81), so it is the one `frasch:*` attribute a
+  feature outside our name list can carry. Drives the local view.
 - `frasch:variety` (string, rare): the sub-dialect the local name belongs to,
   e.g. `Foortuftinge`. Shown by the place card; nothing in the style reads it.
 - `frasch:ref` (string, only on features from our name list): which row of
@@ -413,7 +418,7 @@ per place):
   "id": "string", // the name-list row's id, e.g. "naibel"
   "osm": "string", // omitted: the row's OSM reference(s), e.g. "node/240042766"
   "names": { "frr-x-mooring": "Naibel" }, // by registry tag; only non-empty ones
-  "local": "string", // omitted when unknown: the place's own name
+  "local": "string", // omitted when unknown: the place's own name (as the tiles' `frasch:local`)
   "dialect": "frr-x-fering", // omitted outside the Frisian dialect areas
   "variety": "Foortuftinge", // omitted: sub-dialect of the local name
   "name_nds": "string", // omitted: OSM's Low Saxon name of the place's object
@@ -490,7 +495,9 @@ Where the data comes from (`src/names.ts`):
   it can show is OSM's dialect-less `name:frr` — which the style labels with
   too, so the card would otherwise contradict the label that was clicked. It
   is marked as coming from OSM (`card.frisian`) and left out wherever it only
-  repeats a name the card already shows.
+  repeats a name the card already shows. Inside a dialect area the tile
+  carries the same name as `frasch:local` (issue #81); the card then shows it
+  as the local form (`card.local`), in every view.
 - Low Saxon (`name_nds`) is the same kind of name: the list has no column for
   it, but both chains fall back to `name:nds` before German. A clicked card
   takes it from the tile, one opened from search from `names.json`

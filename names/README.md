@@ -109,7 +109,9 @@ frontend must agree on it:
 
 * **the name of a place in dialect T** = its column, else — if T is the
   dialect of the area the place lies in — `local`
-* **the local name** = `local`, else the name in the dialect of the area
+* **the local name** = `local`, else the name in the dialect of the area,
+  else OSM's own `name:frr` of the object, inside a dialect area only (see
+  *OSM's Frisian names* in `tiles/README.md`)
 * **the variety** = the bracket remark on the primary `local` variant
 
 ## Dialect areas — `dialect_areas.csv` → `dialect_areas.geojson`
@@ -364,8 +366,8 @@ row on the map its point (a node's location; a point *inside* the polygon of
 a way or relation that closes into one; else the relation's `label` /
 `admin_centre` member, else its first vertex the extract holds), the outline
 point as a second try for the dialect lookup, the `admin_level` of an
-administrative boundary, and OSM's `name:nds`. It is stamped with the
-extracts it was read from. The injector and `export_search_index.py` both read
+administrative boundary, and OSM's `name:nds`, `name` and `name:frr`. It is
+stamped with the extracts it was read from. The injector and `export_search_index.py` both read
 it, and both ask `objects.dialect_at` which dialect an object lies in — so a
 label and its search entry cannot disagree. An administrative area above
 municipality level (Kreis Nordfriesland, an Amt) gets no dialect: it spans
@@ -659,7 +661,7 @@ A record with fixed keys is a `TypedDict` in the module that produces it
 | `registry` | the one reader of `dialects.csv` |
 | `placelist` | reads/writes/validates `places.csv`: cells, references, ids, the lock |
 | `curationlist` | the one reader of `curation.csv`, and appending to it |
-| `dialects` | the dialect name logic (`dialect_name`, `local_name`) and the area lookup (`AreaIndex`) |
+| `dialects` | the dialect name logic (`dialect_name`, `local_name`, `osm_local_name`) and the area lookup (`AreaIndex`) |
 | `objects` | reads and writes the objects file `osm_objects.json`; `dialect_at`, the one dialect lookup of injector and exporter |
 | `geo` | the North Frisia box, its centre, haversine |
 | `osmscan`, `osmgeom` | the id-filtered passes over an extract; ring assembly and polygons |

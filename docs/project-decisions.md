@@ -102,7 +102,9 @@ Sölring, Öömrang, Halunder and Hålifrasch names. They are now first-class.
    the local majority language; a northern-Germany `within` polygon comes with
    the planet build):
    - dialect view for tag T: `coalesce(name:T, frasch:local, name:frr, name:nds, name:de, name:latin, name)`
-   - local view (`frr-x-local`): `coalesce(frasch:local, name:nds, name:latin, name, name:de)` — deliberately **no** `name:frr` and `name:de` only as the very last resort: where the Frisian name is unknown the honest local label is the Low Saxon one, not a Hochdeutsch one or another dialect's name. (Revised 2026-10-01, #32: `name:de` was not in the chain at all, which left a feature with only a German name unlabelled. It now comes after OSM's own `name`, so it only matters where a feature has no `name`. The card and search take the generic `name` from OSM too, as `name_osm` in names.json, and no longer treat it as German. North of the border it is Danish.)
+   - local view (`frr-x-local`): `coalesce(frasch:local, name:nds, name:latin, name, name:de)` — deliberately **no** `name:frr` and `name:de` only as the very last resort: where the Frisian name is unknown the honest local label is the Low Saxon one, not a Hochdeutsch one or another dialect's name. (Revised 2026-10-01, #32: `name:de` was not in the chain at all, which left a feature with only a German name unlabelled. It now comes after OSM's own `name`, so it only matters where a feature has no `name`. The card and search take the generic `name` from OSM too, as `name_osm` in names.json, and no longer treat it as German. North of the border it is Danish. Since 2026-10-03, #81: inside a dialect
+     area the injector writes OSM's `name:frr` into `frasch:local` where the
+     list gives no local name, see below. The chain itself is unchanged.)
 7. **UI**: one dropdown. Every option carries a UI language; only registry
    entries with `view=yes` are selectable (today only Mooring — a dialect
    becomes selectable when its UI translation exists). The local view uses
@@ -557,6 +559,47 @@ routine recipes and the pipeline's internals side by side.
 **Why**: every deploy uploaded 102 MB of glyphs, and a range that is missing
 shows: MapLibre then draws the glyph locally in another font, and the smoke
 check reports the 404.
+
+## Decided 2026-10-03: inside a dialect area OSM's `name:frr` is the local name (issue #81)
+
+The local view labelled a place inside a dialect area in German when the name
+list did not have it, although OSM names it in Frisian: the Fahretoft warft
+*Kirchwarft* has `name:frr=Schörkeweerw`. `name:frr` is left out of the local
+chain on purpose, because outside the areas it is a Frisian exonym (Pinneberg
+→ *Pinebärj*). Inside an area the reasoning is reversed: there it is almost
+always the local form. Owner's choices:
+
+- **The injector writes it into `frasch:local`**, the label chain stays as it
+  is (owner's choice over a `within` branch in the style's `text-field`,
+  which would have needed the dialect areas in the browser and the click
+  position on the card).
+- **Every object**, not only places: streets, stations and offices with a
+  `name:frr` inside an area get the Frisian label too. One rule, no class
+  list to maintain.
+- **Listed objects too**: a row's own local name wins, but where the list
+  gives none, OSM's `name:frr` is it. Otherwise adding a place to
+  `places.csv` with only a Mooring name would take its Frisian label away.
+  `osm_objects.json` records `name_frr` for this, and `names.json`'s `local`
+  follows the same rule (`dialects.osm_local_name`), so map, card and search
+  agree. 20 objects of the list (18 rows) changed, e.g. Husum → *Hüsem*.
+- **The objects without a row are located by a pre-pass of the injector**
+  over the extract it is tagging (owner's choice over recording them in
+  `osm_objects.json`): a new `name:frr` in OSM is on the map with the next
+  tile build, and the committed file stays "the objects of the name list".
+  This is no return to the injector's own positions for *listed* objects
+  (2026-09-27): those still come from the file, because the search index
+  needs the same answer. An object without a row has no search entry to
+  disagree with.
+
+Consequence: in a dialect view the chain is `name:<dialect>` → `frasch:local`
+→ the other dialects → `name:frr`. A listed place without a name in the
+selected dialect and without a local name from the list used to show another
+dialect's list name; inside an area it now shows OSM's `name:frr` first.
+
+In the Schleswig-Holstein extract of 2026-09-22, 532 objects carry
+`name:frr`; 168 of them lie in a dialect area and have no row (64 town signs,
+which no tile layer labels, 28 streets, 19 stations, 11 Warften mapped as
+`landuse`, about 37 places, boundaries and waters).
 
 ## Remaining open questions
 1. Hosting provider for the site (R2 + Pages proposed, nothing set up yet); the tiles are GitHub release assets for now (issue #28).
