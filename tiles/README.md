@@ -28,7 +28,7 @@ inject_names.py <in.osm.pbf> <out.osm.pbf>
                 [--dry-run]
 ```
 
-There is no `--dialect` switch any more: **every** dialect of the registry is injected in one pass, and the frontend picks one at display time. The dialect areas are optional — without them the injector warns and writes no `frasch:dialect` (and `frasch:local` only where a row has an explicit `local` name). With them, every object of the name list must be in `--objects` (`uv run just objects`), or the injector stops and lists the missing ones.
+There is no `--dialect` switch any more: **every** dialect of the registry is injected in one pass, and the frontend picks one at display time. The dialect areas are optional — without them the injector warns and writes no `frasch:dialect` (and `frasch:local` only where a row has an explicit `local` name, never from OSM's `name:frr`). With them, every object of the name list must be in `--objects` (`uv run just objects`), or the injector stops and lists the missing ones.
 
 ### The `frasch:*` tile attributes
 
@@ -40,9 +40,18 @@ Planetiler runs with `--extra_name_tags=frasch:kind,frasch:minzoom,frasch:maxzoo
 | `frasch:minzoom` | `curation.csv`'s `minzoom` column | the earliest zoom the label should appear at. **Planetiler does not enforce this** — it is a hint the style must honour, and it can only push a label later, never earlier. |
 | `frasch:maxzoom` | `curation.csv`'s `maxzoom` column | the last zoom (inclusive) the label should be shown at. Style-enforced like `frasch:minzoom`. Nordstrand's synthetic island polygon uses it to hand over to the village label at z12. |
 | `frasch:dialect` | `names/dialect_areas.geojson` at the object's position in `names/osm_objects.json` (point in polygon, smallest area wins; none for an administrative area above municipality level) | the dialect spoken **where the object is**, e.g. `frr-x-hallig` — not necessarily a dialect the object has a name in. Absent outside the Frisian areas. |
-| `frasch:local` | `places.csv`'s `local` column, else the name in `frasch:dialect`'s column | what the people of the place themselves call it. This is what the local-dialect view labels with: `coalesce(frasch:local, name:nds, name:latin, name, name:de)` — deliberately no `name:frr`, and `name:de` only as the last resort. |
+| `frasch:local` | `places.csv`'s `local` column, else the name in `frasch:dialect`'s column, else OSM's `name:frr` inside a dialect area (see below) | what the people of the place themselves call it. This is what the local-dialect view labels with: `coalesce(frasch:local, name:nds, name:latin, name, name:de)` — no `name:frr` in the chain, and `name:de` only as the last resort. An object without a list row can carry it too. |
 | `frasch:variety` | the bracket remark on the primary `local` variant | the name of that local variety, e.g. `Foortuftinge` (Fahretoft) or `ååstermooring`. For the UI to show next to the name. |
 | `frasch:ref` | the row's `id` (of the first row, when several claim the object) | which row of `places.csv` the feature's names come from — `naibel`, `schorkewarw-2`. The same string is the id of the row's entry in the search index, so the frontend can go from a clicked label to the whole name list of that place (the place card). Absent on features that only `curation.csv` touches; a curation row can set it by hand (Nordstrand: `frasch:ref=e-stronj`) when its object belongs to another row — `names/check.py` makes sure it names one. |
+
+#### OSM's Frisian names
+
+OSM's own `name:frr` says nothing about the dialect. Outside the dialect areas it is usually a Frisian exonym (Pinneberg → *Pinebärj*), which the local view must not show. Inside an area of `names/dialect_areas.geojson` it is almost always the form the place itself uses. So there the injector writes it as `frasch:local`, verbatim, wherever the name list gives no local name (#81):
+
+- **An object no row claims**, whatever it is (a Warft, a street, a station): it gets `frasch:local` and nothing else from this rule. Before the main pass the injector scans the extract it is tagging for `name:frr` and locates those objects the way `names/locate.py` locates the list's (a node at its own location, a way or relation inside its polygon, else at its outline point; about 5 s for Schleswig-Holstein). So a new `name:frr` in OSM shows at the next tile build, without a row and without a pipeline step.
+- **An object of the name list** whose rows have neither a `local` name nor one in the area's dialect: its `name:frr` comes from `names/osm_objects.json` (`name_frr`), the file the search index reads too, so `names.json`'s `local` says the same. An object found only through its row's Wikidata QID is asked itself (a node; a way or relation has no dialect).
+
+A row's own local name always wins. An administrative area above municipality level lies in no dialect area, so its `name:frr` is never a local name. The report counts both kinds.
 
 `curation.csv`'s `polygon_km2` makes the injector add a synthetic `place=island` square around a node (new node and way ids above the extract's highest, written in node/way/relation order so Planetiler's node map stays happy). The square inherits the node's `name` / `name:*` / `frasch:dialect` / `frasch:local` / `frasch:variety` / `frasch:ref`. It exists because OMT labels island *nodes* only from z12 but island *polygons* by area from z8, at the polygon's interior point. For a local reference (a place OSM does not have), the square centres on the curation row's own `lat`/`lon` instead of an OSM node, and no node is written at all. See `names/README.md`.
 

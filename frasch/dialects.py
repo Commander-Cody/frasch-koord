@@ -7,7 +7,9 @@ One name belongs to a place beyond its dialect columns:
   the dialect of the surrounding area (sub-dialects such as Fahretoft's
   Foortuftinge).  Empty means "same as the area's dialect".  `dialect_name`
   and `local_name` below implement those two fallbacks; the area a place lies
-  in comes from `AreaIndex` (names/dialect_areas.geojson).
+  in comes from `AreaIndex` (names/dialect_areas.geojson).  Where the list
+  gives no local name at all, OSM's own Frisian name is it inside a dialect
+  area (`osm_local_name`).
 
 The command that prints and exports the registry is frasch.export_dialects.
 """
@@ -130,6 +132,14 @@ def local_name(row: Row, area_tag: str | None, reg: Registry) -> str:
     if not name and area_tag:
         name = dialect_name(row, area_tag, area_tag, reg)
     return name
+
+
+def osm_local_name(name_frr: str | None, area_tag: str | None) -> str:
+    """OSM's own Frisian name (`name:frr`) as the local name of an object
+    the name list gives none -- inside a dialect area only.  There it is
+    almost always the form the place itself uses; outside it is a Frisian
+    exonym (Pinneberg -> Pinebärj), which the local view must not show (#81)."""
+    return (name_frr or "") if area_tag else ""
 
 
 def variety(row: Row) -> str:

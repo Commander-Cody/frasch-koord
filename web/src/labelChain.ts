@@ -22,8 +22,11 @@ import { DIALECTS, LOCAL_TAG } from './config';
  *    but may still have a Wieding one), then generic Frisian, Low Saxon, German,
  *    a transliterated Latin name, and finally the generic OSM `name`.
  *  - local view: ONLY the name the people of the place use themselves, then
- *    the local majority language. Deliberately no `name:frr` (that is some
- *    other dialect's name, which is exactly what this view avoids), and
+ *    the local majority language. Deliberately no `name:frr` (outside the
+ *    dialect areas that is a Frisian exonym or some other dialect's name,
+ *    which is exactly what this view avoids; inside an area the tile build
+ *    has already written it into `frasch:local` where the name list gives no
+ *    local name, issue #81), and
  *    `name:de` only as the very last resort, for a feature without a generic
  *    `name` (issue #32): German comes in via `name:latin`/`name` anyway, but
  *    only after Low Saxon has had its turn.

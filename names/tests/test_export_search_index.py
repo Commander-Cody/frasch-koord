@@ -81,6 +81,15 @@ RIPEN = {
     "osm": "node/597643755",
     "status": "auto",
 }
+# a Mooring name only; the Hallig lies in the Nordergoesharde box of AREAS
+HAMBORJER_HALI = {
+    "id": "hamborjer-hali",
+    "kind": "hallig",
+    "mooring": "Hamborjer Håli",
+    "de": "Hamburger Hallig",
+    "osm": "relation/5615880",
+    "status": "ok",
+}
 OBJECTS: dict[OsmRef, LocatedObject] = {
     ("n", 240042766): {"lon": 8.83, "lat": 54.79, "name_nds": "Niböl"},
     ("w", 28330569): {"lon": 8.86, "lat": 54.47},
@@ -90,6 +99,7 @@ OBJECTS: dict[OsmRef, LocatedObject] = {
     # in the Südergoesharde strip of AREAS
     ("n", 2974350732): {"lon": 9.05, "lat": 54.72},
     ("n", 597643755): {"lon": 8.76, "lat": 55.33, "name": "Ribe"},
+    ("r", 5615880): {"lon": 8.84, "lat": 54.70, "admin_level": 10, "name_frr": "Hamborjer Hali"},
 }
 EXTRACTS: list[ExtractStamp] = [
     {"file": "schleswig-holstein-latest.osm.pbf", "replication_timestamp": "2026-09-22T20:22:59Z"}
@@ -189,6 +199,11 @@ def test_an_entry_gets_the_dialect_and_local_name_of_where_it_lies(export: Expor
     entries = export([STIARDEBEL])
     assert entries["stiardebel"]["dialect"] == "frr-x-suedgoes"
     assert entries["stiardebel"]["local"] == "Stiardebel"
+
+
+def test_the_local_name_of_a_row_without_one_is_osms_frisian_name(export: Export) -> None:
+    # as the injector labels it (#81)
+    assert export([HAMBORJER_HALI])["hamborjer-hali"]["local"] == "Hamborjer Hali"
 
 
 def test_a_district_gets_no_dialect(export: Export) -> None:
