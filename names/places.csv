@@ -218,7 +218,7 @@ settlement,Grut Älerbel,,,,,,,,,,,,Groß Ellerbüll,,,node/9893812282,,auto,,gr
 settlement,Latj Älerbel,,,,,,,,,,,,Klein Ellerbüll,,,node/9893812283,,auto,,latj-alerbel
 settlement,Heerstem,,,,,,,,,,,,Herstum,,,node/1346171839,,auto,,heerstem
 settlement,Håtstinge Mjarsch,,,,,,Haatstinger Määrsch,,,,,,Hattstedtermarsch,,,node/240058893,Q20746,auto,,hatstinge-mjarsch
-settlement,Fädersborj,,,,,,,,,,,,Feddersburg,Hattstedtermarsch,,node/6268347878,,,name:frr from OSM,fadersborj
+settlement,Fädersborj,,,,,,Fädersborch,,,,,,Feddersburg,Hattstedtermarsch,,node/6268347878,,,name:frr from OSM,fadersborj
 settlement,Lunbärj,,,,,,Lunberich,,,,,,Lundenberg,,,node/1346171389,,auto,,lunbarj
 settlement,Buunelönj,,,,,,Buanenlöön,,,,,,Bohnenland,,,,,,,buunelonj
 settlement,Wååbel,,,,,,Waabel,,,,,,Wobbenbüll,,,node/85925751,Q573064,auto,,waabel
@@ -409,7 +409,6 @@ koog,Bäärtuft Kuuch,,,,,,,,,,,,Bevertoft Koog,,,,,,,baartuft-kuuch
 koog,Brääkleme Kuuch,,,,Brääklemer Kuuch,,,,,,,,Breklumer Koog,,,,,,,braakleme-kuuch
 koog,Bruunodenkuuch,,,,,,,,,,,,Brunottenkoog,,,,,,,bruunodenkuuch-2
 koog,Bupheewerkuuch,,,,,,,,,,,,Buphever Koog,,,,,,,bupheewerkuuch
-koog,Cecilienkuuch,,,,,,,,,,,,Cecilienkuuch,,,,,,,cecilienkuuch
 koog,Deljekuuch,,,,,,,,,,,,Deljekoog,,,,,,,deljekuuch
 koog,Desmerciereskuuch,,,,,,,,,,,,Desmerciereskoog,,,node/844930192,Q1200790,auto,,desmerciereskuuch
 koog,Reussenkuuch,,,,,,,,,,,,Reussenkoog,,,node/844930219,Q2146720,auto,,reussenkuuch
@@ -444,7 +443,7 @@ koog,Üülje Kuuch,,,,Uule Kuuch,,,,,,,,Oldenkoog,,,,,,,uulje-kuuch
 koog,Poonshålikuuch,,,,,,,,,,,,Pohnshalligkoog,,,node/85925755,,auto,,poonshalikuuch
 koog,Porekuuch,,,,,,,,,,,,Porrenkoog,,,node/4101407831,,auto,,porekuuch
 koog,Reussenkuuge,,,,,,,,,,,,Reußenköge,,,relation/1416815,Q21043,auto,,reussenkuuge
-koog,Cecilienkuuch,,,,,,,,,,,,Cecilienkoog,Reußenköge,,node/844930205,,,name:frr from OSM,ceciilienkuuch
+koog,Cecilienkuuch,,,,Cecilienkuuch,,,,,,,,Cecilienkoog,Reußenköge,,node/844930205,,,,ceciilienkuuch
 koog,Rikesbelinge Kuuch,,,,,,,,,,,,Rickelsbüller Koog,,,node/2878377420,,auto,,rikesbelinge-kuuch
 koog,Siiwersfleeter Kuuch,,,,,,,,,,,,Sieversflether Koog,,,,,,,siiwersfleeter-kuuch
 koog,Siimensbärjer Kuuch,,,,,,Siimensbeerier Kuuch,,,,,,Simonsbergerkoog,,,,,,,siimensbarjer-kuuch
@@ -520,8 +519,8 @@ warft,Käädelswärw,,,,,,,,,,Käädelsweerw,,Ketelswarf,Langeness,,node/7538193
 warft,Naiwärw,,,,,,,,,,Naiweerw,,Neuwarf,Langeness,,node/7538193729,,auto,,naiwarw
 warft,Båndikswärw,,,,,,,,,,Baondiksweerw,,Bandixwarf,Langeness,,node/7523582620,,auto,,bandikswarw
 warft,Schörkewärw,,,,,,,,,,Schorkeweerw; Nees-Schorkeweerw,,Kirchwarft,Langeness,,node/7523637424,,ok,,schorkewarw
-warft,Üülj-Paderswärw,,,,,,,,,,Ual-Padersweerw,,Alte Peterswarft,Langeness,,node/7545909038,,,name:frr from OSM,ual-padersweerew
-warft,Nai-Paderswärw,,,,,,,,,,Nai-Padersweerw,,Neu-Peterswarf,Langeness,,node/7538193723,,,name:frr from OSM,nai-padersweerew
+warft,Üülj-Paderswärw,,,,,,,,,,Ual-Padersweerw,,Alte Peterswarft,Langeness,,node/7545909038,,,,ual-padersweerew
+warft,Nai-Paderswärw,,,,,,,,,,Nai-Padersweerw,,Neu-Peterswarf,Langeness,,node/7538193723,,,,nai-padersweerew
 warft,Tåånswärw,,,,,,,,,,Taonsweerw,,Tadenswarf,Butweel,,node/7538193727,,auto,,taanswarw
 warft,Krüschenswärw,,,,,,,,,,Kruschensweerw,,Christianswarf,Butweel,,node/7523615329,,auto,,kruschenswarw
 warft,Tamenswärw,,,,,,,,,,Tamensweerw,,Tamenswarf,Butweel,,node/7538193726,,auto,,tamenswarw
@@ -819,7 +818,7 @@ water,e Iilew,,,e Jalw,,,,,,,di Ialew,,Elbe/Ilef,,,way/87315907,,ok,"Google Maps
 water,e Heege,,,,,,,,,,di Heege,,Der Heeg,,,,,,"Google maps: der Hegd, ehemals großer Priel auf Nordmarsch bei Rixwarf",e-heege
 water,Weesterwäile,,,,,,,,,,Wästerweel,,Westerwehl,Butweel,,way/87317104,,auto,,weesterwaile
 water,Ååsterwäile,,,,,,,,,,Uusterweel,,Osterwehl,Butweel,,way/87317128,,auto,,aasterwaile
-warft,e Slüt,,,,,,,,,,di Slut,,Schlütt,,,,,,,e-slut
+water,e Slüt,,,,,,,,,,di Slut,,Schlütt,,,way/1273915439,,auto,,e-slut
 water,Heewer Struum,,,,,,,,,,,,Heverstrom,,,way/1274620096,,,,heewer-struum
 water,Norderheewer,,,,,,,,,,,,Norderhever,,,way/1221744929,,ok,,norderheewer
 water,Sööderheewer,,,,,,,,,,,,Süderhever,,,way/1221744930,,ok,,sooderheewer
