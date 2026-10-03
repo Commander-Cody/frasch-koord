@@ -8,14 +8,15 @@
  * a build must not ship an archive nobody can name. So the copied archives
  * are dropped, and the pinned one is taken from the fetch cache
  * (.cache/tiles/<sha256>.pmtiles) instead. With VITE_TILES_URL set the tiles
- * live elsewhere (see src/config.ts) and no archive is shipped at all. The
- * glyphs are vite-plugins/glyphs.ts' business.
+ * live elsewhere (see src/config.ts) and no archive is shipped at all. A link
+ * there that leads nowhere (to tiles not built yet) stops the build as well:
+ * Vite cannot copy it. The glyphs are vite-plugins/glyphs.ts' business.
  *
  * Build only (`apply: 'build'`); the dev server reads public/ in place.
  */
 import { createHash } from 'node:crypto';
-import { createReadStream } from 'node:fs';
-import { copyFile, mkdir, readdir, rm } from 'node:fs/promises';
+import { createReadStream, type Dirent } from 'node:fs';
+import { copyFile, mkdir, readdir, readlink, rm, stat } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import type { Plugin } from 'vite';
@@ -24,6 +25,9 @@ import { lockValue } from './lock.ts';
 
 /** Where the site serves its own archive from, under dist/ (see src/config.ts). */
 const ARCHIVE = 'tiles/schleswig-holstein.pmtiles';
+
+/** Where the dev server's archive is linked, under the web/ root. */
+const PUBLIC_TILES = 'public/tiles';
 
 /** The web/ root a build runs in, the dist/ it writes, and whether VITE_TILES_URL is set. */
 export interface TilesBuild {
@@ -70,13 +74,47 @@ async function archiveProblem(root: string): Promise<string | undefined> {
   }
 }
 
-/** What the build lacks, one line each, when it starts; empty when it has all it needs. */
+/** Whether the path leads to a file, its links followed. */
+async function exists(path: string): Promise<boolean> {
+  try {
+    await stat(path);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return false;
+    throw err;
+  }
+  return true;
+}
+
+/** The links directly in `dir` whose target is not there. */
+async function danglingLinks(dir: string): Promise<string[]> {
+  const entries = await readdir(dir, { withFileTypes: true }).catch(() => [] as Dirent[]);
+  const links = entries.filter((entry) => entry.isSymbolicLink()).map((entry) => entry.name);
+  const targetExists = await Promise.all(links.map((name) => exists(join(dir, name))));
+  return links.filter((_, i) => !targetExists[i]);
+}
+
+/**
+ * One line per dangling link in public/tiles/, such as a tile builder's to
+ * an archive that is not built yet: Vite's copy of public/ into the build
+ * fails on it with a bare ENOENT.
+ */
+async function danglingLinkProblems(root: string): Promise<string[]> {
+  const dir = join(root, PUBLIC_TILES);
+  return Promise.all(
+    (await danglingLinks(dir)).map(async (name) => {
+      const target = await readlink(join(dir, name));
+      return `${PUBLIC_TILES}/${name} links to ${target}, which does not exist: build the tiles, or remove the link and run \`npm run fetch-tiles\``;
+    }),
+  );
+}
+
+/** What stands in the build's way, one line each, when it starts; empty when it has all it needs. */
 export async function assetProblems({
   root,
   external,
 }: Omit<TilesBuild, 'outDir'>): Promise<string[]> {
   const problem = external ? undefined : await archiveProblem(root);
-  return problem === undefined ? [] : [problem];
+  return [...(problem === undefined ? [] : [problem]), ...(await danglingLinkProblems(root))];
 }
 
 /** Drops the archives Vite copied from public/tiles/: a dev symlink's target, or a stale fetch. */

@@ -34,6 +34,10 @@ ours_to_link() {
 fetch_pinned "$ARCHIVE_URL" "$CACHED" "$ARCHIVE_SHA256"
 if ours_to_link; then
   ln -sfn "../../$CACHED" "$LINK"
+elif [ ! -e "$LINK" ]; then
+  # Someone's own link to an archive that is not built yet: theirs to keep,
+  # but nothing serves it, and Vite cannot copy it (vite-plugins/tiles.ts).
+  echo "fetch-tiles: $LINK links to $(readlink "$LINK"), which does not exist: the dev server shows no map and \`npm run build\` stops. Build the tiles, or remove the link and run \`npm run fetch-tiles\` again" >&2
 else
   echo "kept $LINK (-> $(readlink "$LINK" || echo "a file")): the dev server serves that, a build the fetched archive"
 fi

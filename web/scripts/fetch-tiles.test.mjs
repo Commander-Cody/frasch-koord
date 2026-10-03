@@ -80,13 +80,26 @@ describe('fetch-tiles.sh', () => {
   });
 
   it("keeps a tile builder's own archive linked, and says so", () => {
-    symlinkSync('../../../tiles/data/schleswig-holstein.pmtiles', join(root, LINK));
+    put(root, 'own-tiles/schleswig-holstein.pmtiles', 'a local build');
+    symlinkSync('../../own-tiles/schleswig-holstein.pmtiles', join(root, LINK));
 
     const result = fetchTiles();
 
     expect(result.status, result.stderr).toBe(0);
-    expect(readlinkSync(join(root, LINK))).toBe('../../../tiles/data/schleswig-holstein.pmtiles');
+    expect(readlinkSync(join(root, LINK))).toBe('../../own-tiles/schleswig-holstein.pmtiles');
     expect(result.stdout).toContain(`kept ${LINK}`);
+  });
+
+  it("keeps a tile builder's link to an archive that is not built, and warns", () => {
+    symlinkSync('../../own-tiles/schleswig-holstein.pmtiles', join(root, LINK));
+
+    const result = fetchTiles();
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(readlinkSync(join(root, LINK))).toBe('../../own-tiles/schleswig-holstein.pmtiles');
+    expect(result.stderr).toContain(
+      `${LINK} links to ../../own-tiles/schleswig-holstein.pmtiles, which does not exist`,
+    );
   });
 
   it('moves on from an earlier pinned archive, and drops it', () => {
@@ -99,6 +112,15 @@ describe('fetch-tiles.sh', () => {
     expect(result.status, result.stderr).toBe(0);
     expect(readlinkSync(join(root, LINK))).toBe(`../../.cache/tiles/${PUBLISHED_SHA256}.pmtiles`);
     expect(readdirSync(join(root, '.cache/tiles'))).toEqual([`${PUBLISHED_SHA256}.pmtiles`]);
+  });
+
+  it('repoints its own link to an earlier archive that is gone', () => {
+    symlinkSync(`../../.cache/tiles/${'0'.repeat(64)}.pmtiles`, join(root, LINK));
+
+    const result = fetchTiles();
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(readlinkSync(join(root, LINK))).toBe(`../../.cache/tiles/${PUBLISHED_SHA256}.pmtiles`);
   });
 
   it('refuses an archive that is not the pinned one', () => {
