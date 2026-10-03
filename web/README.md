@@ -150,6 +150,13 @@ ln -sfn ../../../tiles/data/schleswig-holstein.pmtiles \
 `.cache/tiles/`), and `npm run build` still ships the pinned archive, never
 the linked one.
 
+A link whose target does not exist, e.g. that one before the tiles are built,
+shows no map in the dev server, and Vite cannot copy it into a build. So
+`npm run build` stops at its start and names every such link in
+`public/tiles/` (`vite-plugins/tiles.ts`), and `npm run fetch-tiles` keeps it
+but warns. Either build the tiles, or remove the link and run
+`npm run fetch-tiles`, which then links the pinned archive.
+
 The `pmtiles://` protocol is registered once with MapLibre in
 `src/components/Map.tsx` (`addProtocol('pmtiles', protocol.tile)`); MapLibre
 then reads TileJSON straight out of the archive itself.

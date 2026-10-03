@@ -613,6 +613,19 @@ object's OSM name, while a second object of the row lies in another area and
 has a list name there (Nordwarft: the way on the Hallig, the node in the
 Nordergoesharde).
 
+## Decided 2026-10-03: a dangling link in `public/tiles/` stops the build with a hint (issue #53)
+
+A tile builder's link in `web/public/tiles/` to an archive that is not built
+yet failed `npm run build` inside Vite's copy of `public/`, with a bare
+`ENOENT`, although the build ships the pinned archive anyway.
+`vite-plugins/tiles.ts` now names every such link at the build's start, with
+the two ways out: build the tiles, or remove the link and run
+`npm run fetch-tiles` (owner's choice over a plugin that takes over Vite's
+copy of `public/` and builds anyway). It does so with `VITE_TILES_URL` too.
+`npm run fetch-tiles` keeps a link that is not its own even when it dangles,
+but warns instead of saying the dev server serves it (owner's choice over
+replacing it: the link may have been set ahead of the first tile build).
+
 ## Remaining open questions
 1. Hosting provider for the site (R2 + Pages proposed, nothing set up yet); the tiles are GitHub release assets for now (issue #28).
 2. When to do the planet build (needs the VM; only after the North Frisia build looks right).
