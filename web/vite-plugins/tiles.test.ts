@@ -91,21 +91,31 @@ describe('assetProblems', () => {
   });
 
   it('refuses a link in public/tiles/ to an archive that is not built', async () => {
-    link(
-      'public/tiles/schleswig-holstein.pmtiles',
-      '../../../tiles/data/schleswig-holstein.pmtiles',
-    );
+    link('public/tiles/schleswig-holstein.pmtiles', '../../own-tiles/schleswig-holstein.pmtiles');
 
     expect(await assetProblems({ root, external: false })).toEqual([
-      'public/tiles/schleswig-holstein.pmtiles links to ../../../tiles/data/schleswig-holstein.pmtiles, which does not exist: build the tiles, or remove the link and run `npm run fetch-tiles`',
+      'public/tiles/schleswig-holstein.pmtiles links to ../../own-tiles/schleswig-holstein.pmtiles, which does not exist: build the tiles, or remove the link and run `npm run fetch-tiles`',
+    ]);
+  });
+
+  it('names every dangling link in public/tiles/, and only those', async () => {
+    link('public/tiles/denmark.pmtiles', '../../own-tiles/denmark.pmtiles');
+    link('public/tiles/halligen.pmtiles', `../../.cache/tiles/${PINNED_SHA256}.pmtiles`);
+    link('public/tiles/schleswig-holstein.pmtiles', '../../own-tiles/schleswig-holstein.pmtiles');
+
+    const problems = await assetProblems({ root, external: false });
+
+    expect(problems.map((problem) => problem.split(' links to ')[0]).sort()).toEqual([
+      'public/tiles/denmark.pmtiles',
+      'public/tiles/schleswig-holstein.pmtiles',
     ]);
   });
 
   it('refuses a dangling link with VITE_TILES_URL too', async () => {
-    link('public/tiles/denmark.pmtiles', '../../../tiles/data/denmark.pmtiles');
+    link('public/tiles/denmark.pmtiles', '../../own-tiles/denmark.pmtiles');
 
     expect(await assetProblems({ root, external: true })).toEqual([
-      'public/tiles/denmark.pmtiles links to ../../../tiles/data/denmark.pmtiles, which does not exist: build the tiles, or remove the link and run `npm run fetch-tiles`',
+      'public/tiles/denmark.pmtiles links to ../../own-tiles/denmark.pmtiles, which does not exist: build the tiles, or remove the link and run `npm run fetch-tiles`',
     ]);
   });
 });
@@ -123,10 +133,7 @@ describe('a vite build with the plugin', () => {
   });
 
   it('stops at a dangling link in public/tiles/ with the ways out', async () => {
-    link(
-      'public/tiles/schleswig-holstein.pmtiles',
-      '../../../tiles/data/schleswig-holstein.pmtiles',
-    );
+    link('public/tiles/schleswig-holstein.pmtiles', '../../own-tiles/schleswig-holstein.pmtiles');
 
     await expect(viteBuild()).rejects.toThrow('remove the link and run `npm run fetch-tiles`');
   });
