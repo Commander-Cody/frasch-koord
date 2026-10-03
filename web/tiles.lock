@@ -1,5 +1,5 @@
 # The tile archive the website ships, published by `just publish-tiles`
 # (tiles/publish.sh). scripts/fetch-tiles.sh fetches it and
 # vite-plugins/tiles.ts puts it into the build; both check its sha256.
-ARCHIVE_URL=https://github.com/Commander-Cody/frasch-koord/releases/download/tiles-20261001-2d76f695/schleswig-holstein.pmtiles
-ARCHIVE_SHA256=2d76f695ad1abf194676a91a1fde2fa1608d19855bbfe111f5adf51e9ff8fbb7
+ARCHIVE_URL=https://github.com/Commander-Cody/frasch-koord/releases/download/tiles-20261003-b45cefc4/schleswig-holstein.pmtiles
+ARCHIVE_SHA256=b45cefc4ab0d1367e09d046bdfcb0252a654c95ab1b9a8bb6dad6b9505691ea3
