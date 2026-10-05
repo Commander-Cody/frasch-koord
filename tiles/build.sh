@@ -19,7 +19,10 @@
 #           `built_from` names.json carries, see frasch/provenance.py)
 #
 # Env: JAVA_HOME (default ~/.local/opt/jdk-21*, else `java` on PATH),
-#      XMX (default 3g), NAMES, DIALECTS, AREAS, OBJECTS, CURATION,
+#      XMX (default 3g),
+#      NAMES, DIALECTS, AREAS, OBJECTS, CURATION to build from another file
+#      than the committed one (a path relative to tiles/ or absolute; the
+#      defaults are the frasch commands' own, see workspace.sh),
 #      REFRESH=1 to re-download the extract even if one is already present,
 #      SNAPSHOT=yymmdd (e.g. 260923) to build from the extract Geofabrik dated
 #      that day instead of the -latest one
@@ -31,6 +34,8 @@ cd "$(dirname "$0")"
 source ./fetch.sh
 # shellcheck source=tiles/java.sh
 source ./java.sh
+# shellcheck source=tiles/workspace.sh
+source ./workspace.sh
 
 # Planetiler pinned to the version the current tiles were built with, and
 # verified by sha256 -- see fetch.sh for why a plain download is not enough.
@@ -56,14 +61,9 @@ LAKE_CENTERLINES_SHA256="6c900507c88fc9f5b5a386f90fd0a42d0495e8755a03d075538fb9a
 
 REGION_ARG="${1:?region name, e.g. schleswig-holstein or europe/denmark}"; shift || true
 XMX="${XMX:-3g}"
-PY="../.venv/bin/python"
-NAMES="${NAMES:-../names/places.csv}"
-DIALECTS="${DIALECTS:-../names/dialects.csv}"
-AREAS="${AREAS:-../names/dialect_areas.geojson}"
-OBJECTS="${OBJECTS:-../names/osm_objects.json}"
-CURATION="${CURATION:-../names/curation.csv}"
+FRASCH="../.venv/bin/frasch"
 
-# -- up-front checks, so a missing Java/Python fails fast with a clear message ---
+# -- up-front checks, so a missing Java or venv fails fast with a clear message ---
 JAVA_HOME=$(find_java_home)
 JAVA_BIN="$JAVA_HOME/bin/java"
 [ -x "$JAVA_BIN" ] || { echo "build.sh: $JAVA_BIN is not executable (bad JAVA_HOME?)" >&2; exit 1; }
@@ -73,7 +73,7 @@ if ! JAVA_MAJOR=$(java_major "$JAVA_VERSION_LINE") || [ "$JAVA_MAJOR" -lt 21 ]; 
   exit 1
 fi
 
-[ -x "$PY" ] || { echo "build.sh: $PY not found or not executable -- run 'uv sync' first" >&2; exit 1; }
+[ -x "$FRASCH" ] || { echo "build.sh: $FRASCH not found or not executable -- run 'uv sync' first" >&2; exit 1; }
 
 STEM=$(region_stem "$REGION_ARG")
 SRC_URL=$(geofabrik_extract_url "$REGION_ARG" "${SNAPSHOT:-}")
@@ -96,7 +96,8 @@ trap cleanup EXIT
 
 # every dialect of the registry, e.g. frr-x-mooring,frr-x-fering,... -- the
 # list Planetiler has to carry into the tiles
-TAGS=$("$PY" ../names/dialects.py --registry "$DIALECTS" --tags)
+workspace_options dialects
+TAGS=$("$FRASCH" dialects --tags "${WORKSPACE_OPTIONS[@]}")
 
 # a missing jar or source, or one that fails its pin, is downloaded again
 fetch_pinned "$PLANETILER_URL" planetiler.jar "$PLANETILER_SHA256"
@@ -109,19 +110,17 @@ if [ "${REFRESH:-}" = "1" ] || [ ! -f "$SRC" ]; then
 fi
 
 echo "== injecting names ($TAGS) + areas + curation into $SRC"
-"$PY" inject_names.py "$SRC" "$INJECTED_TMP" \
-  --names "$NAMES" --dialects "$DIALECTS" --areas "$AREAS" --objects "$OBJECTS" \
-  --curation "$CURATION"
+workspace_options names dialects areas objects curation
+"$FRASCH" inject "$SRC" "$INJECTED_TMP" "${WORKSPACE_OPTIONS[@]}"
 mv "$INJECTED_TMP" "$INJECTED"
-BUILT_FROM=$("$PY" ../names/provenance.py --names "$NAMES" --dialects "$DIALECTS" \
-  --curation "$CURATION" --areas "$AREAS" --objects "$OBJECTS")
+BUILT_FROM=$("$FRASCH" provenance "${WORKSPACE_OPTIONS[@]}")
 
 echo "== building $OUT"
 # --languages:       which name:* tags end up in the tiles. The dialect tags come
 #                    from names/dialects.csv, so the registry stays the one list.
 # --extra_name_tags: stock Planetiler passes these through verbatim as string
 #                    attributes on the labelled features -- that is how the
-#                    frasch:* tags written by inject_names.py reach the style.
+#                    frasch:* tags written by `frasch inject` reach the style.
 # --archive_description: the build's `built_from` stamp; the frontend compares
 #                    it with names.json's (web/src/provenance.ts). Planetiler
 #                    records the extract's replication time by itself.
