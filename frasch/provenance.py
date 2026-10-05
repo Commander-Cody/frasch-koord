@@ -21,7 +21,6 @@ tiles/build.sh.
 
 from __future__ import annotations
 
-import argparse
 import hashlib
 import json
 import os
@@ -96,11 +95,7 @@ def stamp(ws: Workspace) -> BuiltFrom:
 
 @cli.command
 def main(argv: Sequence[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(
-        prog="frasch provenance",
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
+    ap = cli.parser("provenance", __doc__)
     cli.add_workspace_options(ap, "names", "dialects", "curation", "areas", "objects")
     ws = cli.workspace(ap.parse_args(argv))
     print(json.dumps({"built_from": stamp(ws)}, separators=(",", ":")))

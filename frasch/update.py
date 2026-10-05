@@ -23,8 +23,8 @@ steps are skipped when their output was built from what is there now (see
 stops the run.  A decision `apply` refuses does not: it stays in the patch,
 the rest of the run goes on, and the run exits 1 at its end.
 
-Every step works on the same workspace, and on the dialect registry as it is
-read once the first step has checked it.
+Every step works on the same workspace, and on the dialect registry as the
+first step read and checked it.
 
 The tiles are not built (`just tiles`), and nothing is committed: review the
 result with `git diff`.
@@ -32,9 +32,7 @@ result with `git diff`.
 
 from __future__ import annotations
 
-import argparse
 import enum
-import functools
 import json
 import os
 import sys
@@ -127,22 +125,40 @@ def areas_stale(ws: Workspace, extracts: list[ExtractStamp]) -> bool:
     )
 
 
-def steps(ws: Workspace, extracts: Sequence[str], area_extract: str) -> list[Step]:
+@dataclass
+class Inputs:
+    """What a run works on: its workspace and extracts, and the dialect
+    registry once the first step has read and checked it -- the file is read
+    that once, and every later step works on the same registry."""
+
+    ws: Workspace
+    extracts: Sequence[str]
+    area_extract: str
+    checked: Registry | None = None
+
+    @property
+    def reg(self) -> Registry:
+        if self.checked is None:
+            raise RuntimeError("the dialect registry is asked for before the input check has run")
+        return self.checked
+
+    def check(self) -> Outcome:
+        """The first step: give new rows an id and check the hand-edited files."""
+        found = check_inputs.run(self.ws, fix=True)
+        self.checked = found.registry
+        return Outcome.FAILED if found.problems else Outcome.DONE
+
+
+def steps(inputs: Inputs) -> list[Step]:
     """The run's steps, in order."""
+    ws, extracts, area_extract = inputs.ws, inputs.extracts, inputs.area_extract
     stamps = locate.extract_stamps(extracts)
     area_stamps = locate.extract_stamps([area_extract])
-
-    @functools.cache
-    def reg() -> Registry:
-        """The dialect registry, read once: every step after the first, which
-        checks it, works on the same one."""
-        return registry.read(ws.dialects)
-
     return [
-        Step("ids and input check", unless(lambda: check_inputs.run(ws, fix=True), Outcome.FAILED)),
+        Step("ids and input check", inputs.check),
         Step(
             "curation decisions",
-            unless(lambda: curate.apply(ws, reg()), Outcome.WARNED),
+            unless(lambda: curate.apply(ws, inputs.reg), Outcome.WARNED),
             needed=lambda: os.path.exists(ws.patch),
             skipped="none made",
         ),
@@ -151,21 +167,24 @@ def steps(ws: Workspace, extracts: Sequence[str], area_extract: str) -> list[Ste
             done(lambda: build_candidates.run(ws, extracts)),
             needed=lambda: candidates_stale(ws.candidates, stamps),
         ),
-        Step("match", unless(lambda: match.run(ws, reg()), Outcome.FAILED)),
+        Step("match", unless(lambda: match.run(ws, inputs.reg), Outcome.FAILED)),
         Step(
             "objects",
-            done(lambda: locate.run(ws, reg(), extracts)),
-            needed=lambda: objects_stale(ws.objects, locate.wanted_refs(ws, reg()), stamps),
+            done(lambda: locate.run(ws, inputs.reg, extracts)),
+            needed=lambda: objects_stale(ws.objects, locate.wanted_refs(ws, inputs.reg), stamps),
         ),
         Step(
             "areas",
-            done(lambda: build_dialect_areas.run(ws, reg(), [area_extract])),
+            done(lambda: build_dialect_areas.run(ws, inputs.reg, [area_extract])),
             needed=lambda: areas_stale(ws, area_stamps),
         ),
-        Step("dialect registry", done(lambda: registry.export_json(reg(), ws.registry_json))),
-        Step("search index", done(lambda: searchindex.run(ws, reg()))),
-        Step("curation worklist", done(lambda: curate.export(ws, reg()))),
-        Step("output check", unless(lambda: check_outputs.run(ws, reg()), Outcome.FAILED)),
+        Step(
+            "dialect registry",
+            done(lambda: registry.export_json(inputs.reg, ws.registry_json)),
+        ),
+        Step("search index", done(lambda: searchindex.run(ws, inputs.reg))),
+        Step("curation worklist", done(lambda: curate.export(ws, inputs.reg))),
+        Step("output check", unless(lambda: check_outputs.run(ws, inputs.reg), Outcome.FAILED)),
     ]
 
 
@@ -225,7 +244,7 @@ def run(ws: Workspace, extracts: Sequence[str], area_extract: str | None = None)
         raise PipelineError(f"{', '.join(missing)} not found -- download it with `just extracts`")
     before = contents(outputs(ws))
     warned = []
-    for step in steps(ws, extracts, area_extract):
+    for step in steps(Inputs(ws, extracts, area_extract)):
         if not step.needed():
             print(f"== {step.name}: {step.skipped}")
             continue
@@ -246,11 +265,7 @@ def run(ws: Workspace, extracts: Sequence[str], area_extract: str | None = None)
 
 @cli.command
 def main(argv: Sequence[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(
-        prog="frasch update",
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
+    ap = cli.parser("update", __doc__)
     ap.add_argument(
         "extracts", nargs="+", metavar="PBF", help="the OSM extracts the name list's objects are in"
     )

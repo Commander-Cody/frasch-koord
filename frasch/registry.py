@@ -34,7 +34,6 @@ parameter.
 
 from __future__ import annotations
 
-import argparse
 import csv
 import json
 import os
@@ -198,11 +197,7 @@ def export_json(reg: Registry, path: str) -> None:
 
 @cli.command
 def main(argv: Sequence[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(
-        prog="frasch dialects",
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
+    ap = cli.parser("dialects", __doc__)
     cli.add_workspace_options(ap, "dialects", "registry_json")
     ap.add_argument(
         "--tags",

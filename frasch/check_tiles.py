@@ -22,7 +22,6 @@ CI; run this (`just check-tiles`) after building tiles.
 
 from __future__ import annotations
 
-import argparse
 import gzip
 import json
 import math
@@ -208,11 +207,7 @@ def archive_features(path: str, entries: Mapping[str, SearchEntry], zoom: int) -
 
 @cli.command
 def main(argv: Sequence[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(
-        prog="frasch check-tiles",
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
+    ap = cli.parser("check-tiles", __doc__)
     ap.add_argument("archive")
     cli.add_workspace_options(ap, "index")
     ap.add_argument("--zoom", type=int, default=14)

@@ -420,7 +420,7 @@ def test_an_id_used_twice_is_reported_on_the_second_row(names: CheckNames) -> No
 
 def fix(ws: Workspace) -> list[check_inputs.Problem]:
     """Give the new rows an id and check the workspace; -> what is wrong with it."""
-    return check_inputs.run(ws, fix=True)
+    return check_inputs.run(ws, fix=True).problems
 
 
 def test_fix_gives_each_new_row_an_id_from_its_frisian_name(ws: Workspace, world: Path) -> None:

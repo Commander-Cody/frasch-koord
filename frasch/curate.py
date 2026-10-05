@@ -938,17 +938,13 @@ def options_of(argparser: argparse.ArgumentParser) -> set[str]:
 
 def parser() -> tuple[argparse.ArgumentParser, set[str]]:
     """-> (the parser, the options only its `apply` subcommand takes)."""
-    ap = argparse.ArgumentParser(
-        prog="frasch curate",
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
+    ap = cli.parser("curate", __doc__)
     sub = ap.add_subparsers(dest="cmd", required=True)
 
-    ex = sub.add_parser("export", help="write the worklist for the browser")
+    ex = sub.add_parser("export", help="write the worklist for the browser", allow_abbrev=False)
     cli.add_workspace_options(ex, "names", "dialects", "matches", "candidates", "worklist", "work")
 
-    ap_ = sub.add_parser("apply", help="write the browser's decisions back")
+    ap_ = sub.add_parser("apply", help="write the browser's decisions back", allow_abbrev=False)
     cli.add_workspace_options(ap_, "names", "dialects", "curation", "patch", "work")
     ap_.add_argument(
         "--dry-run", action="store_true", help="print what would change and write nothing"

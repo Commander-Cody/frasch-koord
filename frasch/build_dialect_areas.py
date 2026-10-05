@@ -341,11 +341,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
-    ap = argparse.ArgumentParser(
-        prog="frasch areas",
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
+    ap = cli.parser("areas", __doc__)
     ap.add_argument("pbf", nargs="+", help="OSM extract(s) holding the areas")
     cli.add_workspace_options(ap, "area_list", "dialects", "areas", "parts")
     ap.add_argument(

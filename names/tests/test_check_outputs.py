@@ -165,6 +165,17 @@ def test_an_area_that_moved_in_the_extract_fails(extract: Extract, world: Path) 
     assert "dialect_areas.geojson" in problems(ws, pbf)
 
 
+def test_a_rebuild_that_cannot_run_says_why(extract: Extract, world: Path) -> None:
+    ws, pbf, _ = extract
+    (world / "dialect_areas.csv").write_text(
+        AREA_LIST + "frr-x-mooring,Nowhere,way/999,\n", encoding="utf-8"
+    )
+    assert (
+        f"{ws.areas} cannot be rebuilt: 1 object(s) not found in the extract(s):\n"
+        "  way/999  Nowhere (frr-x-mooring)"
+    ) in problems(ws, pbf)
+
+
 def test_each_file_is_rebuilt_from_the_extracts_its_stamp_names(
     extract: Extract, world: Path
 ) -> None:

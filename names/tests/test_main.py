@@ -86,3 +86,22 @@ def test_the_package_runs_as_a_module(dialects_csv: str) -> None:
 def test_the_frasch_script_is_installed_for_the_command_table() -> None:
     [script] = entry_points(group="console_scripts", name="frasch")
     assert script.value == "frasch.__main__:main"
+
+
+def test_an_option_is_taken_by_its_full_name_only(
+    dialects_csv: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # `--registry` once named dialects.csv; it must not pass for --registry-json
+    with pytest.raises(SystemExit) as stop:
+        main(["dialects", "--tags", "--dialects", dialects_csv, "--registry", "other.csv"])
+    assert stop.value.code == 2
+    assert "unrecognized arguments: --registry" in capsys.readouterr().err
+
+
+def test_an_option_of_a_subcommand_is_taken_by_its_full_name_only(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as stop:
+        main(["curate", "apply", "--dry"])
+    assert stop.value.code == 2
+    assert "unrecognized arguments: --dry" in capsys.readouterr().err

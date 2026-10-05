@@ -14,7 +14,6 @@ What the file records, and why it is committed: frasch.objects.
 
 from __future__ import annotations
 
-import argparse
 import os
 from collections.abc import Collection, Iterable, Mapping, Sequence
 
@@ -217,11 +216,7 @@ def run(ws: Workspace, reg: Registry, pbfs: Sequence[StrPath]) -> None:
 
 @cli.command
 def main(argv: Sequence[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(
-        prog="frasch objects",
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
+    ap = cli.parser("objects", __doc__)
     ap.add_argument("pbf", nargs="+", help="OSM extract(s) holding the objects")
     cli.add_workspace_options(ap, "names", "dialects", "objects")
     a = ap.parse_args(argv)

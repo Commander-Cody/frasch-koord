@@ -1,6 +1,7 @@
 """The objects file, names/osm_objects.json: where the objects of the name
 list are, as frasch.locate worked it out.  The search index, the injector and
-check_built read it (and `just update`, to tell whether it is stale).
+`frasch check-outputs` read it (and `just update`, to tell whether it is
+stale).
 
 For every OSM reference in the `osm` column of a row that is on the map, the
 file records

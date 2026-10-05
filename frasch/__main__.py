@@ -48,6 +48,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         epilog="commands:\n"
         + "\n".join(f"  {name:<14} {what}" for name, (_, what) in COMMANDS.items()),
         formatter_class=argparse.RawDescriptionHelpFormatter,
+        allow_abbrev=False,
     )
     ap.add_argument("command", choices=list(COMMANDS), metavar="command")
     # only the command's name is parsed here: what follows it is the command's own

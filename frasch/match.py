@@ -57,7 +57,6 @@ Run:  frasch match [--dry-run] [--offline]
 
 from __future__ import annotations
 
-import argparse
 import collections
 import csv
 import json
@@ -1303,11 +1302,7 @@ def _run(ws: Workspace, reg: Registry, offline: bool, dry_run: bool) -> int:
 
 @cli.command
 def main(argv: Sequence[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(
-        prog="frasch match",
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
+    ap = cli.parser("match", __doc__)
     cli.add_workspace_options(
         ap,
         "names",

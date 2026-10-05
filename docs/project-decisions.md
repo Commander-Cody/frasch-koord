@@ -677,12 +677,14 @@ Earlier entries of this log keep the script names they were written with:
   calls a function that takes the `Workspace` and the `Registry`
   (`locate.build`, `match.run`, `curate.apply`, ...); `update` and
   `check-outputs` call those functions instead of other commands' `main()`
-  with argument lists. `update` reads the registry once, after its first step
-  has checked it, so `update --dialects X` uses X in every step.
+  with argument lists. `update` reads the registry once -- its first step,
+  the input check, hands it to the later ones --, so `update --dialects X`
+  uses X in every step. The parsers take no abbreviated options
+  (`cli.parser`): the old `--registry` must not pass for `--registry-json`.
 - **The tests have a dialect registry of their own** (`names/tests/conftest.py`)
   and work on a `Workspace` in a temp directory through the typed functions;
-  each command keeps one test through `frasch.__main__.main`. Only the
-  round-trip test of the real `places.csv` reads the real `dialects.csv`.
+  each command keeps one test through `frasch.__main__.main`. No test reads
+  `names/dialects.csv`.
 - **The dialect registry is always passed explicitly**: `registry.default()`
   (a default registry, read on first use) is removed; every command
   reads it from `--dialects` and hands it down.

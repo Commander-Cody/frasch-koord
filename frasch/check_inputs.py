@@ -13,13 +13,13 @@ spreadsheet export or a hand edit broke.
 
 from __future__ import annotations
 
-import argparse
 import csv
 import os
 import re
 import sys
 from collections.abc import Container, Sequence
 from dataclasses import dataclass
+from typing import NamedTuple
 
 from frasch import (
     cli,
@@ -237,10 +237,18 @@ def markdown(problems: Sequence[Problem]) -> str:
     return "\n".join(out + [""]) + "\n"
 
 
-def run(ws: Workspace, *, fix: bool = False, summary: str | None = None) -> list[Problem]:
+class Checked(NamedTuple):
+    """What `run` found: the problems, and the dialect registry as it read
+    it -- the sound rows, so the whole of it when there are no problems."""
+
+    problems: list[Problem]
+    registry: Registry | None
+
+
+def run(ws: Workspace, *, fix: bool = False, summary: str | None = None) -> Checked:
     """Check the workspace's hand-edited files and print what is wrong with
-    them; -> the problems.  `fix`: first give the name list's new rows an
-    id.  `summary`: a file to append the result to as Markdown."""
+    them.  `fix`: first give the name list's new rows an id.  `summary`: a
+    file to append the result to as Markdown."""
     reg, registry_problems = check_dialects(ws.dialects)
     if fix and reg and not registry_problems:
         fill_ids(ws, reg)
@@ -253,12 +261,12 @@ def run(ws: Workspace, *, fix: bool = False, summary: str | None = None) -> list
         with open(summary, "a", encoding="utf-8") as fh:
             fh.write(markdown(problems))
     print(f"{len(problems)} problem(s)" if problems else "no problems", file=sys.stderr)
-    return problems
+    return Checked(problems, reg)
 
 
 @cli.command
 def main(argv: Sequence[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="frasch check-inputs", description=__doc__.split("\n\n")[0])
+    ap = cli.parser("check-inputs", __doc__.split("\n\n")[0])
     cli.add_workspace_options(ap, "names", "curation", "dialects", "area_list", "work")
     ap.add_argument(
         "--fix",
@@ -271,4 +279,4 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="also append the result as Markdown to FILE (CI passes $GITHUB_STEP_SUMMARY)",
     )
     a = ap.parse_args(argv)
-    return 1 if run(cli.workspace(a), fix=a.fix, summary=a.summary) else 0
+    return 1 if run(cli.workspace(a), fix=a.fix, summary=a.summary).problems else 0

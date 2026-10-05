@@ -15,8 +15,9 @@ from typing import Any
 
 import pytest
 
-from frasch import paths, placelist, registry
+from frasch import paths, placelist
 from frasch.paths import Workspace
+from frasch.registry import LOCAL_COLUMN, Dialect, Registry
 from frasch.errors import ValidationError
 
 
@@ -171,16 +172,30 @@ def test_format_osm_normalises_the_separator() -> None:
 
 
 # --------------------------------------------------- the real name list ---
+def registry_of(header: str) -> Registry:
+    """A registry of the dialect columns a places.csv header has: those
+    between `kind` and `de`, but for `local`."""
+    columns = header.split(",")
+    names = columns[columns.index("kind") + 1 : columns.index("de")]
+    return Registry(
+        [
+            Dialect(tag=f"frr-x-{c}", column=c, label=c, status="living", view="no", note="")
+            for c in names
+            if c != LOCAL_COLUMN
+        ]
+    )
+
+
 def test_real_name_list_round_trips_byte_identical(tmp_path: Path) -> None:
     """Reading and writing back the real places.csv changes nothing -- the
     guarantee that the matcher and the curation only ever touch the cells
-    they mean to (a copy: the real file is never written).  The one test of
-    the real files: it reads the list by the real dialect registry."""
-    real = Workspace.default()
+    they mean to (a copy: the real file is never written).  It is read by
+    the dialect columns of its own header."""
     copy = tmp_path / "places.csv"
-    shutil.copyfile(real.names, copy)
+    shutil.copyfile(Workspace.default().names, copy)
     before = copy.read_bytes()
-    rows, fields = placelist.read(str(copy), registry.read(real.dialects))
+    header = before.decode("utf-8").splitlines()[0]
+    rows, fields = placelist.read(str(copy), registry_of(header))
     placelist.write(rows, str(copy), fields)
     assert copy.read_bytes() == before
 

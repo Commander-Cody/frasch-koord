@@ -99,7 +99,6 @@ Used by tiles/build.sh before Planetiler runs.
 
 from __future__ import annotations
 
-import argparse
 import collections
 import enum
 import os
@@ -1050,11 +1049,7 @@ def _print_synthetic(inj: Injector, synthetic: Mapping[Ref, Square], in_file: st
 
 @cli.command
 def main(argv: Sequence[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(
-        prog="frasch inject",
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
+    ap = cli.parser("inject", __doc__)
     ap.add_argument("infile")
     ap.add_argument("outfile")
     # a file named here must exist; the default areas and curation are

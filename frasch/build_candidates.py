@@ -33,7 +33,6 @@ Run:  frasch candidates tiles/data/*.osm.pbf
 
 from __future__ import annotations
 
-import argparse
 import array
 import bisect
 import collections
@@ -354,11 +353,7 @@ def run(ws: Workspace, pbfs: Sequence[str], index: str = "flex_mem") -> None:
 
 @cli.command
 def main(argv: Sequence[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(
-        prog="frasch candidates",
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
+    ap = cli.parser("candidates", __doc__)
     ap.add_argument("pbf", nargs="+", help="OSM extracts to scan")
     cli.add_workspace_options(ap, "candidates", "work")
     ap.add_argument(

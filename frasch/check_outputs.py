@@ -23,7 +23,6 @@ rebuilds the file.
 
 from __future__ import annotations
 
-import argparse
 import filecmp
 import os
 import tempfile
@@ -126,9 +125,12 @@ def extract_problems(
         return [str(missing)]
     try:
         objects = locate.build(ws, reg, objects_from)
+    except PipelineError as stop:
+        return [f"{ws.objects} cannot be rebuilt: {stop}"]
+    try:
         areas = build_dialect_areas.build(ws, reg, areas_from)
     except PipelineError as stop:
-        return [f"{ws.objects} and the dialect areas cannot be rebuilt: {stop}"]
+        return [f"{ws.areas} cannot be rebuilt: {stop}"]
     os.makedirs(os.path.dirname(rebuilt.objects), exist_ok=True)
     files.atomic_write(rebuilt.objects, objects_json(objects))
     build_dialect_areas.write_geojson(rebuilt.areas, areas.dialects)
@@ -178,11 +180,7 @@ def run(ws: Workspace, reg: Registry, extracts: Sequence[str] = ()) -> int:
 
 @cli.command
 def main(argv: Sequence[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(
-        prog="frasch check-outputs",
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
+    ap = cli.parser("check-outputs", __doc__)
     cli.add_workspace_options(
         ap,
         "names",

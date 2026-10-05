@@ -41,7 +41,6 @@ row ids, which name a place by its first OSM reference (or its QID).
 
 from __future__ import annotations
 
-import argparse
 import json
 import os
 from collections.abc import Mapping, Sequence
@@ -204,11 +203,7 @@ def run(ws: Workspace, reg: Registry) -> None:
 
 @cli.command
 def main(argv: Sequence[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(
-        prog="frasch index",
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
+    ap = cli.parser("index", __doc__)
     cli.add_workspace_options(ap, "names", "dialects", "curation", "areas", "objects", "index")
     ws = cli.workspace(ap.parse_args(argv))
     run(ws, registry.read(ws.dialects))

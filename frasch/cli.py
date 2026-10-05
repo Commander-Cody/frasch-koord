@@ -1,8 +1,9 @@
-"""What every command shares.  Its path options: a command lists the files
-of the workspace it works on (`add_workspace_options`), and each gets the
-same option, default and help in every command.  And its `main`, which stops
-on a PipelineError with the message and exit status 1 -- the library below
-raises, only here does a problem become an exit code."""
+"""What every command shares.  Its argument parser (`parser`).  Its path
+options: a command lists the files of the workspace it works on
+(`add_workspace_options`), and each gets the same option, default and help
+in every command.  And its `main`, which stops on a PipelineError with the
+message and exit status 1 -- the library below raises, only here does a
+problem become an exit code."""
 
 from __future__ import annotations
 
@@ -40,6 +41,18 @@ WORKSPACE_FILES = {
 }
 # not a file: the directory of the scratch files, the lock among them
 WORK = "work"
+
+
+def parser(command: str, description: str | None) -> argparse.ArgumentParser:
+    """The argument parser of `frasch <command>`.  It takes an option by its
+    full name only: an abbreviation would pass for another option, as the
+    `--registry` that once named dialects.csv would for `--registry-json`."""
+    return argparse.ArgumentParser(
+        prog=f"frasch {command}",
+        description=description,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        allow_abbrev=False,
+    )
 
 
 def add_workspace_options(ap: argparse.ArgumentParser, *names: str) -> None:

@@ -229,6 +229,22 @@ def test_the_run_ends_with_what_changed_and_what_is_left_to_curate(
     assert "just tiles" in summary
 
 
+def test_a_run_reads_the_dialect_registry_once(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    write_places(workspace, TOFTEM)
+    read_rows = registry.rows
+    reads = []
+
+    def counted(path: str) -> tuple[list[registry.Dialect], list[tuple[int, str]]]:
+        reads.append(path)
+        return read_rows(path)
+
+    monkeypatch.setattr(registry, "rows", counted)
+    assert run(workspace) == 0
+    assert reads == [workspace_of(workspace).dialects]
+
+
 # -------------------------------------------------------------- skip rules ---
 SH: ExtractStamp = {
     "file": "schleswig-holstein-latest.osm.pbf",
