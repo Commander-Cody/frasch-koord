@@ -1,11 +1,11 @@
 """The map and the search index agree (#24): one tiny extract is located
-(names/locate.py), injected (inject_names.py) and exported
-(export_search_index.py), and every feature that carries a `frasch:ref`
+(`frasch objects`), injected (`frasch inject`) and exported
+(`frasch index`), and every feature that carries a `frasch:ref`
 must say what that row's search entry says -- the same dialect, the same
 local name, the same German name and, for a node, the same position (a way
 or relation has no label point before Planetiler places one).  Planetiler
 passes the frasch:* and name:* tags through verbatim, so the injected
-extract stands in for the tiles here; check_tiles.py compares real tiles the
+extract stands in for the tiles here; `frasch check-tiles` compares real tiles the
 same way.
 
 The places are the kinds that disagreed before: an island whose vertex
@@ -24,14 +24,14 @@ from pathlib import Path
 import osmium
 import pytest
 
-from frasch import check_tiles, paths
-from frasch import export_search_index
+from frasch import check_tiles
 from frasch import inject_names
 from frasch import locate
+from frasch import searchindex
 from frasch.check_tiles import Label
 from frasch.geo import LonLat
 from frasch.searchindex import SearchEntry
-from conftest import places_text
+from conftest import REGISTRY, flat_workspace, places_text
 from osm_fixture import ring, write_extract
 
 # the search entries by id, and the injected extract's labelled features
@@ -162,38 +162,10 @@ def built(tmp_path_factory: pytest.TempPathFactory) -> Built:
     )
     (d / "areas.geojson").write_text(json.dumps(AREAS), encoding="utf-8")
     write_extract(d / "in.osm.pbf", NODES, WAYS, RELATIONS)
-    locate.main(
-        [
-            str(d / "in.osm.pbf"),
-            "--names",
-            str(d / "places.csv"),
-            "--out",
-            str(d / "osm_objects.json"),
-        ]
-    )
-    inject_names.run(
-        str(d / "in.osm.pbf"),
-        str(d / "out.osm.pbf"),
-        str(d / "places.csv"),
-        paths.DIALECTS,
-        str(d / "areas.geojson"),
-        curation_csv=str(d / "curation.csv"),
-        objects_json=str(d / "osm_objects.json"),
-    )
-    export_search_index.main(
-        [
-            "--names",
-            str(d / "places.csv"),
-            "--objects",
-            str(d / "osm_objects.json"),
-            "--curation",
-            str(d / "curation.csv"),
-            "--areas",
-            str(d / "areas.geojson"),
-            "--out",
-            str(d / "names.json"),
-        ]
-    )
+    ws = flat_workspace(d)
+    locate.run(ws, REGISTRY, [d / "in.osm.pbf"])
+    inject_names.run(ws, REGISTRY, str(d / "in.osm.pbf"), str(d / "out.osm.pbf"))
+    searchindex.run(ws, REGISTRY)
     names = json.loads((d / "names.json").read_text(encoding="utf-8"))
     return {e["id"]: e for e in names["places"]}, injected_features(d / "out.osm.pbf")
 

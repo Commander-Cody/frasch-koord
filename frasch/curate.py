@@ -1,24 +1,23 @@
-#!/usr/bin/env python3
-"""Put the review worklist of names/match.py on the map, and write the answers
+"""Put the review worklist of `frasch match` on the map, and write the answers
 back into the name list.
 
-`match.py` leaves two kinds of row for a human: `ambiguous` (several plausible
+The matcher leaves two kinds of row for a human: `ambiguous` (several plausible
 OSM objects) and `not_found` (no object, or only near misses).  Deciding them
 from REPORT.md means looking every candidate up on openstreetmap.org; on a map
 the answer is usually obvious at a glance.  So:
 
-    curate.py export  ->  names/work/curate.json   (the worklist, with the
+    frasch curate export  ->  names/work/curate.json   (the worklist, with the
                           candidates' coordinates and the row's location hint)
        the browser (web/, `?curate`, Vite dev server only) shows them as pins
        and appends one decision per line to names/work/curate-patch.jsonl
-    curate.py apply   <-  names/work/curate-patch.jsonl
+    frasch curate apply   <-  names/work/curate-patch.jsonl
 
 What gets written where
   names/work/curate.json   export: the worklist.  Git-ignored, throw it away
-                           and re-export whenever match.py ran again.
+                           and re-export whenever the matcher ran again.
   names/places.csv         apply: only `osm`, `wikidata` and `status` of the
-                           rows the matcher owns -- the same cells match.py
-                           writes, and never a row a human has already decided
+                           rows the matcher owns -- the same cells it
+                           writes itself, and never a row a human has already decided
                            (status ok/skip, a hand-filled reference, a local
                            reference, `not_a_place`).  Review with `git diff`.
   names/curation.csv       apply: one appended row per `local` decision (a
@@ -34,14 +33,14 @@ What gets written where
 Apply checks everything first and then writes curation.csv and places.csv, each
 in one step and only if it did not change on disk meanwhile; when the second
 write fails, the first is undone, so a failed apply changes neither file.
-names/work/.lock keeps it from running at the same time as match.py.
+names/work/.lock keeps it from running at the same time as `frasch match`.
 
-The export never builds match.py's full candidate index (180k records, most of
+The export never builds the matcher's full candidate index (180k records, most of
 a gigabyte): it streams names/work/candidates.jsonl once and keeps only the
 records the worklist actually mentions.
 
-Run:  .venv/bin/python names/curate.py            # = export
-      .venv/bin/python names/curate.py apply --dry-run
+Run:  frasch curate                    # = export
+      frasch curate apply --dry-run
 """
 
 from __future__ import annotations
@@ -71,12 +70,14 @@ from frasch import (
     nameindex,
     paths,
     placelist,
+    registry,
 )
 from frasch.candidates import Candidate
 from frasch.errors import PipelineError, ValidationError
 from frasch.hints import HINT_FALLBACK, Circle, HintResolver
-from frasch.paths import StrPath
+from frasch.paths import StrPath, Workspace
 from frasch.placelist import OsmRef, PlaceRow, Row
+from frasch.registry import Registry
 
 # The order the browser walks the worklist in: the kinds a human can decide
 # quickly first (a village is either there or it is not), the vague ones last.
@@ -96,7 +97,7 @@ KIND_ORDER = [
     "not_a_place",
 ]
 
-# The extract (build_candidates.py `src`) the tiles are built from: only its
+# The extract (`src` of a candidate) the tiles are built from: only its
 # objects can carry an injected name, so it is what "in Schleswig-Holstein"
 # means for the curation view.  An object near the border can come from both.
 SH_SRC = "schleswig-holstein"
@@ -106,7 +107,7 @@ RESULTS = ("ambiguous", "not_found")
 # ------------------------------------------------------------- the worklist ---
 # curate.json, as web/src/dev/curateWorklist.ts reads it
 
-# a candidate as match.py's `candidates` cell names it (`class` is a keyword)
+# a candidate as the matcher's `candidates` cell names it (`class` is a keyword)
 _Listed = TypedDict("_Listed", {"ref": str, "name": str, "class": str, "km": int | None})
 
 
@@ -226,13 +227,14 @@ def work_candidate(listed: ListedCandidate, rec: Candidate | None, in_sh: bool) 
     return c
 
 
-def cmd_export(args: argparse.Namespace) -> int:
-    work = _read_work(args.names, args.matches)
-    index = _read_index(args.candidates, work.matches)
-    out = _work_rows(work.matches, index)
-    _write_worklist(args.out, out)
-    _print_export_summary(args.out, args.matches, out, work)
-    return 0
+def export(ws: Workspace, reg: Registry) -> None:
+    """Write the worklist for the browser: the rows the last match left for
+    a human, with their candidates."""
+    work = _read_work(ws, reg)
+    index = _read_index(ws.candidates, work.matches)
+    out = _work_rows(work.matches, index, reg)
+    _write_worklist(ws.worklist, out)
+    _print_export_summary(ws, out, work)
 
 
 @dataclasses.dataclass
@@ -244,13 +246,14 @@ class _Work:
     unowned: int = 0  # decided by hand since the run
 
 
-def _read_work(names: str, matches: str) -> _Work:
-    """The `ambiguous` and `not_found` rows of `matches` the matcher still
-    owns, each with its places.csv row."""
-    rows, _fields = placelist.read(names)
+def _read_work(ws: Workspace, reg: Registry) -> _Work:
+    """The `ambiguous` and `not_found` rows of the last match the matcher
+    still owns, each with its places.csv row."""
+    matches = ws.matches
+    rows, _fields = placelist.read(ws.names, reg)
     by_id = {r["id"]: r for r in rows}
     if not os.path.exists(matches):
-        raise PipelineError(f"{matches} not found -- run names/match.py first")
+        raise PipelineError(f"{matches} not found -- run `frasch match` first")
 
     work = _Work([])
     with open(matches, encoding="utf-8", newline="") as fh:
@@ -258,7 +261,7 @@ def _read_work(names: str, matches: str) -> _Work:
         if "id" not in (reader.fieldnames or []):
             raise ValidationError(
                 f"{matches} has no `id` column (written before "
-                f"places.csv had ids) -- re-run names/match.py"
+                f"places.csv had ids) -- re-run `frasch match`"
             )
         for m in reader:
             if m["result"] not in RESULTS:
@@ -304,7 +307,7 @@ def _read_index(
 
 
 def _work_rows(
-    work: Iterable[tuple[PlaceRow, dict[str, str]]], index: nameindex.NameIndex
+    work: Iterable[tuple[PlaceRow, dict[str, str]]], index: nameindex.NameIndex, reg: Registry
 ) -> list[WorkRow]:
     """One worklist row per match, in the order the browser walks them."""
     hints = HintResolver(index)
@@ -315,7 +318,7 @@ def _work_rows(
     out: list[WorkRow] = []
     for row, m in work:
         cands = _work_candidates(m["candidates"], index, srcs)
-        out.append(_work_row(row, m, cands, hints.resolve(_first_hint(row))))
+        out.append(_work_row(row, m, cands, hints.resolve(_first_hint(row)), reg))
     order = {k: i for i, k in enumerate(KIND_ORDER)}
     out.sort(key=lambda r: (order.get(r["kind"], len(order)), r["line"]))
     return out
@@ -324,7 +327,7 @@ def _work_rows(
 def _work_candidates(
     cell: str, index: nameindex.NameIndex, srcs: Mapping[OsmRef, set[str | None]]
 ) -> list[WorkCandidate]:
-    """The candidates of match.py's `candidates` cell as the worklist shows
+    """The candidates of the matcher's `candidates` cell as the worklist shows
     them; `srcs` are the extracts each record of `index` came from."""
     cands = []
     for listed in parse_candidates(cell):
@@ -336,17 +339,21 @@ def _work_candidates(
 
 
 def _work_row(
-    row: PlaceRow, m: dict[str, str], cands: list[WorkCandidate], hint_pt: Circle | None
+    row: PlaceRow,
+    m: dict[str, str],
+    cands: list[WorkCandidate],
+    hint_pt: Circle | None,
+    reg: Registry,
 ) -> WorkRow:
-    """A row of the worklist: the places.csv row, what match.py said about
+    """A row of the worklist: the places.csv row, what the matcher said about
     it, its candidates and where its hint points."""
     return {
         "id": row["id"],
         "line": row.line,
         "kind": row["kind"],
         "result": m["result"],
-        "name": placelist.any_name(row),
-        "names": {c: row[c] for c in placelist.name_columns() if row[c]},
+        "name": placelist.any_name(row, reg),
+        "names": {c: row[c] for c in placelist.name_columns(reg) if row[c]},
         "de": row["de"],
         "da": row["da"],
         "hint": row["hint"],
@@ -370,7 +377,10 @@ def _write_worklist(path: str, rows: list[WorkRow]) -> None:
         fh.write("\n")
 
 
-def _print_export_summary(path: str, matches: str, rows: list[WorkRow], work: _Work) -> None:
+def _print_export_summary(ws: Workspace, rows: list[WorkRow], work: _Work) -> None:
+    path = ws.worklist
+    # as the docs name the file: `work/matches.csv`, next to the name list
+    matches = os.path.relpath(ws.matches, os.path.dirname(ws.names))
     cnt = collections.Counter(r["result"] for r in rows)
     # a candidate has a position only when candidates.jsonl still had its record
     n_pos = sum(c["lon"] is not None for r in rows for c in r["candidates"])
@@ -384,12 +394,12 @@ def _print_export_summary(path: str, matches: str, rows: list[WorkRow], work: _W
     if work.unowned:
         print(
             f"note: {work.unowned} row(s) have been decided by hand since "
-            f"{os.path.relpath(matches, paths.NAMES)} was written -- not exported"
+            f"{matches} was written -- not exported"
         )
     if work.stale:
         print(
-            f"note: {work.stale} row(s) of {os.path.relpath(matches, paths.NAMES)} "
-            f"are no longer in places.csv (stale, re-run match.py)"
+            f"note: {work.stale} row(s) of {matches} "
+            f"are no longer in places.csv (stale, re-run `frasch match`)"
         )
 
 
@@ -535,7 +545,7 @@ def line_problem(line: RefusedLine) -> str:
     if isinstance(line.value, dict) and "id" not in line.value:
         return (
             "no `id` (a patch from before the row ids -- "
-            "re-run names/curate.py export and decide it again)"
+            "re-run `frasch curate export` and decide it again)"
         )
     return line.problem
 
@@ -623,10 +633,10 @@ def decision_text(entry: PatchEntry, row: Row, curation: str) -> str:
     return text
 
 
-def curation_name(row: Row) -> str:
+def curation_name(row: Row, reg: Registry) -> str:
     """The free-text label of the appended curation row -- German, else Danish,
     else Frisian, plus the hint, so the file stays readable by a human."""
-    name = placelist.primary(row["de"]) or placelist.primary(row["da"]) or placelist.any_name(row)
+    name = placelist.point_name(row, reg)
     return f"{name} ({row['hint']})" if row["hint"] else name
 
 
@@ -634,26 +644,22 @@ def fmt_deg(v: float) -> str:
     return f"{v:.6f}".rstrip("0").rstrip(".")
 
 
-def cmd_apply(args: argparse.Namespace) -> int:
-    refused = apply(args.names, args.curation, args.patch, dry_run=args.dry_run, keep=args.keep)
-    return 1 if refused else 0
+def apply(ws: Workspace, reg: Registry, *, dry_run: bool = False, keep: bool = False) -> int:
+    """Write the decisions of the workspace's patch into its name list and
+    curation (see the module docstring); -> how many it refused.  Those stay
+    in the patch; a problem that stops the whole apply raises.  `dry_run`:
+    say what would change and write nothing.  `keep`: leave the patch file
+    where it is."""
+    with placelist.lock(ws.lock):
+        return _apply(ws, reg, dry_run, keep)
 
 
-def apply(
-    names: str, curation: str, patch: str, *, dry_run: bool = False, keep: bool = False
-) -> int:
-    """Write the decisions of `patch` into `names` and `curation` (see the
-    module docstring); -> how many it refused.  Those stay in the patch; a
-    problem that stops the whole apply raises."""
-    with placelist.lock(names):
-        return _apply(names, curation, patch, dry_run, keep)
-
-
-def _apply(names: str, curation: str, patch: str, dry_run: bool, keep: bool) -> int:
+def _apply(ws: Workspace, reg: Registry, dry_run: bool, keep: bool) -> int:
+    names, curation, patch = ws.names, ws.curation, ws.patch
     # Everything that can refuse the whole run is checked before the patch is
     # touched: the name list, and curation.csv (read once, kept as bytes, so
     # the rows appended to it land after exactly what was checked).
-    lists = _read_lists(names, curation)
+    lists = _read_lists(names, curation, reg)
     if not os.path.exists(patch):
         raise PipelineError(
             f"{patch} not found -- decide some rows in the browser first (web/, `?curate`)"
@@ -713,6 +719,7 @@ class _Lists:
 
     names: str
     curation: str
+    reg: Registry
     rows: list[PlaceRow]
     fields: list[str]
     used_slugs: set[str]  # local/<slug> references curation.csv or a row has
@@ -725,8 +732,8 @@ class _Lists:
         return {r["id"]: r for r in self.rows}
 
 
-def _read_lists(names: str, curation: str) -> _Lists:
-    rows, fields = placelist.read(names)
+def _read_lists(names: str, curation: str, reg: Registry) -> _Lists:
+    rows, fields = placelist.read(names, reg)
     used_slugs = set(curationlist.local_points(curation))
     cur_data, cur_fields = curationlist.read_bytes(curation)
     cur_digest = files.digest(cur_data) if cur_data is not None else files.MISSING
@@ -734,7 +741,7 @@ def _read_lists(names: str, curation: str) -> _Lists:
         slug = placelist.local_ref(r["osm"])
         if slug:
             used_slugs.add(slug)
-    return _Lists(names, curation, rows, fields, used_slugs, cur_data, cur_fields, cur_digest)
+    return _Lists(names, curation, reg, rows, fields, used_slugs, cur_data, cur_fields, cur_digest)
 
 
 def _take_snapshot(patch: str) -> str:
@@ -780,26 +787,27 @@ def _decide_entry(line: PatchLine, lists: _Lists, decisions: _Decisions) -> None
         return
     why = owner_problem(row, lists.names)
     if why is None:
-        why = _decide_row(e, row, lists.used_slugs, decisions.new_curation)
+        why = _decide_row(e, row, lists, decisions.new_curation)
     if why:
         decisions.refuse(line, why)
         return
     print(
-        f"  {lists.names}:{row.line} {placelist.describe(row)}: {decision_text(e, row, lists.curation)}"
+        f"  {lists.names}:{row.line} {placelist.describe(row, lists.reg)}: "
+        f"{decision_text(e, row, lists.curation)}"
     )
     decisions.applied += 1
 
 
 def _decide_row(
-    entry: PatchEntry, row: PlaceRow, used_slugs: set[str], new_curation: list[dict[str, str]]
+    entry: PatchEntry, row: PlaceRow, lists: _Lists, new_curation: list[dict[str, str]]
 ) -> str | None:
     """Write a decision into the matcher's `row`, a `local` one's curation
     row into `new_curation`; -> why not, or None."""
     if entry["action"] != "local":
         return decide(entry, row)
-    why, cur = decide_local(entry, row, used_slugs)
+    why, cur = decide_local(entry, row, lists.used_slugs)
     if cur:
-        cur["name"] = curation_name(row)
+        cur["name"] = curation_name(row, lists.reg)
         new_curation.append(cur)
     return why
 
@@ -901,8 +909,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = argparser.parse_args(
         with_subcommand(sys.argv[1:] if argv is None else argv, argparser, apply_only)
     )
-    run: Callable[[argparse.Namespace], int] = args.func
-    return run(args)
+    ws = cli.workspace(args)
+    reg = registry.read(ws.dialects)
+    if args.cmd == "apply":
+        return 1 if apply(ws, reg, dry_run=args.dry_run, keep=args.keep) else 0
+    export(ws, reg)
+    return 0
 
 
 def with_subcommand(
@@ -910,12 +922,12 @@ def with_subcommand(
 ) -> list[str]:
     """`argv`, with `export` in front when it names no subcommand: export is
     what one runs every time.  An option only `apply` takes stops it then
-    (`curate.py --dry-run` meant `apply --dry-run`)."""
+    (`frasch curate --dry-run` meant `apply --dry-run`)."""
     if argv and argv[0] in ("export", "apply", "-h", "--help"):
         return list(argv)
     if option := next((a for a in argv if a.split("=")[0] in apply_only), None):
         argparser.error(
-            f"{option} belongs to `apply`: did you mean `curate.py apply {' '.join(argv)}`?"
+            f"{option} belongs to `apply`: did you mean `frasch curate apply {' '.join(argv)}`?"
         )
     return ["export", *argv]
 
@@ -927,26 +939,21 @@ def options_of(argparser: argparse.ArgumentParser) -> set[str]:
 def parser() -> tuple[argparse.ArgumentParser, set[str]]:
     """-> (the parser, the options only its `apply` subcommand takes)."""
     ap = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+        prog="frasch curate",
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     ex = sub.add_parser("export", help="write the worklist for the browser")
-    ex.add_argument("--names", default=paths.PLACES)
-    ex.add_argument("--matches", default=paths.MATCHES)
-    ex.add_argument("--candidates", default=paths.CANDIDATES)
-    ex.add_argument("--out", default=paths.WORKLIST)
-    ex.set_defaults(func=cmd_export)
+    cli.add_workspace_options(ex, "names", "dialects", "matches", "candidates", "worklist", "work")
 
     ap_ = sub.add_parser("apply", help="write the browser's decisions back")
-    ap_.add_argument("--names", default=paths.PLACES)
-    ap_.add_argument("--curation", default=paths.CURATION)
-    ap_.add_argument("--patch", default=paths.PATCH)
+    cli.add_workspace_options(ap_, "names", "dialects", "curation", "patch", "work")
     ap_.add_argument(
         "--dry-run", action="store_true", help="print what would change and write nothing"
     )
     ap_.add_argument(
         "--keep", action="store_true", help="do not rename the patch file after applying it"
     )
-    ap_.set_defaults(func=cmd_apply)
     return ap, options_of(ap_) - options_of(ex)

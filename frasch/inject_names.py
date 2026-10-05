@@ -1,11 +1,7 @@
-#!/usr/bin/env python3
 """Copy an OSM PBF and add North Frisian name / curation tags to it.
 
-    inject_names.py <in.osm.pbf> <out.osm.pbf>
-                    [--names ../names/places.csv] [--dialects ../names/dialects.csv]
-                    [--areas ../names/dialect_areas.geojson]
-                    [--objects ../names/osm_objects.json]
-                    [--curation ../names/curation.csv] [--dry-run]
+    frasch inject <in.osm.pbf> <out.osm.pbf>
+                  [--no-areas] [--no-curation] [--dry-run]
 
 Three inputs are merged into the extract -- the name list, the dialect areas
 (read together with names/osm_objects.json, which says where each object
@@ -50,13 +46,13 @@ synthetic polygon nodes they are written before the first way, i.e. after
 every original node.
 
 `names/dialect_areas.geojson` (built from `names/dialect_areas.csv` by
-`names/build_dialect_areas.py`) says which dialect is spoken where.  It
+`frasch areas`) says which dialect is spoken where.  It
 answers two questions that a name list cannot: which of the dialect names is
 the *local* one at this spot (`frasch:local`, the "local dialect" map view),
 and which dialect a place's own `local` column belongs to.  The smallest area
 containing the object wins.  Without the file the injector still runs -- it
 warns and writes `frasch:local` only for rows with an explicit `local` name.
-Where an object lies comes from `names/osm_objects.json` (`names/locate.py`),
+Where an object lies comes from `names/osm_objects.json` (`frasch objects`),
 and `objects.dialect_at` turns that into a dialect -- the same file and the same
 function the search index uses (frasch.searchindex), so a map label
 and its search entry cannot disagree (#24).  An object of the name list the
@@ -105,6 +101,7 @@ from __future__ import annotations
 
 import argparse
 import collections
+import enum
 import os
 import time
 from collections.abc import Container, Iterable, Mapping, Sequence
@@ -119,7 +116,6 @@ from frasch import (
     dialects,
     locate,
     osmscan,
-    paths,
     placelist,
     registry,
 )
@@ -127,6 +123,7 @@ from frasch.curationlist import LocalPoint, Square, Tuning
 from frasch.errors import PipelineError, ValidationError
 from frasch.geo import LonLat
 from frasch.objects import LocatedObject, dialect_at, read_objects
+from frasch.paths import Workspace
 from frasch.placelist import OsmRef, PlaceRow, Ref, Row
 from frasch.registry import Registry
 
@@ -475,7 +472,7 @@ class Injector:
 
     def area_of(self, key: OsmRef, o: _OsmObject) -> str | None:
         """The dialect spoken where this object lies, or None: from the
-        objects file (names/locate.py), which the search index reads too.
+        objects file (`frasch objects`), which the search index reads too.
         A node found only through its QID is asked at its own location; a
         way or relation found that way gets none."""
         if key in self.objects:
@@ -726,32 +723,41 @@ class _Inputs:
     osm_local: dict[OsmRef, str]
 
 
+class Use(enum.Enum):
+    """What the injector does about an input it can do without."""
+
+    OFF = "off"  # ignores it
+    IF_PRESENT = "if present"  # reads it; goes on without it, saying so, when it is absent
+    REQUIRED = "required"  # reads it; stops when it is absent
+
+
 def run(
+    ws: Workspace,
+    reg: Registry,
     inp: str,
     out: str,
-    names_csv: str,
-    dialects_csv: str,
-    areas_geojson: str | None,
+    *,
     dry_run: bool = False,
-    curation_csv: str | None = None,
-    curation_required: bool = False,
-    areas_required: bool = False,
-    objects_json: str = paths.OBJECTS,
-) -> int:
-    reg = registry.read(dialects_csv)
-    names = load_names(names_csv, reg)
-    _print_names(names, names_csv, dialects_csv, reg)
-    areas = _load_areas(areas_geojson, areas_required)
-    curation = _read_curation(curation_csv, curation_required)
-    _check_local_refs(names.by_id, curation.points, reg, names_csv, curation_csv)
-    objects = _load_objects(areas, names.by_id, reg, names_csv, objects_json)
+    areas: Use = Use.IF_PRESENT,
+    curation: Use = Use.IF_PRESENT,
+) -> None:
+    """Copy the extract `inp` to `out` with the workspace's names, dialect
+    areas and curation as tags (see the module docstring), and report what
+    was tagged.  `dry_run`: report only, write nothing."""
+    curation_csv = None if curation is Use.OFF else ws.curation
+    names = load_names(ws.names, reg)
+    _print_names(names, ws.names, ws.dialects, reg)
+    area_index = _load_areas(None if areas is Use.OFF else ws.areas, areas is Use.REQUIRED)
+    curated = _read_curation(curation_csv, curation is Use.REQUIRED)
+    _check_local_refs(names.by_id, curated.points, reg, ws.names, curation_csv)
+    objects = _load_objects(area_index, names.by_id, reg, ws.names, ws.objects)
     members = scan_waterways(inp, names.by_id)
     if members:
         print(f"waterways : {len(members)} member ways of matched waterway relations")
-    osm_local = scan_osm_local(inp, areas)
+    osm_local = scan_osm_local(inp, area_index)
     if osm_local:
         print(f"{FRISIAN_KEY}  : {len(osm_local)} object(s) in a dialect area have one in OSM")
-    inputs = _Inputs(reg, names, areas, curation, objects, members, osm_local)
+    inputs = _Inputs(reg, names, area_index, curated, objects, members, osm_local)
 
     t0 = time.time()
     inj = _inject(inp, None if dry_run else out, inputs)
@@ -760,7 +766,6 @@ def run(
         print("\n(dry run -- nothing written)")
     else:
         print(f"\nwrote {out} ({os.path.getsize(out) / 1e6:.1f} MB)")
-    return 0
 
 
 def _local_keys(by_id: Iterable[Ref]) -> list[Ref]:
@@ -799,7 +804,7 @@ def _load_areas(areas_geojson: str | None, required: bool) -> dialects.AreaIndex
     print(
         f"areas     : {areas_geojson or 'off'} (no {DIALECT_KEY}; "
         f"{LOCAL_KEY} only from the `local` column). "
-        f"Build it with names/build_dialect_areas.py"
+        f"Build it with `just areas`"
     )
     return None
 
@@ -872,7 +877,7 @@ def _load_objects(
         raise PipelineError(
             f"{len(missing)} object(s) of {names_csv} are not in "
             f"{objects_json} -- run `just objects` "
-            f"(names/locate.py) to locate them:\n{lines}"
+            f"to locate them:\n{lines}"
         )
     print(f"objects   : {objects_json} -> {len(objects)} located object(s)")
     return objects
@@ -1046,33 +1051,15 @@ def _print_synthetic(inj: Injector, synthetic: Mapping[Ref, Square], in_file: st
 @cli.command
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+        prog="frasch inject",
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     ap.add_argument("infile")
     ap.add_argument("outfile")
-    ap.add_argument("--names", default=paths.PLACES)
-    ap.add_argument(
-        "--dialects",
-        default=paths.DIALECTS,
-        help="the dialect registry; its tags become the name:* tags",
-    )
-    ap.add_argument(
-        "--areas",
-        default=paths.DIALECT_AREAS,
-        help="dialect areas as GeoJSON (names/build_dialect_areas.py); "
-        "skipped with a warning when absent",
-    )
-    ap.add_argument(
-        "--objects",
-        default=paths.OBJECTS,
-        help="where the name list's objects are (names/locate.py); needed with the dialect areas",
-    )
-    ap.add_argument(
-        "--curation",
-        default=paths.CURATION,
-        help="per-feature map tuning (set_tags / minzoom / maxzoom / polygon_km2); "
-        "default names/curation.csv, skipped when absent",
-    )
+    # a file named here must exist; the default areas and curation are
+    # optional (the injector then says so and goes on without them)
+    cli.add_workspace_options(ap, "names", "dialects", "areas", "objects", "curation")
     ap.add_argument("--no-curation", action="store_true", help="ignore the curation file entirely")
     ap.add_argument("--no-areas", action="store_true", help="ignore the dialect areas entirely")
     ap.add_argument(
@@ -1081,17 +1068,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     a = ap.parse_args(argv)
     if not a.dry_run and os.path.abspath(a.infile) == os.path.abspath(a.outfile):
         ap.error("refusing to overwrite the input file")
-    return run(
+    ws = cli.workspace(a)
+    run(
+        ws,
+        registry.read(ws.dialects),
         a.infile,
         a.outfile,
-        a.names,
-        a.dialects,
-        None if a.no_areas else a.areas,
-        a.dry_run,
-        curation_csv=None if a.no_curation else a.curation,
-        curation_required=a.curation != paths.CURATION,
-        # an explicitly named area file must exist; the default one is
-        # optional (the injector then warns and skips frasch:dialect)
-        areas_required=os.path.abspath(a.areas) != paths.DIALECT_AREAS,
-        objects_json=a.objects,
+        dry_run=a.dry_run,
+        areas=_use(a.no_areas, a.areas),
+        curation=_use(a.no_curation, a.curation),
     )
+    return 0
+
+
+def _use(switched_off: bool, named: str | None) -> Use:
+    """What to do about an input the command line may switch off or name."""
+    if switched_off:
+        return Use.OFF
+    return Use.IF_PRESENT if named is None else Use.REQUIRED

@@ -11,15 +11,16 @@ from shapely.geometry.base import BaseGeometry
 
 from frasch import dialects, registry
 from frasch import placelist
+from conftest import REGISTRY
 
 
 @pytest.fixture(scope="module")
 def reg() -> registry.Registry:
-    return registry.read()
+    return REGISTRY
 
 
 def row(**cells: str) -> dict[str, str]:
-    r = {c: "" for c in placelist.columns()}
+    r = {c: "" for c in placelist.columns(REGISTRY)}
     r.update(cells)
     return r
 

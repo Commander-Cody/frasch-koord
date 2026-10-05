@@ -6,21 +6,21 @@ injector reads too, so a place is where its map label is (#24)."""
 from __future__ import annotations
 
 import json
-import re
 import subprocess
 from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 
 import pytest
 
-from frasch import export_search_index
-from frasch import paths as default_paths
+from frasch import searchindex
+from frasch.__main__ import main
+from frasch.errors import PipelineError
 from frasch.paths import StrPath
 from frasch.objects import LocatedObject, Objects, objects_json
 from frasch.placelist import OsmRef
 from frasch.provenance import ExtractStamp
 from frasch.searchindex import SearchEntry, SearchIndex
-from conftest import curation_file, places_text
+from conftest import REGISTRY, curation_file, path_options, places_text, workspace
 
 Rows = Iterable[Mapping[str, str]]
 # the `export` fixture: `rows` exported -> {id: entry}
@@ -132,32 +132,16 @@ def paths(world: Path) -> Path:
     (world / "osm_objects.json").write_text(
         objects_json(Objects(OBJECTS, {"extracts": EXTRACTS})), encoding="utf-8"
     )
-    (world / "areas.geojson").write_text(json.dumps(AREAS), encoding="utf-8")
+    (world / "dialect_areas.geojson").write_text(json.dumps(AREAS), encoding="utf-8")
     return world
 
 
-def export_status(world: Path, rows: Rows) -> int:
-    """Run the export command on `rows` -> its exit status."""
-    (world / "places.csv").write_text(places_text(rows), encoding="utf-8")
-    return export_search_index.main(
-        [
-            "--names",
-            str(world / "places.csv"),
-            "--objects",
-            str(world / "osm_objects.json"),
-            "--curation",
-            str(world / "curation.csv"),
-            "--areas",
-            str(world / "areas.geojson"),
-            "--out",
-            str(world / "names.json"),
-        ]
-    )
-
-
 def export_into(world: Path, rows: Rows) -> SearchIndex:
-    assert export_status(world, rows) == 0
-    index: SearchIndex = json.loads((world / "names.json").read_text(encoding="utf-8"))
+    """Export the index of `rows` and read it back."""
+    ws = workspace(world)
+    (world / "places.csv").write_text(places_text(rows), encoding="utf-8")
+    searchindex.run(ws, REGISTRY)
+    index: SearchIndex = json.loads(Path(ws.index).read_text(encoding="utf-8"))
     return index
 
 
@@ -244,13 +228,11 @@ def test_a_place_osm_does_not_have_gets_the_generic_name_of_its_map_point(
     assert export([waasterhias])["waasterhias"]["name_osm"] == "Westerheide"
 
 
-def test_a_row_whose_object_was_never_located_stops_the_export(
-    paths: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_a_row_whose_object_was_never_located_stops_the_export(paths: Path) -> None:
     moved = NAIBEL | {"osm": "node/99"}
-    assert export_status(paths, [moved]) == 1
-    assert re.search(r"naibel.*node/99", capsys.readouterr().err)
-    assert not (paths / "names.json").exists()
+    with pytest.raises(PipelineError, match=r"naibel.*node/99"):
+        export_into(paths, [moved])
+    assert not Path(workspace(paths).index).exists()
 
 
 def test_a_row_keyed_by_wikidata_alone_is_left_out(export: Export) -> None:
@@ -275,9 +257,19 @@ def test_the_index_records_what_it_was_built_from(paths: Path) -> None:
     stamp = export_into(paths, [NAIBEL])["built_from"]
     assert stamp == {
         "places.csv": git_hash(paths / "places.csv"),
-        "dialects.csv": git_hash(default_paths.DIALECTS),
+        "dialects.csv": git_hash(paths / "dialects.csv"),
         "curation.csv": git_hash(paths / "curation.csv"),
-        "dialect_areas.geojson": git_hash(paths / "areas.geojson"),
+        "dialect_areas.geojson": git_hash(paths / "dialect_areas.geojson"),
         "osm_objects.json": git_hash(paths / "osm_objects.json"),
         "extracts": EXTRACTS,
     }
+
+
+def test_the_command_exports_the_index_of_the_workspace_its_options_name(
+    paths: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ws = workspace(paths)
+    (paths / "places.csv").write_text(places_text([NAIBEL]), encoding="utf-8")
+    files = path_options(ws, "names", "dialects", "curation", "areas", "objects", "index")
+    assert main(["index", *files]) == 0
+    assert capsys.readouterr().out.startswith(f"wrote 1 entries to {ws.index}")

@@ -31,7 +31,7 @@ import json
 import os
 from typing import NamedTuple, NotRequired, TypedDict
 
-from frasch import paths, placelist, provenance
+from frasch import placelist, provenance
 from frasch.dialects import AreaIndex
 from frasch.errors import PipelineError
 from frasch.placelist import OsmRef
@@ -98,9 +98,9 @@ class Objects(NamedTuple):
     built_from: provenance.BuiltFrom
 
 
-def read_objects(path: str = paths.OBJECTS) -> Objects:
+def read_objects(path: str) -> Objects:
     if not os.path.exists(path):
-        raise PipelineError(f"{path} not found -- build it with `just objects` (names/locate.py)")
+        raise PipelineError(f"{path} not found -- build it with `just objects`")
     with open(path, encoding="utf-8") as fh:
         data = json.load(fh)
     by_ref = {placelist.osm_refs(ref)[0]: obj for ref, obj in data["objects"].items()}

@@ -1,4 +1,4 @@
-"""`check.py` reports every problem in the hand-edited name files, each with
+"""`frasch check-inputs` reports every problem in the hand-edited name files, each with
 its line, instead of stopping at the first one (#22, M3)."""
 
 from __future__ import annotations
@@ -10,9 +10,10 @@ from typing import Protocol
 
 import pytest
 
-from frasch import check, paths, placelist
-from frasch.paths import StrPath
-from conftest import CURATION_HEADER, TOFTUM, places_text
+from frasch import check_inputs, placelist
+from frasch.__main__ import main
+from frasch.paths import Workspace
+from conftest import CURATION_HEADER, REGISTRY, TOFTUM, places_text
 
 NIEBUELL = {
     "kind": "settlement",
@@ -27,29 +28,27 @@ NIEBUELL = {
 class CheckNames(Protocol):
     def __call__(
         self, places: str, curation: str = ..., dialects: str | None = ...
-    ) -> list[check.Problem]: ...
+    ) -> list[check_inputs.Problem]: ...
 
 
 @pytest.fixture
-def names(world: Path) -> CheckNames:
-    """Write places.csv (and optionally curation.csv) into `world` and return
-    what `check` finds in them, as `"line: message"` strings."""
+def names(ws: Workspace) -> CheckNames:
+    """Write places.csv (and optionally curation.csv and dialects.csv) into
+    the workspace and return what `check` finds in it."""
 
     def run(
         places: str, curation: str = CURATION_HEADER, dialects: str | None = None
-    ) -> list[check.Problem]:
-        (world / "places.csv").write_text(places, encoding="utf-8")
-        (world / "curation.csv").write_text(curation, encoding="utf-8")
-        registry: StrPath = paths.DIALECTS
+    ) -> list[check_inputs.Problem]:
+        Path(ws.names).write_text(places, encoding="utf-8")
+        Path(ws.curation).write_text(curation, encoding="utf-8")
         if dialects is not None:
-            registry = world / "dialects.csv"
-            registry.write_text(dialects, encoding="utf-8")
-        return check.check(world / "places.csv", world / "curation.csv", registry)
+            Path(ws.dialects).write_text(dialects, encoding="utf-8")
+        return check_inputs.check(ws)
 
     return run
 
 
-def lines(problems: Sequence[check.Problem]) -> list[int]:
+def lines(problems: Sequence[check_inputs.Problem]) -> list[int]:
     return [p.line for p in problems]
 
 
@@ -278,23 +277,32 @@ def test_a_local_reference_positioned_twice_is_reported(names: CheckNames) -> No
     assert [(os.path.basename(p.path), p.line) for p in problems] == [("curation.csv", 3)]
 
 
+def command(ws: Workspace, *options: str) -> int:
+    """`frasch check-inputs` on the files of the workspace."""
+    files = ["--names", ws.names, "--curation", ws.curation, "--dialects", ws.dialects]
+    return main(
+        ["check-inputs", *files, "--area-list", ws.area_list, "--work", str(work(ws)), *options]
+    )
+
+
+def work(ws: Workspace) -> Path:
+    return Path(ws.lock).parent
+
+
 def test_the_command_fails_and_prints_each_problem_with_its_place(
-    world: Path, capsys: pytest.CaptureFixture[str]
+    ws: Workspace, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    places = world / "places.csv"
-    places.write_text(places_text([TOFTUM, {**NIEBUELL, "kind": "town"}]), encoding="utf-8")
-    code = check.main(["--names", str(places), "--curation", str(world / "curation.csv")])
-    assert code == 1
-    assert capsys.readouterr().out.startswith(f"{places}:3: unknown kind 'town'")
+    Path(ws.names).write_text(places_text([TOFTUM, {**NIEBUELL, "kind": "town"}]), encoding="utf-8")
+    assert command(ws) == 1
+    assert capsys.readouterr().out.startswith(f"{ws.names}:3: unknown kind 'town'")
 
 
-def test_the_command_succeeds_on_a_clean_list(world: Path) -> None:
-    places = world / "places.csv"
-    places.write_text(places_text([TOFTUM]), encoding="utf-8")
-    assert check.main(["--names", str(places), "--curation", str(world / "curation.csv")]) == 0
+def test_the_command_succeeds_on_a_clean_list(ws: Workspace) -> None:
+    Path(ws.names).write_text(places_text([TOFTUM]), encoding="utf-8")
+    assert command(ws) == 0
 
 
-REGISTRY = "tag,column,label,status,view,note\n"
+REGISTRY_HEADER = "tag,column,label,status,view,note\n"
 MOORING = "frr-x-mooring,mooring,Mooring,living,yes,\n"
 
 
@@ -311,58 +319,40 @@ MOORING = "frr-x-mooring,mooring,Mooring,living,yes,\n"
     ],
 )
 def test_a_damaged_dialect_row_is_reported(names: CheckNames, row: str) -> None:
-    problems = names(places_text([TOFTUM]), dialects=REGISTRY + row)
+    problems = names(places_text([TOFTUM]), dialects=REGISTRY_HEADER + row)
     assert [(os.path.basename(p.path), p.line) for p in problems] == [("dialects.csv", 2)]
 
 
 def test_a_dialect_registered_twice_is_reported(names: CheckNames) -> None:
-    problems = names(places_text([TOFTUM]), dialects=REGISTRY + MOORING * 2)
+    problems = names(places_text([TOFTUM]), dialects=REGISTRY_HEADER + MOORING * 2)
     assert [(os.path.basename(p.path), p.line) for p in problems] == [("dialects.csv", 3)]
 
 
 def test_a_registry_without_dialects_is_reported_not_a_crash(names: CheckNames) -> None:
     # as registry.read refuses it: without a dialect no name column exists
-    problems = names(places_text([TOFTUM]), dialects=REGISTRY + "\n")
+    problems = names(places_text([TOFTUM]), dialects=REGISTRY_HEADER + "\n")
     assert [(os.path.basename(p.path), p.line, p.message) for p in problems] == [
         ("dialects.csv", 1, "no dialects")
     ]
 
 
-def test_the_command_can_add_its_problems_to_a_markdown_summary(world: Path) -> None:
+def test_the_command_can_add_its_problems_to_a_markdown_summary(ws: Workspace, world: Path) -> None:
     # CI passes $GITHUB_STEP_SUMMARY, so a broken places.csv shows on the
     # run's page and not only in its log.
     places, summary = world / "places.csv", world / "summary.md"
     places.write_text(places_text([TOFTUM, {**NIEBUELL, "kind": "town"}]), encoding="utf-8")
     summary.write_text("earlier step\n", encoding="utf-8")
-    check.main(
-        [
-            "--names",
-            str(places),
-            "--curation",
-            str(world / "curation.csv"),
-            "--summary",
-            str(summary),
-        ]
-    )
+    command(ws, "--summary", str(summary))
     text = summary.read_text(encoding="utf-8")
     assert text.startswith("earlier step\n")  # appended, not replaced
     assert "places.csv:3" in text
     assert "unknown kind 'town'" in text
 
 
-def test_a_clean_list_says_so_in_the_summary(world: Path) -> None:
+def test_a_clean_list_says_so_in_the_summary(ws: Workspace, world: Path) -> None:
     places, summary = world / "places.csv", world / "summary.md"
     places.write_text(places_text([TOFTUM]), encoding="utf-8")
-    check.main(
-        [
-            "--names",
-            str(places),
-            "--curation",
-            str(world / "curation.csv"),
-            "--summary",
-            str(summary),
-        ]
-    )
+    check_inputs.run(ws, summary=str(summary))
     assert "no problems" in summary.read_text(encoding="utf-8")
 
 
@@ -400,7 +390,8 @@ def test_a_curation_row_with_the_wrong_number_of_cells_is_reported(
 
 def test_a_dialect_row_with_the_wrong_number_of_cells_is_reported(names: CheckNames) -> None:
     problems = names(
-        places_text([TOFTUM]), dialects=REGISTRY + "frr-x-mooring,mooring,Mooring,living,yes\n"
+        places_text([TOFTUM]),
+        dialects=REGISTRY_HEADER + "frr-x-mooring,mooring,Mooring,living,yes\n",
     )
     assert [(os.path.basename(p.path), p.line) for p in problems] == [("dialects.csv", 2)]
     assert "cells" in problems[0].message
@@ -419,7 +410,7 @@ def test_a_blank_line_is_no_problem_and_keeps_the_line_numbers(names: CheckNames
 def test_a_row_without_an_id_is_reported(names: CheckNames) -> None:
     problems = names(places_text([TOFTUM, {**NIEBUELL, "id": ""}]))
     assert lines(problems) == [3]
-    assert "check.py --fix" in problems[0].message
+    assert "check-inputs --fix" in problems[0].message
 
 
 def test_an_id_used_twice_is_reported_on_the_second_row(names: CheckNames) -> None:
@@ -427,13 +418,12 @@ def test_an_id_used_twice_is_reported_on_the_second_row(names: CheckNames) -> No
     assert [(p.line, p.message) for p in problems] == [(3, "id toftem is already used on line 2")]
 
 
-def fix(places: Path) -> int:
-    return check.main(
-        ["--fix", "--names", str(places), "--curation", str(places.parent / "curation.csv")]
-    )
+def fix(ws: Workspace) -> list[check_inputs.Problem]:
+    """Give the new rows an id and check the workspace; -> what is wrong with it."""
+    return check_inputs.run(ws, fix=True)
 
 
-def test_fix_gives_each_new_row_an_id_from_its_frisian_name(world: Path) -> None:
+def test_fix_gives_each_new_row_an_id_from_its_frisian_name(ws: Workspace, world: Path) -> None:
     places = world / "places.csv"
     places.write_text(
         places_text(
@@ -454,8 +444,8 @@ def test_fix_gives_each_new_row_an_id_from_its_frisian_name(world: Path) -> None
         ),
         encoding="utf-8",
     )
-    assert fix(places) == 0
-    rows, _ = placelist.read(str(places))
+    assert fix(ws) == []
+    rows, _ = placelist.read(str(places), REGISTRY)
     assert [r["id"] for r in rows] == [
         "naibel",
         "schorkewarw",
@@ -466,25 +456,25 @@ def test_fix_gives_each_new_row_an_id_from_its_frisian_name(world: Path) -> None
     ]
 
 
-def test_fix_adds_the_id_column_to_a_list_that_has_none(world: Path) -> None:
+def test_fix_adds_the_id_column_to_a_list_that_has_none(ws: Workspace, world: Path) -> None:
     places = world / "places.csv"
     # `id` is the last column: cut it off every line, the header's included
     without = "".join(
         line.rsplit(",", 1)[0] + "\n" for line in places_text([TOFTUM, NIEBUELL]).splitlines()
     )
     places.write_text(without, encoding="utf-8")
-    assert fix(places) == 0
-    rows, fields = placelist.read(str(places))
+    assert fix(ws) == []
+    rows, fields = placelist.read(str(places), REGISTRY)
     assert fields[-1] == "id"
     assert [r["id"] for r in rows] == ["toftem", "naibel"]
 
 
-def test_fix_run_twice_changes_nothing(world: Path) -> None:
+def test_fix_run_twice_changes_nothing(ws: Workspace, world: Path) -> None:
     places = world / "places.csv"
     places.write_text(places_text([{**TOFTUM, "id": ""}, {**NIEBUELL, "id": ""}]), encoding="utf-8")
-    fix(places)
+    fix(ws)
     once = places.read_bytes()
-    fix(places)
+    fix(ws)
     assert places.read_bytes() == once
 
 
@@ -500,7 +490,7 @@ def test_a_hand_set_frasch_ref_must_name_a_row(names: CheckNames) -> None:
     assert "frasch:ref=relation/1420555 names no row" in problems[0].message
 
 
-def test_a_dialect_area_reference_on_two_rows_is_reported(world: Path) -> None:
+def test_a_dialect_area_reference_on_two_rows_is_reported(ws: Workspace, world: Path) -> None:
     places = world / "places.csv"
     places.write_text(places_text([TOFTUM]), encoding="utf-8")
     areas = world / "dialect_areas.csv"
@@ -510,30 +500,30 @@ def test_a_dialect_area_reference_on_two_rows_is_reported(world: Path) -> None:
         "frr-x-fering,relation/1147134,Sylt,\n",
         encoding="utf-8",
     )
-    problems = check.check(places, world / "curation.csv", areas=areas)
+    problems = check_inputs.check(ws)
     assert [(os.path.basename(p.path), p.line, p.message) for p in problems] == [
         ("dialect_areas.csv", 3, "relation/1147134 is already on line 2")
     ]
 
 
-def test_a_dialect_area_node_reference_is_reported(world: Path) -> None:
+def test_a_dialect_area_node_reference_is_reported(ws: Workspace, world: Path) -> None:
     # a node can never be a polygon (#24)
     places = world / "places.csv"
     places.write_text(places_text([TOFTUM]), encoding="utf-8")
     areas = world / "dialect_areas.csv"
     areas.write_text("dialect,osm,name,note\nfrr-x-solring,node/1,Not an area,\n", encoding="utf-8")
-    problems = check.check(places, world / "curation.csv", areas=areas)
+    problems = check_inputs.check(ws)
     assert [(os.path.basename(p.path), p.line) for p in problems] == [("dialect_areas.csv", 2)]
     assert "node/1" in problems[0].message
 
 
 def test_fix_on_a_damaged_list_still_reports_every_problem(
-    world: Path, capsys: pytest.CaptureFixture[str]
+    ws: Workspace, world: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     places = world / "places.csv"
     text = places_text([{**TOFTUM, "id": ""}, {**NIEBUELL, "kind": "town"}, TOFTUM])
     places.write_text(text.replace("Toftem,,", "Toftem,", 1), encoding="utf-8")
-    assert fix(places) == 1
+    assert fix(ws) != []
     out = capsys.readouterr()
     assert "no id given" in out.err
     assert [line.split(": ")[0].rsplit(":", 1)[1] for line in out.out.splitlines()] == ["2", "3"]

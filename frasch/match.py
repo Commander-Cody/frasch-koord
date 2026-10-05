@@ -1,11 +1,10 @@
-#!/usr/bin/env python3
 """Fill the empty `osm` / `wikidata` cells of names/places.csv.
 
 Matching is EXACT after normalisation -- no fuzzy matching.  The German names
 of a row (the Danish ones where a row has no German name) are compared against
 the candidates' name, name:de, name:da, short_name, official_name, alt_name
 and old_name.
-Candidates come from names/work/candidates.jsonl (see frasch.build_candidates).
+Candidates come from names/work/candidates.jsonl (`frasch candidates`).
 
 What gets written where
   names/places.csv        only `osm`, `wikidata` and `status` of the rows the
@@ -50,10 +49,10 @@ Changed extracts
   the same extract (only its replication timestamp differs) is no warning.
 
 places.csv is written in one step (never half), and not at all if it changed
-on disk during the run; names/work/.lock keeps match.py and
-`curate.py apply` from running at the same time.
+on disk during the run; names/work/.lock keeps `frasch match` and
+`frasch curate apply` from running at the same time.
 
-Run:  .venv/bin/python names/match.py
+Run:  frasch match [--dry-run] [--offline]
 """
 
 from __future__ import annotations
@@ -68,12 +67,13 @@ import time
 from collections.abc import Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, NamedTuple, TypedDict
 
-from frasch import candidates, cli, files, paths, placelist
+from frasch import candidates, cli, files, placelist, registry
 from frasch.candidates import ISLAND_PLACES, Candidate, decisive_tags, osm_key
 from frasch.errors import PipelineError
 from frasch.geo import NF_CENTRE, haversine, in_north_frisia
 from frasch.hints import Circle, HintResolver
 from frasch.nameindex import NameIndex, norm
+from frasch.paths import Workspace
 from frasch.placelist import (
     OsmRef,
     PlaceRow,
@@ -89,11 +89,10 @@ from frasch.placelist import (
     variants,
 )
 from frasch.provenance import ExtractStamp
+from frasch.registry import Registry
 
 if TYPE_CHECKING:
     import requests
-
-EXTRACTS_STATE = "match-extracts.json"  # next to the candidates file
 
 MATCH_COLUMNS = [
     "id",
@@ -326,7 +325,7 @@ WD_USER_AGENT = (
 WD_COUNTRY_CLASSES = {"Q6256", "Q3624078", "Q1763527", "Q112099", "Q185441"}
 
 
-def read_wikidata_cache(cache_path: str = paths.WIKIDATA_CACHE) -> dict[str, str]:
+def read_wikidata_cache(cache_path: str) -> dict[str, str]:
     """The cached lookups, `{German name: QID or ""}` (`""` = the lookup worked
     and found no country item).  A damaged file stops the run: starting from
     an empty cache would look like "not found" for every country offline."""
@@ -404,7 +403,7 @@ def _wikidata_country(session: requests.Session, name: str) -> str:
 
 
 def wikidata_countries(
-    names: Iterable[str], cache_path: str = paths.WIKIDATA_CACHE, offline: bool = False
+    names: Iterable[str], cache_path: str, offline: bool = False
 ) -> tuple[dict[str, str], set[str]]:
     """German country name -> QID, via wbsearchentities + wbgetentities.
 
@@ -832,14 +831,18 @@ def _matched_cells(
 
 
 def match_row(
-    row: Row, index: NameIndex, hints: HintResolver, claimed: Mapping[Ref, int] | None = None
+    row: Row,
+    index: NameIndex,
+    hints: HintResolver,
+    reg: Registry,
+    claimed: Mapping[Ref, int] | None = None,
 ) -> MatchResult:
     """`claimed`: {(type, id): line} of the objects other rows hold that
     are not the matcher's to give away (see `claimed_objects`)."""
     claimed = claimed or {}
     kind = row["kind"]
     out = _unfilled(row)
-    if not any_name(row):
+    if not any_name(row, reg):
         return _unmatched(out, "not_found", "no Frisian name")
 
     queries = row_query_names(row)
@@ -963,9 +966,9 @@ def extract_set_warning(
         )
     return (
         "warning: the candidates come from other extracts than the last "
-        "match.py run; "
+        "`frasch match`; "
         + "; ".join(parts)
-        + ". Rebuild them with build_candidates.py from every extract "
+        + ". Rebuild them with `just candidates` from every extract "
         "unless that is intended."
     )
 
@@ -977,7 +980,7 @@ def check_extracts(candidates_path: str, state_path: str) -> list[ExtractStamp] 
     if extracts is None:
         print(
             f"warning: {candidates_path} names no extracts (written before "
-            f"it had a header) -- rebuild it with build_candidates.py",
+            f"it had a header) -- rebuild it with `just candidates`",
             file=sys.stderr,
         )
         return None
@@ -1010,29 +1013,29 @@ REPORT_STATES = [
 
 
 def write_report(
-    rows: Sequence[PlaceRow], results: Mapping[str, MatchResult], path: str = paths.REPORT
+    rows: Sequence[PlaceRow], results: Mapping[str, MatchResult], path: str, reg: Registry
 ) -> None:
     """`results` maps a row's id to its match_row() output (only for the rows
     the matcher owns).  The report depends on these alone -- no date, no run
     time -- so a run on unchanged inputs leaves the tracked file as it was."""
     lines = (
         _report_intro(rows)
-        + _counts_section(rows, results)
-        + _ambiguous_section(rows, results)
-        + _duplicates_section(rows)
-        + _not_found_section(rows, results)
+        + _counts_section(rows, results, reg)
+        + _ambiguous_section(rows, results, reg)
+        + _duplicates_section(rows, reg)
+        + _not_found_section(rows, results, reg)
     )
     with open(path, "w", encoding="utf-8") as fh:
         fh.write("\n".join(lines))
 
 
-def _report_state(r: Row, results: Mapping[str, MatchResult]) -> str:
+def _report_state(r: Row, results: Mapping[str, MatchResult], reg: Registry) -> str:
     """Which of the REPORT_STATES the row is in."""
     if r["kind"] == "not_a_place":
         return "not a place"
     if r["status"] == "skip":
         return "skip"
-    if not any_name(r):
+    if not any_name(r, reg):
         return "no Frisian name"
     if local_ref(r["osm"]):
         return "own point"
@@ -1044,22 +1047,23 @@ def _report_state(r: Row, results: Mapping[str, MatchResult]) -> str:
     return "ambiguous" if res and res["status"] == "ambiguous" else "not found"
 
 
-def _report_ref(r: PlaceRow) -> str:
+def _report_ref(r: PlaceRow, reg: Registry) -> str:
     """The id, line, kind, Frisian and German cells of a row's table line."""
-    return f"{r['id']} | {r.line} | {r['kind']} | {any_name(r)} | {primary(r['de']) or primary(r['da'])}"
+    german = primary(r["de"]) or primary(r["da"])
+    return f"{r['id']} | {r.line} | {r['kind']} | {any_name(r, reg)} | {german}"
 
 
 def _report_intro(rows: Sequence[PlaceRow]) -> list[str]:
     return [
         "# Name matching report\n",
-        f"Generated by `names/match.py` from `names/places.csv` ({len(rows)} rows). "
+        f"Generated by `frasch match` from `names/places.csv` ({len(rows)} rows). "
         "`id` is the row's `id` cell, `line` its line number in that file.\n",
         "Hand-review worklist: for every **ambiguous** row below pick the right "
         "object and write it into the `osm` column of `names/places.csv` "
         "(`node/123`, `way/123`, `relation/123`); for the **not found** rows "
         "look the feature up on openstreetmap.org yourself. Put `ok` in "
         "`status` when you have checked a row (or leave it empty), `skip` when "
-        "the row must never be put on the map. `match.py` only ever rewrites "
+        "the row must never be put on the map. `frasch match` only ever rewrites "
         "rows with `status=auto` or with empty `osm`/`wikidata`/`status` cells. "
         "**own point** rows carry a local reference (`local/<slug>`, a place "
         "OSM does not have, positioned in `names/curation.csv`) and are never "
@@ -1067,14 +1071,16 @@ def _report_intro(rows: Sequence[PlaceRow]) -> list[str]:
     ]
 
 
-def _counts_section(rows: Sequence[PlaceRow], results: Mapping[str, MatchResult]) -> list[str]:
+def _counts_section(
+    rows: Sequence[PlaceRow], results: Mapping[str, MatchResult], reg: Registry
+) -> list[str]:
     """The rows per kind and state."""
     by_kind: collections.defaultdict[str, collections.Counter[str]] = collections.defaultdict(
         collections.Counter
     )
     total: collections.Counter[str] = collections.Counter()
     for r in rows:
-        st = _report_state(r, results)
+        st = _report_state(r, results, reg)
         by_kind[r["kind"]][st] += 1
         total[st] += 1
     lines = ["## Counts\n"]
@@ -1095,8 +1101,10 @@ def _counts_section(rows: Sequence[PlaceRow], results: Mapping[str, MatchResult]
     return lines
 
 
-def _ambiguous_section(rows: Sequence[PlaceRow], results: Mapping[str, MatchResult]) -> list[str]:
-    amb = [r for r in rows if _report_state(r, results) == "ambiguous"]
+def _ambiguous_section(
+    rows: Sequence[PlaceRow], results: Mapping[str, MatchResult], reg: Registry
+) -> list[str]:
+    amb = [r for r in rows if _report_state(r, results, reg) == "ambiguous"]
     lines = [f"## Ambiguous ({len(amb)})\n"]
     lines.append("`candidates` format: `type/id:name:class:km-from-NF-centre`\n")
     lines.append("| id | line | kind | Frisian | German | hint | why | candidates |")
@@ -1104,14 +1112,14 @@ def _ambiguous_section(rows: Sequence[PlaceRow], results: Mapping[str, MatchResu
     for r in amb:
         res = results[r["id"]]
         lines.append(
-            f"| {_report_ref(r)} | {r['hint']} | {res.get('note', '')} "
+            f"| {_report_ref(r, reg)} | {r['hint']} | {res.get('note', '')} "
             f"| `{report_cands(res.get('candidates', ''))}` |"
         )
     lines.append("")
     return lines
 
 
-def _duplicates_section(rows: Sequence[PlaceRow]) -> list[str]:
+def _duplicates_section(rows: Sequence[PlaceRow], reg: Registry) -> list[str]:
     dups = find_duplicates(rows)
     lines = [f"## Rows sharing one OSM object ({len(dups)})\n"]
     lines.append(
@@ -1126,15 +1134,17 @@ def _duplicates_section(rows: Sequence[PlaceRow]) -> list[str]:
             f"| `{format_osm([key])}` | "
             + ", ".join(f"{x['id']} ({x.line})" for x in g)
             + " | "
-            + ", ".join(any_name(x) for x in g)
+            + ", ".join(any_name(x, reg) for x in g)
             + f" | {primary(g[0]['de'])} |"
         )
     lines.append("")
     return lines
 
 
-def _not_found_section(rows: Sequence[PlaceRow], results: Mapping[str, MatchResult]) -> list[str]:
-    nf = [r for r in rows if _report_state(r, results) == "not found"]
+def _not_found_section(
+    rows: Sequence[PlaceRow], results: Mapping[str, MatchResult], reg: Registry
+) -> list[str]:
+    nf = [r for r in rows if _report_state(r, results, reg) == "not found"]
     lines = [f"## Not found ({len(nf)})\n"]
     lines.append(
         "Either the feature is not in OSM at all, or OSM spells it "
@@ -1147,7 +1157,7 @@ def _not_found_section(rows: Sequence[PlaceRow], results: Mapping[str, MatchResu
     for r in nf:
         res = results.get(r["id"], {})
         cands = f"`{report_cands(res['candidates'])}`" if res.get("candidates") else ""
-        lines.append(f"| {_report_ref(r)} | {res.get('note', '')} | {cands} |")
+        lines.append(f"| {_report_ref(r, reg)} | {res.get('note', '')} | {cands} |")
     lines.append("")
     return lines
 
@@ -1156,7 +1166,8 @@ def write_matches(
     rows: Iterable[PlaceRow],
     results: Mapping[str, MatchResult],
     index: NameIndex,
-    path: str = paths.MATCHES,
+    path: str,
+    reg: Registry,
 ) -> None:
     """work/matches.csv: one line per places.csv row, with the match details
     (and lon/lat also for rows a human filled in, looked up by id)."""
@@ -1172,7 +1183,7 @@ def write_matches(
                 "id": r["id"],
                 "line": str(r.line),
                 "kind": r["kind"],
-                "name": any_name(r),
+                "name": any_name(r, reg),
                 "de": primary(r["de"]),
                 "osm": r["osm"],
                 "wikidata": r["wikidata"],
@@ -1210,49 +1221,21 @@ def write_matches(
             w.writerow(rec)
 
 
-@cli.command
-def main(argv: Sequence[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-    ap.add_argument("--names", default=paths.PLACES)
-    ap.add_argument("--candidates", default=paths.CANDIDATES)
-    ap.add_argument("--matches", default=paths.MATCHES)
-    ap.add_argument("--report", default=paths.REPORT)
-    ap.add_argument(
-        "--offline", action="store_true", help="do not call the Wikidata API (use the cache only)"
-    )
-    ap.add_argument(
-        "--wikidata-cache",
-        default=paths.WIKIDATA_CACHE,
-        help="country lookups already made (default: %(default)s)",
-    )
-    ap.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="write only work/matches.csv (git-ignored); leave places.csv and REPORT.md alone",
-    )
-    ap.add_argument(
-        "--extracts-state",
-        help=f"the extracts the last run used (default: {EXTRACTS_STATE} next to --candidates)",
-    )
-    args = ap.parse_args(argv)
-    if args.extracts_state is None:
-        args.extracts_state = os.path.join(
-            os.path.dirname(os.path.abspath(args.candidates)), EXTRACTS_STATE
-        )
-
-    with placelist.lock(args.names):
-        return run(args)
+def run(ws: Workspace, reg: Registry, *, offline: bool = False, dry_run: bool = False) -> int:
+    """Match the rows the matcher owns and write the result (see the module
+    docstring); -> the exit status.  `offline`: no call to the Wikidata API,
+    the cache only.  `dry_run`: only matches.csv is written."""
+    with placelist.lock(ws.lock):
+        return _run(ws, reg, offline, dry_run)
 
 
-def run(args: argparse.Namespace) -> int:
+def _run(ws: Workspace, reg: Registry, offline: bool, dry_run: bool) -> int:
     t0 = time.time()
-    rows, fields = placelist.read(args.names)
-    print(f"loaded {len(rows)} rows from {args.names}")
+    rows, fields = placelist.read(ws.names, reg)
+    print(f"loaded {len(rows)} rows from {ws.names}")
 
-    extracts = check_extracts(args.candidates, args.extracts_state)
-    index = NameIndex(candidates.read_records(args.candidates))
+    extracts = check_extracts(ws.candidates, ws.extracts_state)
+    index = NameIndex(candidates.read_records(ws.candidates))
     print(
         f"indexed {len(index.recs):,} candidates / "
         f"{len(index.by_name):,} distinct normalised names "
@@ -1260,13 +1243,11 @@ def run(args: argparse.Namespace) -> int:
     )
     hints = HintResolver(index)
 
-    todo = [r for r in rows if owned_by_matcher(r) and any_name(r)]
+    todo = [r for r in rows if owned_by_matcher(r) and any_name(r, reg)]
     claimed = claimed_objects(rows)
     country_rows = [r for r in todo if r["kind"] == "country"]
     qids, wd_failed = wikidata_countries(
-        [primary(r["de"]) for r in country_rows],
-        cache_path=args.wikidata_cache,
-        offline=args.offline,
+        [primary(r["de"]) for r in country_rows], ws.wikidata_cache, offline
     )
     unresolved: list[PlaceRow] = []
 
@@ -1282,7 +1263,7 @@ def run(args: argparse.Namespace) -> int:
         if r["kind"] == "country":
             o = _country_result(r, qids)
         else:
-            o = match_row(r, index, hints, claimed)
+            o = match_row(r, index, hints, reg, claimed)
         results[r["id"]] = o
         _write_back(r, o)
         change = _change(before, _reference(r))
@@ -1290,12 +1271,12 @@ def run(args: argparse.Namespace) -> int:
             changed[change] += 1
 
     # matches.csv first: a run that cannot write it leaves places.csv as it was
-    write_matches(rows, results, index, args.matches)
-    if not args.dry_run:
-        placelist.write(rows, args.names, fields)
-        write_report(rows, results, args.report)
+    write_matches(rows, results, index, ws.matches, reg)
+    if not dry_run:
+        placelist.write(rows, ws.names, fields)
+        write_report(rows, results, ws.report, reg)
         if extracts is not None:
-            record_used_extracts(args.extracts_state, extracts)
+            record_used_extracts(ws.extracts_state, extracts)
 
     cnt = collections.Counter(o["status"] for o in results.values())
     print(
@@ -1304,20 +1285,51 @@ def run(args: argparse.Namespace) -> int:
     )
     print(
         f"places.csv: {changed['filled']} rows filled, {changed['cleared']} cleared, "
-        f"{changed['changed']} changed" + (" (dry run -- not written)" if args.dry_run else "")
+        f"{changed['changed']} changed" + (" (dry run -- not written)" if dry_run else "")
     )
-    print("wrote", args.matches, *(() if args.dry_run else ("and", args.report)))
+    print("wrote", ws.matches, *(() if dry_run else ("and", ws.report)))
     print(f"done in {time.time() - t0:.0f}s")
     if unresolved:
         print(
             f"error: no Wikidata answer for {len(unresolved)} country row(s) "
-            + ("(--offline and not in the cache)" if args.offline else "(lookup failed, see above)")
+            + ("(--offline and not in the cache)" if offline else "(lookup failed, see above)")
             + " -- left unchanged: "
-            + ", ".join(placelist.describe(r) for r in unresolved),
+            + ", ".join(placelist.describe(r, reg) for r in unresolved),
             file=sys.stderr,
         )
         return 1
     return 0
+
+
+@cli.command
+def main(argv: Sequence[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(
+        prog="frasch match",
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    cli.add_workspace_options(
+        ap,
+        "names",
+        "dialects",
+        "report",
+        "candidates",
+        "matches",
+        "wikidata_cache",
+        "extracts_state",
+        "work",
+    )
+    ap.add_argument(
+        "--offline", action="store_true", help="do not call the Wikidata API (use the cache only)"
+    )
+    ap.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="write only work/matches.csv (git-ignored); leave places.csv and REPORT.md alone",
+    )
+    a = ap.parse_args(argv)
+    ws = cli.workspace(a)
+    return run(ws, registry.read(ws.dialects), offline=a.offline, dry_run=a.dry_run)
 
 
 def _lookup_failed(r: PlaceRow) -> MatchResult:

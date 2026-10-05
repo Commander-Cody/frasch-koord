@@ -15,7 +15,7 @@ from frasch import placelist
 from frasch.nameindex import NameIndex
 from frasch.candidates import HeaderLine, read_records
 from frasch.provenance import ExtractStamp
-from conftest import cand, places_text, write_candidates
+from conftest import REGISTRY, cand, places_text, workspace, write_candidates
 
 SH: ExtractStamp = {
     "file": "schleswig-holstein-latest.osm.pbf",
@@ -56,34 +56,16 @@ def test_the_curation_export_skips_the_header(tmp_path: Path) -> None:
 
 
 # ------------------------------------------------------------ extract set ---
-def run_match(world: Path, extracts: list[ExtractStamp] | None, *extra: str) -> None:
-    """match.py on ROWS against candidates built from `extracts` (None: a file
+def run_match(world: Path, extracts: list[ExtractStamp] | None, dry_run: bool = False) -> None:
+    """The matcher on ROWS against candidates built from `extracts` (None: a file
     from before the header); the extracts of HOYER's are DK's only."""
     recs = [TOFTUM] + ([HOYER] if extracts and DK["file"] in {e["file"] for e in extracts} else [])
     header: list[HeaderLine] = [{"header": {"extracts": extracts}}] if extracts is not None else []
-    cands = write_candidates(world / "work" / "candidates.jsonl", *header, *recs)
+    write_candidates(world / "work" / "candidates.jsonl", *header, *recs)
     places = world / "places.csv"
     if not places.exists():
         places.write_text(places_text(ROWS), encoding="utf-8")
-    assert (
-        match.main(
-            [
-                "--names",
-                str(places),
-                "--candidates",
-                str(cands),
-                "--matches",
-                str(world / "work" / "matches.csv"),
-                "--report",
-                str(world / "REPORT.md"),
-                "--offline",
-                "--wikidata-cache",
-                str(world / "work" / "wd.json"),
-                *extra,
-            ]
-        )
-        == 0
-    )
+    assert match.run(workspace(world), REGISTRY, offline=True, dry_run=dry_run) == 0
 
 
 def recorded(world: Path) -> object:
@@ -92,7 +74,7 @@ def recorded(world: Path) -> object:
 
 
 def statuses(world: Path) -> dict[str, str]:
-    rows, _ = placelist.read(str(world / "places.csv"))
+    rows, _ = placelist.read(str(world / "places.csv"), REGISTRY)
     return {r["id"]: r["status"] for r in rows}
 
 
@@ -102,7 +84,7 @@ def test_a_run_records_the_extracts_it_used(world: Path) -> None:
 
 
 def test_a_dry_run_records_nothing(world: Path) -> None:
-    run_match(world, [SH, DK], "--dry-run")
+    run_match(world, [SH, DK], dry_run=True)
     assert recorded(world) is None
 
 
@@ -123,7 +105,7 @@ def test_a_dropped_extract_is_named_and_its_rows_said_to_be_cleared(
 def test_an_added_extract_is_named(world: Path, capsys: pytest.CaptureFixture[str]) -> None:
     run_match(world, [SH])
     capsys.readouterr()
-    run_match(world, [SH, DK], "--dry-run")
+    run_match(world, [SH, DK], dry_run=True)
     assert "added: denmark-latest.osm.pbf" in capsys.readouterr().err
 
 
@@ -138,5 +120,5 @@ def test_candidates_without_a_header_are_to_be_rebuilt(
     world: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     run_match(world, None)
-    assert "build_candidates.py" in capsys.readouterr().err
+    assert "rebuild it with `just candidates`" in capsys.readouterr().err
     assert recorded(world) is None

@@ -1,9 +1,19 @@
-"""check_tiles.compare: what counts as the map and the search index
-disagreeing."""
+"""`frasch check-tiles`: what counts as the map and the search index
+disagreeing (check_tiles.compare), and the command on a tile archive."""
 
 from __future__ import annotations
 
+import gzip
+import json
+from pathlib import Path
+
+import mapbox_vector_tile
+import pytest
+from pmtiles.tile import Compression, TileType, zxy_to_tileid
+from pmtiles.writer import Writer
+
 from frasch import check_tiles
+from frasch.__main__ import main
 from frasch.check_tiles import Label
 from frasch.searchindex import SearchEntry
 
@@ -104,3 +114,49 @@ def test_only_entries_whose_own_object_is_labelled_count_as_checked() -> None:
     ]
     entries = {"stiardebel": STIARDEBEL, "pelweerm": pellworm}
     assert check_tiles.checked_entries(entries, features) == {"pelweerm"}
+
+
+# ---------------------------------------------------------- the command ---
+def write_archive(path: Path, entry: SearchEntry, **props: str) -> Path:
+    """A PMTiles archive of one z14 tile: the tile `entry` lies in, holding
+    the label of node/1 for its row at the tile's corner, with the properties
+    `props`."""
+    x, y = check_tiles.tile_of(entry["lon"], entry["lat"], 14)
+    label = {
+        "id": 11,  # OpenMapTiles' id of node/1
+        "geometry": {"type": "Point", "coordinates": [0, 0]},
+        "properties": {"frasch:ref": entry["id"], **props},
+    }
+    tile = mapbox_vector_tile.encode([{"name": "place", "features": [label]}])
+    with open(path, "wb") as fh:
+        writer = Writer(fh)
+        writer.write_tile(zxy_to_tileid(14, x, y), gzip.compress(tile))
+        writer.finalize(
+            {
+                "tile_type": TileType.MVT,
+                "tile_compression": Compression.GZIP,
+                "min_zoom": 14,
+                "max_zoom": 14,
+                "min_lon_e7": int(-180e7),
+                "min_lat_e7": int(-85e7),
+                "max_lon_e7": int(180e7),
+                "max_lat_e7": int(85e7),
+                "center_zoom": 14,
+                "center_lon_e7": 0,
+                "center_lat_e7": 0,
+            },
+            {},
+        )
+    return path
+
+
+def test_the_command_fails_on_an_archive_that_disagrees_with_the_index_its_option_names(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    index = tmp_path / "names.json"
+    index.write_text(json.dumps({"places": [STIARDEBEL]}), encoding="utf-8")
+    # the label says what the entry says, but lies at the corner of its tile
+    agreeing = {"frasch:dialect": "frr-x-suedgoes", "frasch:local": "Stiardebel"}
+    archive = write_archive(tmp_path / "tiles.pmtiles", STIARDEBEL, **agreeing)
+    assert main(["check-tiles", str(archive), "--index", str(index)]) == 1
+    assert capsys.readouterr().err == f"1 disagreement(s) between {archive} and {index}\n"

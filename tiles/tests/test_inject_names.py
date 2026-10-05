@@ -19,20 +19,20 @@ import math
 import re
 from collections.abc import Iterable, Mapping
 from pathlib import Path
-from typing import Any
 
 import osmium
 import pytest
 
-from frasch import paths, registry
 from frasch.errors import PipelineError, ValidationError
 from frasch import inject_names
 from frasch import locate
 from frasch import placelist
+from frasch.__main__ import main
 from frasch.geo import LonLat
+from frasch.inject_names import Use
 from frasch.objects import Objects, objects_json
 from frasch.registry import Registry
-from conftest import curation_file
+from conftest import REGISTRY, curation_file, flat_workspace, path_options
 from osm_fixture import Nodes, write_extract as write_osm
 
 
@@ -62,11 +62,11 @@ def test_square_is_centred_on_the_node() -> None:
 # ----------------------------------------------------------------- name_tags ---
 @pytest.fixture(scope="module")
 def reg() -> Registry:
-    return registry.read()
+    return REGISTRY
 
 
 def place(line: int = 2, **cells: str) -> placelist.PlaceRow:
-    return placelist.PlaceRow({c: "" for c in placelist.columns()} | cells, line)
+    return placelist.PlaceRow({c: "" for c in placelist.columns(REGISTRY)} | cells, line)
 
 
 BRODERSWARFT = place(
@@ -446,11 +446,31 @@ def read_extract(path: Path) -> list[ExtractObject]:
 
 def places_csv(rows: Iterable[Mapping[str, str]]) -> str:
     buf = io.StringIO(newline="")
-    w = csv.DictWriter(buf, fieldnames=placelist.columns(), lineterminator="\n")
+    w = csv.DictWriter(buf, fieldnames=placelist.columns(REGISTRY), lineterminator="\n")
     w.writeheader()
     for r in rows:
-        w.writerow({k: r.get(k, "") for k in placelist.columns()})
+        w.writerow({k: r.get(k, "") for k in placelist.columns(REGISTRY)})
     return buf.getvalue()
+
+
+def inject(
+    d: Path, *, areas: Use = Use.OFF, curation: Use = Use.OFF, dry_run: bool = False
+) -> None:
+    """Inject the name files of `d` into its in.osm.pbf, as out.osm.pbf."""
+    inject_names.run(
+        flat_workspace(d),
+        REGISTRY,
+        str(d / "in.osm.pbf"),
+        str(d / "out.osm.pbf"),
+        dry_run=dry_run,
+        areas=areas,
+        curation=curation,
+    )
+
+
+def locate_objects(d: Path) -> None:
+    """Write the objects file of `d` from its in.osm.pbf."""
+    locate.run(flat_workspace(d), REGISTRY, [d / "in.osm.pbf"])
 
 
 def normalized(report: str, directory: Path) -> str:
@@ -463,29 +483,13 @@ def injected_run(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, str]:
     """-> (the run's directory, the report it printed)"""
     d = tmp_path_factory.mktemp("inject")
     (d / "places.csv").write_text(places_csv(PLACES), encoding="utf-8")
-    curation = curation_file(d, *CURATION)
+    curation_file(d, *CURATION)
     (d / "areas.geojson").write_text(json.dumps(AREAS), encoding="utf-8")
     write_extract(d / "in.osm.pbf")
-    locate.main(
-        [
-            str(d / "in.osm.pbf"),
-            "--names",
-            str(d / "places.csv"),
-            "--out",
-            str(d / "osm_objects.json"),
-        ]
-    )
+    locate_objects(d)
     report = io.StringIO()
     with contextlib.redirect_stdout(report):
-        inject_names.run(
-            str(d / "in.osm.pbf"),
-            str(d / "out.osm.pbf"),
-            str(d / "places.csv"),
-            paths.DIALECTS,
-            str(d / "areas.geojson"),
-            curation_csv=curation,
-            objects_json=str(d / "osm_objects.json"),
-        )
+        inject(d, areas=Use.IF_PRESENT, curation=Use.IF_PRESENT)
     return d, normalized(report.getvalue(), d)
 
 
@@ -499,7 +503,7 @@ def injected(injected_run: tuple[Path, str]) -> Injected:
 def test_report_of_a_run(injected_run: tuple[Path, str]) -> None:
     _, report = injected_run
     lines = report.splitlines()
-    assert lines[1].startswith(f"dialects  : {paths.DIALECTS} -> ")
+    assert lines[1].startswith("dialects  : <dir>/dialects.csv -> ")
     assert lines[:1] + lines[2:] == [
         "name list : <dir>/places.csv",
         "usable    : 5 rows -> 4 OSM ids + 1 wikidata QIDs + 1 local reference(s)",
@@ -654,14 +658,7 @@ def test_an_object_nobody_located_stops_the_build(tmp_path: Path) -> None:
     )
     write_extract(tmp_path / "in.osm.pbf")
     with pytest.raises(PipelineError, match=f"node/{HOLM}"):
-        inject_names.run(
-            str(tmp_path / "in.osm.pbf"),
-            str(tmp_path / "out.osm.pbf"),
-            str(tmp_path / "places.csv"),
-            paths.DIALECTS,
-            str(tmp_path / "areas.geojson"),
-            objects_json=str(tmp_path / "osm_objects.json"),
-        )
+        inject(tmp_path, areas=Use.IF_PRESENT)
     assert not (tmp_path / "out.osm.pbf").exists()
 
 
@@ -881,21 +878,16 @@ def write_report_extract(path: Path) -> None:
 
 
 def report_run(
-    d: Path, places: Iterable[Mapping[str, str]], curation: Iterable[Mapping[str, str]], **kw: Any
+    d: Path,
+    places: Iterable[Mapping[str, str]],
+    curation: Iterable[Mapping[str, str]],
+    areas: Use = Use.OFF,
 ) -> None:
-    """A dry run over the report extract, without dialect areas unless `kw` says so."""
+    """A dry run over the report extract, without dialect areas unless `areas` says so."""
     (d / "places.csv").write_text(places_csv(places), encoding="utf-8")
     write_report_extract(d / "in.osm.pbf")
-    inject_names.run(
-        str(d / "in.osm.pbf"),
-        str(d / "out.osm.pbf"),
-        str(d / "places.csv"),
-        paths.DIALECTS,
-        kw.pop("areas_geojson", None),
-        dry_run=True,
-        curation_csv=curation_file(d, *curation),
-        **kw,
-    )
+    curation_file(d, *curation)
+    inject(d, areas=areas, curation=Use.IF_PRESENT, dry_run=True)
 
 
 def test_report_of_rows_and_curation_rows_that_do_not_fit(
@@ -903,7 +895,7 @@ def test_report_of_rows_and_curation_rows_that_do_not_fit(
 ) -> None:
     report_run(tmp_path, REPORT_PLACES, REPORT_CURATION)
     lines = normalized(capsys.readouterr().out, tmp_path).splitlines()
-    assert lines[1].startswith(f"dialects  : {paths.DIALECTS} -> ")
+    assert lines[1].startswith("dialects  : <dir>/dialects.csv -> ")
     assert lines[:1] + lines[2:] == [
         "name list : <dir>/places.csv",
         "usable    : 6 rows -> 3 OSM ids + 2 wikidata QIDs + 1 local reference(s)",
@@ -911,7 +903,7 @@ def test_report_of_rows_and_curation_rows_that_do_not_fit(
         "ignoring 'Hoolm' (places.csv line 3)",
         "  ! Q559369 claimed twice: keeping line 2, ignoring places.csv line 3",
         "areas     : off (no frasch:dialect; frasch:local only from the `local` column). "
-        "Build it with names/build_dialect_areas.py",
+        "Build it with `just areas`",
         "curation  : <dir>/curation.csv -> 2 OSM ids (2 with frasch:minzoom, 0 with frasch:maxzoom)",
         "synthetic : 1 polygon(s) to add around nodes",
         "local     : 2 local reference(s) positioned in <dir>/curation.csv",
@@ -974,15 +966,22 @@ def test_a_local_reference_without_a_position_stops_the_build(tmp_path: Path) ->
 
 def test_a_named_dialect_area_file_must_exist(tmp_path: Path) -> None:
     with pytest.raises(PipelineError) as exc:
-        report_run(
-            tmp_path,
-            REPORT_PLACES[:1],
-            [],
-            areas_geojson=str(tmp_path / "absent.geojson"),
-            areas_required=True,
-        )
+        report_run(tmp_path, REPORT_PLACES[:1], [], areas=Use.REQUIRED)
     assert normalized(str(exc.value), tmp_path) == (
-        "dialect area file not found: <dir>/absent.geojson"
+        "dialect area file not found: <dir>/areas.geojson"
+    )
+
+
+def test_the_command_stops_when_the_dialect_area_file_its_option_names_is_absent(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "places.csv").write_text(places_csv(REPORT_PLACES[:1]), encoding="utf-8")
+    write_report_extract(tmp_path / "in.osm.pbf")
+    files = path_options(flat_workspace(tmp_path), "names", "dialects", "objects", "areas")
+    extracts = [str(tmp_path / "in.osm.pbf"), str(tmp_path / "out.osm.pbf")]
+    assert main(["inject", *extracts, *files, "--no-curation", "--dry-run"]) == 1
+    assert capsys.readouterr().err == (
+        f"dialect area file not found: {tmp_path / 'areas.geojson'}\n"
     )
 
 
@@ -994,13 +993,7 @@ def test_report_when_no_object_lies_in_a_dialect_area(
         objects_json(Objects({}, {"extracts": []})), encoding="utf-8"
     )
     # only the North Sea, found through its QID, far out of every area
-    report_run(
-        tmp_path,
-        REPORT_PLACES[2:3],
-        [],
-        areas_geojson=str(tmp_path / "areas.geojson"),
-        objects_json=str(tmp_path / "osm_objects.json"),
-    )
+    report_run(tmp_path, REPORT_PLACES[2:3], [], areas=Use.IF_PRESENT)
     out = capsys.readouterr().out
     assert out.endswith(
         "objects per dialect area:\n"
@@ -1054,25 +1047,10 @@ def test_a_member_way_inherits_the_frisian_name_of_its_waterway_relation(tmp_pat
             )
         },
     )
+    curation_file(tmp_path)
     with contextlib.redirect_stdout(io.StringIO()):
-        locate.main(
-            [
-                str(tmp_path / "in.osm.pbf"),
-                "--names",
-                str(tmp_path / "places.csv"),
-                "--out",
-                str(tmp_path / "osm_objects.json"),
-            ]
-        )
-        inject_names.run(
-            str(tmp_path / "in.osm.pbf"),
-            str(tmp_path / "out.osm.pbf"),
-            str(tmp_path / "places.csv"),
-            paths.DIALECTS,
-            str(tmp_path / "areas.geojson"),
-            curation_csv=curation_file(tmp_path),
-            objects_json=str(tmp_path / "osm_objects.json"),
-        )
+        locate_objects(tmp_path)
+        inject(tmp_path, areas=Use.IF_PRESENT, curation=Use.IF_PRESENT)
     tags = {(o[0], o[1]): o[2] for o in read_extract(tmp_path / "out.osm.pbf")}
     assert tags[("w", 10)]["frasch:local"] == "Arluu"
 
@@ -1092,15 +1070,9 @@ def carrier_tags_after_run(tmp_path: Path, t: str, tags: dict[str, str]) -> dict
     ways = {10: ([1, 2], tags)} if t == "w" else {}
     relations = {20: ([("n", 1, "")], tags)} if t == "r" else {}
     write_osm(tmp_path / "in.osm.pbf", nodes=nodes, ways=ways, relations=relations)
+    curation_file(tmp_path)
     with contextlib.redirect_stdout(io.StringIO()):
-        inject_names.run(
-            str(tmp_path / "in.osm.pbf"),
-            str(tmp_path / "out.osm.pbf"),
-            str(tmp_path / "places.csv"),
-            paths.DIALECTS,
-            None,
-            curation_csv=curation_file(tmp_path),
-        )
+        inject(tmp_path, curation=Use.IF_PRESENT)
     out = {(o[0], o[1]): o[2] for o in read_extract(tmp_path / "out.osm.pbf")}
     return out[(t, {"n": 1, "w": 10, "r": 20}[t])]
 
@@ -1134,15 +1106,8 @@ def test_a_qid_counts_as_present_whatever_matched_its_carrier(
     (tmp_path / "places.csv").write_text(places_csv([hulm, NORDSIIE]), encoding="utf-8")
     holm = {"place": "village", "name": "Holm", "wikidata": "Q559369"}
     write_osm(tmp_path / "in.osm.pbf", nodes={1: ((8.9, 54.6), holm)})
-    inject_names.run(
-        str(tmp_path / "in.osm.pbf"),
-        str(tmp_path / "out.osm.pbf"),
-        str(tmp_path / "places.csv"),
-        paths.DIALECTS,
-        None,
-        dry_run=True,
-        curation_csv=curation_file(tmp_path),
-    )
+    curation_file(tmp_path)
+    inject(tmp_path, curation=Use.IF_PRESENT, dry_run=True)
     lines = capsys.readouterr().out.splitlines()
     assert (
         "tagged  1 objects: 1 nodes, 0 ways, 0 relations "
@@ -1163,16 +1128,9 @@ def test_a_node_found_by_its_qid_is_asked_for_its_own_frisian_name(tmp_path: Pat
     holm = {"place": "village", "name": "Holm", "name:frr": "Hoolm", "wikidata": "Q559369"}
     # in the Nordergoesharde box of AREAS
     write_osm(tmp_path / "in.osm.pbf", nodes={1: ((8.85, 54.66), holm)})
+    curation_file(tmp_path)
     with contextlib.redirect_stdout(io.StringIO()):
-        inject_names.run(
-            str(tmp_path / "in.osm.pbf"),
-            str(tmp_path / "out.osm.pbf"),
-            str(tmp_path / "places.csv"),
-            paths.DIALECTS,
-            str(tmp_path / "areas.geojson"),
-            curation_csv=curation_file(tmp_path),
-            objects_json=str(tmp_path / "osm_objects.json"),
-        )
+        inject(tmp_path, areas=Use.IF_PRESENT, curation=Use.IF_PRESENT)
     ((_, _, tags, _),) = read_extract(tmp_path / "out.osm.pbf")
     assert tags["frasch:local"] == "Hoolm"
 

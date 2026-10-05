@@ -1,13 +1,13 @@
 """The client-side search index of web/ (web/public/data/names.json): the
 rows of names/places.csv that are on the map, built by `build` and written
-by `write` (frasch.export_search_index runs the two).
+by `write` (`frasch index` runs the two).
 
 Every dialect name of a place is searchable, not only the one the map
 currently labels with: somebody who knows a Hallig as *Hansweerf* must find it
 while the map shows Mooring.
 
 Where a place is, and so which dialect is the *local* one there, comes from
-names/osm_objects.json (names/locate.py) and names/dialect_areas.geojson --
+names/osm_objects.json (`frasch objects`) and names/dialect_areas.geojson --
 the same files, read through the same `objects.dialect_at`, as the injector
 uses for the tiles, so a search result and the map label agree.  An entry
 lies where the first object of its row's `osm` cell lies.  A row for a place
@@ -41,12 +41,14 @@ row ids, which name a place by its first OSM reference (or its QID).
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import NotRequired, TypedDict
 
 from frasch import (
+    cli,
     curationlist,
     dialects,
     files,
@@ -57,6 +59,7 @@ from frasch import (
 from frasch.errors import PipelineError, ValidationError
 from frasch.geo import LonLat
 from frasch.objects import LocatedObject, Objects, dialect_at, read_objects
+from frasch.paths import Workspace
 from frasch.placelist import Row
 from frasch.registry import Registry
 
@@ -147,17 +150,14 @@ def entry(row: Row, obj: LocatedObject, areas: dialects.AreaIndex, reg: Registry
     return out
 
 
-def build(
-    names: str, dialects_csv: str, curation: str, areas_path: str, objects_path: str
-) -> SearchIndex:
+def build(ws: Workspace, reg: Registry) -> SearchIndex:
     """The search index, `{"built_from", "places"}`, from its input files."""
-    reg = registry.read(dialects_csv)
-    if not os.path.exists(areas_path):
-        raise PipelineError(f"{areas_path} not found -- build it with `just areas`")
-    areas = dialects.AreaIndex.from_geojson(areas_path)
-    objects = read_objects(objects_path)
-    local_points = curationlist.local_points(curation)
-    rows, _ = placelist.read(names, reg)
+    if not os.path.exists(ws.areas):
+        raise PipelineError(f"{ws.areas} not found -- build it with `just areas`")
+    areas = dialects.AreaIndex.from_geojson(ws.areas)
+    objects = read_objects(ws.objects)
+    local_points = curationlist.local_points(ws.curation)
+    rows, _ = placelist.read(ws.names, reg)
 
     places: list[SearchEntry] = []
     unlocated: list[str] = []
@@ -165,7 +165,7 @@ def build(
         if not placelist.on_map(r, reg):
             continue
         try:
-            obj = entry_object(r, objects, local_points, reg, f"{names}:{r.line}")
+            obj = entry_object(r, objects, local_points, reg, f"{ws.names}:{r.line}")
         except KeyError as missing:
             unlocated.append(
                 f"  {r['id']} (line {r.line}): {placelist.format_osm([missing.args[0]])}"
@@ -176,13 +176,40 @@ def build(
     if unlocated:
         raise PipelineError(
             f"{len(unlocated)} row(s) on the map have an object that "
-            f"{objects_path} does not know -- run `just objects` "
-            f"(names/locate.py) to locate them:\n" + "\n".join(unlocated)
+            f"{ws.objects} does not know -- run `just objects` "
+            f"to locate them:\n" + "\n".join(unlocated)
         )
-    stamp = provenance.stamp(names, dialects_csv, curation, areas_path, objects_path)
-    return {"built_from": stamp, "places": places}
+    return {"built_from": provenance.stamp(ws), "places": places}
 
 
 def write(index: SearchIndex, out: str) -> None:
     os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
     files.atomic_write(out, json.dumps(index, ensure_ascii=False, separators=(",", ":")) + "\n")
+
+
+def run(ws: Workspace, reg: Registry) -> None:
+    """Build the search index, write it and say what it holds."""
+    index = build(ws, reg)
+    write(index, ws.index)
+    places = index["places"]
+    print(
+        f"wrote {len(places)} entries to {ws.index} "
+        f"({os.path.getsize(ws.index) / 1e3:.0f} kB); "
+        f"{sum(1 for e in places if 'dialect' in e)} in a dialect area, "
+        f"{sum(1 for e in places if 'local' in e)} with a local name, "
+        f"{sum(1 for e in places if 'name_nds' in e)} with a Low Saxon one; "
+        f"rows keyed by Wikidata alone (no position) are left out"
+    )
+
+
+@cli.command
+def main(argv: Sequence[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(
+        prog="frasch index",
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    cli.add_workspace_options(ap, "names", "dialects", "curation", "areas", "objects", "index")
+    ws = cli.workspace(ap.parse_args(argv))
+    run(ws, registry.read(ws.dialects))
+    return 0

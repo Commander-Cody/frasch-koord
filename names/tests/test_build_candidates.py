@@ -1,4 +1,4 @@
-"""build_candidates.py: the way-position store, and candidates.jsonl -- its
+"""`frasch candidates`: the way-position store, and candidates.jsonl -- its
 header naming the extracts it was built from, and the one-step write (#24)."""
 
 from __future__ import annotations
@@ -11,7 +11,9 @@ import pytest
 
 from frasch import build_candidates
 from frasch import candidates
+from frasch.__main__ import main
 from frasch.build_candidates import WayCentroids
+from frasch.paths import Workspace
 from conftest import cand, write_candidates
 from osm_fixture import write_extract
 
@@ -53,9 +55,10 @@ def extracts(tmp_path: Path) -> tuple[Path, Path]:
 
 
 def build(tmp_path: Path, *pbfs: Path) -> Path:
-    out = tmp_path / "work" / "candidates.jsonl"
-    assert build_candidates.main([*map(str, pbfs), "--out", str(out)]) == 0
-    return out
+    """Scan `pbfs` into the candidates file of a workspace in `tmp_path`."""
+    ws = Workspace.at(tmp_path).with_work(tmp_path / "work")
+    build_candidates.run(ws, [str(p) for p in pbfs])
+    return Path(ws.candidates)
 
 
 def test_header_names_every_extract_with_its_timestamp(tmp_path: Path) -> None:
@@ -111,7 +114,7 @@ def test_a_failed_build_leaves_the_old_file_and_no_temp_file(tmp_path: Path) -> 
     before = old.read_bytes()
     unsorted = write_unsorted_extract(tmp_path / "unsorted.osm.pbf")
     with pytest.raises(ValueError, match="osmium sort"):
-        build_candidates.main([str(sh), str(unsorted), "--out", str(old)])
+        build(tmp_path, sh, unsorted)
     assert old.read_bytes() == before
     assert [p.name for p in old.parent.iterdir()] == ["candidates.jsonl"]
 
@@ -227,3 +230,9 @@ def test_main_keeps_named_classified_objects_with_their_positions(
         "         3  place\n"
         "         1  wikidata\n"
     )
+
+
+def test_the_command_scans_into_the_work_directory_its_option_names(tmp_path: Path) -> None:
+    sh, _dk = extracts(tmp_path)
+    assert main(["candidates", str(sh), "--work", str(tmp_path / "scratch")]) == 0
+    assert (tmp_path / "scratch" / "candidates.jsonl").exists()

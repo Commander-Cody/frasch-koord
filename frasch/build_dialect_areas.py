@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """names/dialect_areas.csv + OSM extract(s) -> names/dialect_areas.geojson.
 
 Which dialect is spoken where is a question about *areas*, not about single
@@ -7,13 +6,9 @@ says nothing about it, and the name of a place whose own column is empty is
 still the name of the dialect around it.  `dialect_areas.csv` answers it the
 only way that stays maintainable: by naming the OSM municipalities (and, where
 a municipality is the wrong unit, the island polygons) that belong to each
-dialect.  This script turns those references into geometry.
+dialect.  This command turns those references into geometry.
 
-    build_dialect_areas.py <in.osm.pbf> [<in.osm.pbf> ...]
-                           [--areas names/dialect_areas.csv]
-                           [--out names/dialect_areas.geojson]
-                           [--parts-out names/dialect_areas_parts.geojson]
-                           [--allow-missing]
+    frasch areas <in.osm.pbf> [<in.osm.pbf> ...] [--allow-missing] [--no-parts]
 
 The result is **committed**: it is a handful of kilobytes, the injector and
 the search exporter need it on every build, and a planet build must not have
@@ -38,18 +33,19 @@ read, so a stale file can be told apart from a current one.
 Two files come out of one run, from the same in-memory geometry so that they
 cannot disagree:
 
-  --out        one Feature per *dialect*, municipalities dissolved.  This is
-               the lookup file: the injector and the search exporter read it
-               through dialects.AreaIndex ("smallest containing area wins").
-  --parts-out  one Feature per *municipality*, carrying the `name` and the
-               research `note` of its dialect_areas.csv row -- plus the Kreis
-               Nordfriesland municipalities that no row claims at all, marked
-               `assigned: false`.  This one is for the review overlay only
-               (web `?areas`, see web/src/components/AreaPanel.tsx); a reviewer
-               needs to see which municipality got which dialect and why, and
-               an unassigned one is a hole in the coverage.
+  --areas  one Feature per *dialect*, municipalities dissolved.  This is
+           the lookup file: the injector and the search exporter read it
+           through dialects.AreaIndex ("smallest containing area wins").
+  --parts  one Feature per *municipality*, carrying the `name` and the
+           research `note` of its dialect_areas.csv row -- plus the Kreis
+           Nordfriesland municipalities that no row claims at all, marked
+           `assigned: false`.  This one is for the review overlay only
+           (web `?areas`, see web/src/dev/AreaPanel.tsx); a reviewer needs
+           to see which municipality got which dialect and why, and an
+           unassigned one is a hole in the coverage.  `--no-parts` leaves
+           it unwritten.
 
-  NOTHING in the Python pipeline may read --parts-out.  Its features are
+  NOTHING in the Python pipeline may read --parts.  Its features are
   municipalities, not dialects, so feeding it to AreaIndex would silently
   change the unit of every dialect lookup.  The unassigned features carry no
   `dialect` property at all, which makes AreaIndex refuse the file outright
@@ -85,7 +81,6 @@ from frasch import (
     files,
     osmgeom,
     osmscan,
-    paths,
     placelist,
     provenance,
     registry,
@@ -95,7 +90,7 @@ from frasch.errors import PipelineError, ValidationError
 from frasch.geo import LonLat
 from frasch.osmscan import Rings
 from frasch.placelist import OsmRef
-from frasch.paths import StrPath
+from frasch.paths import StrPath, Workspace
 from frasch.provenance import BuiltFrom, ExtractStamp
 from frasch.registry import Dialect, Registry
 
@@ -119,14 +114,14 @@ DEFAULT_UNASSIGNED_AGS = "01054"
 
 
 class DialectProperties(TypedDict):
-    """A feature of --out: one dialect."""
+    """A feature of --areas: one dialect."""
 
     dialect: str
     label: str
 
 
 class PartProperties(TypedDict):
-    """A feature of --parts-out: one municipality; one that no row assigns
+    """A feature of --parts: one municipality; one that no row assigns
     (`assigned` false) has no dialect and no row."""
 
     fid: int
@@ -241,33 +236,66 @@ def round_geojson(obj: object, nd: int = ROUND) -> object:
     return obj
 
 
-def stamp_inputs(area_list: StrPath, registry_csv: StrPath) -> dict[str, StrPath]:
+def stamp_inputs(ws: Workspace) -> dict[str, StrPath]:
     """The committed files the dialect areas are built from, by the label
     their stamp gives them."""
-    return {"dialect_areas.csv": area_list, "dialects.csv": registry_csv}
+    return {"dialect_areas.csv": ws.area_list, "dialects.csv": ws.dialects}
 
 
-def stamp(area_list: StrPath, registry_csv: StrPath, extracts: list[ExtractStamp]) -> BuiltFrom:
+def stamp(ws: Workspace, extracts: list[ExtractStamp]) -> BuiltFrom:
     """What the dialect areas are built from: the area list, the dialect
     registry and the extracts."""
-    return provenance.built_from(stamp_inputs(area_list, registry_csv), extracts)
+    return provenance.built_from(stamp_inputs(ws), extracts)
 
 
-@cli.command
-def main(argv: Sequence[str] | None = None) -> int:
-    a = _parse_args(argv)
-    reg = registry.read(a.registry)
-    by_ref, labels, rows = read_areas(a.areas, reg)
-    want_unassigned = bool(a.parts_out) and not a.no_unassigned
+@dataclass(frozen=True)
+class Options:
+    """How a build differs from the usual one."""
+
+    simplify: float = SIMPLIFY_DEG
+    parts_simplify: float = PARTS_SIMPLIFY_DEG
+    # the municipality-key prefix of the district whose unclaimed
+    # municipalities join the parts; None: none do
+    unassigned_ags: str | None = DEFAULT_UNASSIGNED_AGS
+    allow_missing: bool = False  # build although a reference gave no geometry
+    parts: bool = True  # build the per-municipality file too
+
+
+USUAL = Options()
+
+
+class Parts(NamedTuple):
+    """The --parts file, and what its report says about it."""
+
+    fc: FeatureCollection[PartProperties]
+    skipped: int  # rows without geometry
+    unassigned: int  # municipalities no row claims
+
+
+class Areas(NamedTuple):
+    """What one build gives: the contents of both files."""
+
+    dialects: FeatureCollection[DialectProperties]
+    polygons: int
+    parts: Parts | None
+
+
+def build(ws: Workspace, reg: Registry, pbfs: Sequence[StrPath], options: Options = USUAL) -> Areas:
+    """The dialect areas of the workspace's area list, from the extracts
+    `pbfs`.  Says what it finds as it goes -- a scan takes its time -- and
+    writes nothing."""
+    by_ref, labels, rows = read_areas(ws.area_list, reg)
+    unassigned_ags = options.unassigned_ags if options.parts else None
     print(
-        f"area list : {a.areas} -> {len(by_ref)} OSM objects, {len(set(by_ref.values()))} dialects"
+        f"area list : {ws.area_list} -> {len(by_ref)} OSM objects, "
+        f"{len(set(by_ref.values()))} dialects"
     )
 
     scan = _Scan()
-    for path in a.pbf:
-        _scan_extract(path, by_ref, a.unassigned_ags if want_unassigned else None, scan)
+    for path in pbfs:
+        _scan_extract(os.fspath(path), by_ref, unassigned_ags, scan)
 
-    features, total = _dialect_features(reg, by_ref, scan.geoms, a.simplify)
+    features, total = _dialect_features(reg, by_ref, scan.geoms, options.simplify)
     if not features:
         raise PipelineError("no geometry found -- is the extract the right region?")
 
@@ -275,31 +303,51 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"  ! {p}")
     missing = [ref for ref in by_ref if ref not in scan.geoms]
     if missing:
-        _report_missing(missing, by_ref, labels, a.allow_missing)
+        _report_missing(missing, by_ref, labels, options.allow_missing)
 
-    built_from = stamp(a.areas, a.registry, [provenance.extract_stamp(p) for p in a.pbf])
+    built_from = stamp(ws, [provenance.extract_stamp(p) for p in pbfs])
+    source = os.path.basename(ws.area_list)
+    parts = build_parts(source, options, reg, rows, scan, built_from) if options.parts else None
+    return Areas(_dialect_fc(source, options.simplify, features, built_from), total, parts)
 
-    # Both files are computed in full before either is written, so a problem
-    # building --parts-out cannot leave --out written on its own.
-    parts: tuple[FeatureCollection[PartProperties], int] | None = None
-    if a.parts_out:
-        parts = build_parts_fc(a, reg, rows, scan.geoms, scan.free, scan.free_names, built_from)
-    fc = _dialect_fc(a, features, built_from)
 
-    _write_dialects(a.out, fc, total)
-    if parts is not None:
-        write_parts(a, *parts, scan.free)
+def write(areas: Areas, ws: Workspace) -> None:
+    """Write both files of a build and report on them.  Both were computed
+    in full before either is written, so a problem building the parts cannot
+    leave the areas written on their own."""
+    _write_dialects(ws.areas, areas.dialects, areas.polygons)
+    if areas.parts is not None:
+        write_parts(ws.parts, areas.parts)
+
+
+def run(ws: Workspace, reg: Registry, pbfs: Sequence[StrPath], options: Options = USUAL) -> None:
+    """Build the dialect areas and write them."""
+    write(build(ws, reg, pbfs, options), ws)
+
+
+@cli.command
+def main(argv: Sequence[str] | None = None) -> int:
+    a = _parse_args(argv)
+    ws = cli.workspace(a)
+    options = Options(
+        simplify=a.simplify,
+        parts_simplify=a.parts_simplify,
+        unassigned_ags=None if a.no_unassigned else a.unassigned_ags,
+        allow_missing=a.allow_missing,
+        parts=not a.no_parts,
+    )
+    run(ws, registry.read(ws.dialects), a.pbf, options)
     return 0
 
 
 def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     ap = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+        prog="frasch areas",
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     ap.add_argument("pbf", nargs="+", help="OSM extract(s) holding the areas")
-    ap.add_argument("--areas", default=paths.DIALECT_AREA_LIST)
-    ap.add_argument("--registry", default=paths.DIALECTS)
-    ap.add_argument("--out", default=paths.DIALECT_AREAS)
+    cli.add_workspace_options(ap, "area_list", "dialects", "areas", "parts")
     ap.add_argument(
         "--simplify",
         type=float,
@@ -307,16 +355,15 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         help=f"tolerance in degrees (default {SIMPLIFY_DEG})",
     )
     ap.add_argument(
-        "--parts-out",
-        default=paths.DIALECT_AREA_PARTS,
-        help="per-municipality areas for the review overlay "
-        "(web ?areas); '' skips the file entirely",
+        "--no-parts",
+        action="store_true",
+        help="leave the per-municipality areas of the review overlay (--parts) unwritten",
     )
     ap.add_argument(
         "--parts-simplify",
         type=float,
         default=PARTS_SIMPLIFY_DEG,
-        help=f"tolerance for --parts-out (default "
+        help=f"tolerance for --parts (default "
         f"{PARTS_SIMPLIFY_DEG}); finer than --simplify because "
         f"neighbours are simplified independently and must not "
         f"drift apart",
@@ -325,13 +372,13 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         "--unassigned-ags",
         default=DEFAULT_UNASSIGNED_AGS,
         help=f"municipality-key prefix whose unclaimed "
-        f"municipalities go into --parts-out "
+        f"municipalities go into --parts "
         f"(default {DEFAULT_UNASSIGNED_AGS} = Kreis Nordfriesland)",
     )
     ap.add_argument(
         "--no-unassigned",
         action="store_true",
-        help="skip the extra relation scan; --parts-out then holds "
+        help="skip the extra relation scan; --parts then holds "
         "only the municipalities the CSV assigns",
     )
     ap.add_argument(
@@ -492,29 +539,28 @@ def _report_missing(
         # A dialect area silently missing a reference is worse than a
         # stopped build -- nothing downstream would ever notice the gap.
         # Nothing may be written past this point (see the module
-        # docstring): both --out and --parts-out are still untouched.
+        # docstring): both --areas and --parts are still untouched.
         raise PipelineError(
             f"{report}\n\nrun with --allow-missing to build anyway; nothing was written"
         )
 
 
 def _dialect_fc(
-    a: argparse.Namespace, features: list[Feature[DialectProperties]], built_from: BuiltFrom
+    source: str,
+    simplify: float,
+    features: list[Feature[DialectProperties]],
+    built_from: BuiltFrom,
 ) -> FeatureCollection[DialectProperties]:
-    """The --out FeatureCollection: one Feature per dialect."""
+    """The --areas FeatureCollection: one Feature per dialect."""
     return {
         "type": "FeatureCollection",
-        "properties": {
-            "source": os.path.basename(a.areas),
-            "simplify_deg": a.simplify,
-            "built_from": built_from,
-        },
+        "properties": {"source": source, "simplify_deg": simplify, "built_from": built_from},
         "features": features,
     }
 
 
 def _write_dialects(path: str, fc: FeatureCollection[DialectProperties], total: int) -> None:
-    """Write --out, report on it and check that AreaIndex reads it back."""
+    """Write --areas, report on it and check that AreaIndex reads it back."""
     write_geojson(path, fc)
     print(
         f"\nwrote {path} ({len(fc['features'])} features, {total} polygons, "
@@ -542,20 +588,20 @@ def simplified(geom: BaseGeometry, tol: float) -> BaseGeometry:
     return geom
 
 
-def build_parts_fc(
-    a: argparse.Namespace,
+def build_parts(
+    source: str,
+    options: Options,
     reg: Registry,
     rows: Sequence[AreaRow],
-    geoms: Mapping[OsmRef, Sequence[BaseGeometry]],
-    free: Mapping[OsmRef, Sequence[BaseGeometry]],
-    free_names: Mapping[OsmRef, str],
+    scan: _Scan,
     built_from: BuiltFrom,
-) -> tuple[FeatureCollection[PartProperties], int]:
-    """-> (fc, skipped): the --parts-out FeatureCollection -- one Feature per
-    municipality, see the module docstring for why this is a separate file
-    from --out -- and the count of rows with no geometry (already in the
-    `missing` report).  Pure: building it does not touch disk, so it can run
-    to completion before anything is written (see `main`)."""
+) -> Parts:
+    """The --parts FeatureCollection -- one Feature per municipality, see the
+    module docstring for why this is a separate file from --areas -- with the
+    count of rows without geometry (already in the `missing` report).  Pure:
+    building it does not touch disk, so it can run to completion before
+    anything is written (see `write`)."""
+    geoms, free, free_names = scan.geoms, scan.free, scan.free_names
     from shapely.geometry import mapping
     from shapely.ops import unary_union
 
@@ -568,7 +614,7 @@ def build_parts_fc(
         if not polys:
             skipped += 1  # already in the `missing` report
             continue
-        geom = simplified(unary_union(polys), a.parts_simplify)
+        geom = simplified(unary_union(polys), options.parts_simplify)
         fid += 1
         features.append(
             {
@@ -591,7 +637,7 @@ def build_parts_fc(
     # No `dialect` key on these on purpose: it is what stops AreaIndex from
     # ever loading this file (see the module docstring).
     for ref in sorted(free, key=lambda r: free_names.get(r, "")):
-        geom = simplified(unary_union(free[ref]), a.parts_simplify)
+        geom = simplified(unary_union(free[ref]), options.parts_simplify)
         fid += 1
         features.append(
             {
@@ -611,30 +657,25 @@ def build_parts_fc(
     fc = {
         "type": "FeatureCollection",
         "properties": {
-            "source": os.path.basename(a.areas),
-            "simplify_deg": a.parts_simplify,
+            "source": source,
+            "simplify_deg": options.parts_simplify,
             "unit": "one feature per municipality",
-            "unassigned_ags": a.unassigned_ags if free else "",
+            "unassigned_ags": (options.unassigned_ags or "") if free else "",
             "built_from": built_from,
         },
         "features": features,
     }
-    return fc, skipped
+    return Parts(fc, skipped, len(free))
 
 
-def write_parts(
-    a: argparse.Namespace,
-    parts_fc: FeatureCollection[PartProperties],
-    skipped: int,
-    free: Mapping[OsmRef, object],
-) -> None:
-    """Write the --parts-out FeatureCollection `build_parts_fc` built, and
-    report on it."""
-    write_geojson(a.parts_out, parts_fc)
-    features = parts_fc["features"]
+def write_parts(path: str, parts: Parts) -> None:
+    """Write the --parts FeatureCollection `build_parts` built, and report
+    on it."""
+    write_geojson(path, parts.fc)
+    features = parts.fc["features"]
     print(
-        f"wrote {a.parts_out} ({len(features)} features: "
-        f"{len(features) - len(free)} assigned, {len(free)} unassigned"
-        f"{f', {skipped} row(s) without geometry' if skipped else ''}, "
-        f"{os.path.getsize(a.parts_out) / 1e3:.0f} kB)"
+        f"wrote {path} ({len(features)} features: "
+        f"{len(features) - parts.unassigned} assigned, {parts.unassigned} unassigned"
+        f"{f', {parts.skipped} row(s) without geometry' if parts.skipped else ''}, "
+        f"{os.path.getsize(path) / 1e3:.0f} kB)"
     )

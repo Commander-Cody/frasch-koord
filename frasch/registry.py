@@ -4,7 +4,7 @@ the project knows.
 North Frisian is not one language variety but a dozen, and the map shows more
 than one of them.  Everything else derives from this list: the name columns of
 names/places.csv (frasch.placelist), the `name:<tag>` tags the injector
-writes, Planetiler's `--languages` list (`dialects.py --tags` in
+writes, Planetiler's `--languages` list (`frasch dialects --tags` in
 tiles/build.sh), the search index and the frontend's selector
 (web/src/generated/dialects.json).  Adding a dialect is therefore one line in
 the registry plus a column in places.csv -- no code change.
@@ -18,21 +18,31 @@ the registry plus a column in places.csv -- no code change.
 | `view`   | `yes` = selectable as a map language in the frontend |
 | `note`   | free text: which area speaks it |
 
-This is the one reader of the file.  Whatever needs the registry takes a
-`Registry` as a parameter; `default()` reads names/dialects.csv the first
-time it is asked for, never at import.
+This is the one reader of the file.  A command reads the registry of its
+workspace once (`read`), and whatever needs it takes the `Registry` as a
+parameter.
+
+`frasch dialects` hands it to the rest of the build:
+
+    frasch dialects            prints the registry
+    frasch dialects --tags     prints `frr-x-mooring,frr-x-wieding,...`
+                               (tiles/build.sh feeds it to Planetiler)
+    frasch dialects --export   writes the registry the frontend compiles in
+                               (web/src/generated/dialects.json: every
+                               column but `note`)
 """
 
 from __future__ import annotations
 
+import argparse
 import csv
-import functools
+import json
 import os
 import re
-from collections.abc import Collection, Iterator, Mapping
+from collections.abc import Collection, Iterator, Mapping, Sequence
 from typing import Literal, TypedDict
 
-from frasch import files, paths
+from frasch import cli, files
 from frasch.errors import PipelineError, ValidationError
 
 FIELDS = ["tag", "column", "label", "status", "view", "note"]
@@ -164,7 +174,7 @@ def _dialect(row: Mapping[str, str]) -> Dialect:
     )
 
 
-def read(path: str = paths.DIALECTS) -> Registry:
+def read(path: str) -> Registry:
     """The registry, validated; a ValidationError lists every problem."""
     found, problems = rows(path)
     if problems:
@@ -172,7 +182,51 @@ def read(path: str = paths.DIALECTS) -> Registry:
     return Registry(found)
 
 
-@functools.cache
-def default() -> Registry:
-    """names/dialects.csv, read on first use."""
-    return read(paths.DIALECTS)
+def export_json(reg: Registry, path: str) -> None:
+    """Write the registry the frontend compiles in: every column but `note`."""
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    files.atomic_write(
+        path,
+        json.dumps(
+            [{k: v for k, v in d.items() if k in EXPORT_FIELDS} for d in reg],
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+        + "\n",
+    )
+
+
+@cli.command
+def main(argv: Sequence[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(
+        prog="frasch dialects",
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    cli.add_workspace_options(ap, "dialects", "registry_json")
+    ap.add_argument(
+        "--tags",
+        action="store_true",
+        help="print the language tags as a comma-separated list "
+        "(tiles/build.sh feeds them to Planetiler)",
+    )
+    ap.add_argument("--columns", action="store_true", help="print the places.csv columns instead")
+    ap.add_argument(
+        "--export", action="store_true", help="write the registry as JSON for the frontend"
+    )
+    a = ap.parse_args(argv)
+    ws = cli.workspace(a)
+    reg = read(ws.dialects)
+    if a.export:
+        export_json(reg, ws.registry_json)
+    elif a.tags:
+        print(",".join(reg.tags))
+    elif a.columns:
+        print(",".join(reg.columns))
+    else:
+        for d in reg:
+            print(
+                f"{d['tag']:<16} {d['column']:<10} {d['label']:<18} "
+                f"{d['status']:<7} view={d['view']:<4} {d['note']}"
+            )
+    return 0

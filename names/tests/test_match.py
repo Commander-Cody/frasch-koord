@@ -18,7 +18,7 @@ from frasch import placelist
 from frasch.nameindex import NameIndex
 from frasch.hints import HintResolver
 from frasch.candidates import Candidate, read_records
-from conftest import cand, write_candidates
+from conftest import REGISTRY, cand, write_candidates
 
 
 def make_index(tmp_path: Path, *recs: Candidate) -> NameIndex:
@@ -27,12 +27,12 @@ def make_index(tmp_path: Path, *recs: Candidate) -> NameIndex:
 
 def row(**cells: str) -> placelist.PlaceRow:
     """A places.csv row as placelist.read returns it."""
-    return placelist.PlaceRow({c: "" for c in placelist.columns()} | cells, 2)
+    return placelist.PlaceRow({c: "" for c in placelist.columns(REGISTRY)} | cells, 2)
 
 
 def run(tmp_path: Path, r: placelist.PlaceRow, *recs: Candidate) -> match.MatchResult:
     index = make_index(tmp_path, *recs)
-    return match.match_row(r, index, HintResolver(index))
+    return match.match_row(r, index, HintResolver(index), REGISTRY)
 
 
 # real objects -------------------------------------------------------------

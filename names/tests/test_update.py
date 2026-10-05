@@ -1,23 +1,27 @@
-"""names/update.py (`just update`): one command takes an edited name list, and
+"""`frasch update` (`just update`): one command takes an edited name list, and
 the decisions made in the curation view, to up-to-date outputs (#57)."""
 
 from __future__ import annotations
 
 import csv
 import json
-import shutil
 from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
 
-from frasch import build_dialect_areas, paths, placelist, provenance, update
+from frasch import build_dialect_areas, placelist, provenance, registry, update
+from frasch.__main__ import main
+from frasch.errors import PipelineError
 from frasch.objects import Objects, objects_json
 from frasch.provenance import ExtractStamp
-from conftest import cand, places_text, write_candidates
+from conftest import REGISTRY_CSV, cand, path_options, places_text, write_candidates
+from conftest import workspace as workspace_of
 from osm_fixture import Nodes, ring, write_extract
 
 AREA_LIST = "dialect,name,osm,note\nfrr-x-mooring,Niebüll,relation/1,\n"
+# a dialect the registry of the tests does not have
+STRAND = "frr-x-strand,strand,Strander,extinct,no,\n"
 # a village inside the Mooring area of the fixture extract
 TOFTUM_NODE = ((8.83, 54.71), {"name": "Toftum", "place": "village"})
 # a row the matcher finds in it, and one it does not
@@ -27,9 +31,8 @@ HESBEL = {"id": "hesbel", "kind": "settlement", "mooring": "Hesbel", "de": "Hesb
 
 @pytest.fixture
 def workspace(world: Path) -> Path:
-    """`world` with the rest of the pipeline's inputs: the dialect registry,
-    one dialect area, and an extract holding it and one village."""
-    shutil.copy(paths.DIALECTS, world / "dialects.csv")
+    """`world` with the rest of the pipeline's inputs: one dialect area, and
+    an extract holding it and one village."""
     (world / "dialect_areas.csv").write_text(AREA_LIST, encoding="utf-8")
     write_sh_extract(world)
     return world
@@ -49,36 +52,16 @@ def write_sh_extract(
     )
 
 
-def run(world: Path, *extra: str) -> int:
-    """`update.main` on the files of `world`."""
-    return update.main(
-        [
-            str(world / "schleswig-holstein-latest.osm.pbf"),
-            *extra,
-            "--names",
-            str(world / "places.csv"),
-            "--dialects",
-            str(world / "dialects.csv"),
-            "--curation",
-            str(world / "curation.csv"),
-            "--area-list",
-            str(world / "dialect_areas.csv"),
-            "--areas",
-            str(world / "dialect_areas.geojson"),
-            "--parts",
-            str(world / "dialect_areas_parts.geojson"),
-            "--objects",
-            str(world / "osm_objects.json"),
-            "--index",
-            str(world / "names.json"),
-            "--registry-json",
-            str(world / "dialects.json"),
-            "--report",
-            str(world / "REPORT.md"),
-            "--work",
-            str(world / "work"),
-        ]
+def run(world: Path, area_extract: Path | None = None) -> int:
+    """`update.run` on the workspace of `world` and its extract."""
+    extract = str(world / "schleswig-holstein-latest.osm.pbf")
+    return update.run(
+        workspace_of(world), [extract], None if area_extract is None else str(area_extract)
     )
+
+
+def index_file(world: Path) -> Path:
+    return Path(workspace_of(world).index)
 
 
 def write_places(world: Path, *rows: dict[str, str]) -> None:
@@ -98,17 +81,13 @@ def test_a_new_row_ends_up_matched_located_and_searchable(workspace: Path) -> No
     assert (row["osm"], row["status"]) == ("node/240044107", "auto")
     objects = json.loads((workspace / "osm_objects.json").read_text(encoding="utf-8"))
     assert "node/240044107" in objects["objects"]
-    index = json.loads((workspace / "names.json").read_text(encoding="utf-8"))
+    index = json.loads(index_file(workspace).read_text(encoding="utf-8"))
     assert [e["id"] for e in index["places"]] == ["toftem"]
 
 
 def test_the_objects_are_located_with_the_registry_passed_in(workspace: Path) -> None:
     # a row named only in a dialect of the workspace's own registry is on the map
-    registry = workspace / "dialects.csv"
-    registry.write_text(
-        registry.read_text(encoding="utf-8") + "frr-x-strand,strand,Strander,extinct,no,\n",
-        encoding="utf-8",
-    )
+    (workspace / "dialects.csv").write_text(REGISTRY_CSV + STRAND, encoding="utf-8")
     toftem = TOFTEM | {"mooring": "", "osm": "node/240044107", "status": "ok"}
     header, row, _ = places_text([toftem]).split("\n")
     (workspace / "places.csv").write_text(f"{header},strand\n{row},Toftem\n", encoding="utf-8")
@@ -175,7 +154,7 @@ def test_a_refused_curation_decision_does_not_stop_the_run(
     patch.write_text(json.dumps({"id": "deleted-row", "action": "skip"}) + "\n", encoding="utf-8")
     assert run(workspace) == 1
     assert "deleted-row" in patch.read_text(encoding="utf-8")  # kept for the browser
-    index = json.loads((workspace / "names.json").read_text(encoding="utf-8"))
+    index = json.loads(index_file(workspace).read_text(encoding="utf-8"))
     assert [e["id"] for e in index["places"]] == ["toftem"]
     assert "refused" in capsys.readouterr().out
 
@@ -187,21 +166,19 @@ def test_a_curation_apply_that_cannot_run_stops_the_run(
     (workspace / "work" / "curate-patch.jsonl").write_text(
         json.dumps({"id": "toftem", "action": "skip"}) + "\n", encoding="utf-8"
     )
-    with placelist.lock(str(workspace / "places.csv")):  # match.py is running
+    with placelist.lock(workspace_of(workspace).lock):  # the matcher is running
         assert run(workspace) == 1
     out = capsys.readouterr().out
     assert "update stopped: curation decisions failed" in out
-    assert not (workspace / "names.json").exists()
+    assert not index_file(workspace).exists()
 
 
-def test_a_missing_extract_stops_the_run_with_how_to_get_it(
-    workspace: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_a_missing_extract_stops_the_run_with_how_to_get_it(workspace: Path) -> None:
     write_places(workspace, TOFTEM)
     missing = workspace / "nowhere-latest.osm.pbf"
-    assert run(workspace, "--area-extract", str(missing)) == 1
-    assert f"{missing} not found" in capsys.readouterr().err
-    assert not (workspace / "names.json").exists()
+    with pytest.raises(PipelineError, match=f"{missing} not found -- download it"):
+        run(workspace, area_extract=missing)
+    assert not index_file(workspace).exists()
 
 
 def test_a_second_run_on_the_same_extracts_skips_the_slow_steps(
@@ -317,51 +294,128 @@ def write_area_files(
 
 
 def test_dialect_areas_are_stale_until_built_from_the_current_inputs(workspace: Path) -> None:
-    area_list, registry = workspace / "dialect_areas.csv", workspace / "dialects.csv"
-    outputs = [workspace / "dialect_areas.geojson", workspace / "dialect_areas_parts.geojson"]
-    assert update.areas_stale(outputs, area_list, registry, [SH])
-    write_area_files(outputs, area_list, registry, SH)
-    assert not update.areas_stale(outputs, area_list, registry, [SH])
-    assert update.areas_stale(outputs, area_list, registry, [DK])
+    ws = workspace_of(workspace)
+    area_list, outputs = Path(ws.area_list), [Path(ws.areas), Path(ws.parts)]
+    assert update.areas_stale(ws, [SH])
+    write_area_files(outputs, area_list, Path(ws.dialects), SH)
+    assert not update.areas_stale(ws, [SH])
+    assert update.areas_stale(ws, [DK])
     area_list.write_text(AREA_LIST + "frr-x-fering,Wyk,relation/2,\n", encoding="utf-8")
-    assert update.areas_stale(outputs, area_list, registry, [SH])
+    assert update.areas_stale(ws, [SH])
 
 
 def test_dialect_areas_are_stale_after_a_registry_edit(workspace: Path) -> None:
-    area_list, registry = workspace / "dialect_areas.csv", workspace / "dialects.csv"
-    outputs = [workspace / "dialect_areas.geojson", workspace / "dialect_areas_parts.geojson"]
-    assert (
-        build_dialect_areas.main(
-            [
-                str(workspace / "schleswig-holstein-latest.osm.pbf"),
-                "--areas",
-                str(area_list),
-                "--registry",
-                str(registry),
-                "--out",
-                str(outputs[0]),
-                "--parts-out",
-                str(outputs[1]),
-            ]
-        )
-        == 0
-    )
-    assert not update.areas_stale(outputs, area_list, registry, [SH])
-    text = registry.read_text(encoding="utf-8")
-    registry.write_text(text.replace(",Mooring,", ",Mooring (edited),", 1), encoding="utf-8")
-    assert update.areas_stale(outputs, area_list, registry, [SH])
+    ws = workspace_of(workspace)
+    extract = workspace / "schleswig-holstein-latest.osm.pbf"
+    build_dialect_areas.run(ws, registry.read(ws.dialects), [extract])
+    assert not update.areas_stale(ws, [SH])
+    dialects_csv = Path(ws.dialects)
+    text = dialects_csv.read_text(encoding="utf-8")
+    dialects_csv.write_text(text.replace(",Mooring,", ",Mooring (edited),", 1), encoding="utf-8")
+    assert update.areas_stale(ws, [SH])
 
 
 def test_dialect_areas_are_stale_when_one_of_the_two_files_is(workspace: Path) -> None:
-    area_list, registry = workspace / "dialect_areas.csv", workspace / "dialects.csv"
-    outputs = [workspace / "dialect_areas.geojson", workspace / "dialect_areas_parts.geojson"]
-    write_area_files(outputs[:1], area_list, registry, SH)
-    assert update.areas_stale(outputs, area_list, registry, [SH])
+    ws = workspace_of(workspace)
+    write_area_files([Path(ws.areas)], Path(ws.area_list), Path(ws.dialects), SH)
+    assert update.areas_stale(ws, [SH])
 
 
 def test_dialect_areas_without_a_stamp_are_stale(workspace: Path) -> None:
-    area_list, registry = workspace / "dialect_areas.csv", workspace / "dialects.csv"
-    outputs = [workspace / "dialect_areas.geojson", workspace / "dialect_areas_parts.geojson"]
-    for path in outputs:
-        path.write_text(json.dumps({"type": "FeatureCollection", "features": []}), encoding="utf-8")
-    assert update.areas_stale(outputs, area_list, registry, [SH])
+    ws = workspace_of(workspace)
+    for path in (ws.areas, ws.parts):
+        Path(path).write_text(
+            json.dumps({"type": "FeatureCollection", "features": []}), encoding="utf-8"
+        )
+    assert update.areas_stale(ws, [SH])
+
+
+# ------------------------------------------------------------- the command ---
+# every path option of the command, for a workspace
+FILES = ["names", "curation", "area_list", "areas", "parts", "objects", "index"]
+FILES += ["registry_json", "report", "work"]
+
+
+def test_the_command_fails_on_a_missing_extract_and_says_how_to_get_it(
+    workspace: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    write_places(workspace, TOFTEM)
+    ws = workspace_of(workspace)
+    missing = str(workspace / "nowhere-latest.osm.pbf")
+    assert main(["update", missing, *path_options(ws, *FILES, "dialects")]) == 1
+    assert capsys.readouterr().err == f"{missing} not found -- download it with `just extracts`\n"
+
+
+@pytest.fixture
+def another_registry(workspace: Path, tmp_path: Path) -> Path:
+    """`frasch update --dialects X` on a workspace only X can read: X has a
+    dialect of its own, which the dialect area is assigned to and the name
+    list names its rows in -- one the matcher finds, one decided in the
+    curation view, one left for review.  -> the workspace's names/."""
+    other = tmp_path / "other-dialects.csv"
+    other.write_text(REGISTRY_CSV + STRAND, encoding="utf-8")
+    (workspace / "dialect_areas.csv").write_text(
+        AREA_LIST.replace("frr-x-mooring", "frr-x-strand"), encoding="utf-8"
+    )
+    rows = [TOFTEM, HESBEL, HESBEL | {"id": "hesbel-2"}]
+    header, *lines = places_text([row | {"mooring": ""} for row in rows]).splitlines()
+    named = [f"{line},{row['mooring']}" for line, row in zip(lines, rows, strict=True)]
+    (workspace / "places.csv").write_text(
+        "\n".join([f"{header},strand", *named]) + "\n", encoding="utf-8"
+    )
+    (workspace / "work" / "curate-patch.jsonl").write_text(
+        json.dumps({"id": "hesbel-2", "action": "skip"}) + "\n", encoding="utf-8"
+    )
+    extract = str(workspace / "schleswig-holstein-latest.osm.pbf")
+    files = path_options(workspace_of(workspace), *FILES)
+    assert main(["update", extract, *files, "--dialects", str(other)]) == 0
+    return workspace
+
+
+def test_the_registry_of_the_dialects_option_reads_the_list_for_the_curation_decisions(
+    another_registry: Path,
+) -> None:
+    assert {r["id"]: r["status"] for r in read_places(another_registry)}["hesbel-2"] == "skip"
+
+
+def test_the_registry_of_the_dialects_option_names_the_rows_the_matcher_fills(
+    another_registry: Path,
+) -> None:
+    assert {r["id"]: r["osm"] for r in read_places(another_registry)}["toftem"] == (
+        "node/240044107"
+    )
+
+
+def test_the_registry_of_the_dialects_option_decides_which_objects_are_located(
+    another_registry: Path,
+) -> None:
+    objects = json.loads((another_registry / "osm_objects.json").read_text(encoding="utf-8"))
+    assert list(objects["objects"]) == ["node/240044107"]
+
+
+def test_the_registry_of_the_dialects_option_assigns_the_dialect_areas(
+    another_registry: Path,
+) -> None:
+    areas = json.loads((another_registry / "dialect_areas.geojson").read_text(encoding="utf-8"))
+    assert [f["properties"]["dialect"] for f in areas["features"]] == ["frr-x-strand"]
+
+
+def test_the_registry_of_the_dialects_option_is_the_one_exported_for_the_frontend(
+    another_registry: Path,
+) -> None:
+    exported = Path(workspace_of(another_registry).registry_json).read_text(encoding="utf-8")
+    assert '"tag":"frr-x-strand"' in exported
+
+
+def test_the_registry_of_the_dialects_option_names_the_entries_of_the_search_index(
+    another_registry: Path,
+) -> None:
+    index = json.loads(index_file(another_registry).read_text(encoding="utf-8"))
+    assert [e["names"] for e in index["places"]] == [{"frr-x-strand": "Toftem"}]
+
+
+def test_the_registry_of_the_dialects_option_names_the_rows_of_the_curation_worklist(
+    another_registry: Path,
+) -> None:
+    worklist = json.loads((another_registry / "work" / "curate.json").read_text(encoding="utf-8"))
+    assert [(r["id"], r["names"]) for r in worklist["rows"]] == [("hesbel", {"strand": "Hesbel"})]

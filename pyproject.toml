@@ -25,13 +25,18 @@ dev = [
     "types-shapely>=2.1.0.20260728",
 ]
 
+# Every command of the pipeline: `uv run frasch <command>` (frasch/__main__.py
+# holds the table).
+[project.scripts]
+frasch = "frasch.__main__:main"
+
 [build-system]
 requires = ["uv_build>=0.12,<0.13"]
 build-backend = "uv_build"
 
 # The pipeline's code is the `frasch` package at the repo root; uv installs it
-# editable, so names/*.py and tiles/*.py (thin launchers) and the tests import
-# it without any sys.path set-up.
+# editable, so the `frasch` script and the tests import it without any
+# sys.path set-up.
 [tool.uv.build-backend]
 module-name = "frasch"
 module-root = ""
@@ -54,11 +59,10 @@ select = ["F", "E9", "B", "PLR0915"]
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["frasch", "names", "tiles", "scripts"]
+files = ["frasch", "names/tests", "tiles/tests", "scripts"]
 mypy_path = "names/tests"
 # pmtiles ships py.typed, but its functions are not annotated
 untyped_calls_exclude = ["pmtiles"]
-exclude = ["^tiles/data/", "^names/work/"]
 
 [[tool.mypy.overrides]]
 module = ["mapbox_vector_tile"]

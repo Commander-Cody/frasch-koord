@@ -1,4 +1,4 @@
-"""names/locate.py: where each object of the name list is, worked out once
+"""`frasch objects`: where each object of the name list is, worked out once
 from the extract(s) into names/osm_objects.json -- the one answer the
 injector (tiles) and the search index share (#24)."""
 
@@ -11,9 +11,10 @@ from typing import Any, Protocol
 
 import pytest
 
-from frasch import locate, paths
+from frasch import locate
+from frasch.__main__ import main
 from frasch.objects import read_objects
-from conftest import places_text
+from conftest import REGISTRY, REGISTRY_CSV, path_options, places_text, workspace
 from osm_fixture import ring, write_extract
 from shapely.geometry import Point, Polygon
 
@@ -30,9 +31,8 @@ def run_locate(world: Path) -> RunLocate:
 
     def run(rows: Iterable[Mapping[str, str]], *extracts: Path) -> Any:
         (world / "places.csv").write_text(places_text(rows), encoding="utf-8")
-        out = world / "osm_objects.json"
-        locate.main([*map(str, extracts), "--names", str(world / "places.csv"), "--out", str(out)])
-        return json.loads(out.read_text(encoding="utf-8"))
+        locate.run(workspace(world), REGISTRY, extracts)
+        return json.loads((world / "osm_objects.json").read_text(encoding="utf-8"))
 
     return run
 
@@ -174,41 +174,31 @@ def test_the_file_records_the_extracts_it_was_read_from(
     }
 
 
-def test_the_file_reads_back_by_reference(run_locate: RunLocate, tmp_path: Path) -> None:
+def test_the_file_reads_back_by_reference(
+    run_locate: RunLocate, world: Path, tmp_path: Path
+) -> None:
     pbf = write_extract(tmp_path / "in.osm.pbf", nodes={NAIBEL: ((8.8285, 54.7868), {})})
     run_locate([{"kind": "settlement", "mooring": "Naibel", "osm": f"node/{NAIBEL}"}], pbf)
-    objects = read_objects(str(tmp_path / "osm_objects.json"))
+    objects = read_objects(str(world / "osm_objects.json"))
     assert objects.by_ref == {("n", NAIBEL): {"lon": 8.8285, "lat": 54.7868}}
     extracts = objects.built_from["extracts"]
     assert isinstance(extracts, list) and extracts[0]["file"] == "in.osm.pbf"
 
 
-def test_the_registry_passed_in_decides_which_rows_are_on_the_map(
+def test_the_command_locates_the_rows_the_registry_of_its_option_puts_on_the_map(
     world: Path, tmp_path: Path
 ) -> None:
     # `--dialects`: a row named only in a dialect of that registry is located
-    registry = world / "dialects.csv"
+    registry = tmp_path / "other-dialects.csv"
     registry.write_text(
-        Path(paths.DIALECTS).read_text(encoding="utf-8")
-        + "frr-x-strand,strand,Strander,extinct,no,\n",
-        encoding="utf-8",
+        REGISTRY_CSV + "frr-x-strand,strand,Strander,extinct,no,\n", encoding="utf-8"
     )
     header, row, _ = places_text([{"kind": "island", "osm": f"node/{NAIBEL}"}]).split("\n")
     (world / "places.csv").write_text(f"{header},strand\n{row},Strand\n", encoding="utf-8")
     pbf = write_extract(tmp_path / "in.osm.pbf", nodes={NAIBEL: ((8.8285, 54.7868), {})})
-    out = world / "osm_objects.json"
-    locate.main(
-        [
-            str(pbf),
-            "--names",
-            str(world / "places.csv"),
-            "--dialects",
-            str(registry),
-            "--out",
-            str(out),
-        ]
-    )
-    objects = json.loads(out.read_text(encoding="utf-8"))
+    files = path_options(workspace(world), "names", "objects")
+    assert main(["objects", str(pbf), *files, "--dialects", str(registry)]) == 0
+    objects = json.loads((world / "osm_objects.json").read_text(encoding="utf-8"))
     assert objects["objects"] == {f"node/{NAIBEL}": {"lon": 8.8285, "lat": 54.7868}}
 
 

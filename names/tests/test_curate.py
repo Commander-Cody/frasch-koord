@@ -1,5 +1,5 @@
-"""curate.py helpers: reading back match.py's `candidates` cell and reading
-the decision patch.  (`apply`
+"""`frasch curate`: reading back the matcher's `candidates` cell, reading the
+decision patch, the export of the worklist and the command line.  (`apply`
 itself is covered in test_curate_apply.py.)"""
 
 from __future__ import annotations
@@ -11,9 +11,10 @@ import pytest
 
 from frasch import curate
 from frasch import match
-from frasch import paths
+from frasch.__main__ import main
 from frasch.candidates import Candidate
-from conftest import cand, places_text, write_candidates
+from frasch.errors import ValidationError
+from conftest import REGISTRY, cand, path_options, places_text, workspace, write_candidates
 
 
 def rec(t: str, id: int, lon: float | None, lat: float | None, **tags: str) -> Candidate:
@@ -199,30 +200,17 @@ EXPORT_PLACES = [
 ]
 
 
-def export(world: Path, matches: Path) -> int:
+def export(world: Path) -> None:
     write_candidates(world / "work" / "candidates.jsonl", SYLT, KAMPEN, KAMPEN_DK)
-    return curate.main(
-        [
-            "export",
-            "--names",
-            str(world / "places.csv"),
-            "--matches",
-            str(matches),
-            "--candidates",
-            str(world / "work" / "candidates.jsonl"),
-            "--out",
-            str(world / "work" / "curate.json"),
-        ]
-    )
+    curate.export(workspace(world), REGISTRY)
 
 
 def test_export_writes_the_worklist_and_reports_what_it_left_out(
-    world: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    world: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setattr(paths, "NAMES", str(world))
     (world / "places.csv").write_text(places_text(EXPORT_PLACES), encoding="utf-8")
     kampen_cell = ";".join(match.fmt_cand(c) for c in (KAMPEN, KAMPEN_DK, KAMPEN_GONE))
-    matches = write_matches(
+    write_matches(
         world / "work" / "matches.csv",
         ("kirchwarft", "not_found", "", "no candidate"),
         ("kampen", "ambiguous", kampen_cell, "3 clusters"),
@@ -231,7 +219,7 @@ def test_export_writes_the_worklist_and_reports_what_it_left_out(
         ("toftem", "ok", "", ""),  # not for the worklist
         ("bol", "not_found", "", "too far"),
     )
-    assert export(world, matches) == 0
+    export(world)
 
     out = world / "work" / "curate.json"
     assert capsys.readouterr().out == (
@@ -242,7 +230,7 @@ def test_export_writes_the_worklist_and_reports_what_it_left_out(
         "note: 1 row(s) have been decided by hand since work/matches.csv "
         "was written -- not exported\n"
         "note: 1 row(s) of work/matches.csv are no longer in places.csv "
-        "(stale, re-run match.py)\n"
+        "(stale, re-run `frasch match`)\n"
     )
     worklist = json.loads(out.read_text(encoding="utf-8"))
     assert worklist["bbox"] == [7.8, 54.15, 9.55, 55.12]
@@ -302,16 +290,14 @@ def test_export_writes_the_worklist_and_reports_what_it_left_out(
     assert (warft["result"], warft["hint_point"], warft["candidates"]) == ("not_found", None, [])
 
 
-def test_export_refuses_matches_without_ids(
-    world: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_export_refuses_matches_without_ids(world: Path) -> None:
     (world / "places.csv").write_text(places_text(EXPORT_PLACES), encoding="utf-8")
     matches = world / "work" / "matches.csv"
     matches.write_text("line,result,candidates,note\n2,not_found,,\n", encoding="utf-8")
-    assert export(world, matches) == 1
-    assert capsys.readouterr().err == (
-        f"{matches} has no `id` column (written before places.csv had ids) "
-        "-- re-run names/match.py\n"
+    with pytest.raises(ValidationError) as stop:
+        export(world)
+    assert str(stop.value) == (
+        f"{matches} has no `id` column (written before places.csv had ids) -- re-run `frasch match`"
     )
 
 
@@ -319,23 +305,23 @@ def test_export_refuses_matches_without_ids(
 @pytest.mark.parametrize(
     "argv,hint",
     [
-        (["--dry-run"], "curate.py apply --dry-run"),
-        (["--names", "places.csv", "--keep"], "curate.py apply --names places.csv --keep"),
+        (["--dry-run"], "frasch curate apply --dry-run"),
+        (["--names", "places.csv", "--keep"], "frasch curate apply --names places.csv --keep"),
     ],
 )
 def test_an_apply_option_without_a_subcommand_points_at_apply(
     argv: list[str], hint: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
     with pytest.raises(SystemExit) as exc:
-        curate.main(argv)
+        main(["curate", *argv])
     assert exc.value.code == 2
     assert f"did you mean `{hint}`?" in capsys.readouterr().err
 
 
 def test_options_without_a_subcommand_mean_export(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    world: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    places = tmp_path / "places.csv"
-    places.write_text(places_text([]), encoding="utf-8")
-    assert curate.main(["--names", str(places), "--matches", str(tmp_path / "matches.csv")]) == 1
-    assert "run names/match.py first" in capsys.readouterr().err
+    (world / "places.csv").write_text(places_text([]), encoding="utf-8")
+    files = path_options(workspace(world), "names", "dialects", "work")
+    assert main(["curate", *files]) == 1
+    assert "run `frasch match` first" in capsys.readouterr().err

@@ -8,14 +8,14 @@ import pytest
 
 from frasch import placelist, registry
 from frasch.errors import PipelineError, ValidationError
-from conftest import TOFTUM, places_text
+from conftest import REGISTRY, TOFTUM, places_text
 
 
 def test_reads_a_list_saved_with_a_byte_order_mark(tmp_path: Path) -> None:
     # Excel's "CSV UTF-8" starts the file with one.
     path = tmp_path / "places.csv"
     path.write_bytes(b"\xef\xbb\xbf" + places_text([TOFTUM]).encode("utf-8"))
-    rows, fields = placelist.read(str(path))
+    rows, fields = placelist.read(str(path), REGISTRY)
     assert fields[0] == "kind"
     assert rows[0]["mooring"] == "Toftem"
 
@@ -23,22 +23,22 @@ def test_reads_a_list_saved_with_a_byte_order_mark(tmp_path: Path) -> None:
 def test_a_missing_list_is_a_pipeline_error_not_a_traceback(tmp_path: Path) -> None:
     path = tmp_path / "places.csv"
     with pytest.raises(PipelineError, match=f"^name list not found: {path}$"):
-        placelist.read(str(path))
+        placelist.read(str(path), REGISTRY)
 
 
 def test_refuses_a_semicolon_separated_list_with_a_clear_message(tmp_path: Path) -> None:
     path = tmp_path / "places.csv"
     path.write_text(places_text([TOFTUM]).replace(",", ";"), encoding="utf-8")
     with pytest.raises(ValidationError, match="separated by `;`"):
-        placelist.read(str(path))
+        placelist.read(str(path), REGISTRY)
 
 
 def test_line_numbers_are_those_of_the_file_after_a_blank_line(tmp_path: Path) -> None:
-    # REPORT.md, curate.py and check.py all point editors at a row's `line`.
+    # REPORT.md, the curation and the input check all point editors at a row's `line`.
     head, first, second, _ = places_text([TOFTUM, {**TOFTUM, "mooring": "Taftem"}]).split("\n")
     path = tmp_path / "places.csv"
     path.write_text("\n".join([head, first, "", second]) + "\n", encoding="utf-8")
-    rows, _ = placelist.read(str(path))
+    rows, _ = placelist.read(str(path), REGISTRY)
     assert [r.line for r in rows] == [2, 4]
 
 
@@ -53,18 +53,18 @@ def test_line_numbers_are_those_of_the_file_after_a_blank_line(tmp_path: Path) -
 def test_refuses_a_row_without_a_unique_well_formed_id(
     tmp_path: Path, ids: list[str], reason: str
 ) -> None:
-    # The id is what every other file keys a row on (#23); `check.py --fix`
+    # The id is what every other file keys a row on (#23); `frasch check-inputs --fix`
     # gives a new row one.
     path = tmp_path / "places.csv"
     path.write_text(places_text([{**TOFTUM, "id": i} for i in ids]), encoding="utf-8")
     with pytest.raises(ValidationError, match=f"places.csv:3: {reason}"):
-        placelist.read(str(path))
+        placelist.read(str(path), REGISTRY)
 
 
 def test_every_row_carries_its_id(tmp_path: Path) -> None:
     path = tmp_path / "places.csv"
     path.write_text(places_text([{**TOFTUM, "id": "toftem"}]), encoding="utf-8")
-    rows, _ = placelist.read(str(path))
+    rows, _ = placelist.read(str(path), REGISTRY)
     assert rows[0]["id"] == "toftem"
 
 
@@ -75,7 +75,7 @@ def test_every_broken_row_is_reported_at_once(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     with pytest.raises(ValidationError) as exc:
-        placelist.read(str(path))
+        placelist.read(str(path), REGISTRY)
     assert exc.value.problems == [
         f"{path}:2: unknown kind 'town'",
         f"{path}:4: unknown status 'done' (auto / ok / skip / empty)",

@@ -1,9 +1,7 @@
-#!/usr/bin/env python3
 """Do the tiles and the search index agree?  Decode a built PMTiles archive
 and compare every labelled feature with its entry in names.json.
 
-    check_tiles.py <archive.pmtiles> [--names web/public/data/names.json]
-                   [--zoom 14]
+    frasch check-tiles <archive.pmtiles> [--zoom 14]
 
 A feature that carries a `frasch:ref` must say what that row's search entry
 says: the same `frasch:dialect`, the same `frasch:local`, the same `name:de`
@@ -35,7 +33,7 @@ from typing import Literal, NotRequired, TypedDict
 import mapbox_vector_tile
 from pmtiles.reader import MmapSource, Reader
 
-from frasch import cli, paths
+from frasch import cli
 from frasch.geo import LonLat
 from frasch.searchindex import SearchEntry
 
@@ -211,13 +209,16 @@ def archive_features(path: str, entries: Mapping[str, SearchEntry], zoom: int) -
 @cli.command
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+        prog="frasch check-tiles",
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     ap.add_argument("archive")
-    ap.add_argument("--names", default=paths.SEARCH_INDEX)
+    cli.add_workspace_options(ap, "index")
     ap.add_argument("--zoom", type=int, default=14)
     a = ap.parse_args(argv)
-    with open(a.names, encoding="utf-8") as fh:
+    index = cli.workspace(a).index
+    with open(index, encoding="utf-8") as fh:
         entries: dict[str, SearchEntry] = {e["id"]: e for e in json.load(fh)["places"]}
     features = archive_features(a.archive, entries, a.zoom)
     problems = compare(entries, features)
@@ -229,6 +230,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     for p in problems:
         print(f"  ! {p}")
     if problems:
-        print(f"{len(problems)} disagreement(s) between {a.archive} and {a.names}", file=sys.stderr)
+        print(f"{len(problems)} disagreement(s) between {a.archive} and {index}", file=sys.stderr)
         return 1
     return 0

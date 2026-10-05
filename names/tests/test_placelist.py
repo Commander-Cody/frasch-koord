@@ -3,7 +3,7 @@ apply to every name cell", the `osm` column, curation positions) and a
 read/write round trip of the real name list.
 
 Malformed name cells (unbalanced brackets, `?`, `;` without a space) are
-deliberately not pinned down here: names/check.py owns them."""
+deliberately not pinned down here: `frasch check-inputs` owns them."""
 
 from __future__ import annotations
 
@@ -15,7 +15,8 @@ from typing import Any
 
 import pytest
 
-from frasch import paths, placelist
+from frasch import paths, placelist, registry
+from frasch.paths import Workspace
 from frasch.errors import ValidationError
 
 
@@ -172,12 +173,14 @@ def test_format_osm_normalises_the_separator() -> None:
 # --------------------------------------------------- the real name list ---
 def test_real_name_list_round_trips_byte_identical(tmp_path: Path) -> None:
     """Reading and writing back the real places.csv changes nothing -- the
-    guarantee that match.py and curate.py apply only ever touch the cells
-    they mean to (a copy: the real file is never written)."""
+    guarantee that the matcher and the curation only ever touch the cells
+    they mean to (a copy: the real file is never written).  The one test of
+    the real files: it reads the list by the real dialect registry."""
+    real = Workspace.default()
     copy = tmp_path / "places.csv"
-    shutil.copyfile(paths.PLACES, copy)
+    shutil.copyfile(real.names, copy)
     before = copy.read_bytes()
-    rows, fields = placelist.read(str(copy))
+    rows, fields = placelist.read(str(copy), registry.read(real.dialects))
     placelist.write(rows, str(copy), fields)
     assert copy.read_bytes() == before
 

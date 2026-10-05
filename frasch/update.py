@@ -1,27 +1,30 @@
-#!/usr/bin/env python3
 """Bring every file the name list feeds up to date, in one run (`just update`).
 
-    names/update.py <in.osm.pbf> [<in.osm.pbf> ...] [--area-extract <pbf>]
+    frasch update <in.osm.pbf> [<in.osm.pbf> ...] [--area-extract <pbf>]
 
 After an edit to places.csv, or a session in the curation view (`?curate`),
 this runs the pipeline's commands in their order:
 
-  ids and checks      give new rows an `id`, check the hand-edited files
-  curation decisions  `curate.py apply`, when the view left a patch
-  candidates          `build_candidates.py`          -- only when stale
+  ids and input check `check-inputs --fix`: give new rows an `id`, check the
+                      hand-edited files
+  curation decisions  `curate apply`, when the view left a patch
+  candidates          `candidates`                   -- only when stale
   match               fill the empty `osm` cells of places.csv, REPORT.md
-  objects             `locate.py`, osm_objects.json   -- only when stale
-  areas               `build_dialect_areas.py`        -- only when stale
+  objects             `objects`, osm_objects.json     -- only when stale
+  areas               `areas`                         -- only when stale
   dialect registry    web/src/generated/dialects.json
   search index        web/public/data/names.json
-  curation worklist   `curate.py export`: what is left for the view
-  check               the committed outputs match their inputs (`just check-outputs`)
+  curation worklist   `curate export`: what is left for the view
+  output check        `check-outputs`: the committed outputs match their inputs
 
 and ends with the files it changed and the rows left to curate.  The slow
 steps are skipped when their output was built from what is there now (see
 `candidates_stale`, `objects_stale`, `areas_stale`).  A step that fails
 stops the run.  A decision `apply` refuses does not: it stays in the patch,
 the rest of the run goes on, and the run exits 1 at its end.
+
+Every step works on the same workspace, and on the dialect registry as it is
+read once the first step has checked it.
 
 The tiles are not built (`just tiles`), and nothing is committed: review the
 result with `git diff`.
@@ -31,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import enum
+import functools
 import json
 import os
 import sys
@@ -41,24 +45,22 @@ from frasch import (
     build_candidates,
     build_dialect_areas,
     candidates,
-    check,
-    check_built,
+    check_inputs,
+    check_outputs,
     cli,
     curate,
-    export_dialects,
-    export_search_index,
     locate,
     match,
-    paths,
-    placelist,
     provenance,
     registry,
+    searchindex,
 )
 from frasch.errors import PipelineError
 from frasch.objects import read_objects
-from frasch.paths import StrPath
+from frasch.paths import StrPath, Workspace
 from frasch.placelist import OsmRef
 from frasch.provenance import ExtractStamp
+from frasch.registry import Registry
 
 
 class Outcome(enum.Enum):
@@ -74,7 +76,7 @@ def always() -> bool:
 @dataclass(frozen=True)
 class Step:
     """One step of the run; it is skipped (saying `skipped`) when `needed`
-    says so at the moment it is due."""
+    says so at the moment it is due.  A PipelineError it raises fails it."""
 
     name: str
     run: Callable[[], Outcome]
@@ -82,21 +84,20 @@ class Step:
     skipped: str = "up to date"
 
 
-def command(main: cli.Command, *argv: str) -> Callable[[], Outcome]:
-    """A command as a step: any exit status but 0 stops the run."""
-    return lambda: Outcome.DONE if main(argv) == 0 else Outcome.FAILED
+def done(run: Callable[[], object]) -> Callable[[], Outcome]:
+    """A step that is done once `run` returns."""
+
+    def step() -> Outcome:
+        run()
+        return Outcome.DONE
+
+    return step
 
 
-def apply_decisions(names: str, curation: str, patch: str) -> Outcome:
-    """`curate.py apply`: a decision it refuses stays in the patch, for the
-    browser to show and the curator to fix -- no reason to hold back the rest
-    of the run.  A problem that stops the apply itself stops the run."""
-    try:
-        refused = curate.apply(names, curation, patch)
-    except PipelineError as stop:
-        print(stop, file=sys.stderr)
-        return Outcome.FAILED
-    return Outcome.WARNED if refused else Outcome.DONE
+def unless(failed: Callable[[], object], otherwise: Outcome) -> Callable[[], Outcome]:
+    """A step that takes the outcome `otherwise` when `failed` returns
+    something true -- an exit status, problems, refused decisions."""
+    return lambda: otherwise if failed() else Outcome.DONE
 
 
 def candidates_stale(path: StrPath, extracts: list[ExtractStamp]) -> bool:
@@ -116,155 +117,70 @@ def objects_stale(path: StrPath, refs: Collection[OsmRef], extracts: list[Extrac
     return set(objects.by_ref) != set(refs) or objects.built_from["extracts"] != extracts
 
 
-def areas_stale(
-    outputs: Sequence[StrPath],
-    area_list: StrPath,
-    registry_csv: StrPath,
-    extracts: list[ExtractStamp],
-) -> bool:
+def areas_stale(ws: Workspace, extracts: list[ExtractStamp]) -> bool:
     """Is either dialect area file missing, or built from another area list,
-    registry or extract than these?"""
-    current = build_dialect_areas.stamp(area_list, registry_csv, extracts)
-    return any(not os.path.exists(path) or provenance.recorded(path) != current for path in outputs)
+    registry or extract than the workspace's and `extracts`?"""
+    current = build_dialect_areas.stamp(ws, extracts)
+    return any(
+        not os.path.exists(path) or provenance.recorded(path) != current
+        for path in (ws.areas, ws.parts)
+    )
 
 
-def mapped_refs(names: str, dialects: str) -> set[OsmRef]:
-    """The OSM references of the rows on the map, as the name list has them now."""
-    reg = registry.read(dialects)
-    rows, _ = placelist.read(names, reg)
-    return locate.mapped_refs(rows, reg)
-
-
-def steps(a: argparse.Namespace) -> list[Step]:
+def steps(ws: Workspace, extracts: Sequence[str], area_extract: str) -> list[Step]:
     """The run's steps, in order."""
-    extracts = [provenance.extract_stamp(p) for p in a.extracts]
-    area_extract = provenance.extract_stamp(a.area_extract)
-    inputs = [
-        "--names",
-        a.names,
-        "--dialects",
-        a.dialects,
-        "--curation",
-        a.curation,
-        "--areas",
-        a.areas,
-        "--objects",
-        a.objects,
-    ]
+    stamps = locate.extract_stamps(extracts)
+    area_stamps = locate.extract_stamps([area_extract])
+
+    @functools.cache
+    def reg() -> Registry:
+        """The dialect registry, read once: every step after the first, which
+        checks it, works on the same one."""
+        return registry.read(ws.dialects)
+
     return [
-        Step(
-            "ids and checks",
-            command(
-                check.main,
-                "--fix",
-                "--names",
-                a.names,
-                "--curation",
-                a.curation,
-                "--dialects",
-                a.dialects,
-                "--areas",
-                a.area_list,
-            ),
-        ),
+        Step("ids and input check", unless(lambda: check_inputs.run(ws, fix=True), Outcome.FAILED)),
         Step(
             "curation decisions",
-            lambda: apply_decisions(a.names, a.curation, a.patch),
-            needed=lambda: os.path.exists(a.patch),
+            unless(lambda: curate.apply(ws, reg()), Outcome.WARNED),
+            needed=lambda: os.path.exists(ws.patch),
             skipped="none made",
         ),
         Step(
             "candidates",
-            command(build_candidates.main, *a.extracts, "--out", a.candidates),
-            needed=lambda: candidates_stale(a.candidates, extracts),
+            done(lambda: build_candidates.run(ws, extracts)),
+            needed=lambda: candidates_stale(ws.candidates, stamps),
         ),
-        Step(
-            "match",
-            command(
-                match.main,
-                "--names",
-                a.names,
-                "--candidates",
-                a.candidates,
-                "--matches",
-                a.matches,
-                "--report",
-                a.report,
-                "--wikidata-cache",
-                a.wikidata_cache,
-            ),
-        ),
+        Step("match", unless(lambda: match.run(ws, reg()), Outcome.FAILED)),
         Step(
             "objects",
-            command(
-                locate.main,
-                *a.extracts,
-                "--names",
-                a.names,
-                "--dialects",
-                a.dialects,
-                "--out",
-                a.objects,
-            ),
-            needed=lambda: objects_stale(a.objects, mapped_refs(a.names, a.dialects), extracts),
+            done(lambda: locate.run(ws, reg(), extracts)),
+            needed=lambda: objects_stale(ws.objects, locate.wanted_refs(ws, reg()), stamps),
         ),
         Step(
             "areas",
-            command(
-                build_dialect_areas.main,
-                a.area_extract,
-                "--areas",
-                a.area_list,
-                "--registry",
-                a.dialects,
-                "--out",
-                a.areas,
-                "--parts-out",
-                a.parts,
-            ),
-            needed=lambda: areas_stale([a.areas, a.parts], a.area_list, a.dialects, [area_extract]),
+            done(lambda: build_dialect_areas.run(ws, reg(), [area_extract])),
+            needed=lambda: areas_stale(ws, area_stamps),
         ),
-        Step(
-            "dialect registry",
-            command(export_dialects.main, "--registry", a.dialects, "--export", a.registry_json),
-        ),
-        Step("search index", command(export_search_index.main, *inputs, "--out", a.index)),
-        Step(
-            "curation worklist",
-            command(
-                curate.main,
-                "export",
-                "--names",
-                a.names,
-                "--matches",
-                a.matches,
-                "--candidates",
-                a.candidates,
-                "--out",
-                a.worklist,
-            ),
-        ),
-        Step(
-            "check",
-            command(
-                check_built.main,
-                *inputs,
-                "--index",
-                a.index,
-                "--registry-json",
-                a.registry_json,
-                "--area-list",
-                a.area_list,
-                "--parts",
-                a.parts,
-            ),
-        ),
+        Step("dialect registry", done(lambda: registry.export_json(reg(), ws.registry_json))),
+        Step("search index", done(lambda: searchindex.run(ws, reg()))),
+        Step("curation worklist", done(lambda: curate.export(ws, reg()))),
+        Step("output check", unless(lambda: check_outputs.run(ws, reg()), Outcome.FAILED)),
     ]
 
 
-def outputs(a: argparse.Namespace) -> list[str]:
+def outputs(ws: Workspace) -> list[str]:
     """The files of the repository a run may change."""
-    return [a.names, a.curation, a.report, a.objects, a.areas, a.parts, a.index, a.registry_json]
+    return [
+        ws.names,
+        ws.curation,
+        ws.report,
+        ws.objects,
+        ws.areas,
+        ws.parts,
+        ws.index,
+        ws.registry_json,
+    ]
 
 
 def contents(files: Sequence[str]) -> dict[str, str | None]:
@@ -289,9 +205,51 @@ def summary(before: Mapping[str, str | None], worklist: str) -> str:
     )
 
 
-def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
+def attempt(step: Step) -> Outcome:
+    """Run a step; a problem that stops it is said and fails it."""
+    try:
+        return step.run()
+    except PipelineError as stop:
+        print(stop, file=sys.stderr)
+        return Outcome.FAILED
+
+
+def run(ws: Workspace, extracts: Sequence[str], area_extract: str | None = None) -> int:
+    """Bring the workspace up to date from the OSM extracts its objects are
+    in (see the module docstring); -> the exit status.  `area_extract`: the
+    extract the dialect areas are built from, the first of `extracts` when
+    None."""
+    area_extract = area_extract or extracts[0]
+    missing = [p for p in dict.fromkeys([*extracts, area_extract]) if not os.path.exists(p)]
+    if missing:
+        raise PipelineError(f"{', '.join(missing)} not found -- download it with `just extracts`")
+    before = contents(outputs(ws))
+    warned = []
+    for step in steps(ws, extracts, area_extract):
+        if not step.needed():
+            print(f"== {step.name}: {step.skipped}")
+            continue
+        print(f"== {step.name}", flush=True)
+        outcome = attempt(step)
+        if outcome is Outcome.FAILED:
+            print(f"update stopped: {step.name} failed")
+            return 1
+        if outcome is Outcome.WARNED:
+            warned.append(step.name)
+    print("== summary")
+    print(summary(before, ws.worklist))
+    if warned:
+        print(f"update done, but look at the output of: {', '.join(warned)}")
+        return 1
+    return 0
+
+
+@cli.command
+def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+        prog="frasch update",
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     ap.add_argument(
         "extracts", nargs="+", metavar="PBF", help="the OSM extracts the name list's objects are in"
@@ -301,58 +259,6 @@ def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         metavar="PBF",
         help="the extract the dialect areas are built from (default: the first of the extracts)",
     )
-    ap.add_argument("--names", default=paths.PLACES)
-    ap.add_argument("--dialects", default=paths.DIALECTS)
-    ap.add_argument("--curation", default=paths.CURATION)
-    ap.add_argument("--area-list", default=paths.DIALECT_AREA_LIST)
-    ap.add_argument("--areas", default=paths.DIALECT_AREAS)
-    ap.add_argument("--parts", default=paths.DIALECT_AREA_PARTS)
-    ap.add_argument("--objects", default=paths.OBJECTS)
-    ap.add_argument("--index", default=paths.SEARCH_INDEX)
-    ap.add_argument("--registry-json", default=paths.REGISTRY_JSON)
-    ap.add_argument("--report", default=paths.REPORT)
-    ap.add_argument(
-        "--work",
-        default=paths.WORK,
-        help="the git-ignored scratch directory of matching and curation",
-    )
+    cli.add_workspace_options(ap, *cli.WORKSPACE_FILES, cli.WORK)
     a = ap.parse_args(argv)
-    a.area_extract = a.area_extract or a.extracts[0]
-    missing = [p for p in dict.fromkeys([*a.extracts, a.area_extract]) if not os.path.exists(p)]
-    if missing:
-        raise PipelineError(f"{', '.join(missing)} not found -- download it with `just extracts`")
-    a.candidates, a.matches, a.worklist, a.patch, a.wikidata_cache = (
-        os.path.join(a.work, os.path.basename(default))
-        for default in (
-            paths.CANDIDATES,
-            paths.MATCHES,
-            paths.WORKLIST,
-            paths.PATCH,
-            paths.WIKIDATA_CACHE,
-        )
-    )
-    return a
-
-
-@cli.command
-def main(argv: Sequence[str] | None = None) -> int:
-    a = parse_args(argv)
-    before = contents(outputs(a))
-    warned = []
-    for step in steps(a):
-        if not step.needed():
-            print(f"== {step.name}: {step.skipped}")
-            continue
-        print(f"== {step.name}", flush=True)
-        outcome = step.run()
-        if outcome is Outcome.FAILED:
-            print(f"update stopped: {step.name} failed")
-            return 1
-        if outcome is Outcome.WARNED:
-            warned.append(step.name)
-    print("== summary")
-    print(summary(before, a.worklist))
-    if warned:
-        print(f"update done, but look at the output of: {', '.join(warned)}")
-        return 1
-    return 0
+    return run(cli.workspace(a), a.extracts, a.area_extract)
