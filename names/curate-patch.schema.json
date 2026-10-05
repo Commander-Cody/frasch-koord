@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/Commander-Cody/frasch-koord/names/curate-patch.schema.json",
   "title": "Curation patch entry",
-  "description": "One line of names/work/curate-patch.jsonl: a decision the curation view (web `?curate`) made about one row of names/places.csv, which `names/curate.py apply` writes back. The browser appends through the Vite dev server (web/vite-plugins/curate.ts), which keeps only these properties and sets `at`. The rules that need the name list (is the row the matcher's, is the slug free) are apply's.",
+  "description": "One line of names/work/curate-patch.jsonl: a decision the curation view (web `?curate`) made about one row of names/places.csv, which `frasch curate apply` writes back. The browser appends through the Vite dev server (web/vite-plugins/curate.ts), which keeps only these properties and sets `at`. The rules that need the name list (is the row the matcher's, is the slug free) are apply's.",
   "type": "object",
   "required": ["id", "action"],
   "additionalProperties": false,

@@ -260,7 +260,7 @@ function Candidates({
             title={
               hasInShFlag
                 ? undefined
-                : 'curate.json predates the in_sh flag — re-run names/curate.py export'
+                : 'curate.json predates the in_sh flag — re-run frasch curate export'
             }
             onClick={() => onCheckAll(inSh)}
           >

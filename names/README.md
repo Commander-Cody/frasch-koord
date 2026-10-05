@@ -11,25 +11,26 @@ names/dialects.csv       THE dialect registry (hand-edited, in git)
 names/dialect_areas.csv  which OSM municipalities/islands speak which dialect
 names/curation.csv       per-OSM-object map tuning (hand-edited, in git)
         |
-        |  match.py          fills empty `osm` cells, marks them status=auto
-        |  <- work/candidates.jsonl <- build_candidates.py <- tiles/data/*.osm.pbf
+        |  frasch match       fills empty `osm` cells, marks them status=auto
+        |  <- work/candidates.jsonl <- frasch candidates <- tiles/data/*.osm.pbf
         |
-        |  locate.py               ->  names/osm_objects.json (in git)
-        |  build_dialect_areas.py  ->  names/dialect_areas.geojson (in git)
+        |  frasch objects  ->  names/osm_objects.json (in git)
+        |  frasch areas    ->  names/dialect_areas.geojson (in git)
         v
 names/REPORT.md          generated worklist: what is still unmatched
 names/work/matches.csv   generated details of the last match run (git-ignored)
         |
-        |  export_search_index.py  ->  web/public/data/names.json (in git)
-        |  dialects.py --export    ->  web/src/generated/dialects.json (in git)
-        |  tiles/inject_names.py   ->  tags in the OSM extract  ->  tiles
+        |  frasch index            ->  web/public/data/names.json (in git)
+        |  frasch dialects --export  ->  web/src/generated/dialects.json (in git)
+        |  frasch inject           ->  tags in the OSM extract  ->  tiles
 ```
 
 Every step is a recipe of the root `justfile` (`uv run just` lists them):
 `update` runs the name part in one go (see [Workflow](#workflow)); the single
 steps are `extracts`, `candidates`, `match`, `objects`, `areas`, `index`,
-`dialects` and `tiles`, and the checks `check-outputs` (CI), `check-full` and
-`check-tiles`.
+`dialects` and `tiles`, and the checks `check-inputs`, `check-outputs` (CI),
+`check-full` and `check-tiles`. Behind each recipe is one `frasch <command>`
+(see [Code](#code)), which you can also run directly: `uv run frasch match`.
 
 `names/bootstrap/sheet-export.csv` is the export of the original Google Sheet
 the list was imported from (September 2026). The sheet is history; do not
@@ -49,9 +50,9 @@ are gone from the tree; `git show b602a3f:names/bootstrap/` lists them.
 | `da` | Danish name(s). Used for matching when there is no German name. |
 | `osm` | the OSM object(s) that carry the label: `node/123`, `way/123`, `relation/123`. Several separated by `;` when OSM splits a river or dyke into pieces: `way/1; way/2`. A place **OSM does not have** carries a local reference instead: `local/<slug>` (lowercase ascii letters, digits, hyphens) alone in the cell, e.g. `local/westerheide-amrum` — never mixed with a real reference, never split by `;`. See *Places OSM does not have*. |
 | `wikidata` | Wikidata item. The injector also tags every place-like OSM object (`place`, `boundary`, `natural`, `water`, `waterway`) with this `wikidata` tag; for the countries, which have no `osm`, it is the only key. Empty for a `local/` row. |
-| `status` | `auto` — `match.py` filled `osm`/`wikidata` and will recompute them next run. `ok` — a human checked the row. `skip` — never put on the map. Empty — nothing decided yet (or, with `osm` filled by hand, simply yours). |
-| `note` | free text for you. `match.py` never writes here. The import put `uncertain` here for names the sheet marked with `?`. |
-| `id` | the row's own key, e.g. `naibel`, `schorkewarw-2`: lowercase ascii letters, digits, hyphens, unique. Everything else names the row by it — `work/matches.csv`, `REPORT.md`, the curation worklist and patch, the search index (`?place=` links) and the tiles (`frasch:ref`) — so adding, deleting or moving rows, or correcting a name, never changes another row's identity. **Leave it empty on a new row** and run `names/check.py --fix`, which fills it from the Frisian name (German, then Danish, when there is none; `-2`, `-3` on repeats). Never change an id once written: it would break the share links to that place. |
+| `status` | `auto` — `frasch match` filled `osm`/`wikidata` and will recompute them next run. `ok` — a human checked the row. `skip` — never put on the map. Empty — nothing decided yet (or, with `osm` filled by hand, simply yours). |
+| `note` | free text for you. `frasch match` never writes here. The import put `uncertain` here for names the sheet marked with `?`. |
+| `id` | the row's own key, e.g. `naibel`, `schorkewarw-2`: lowercase ascii letters, digits, hyphens, unique. Everything else names the row by it — `work/matches.csv`, `REPORT.md`, the curation worklist and patch, the search index (`?place=` links) and the tiles (`frasch:ref`) — so adding, deleting or moving rows, or correcting a name, never changes another row's identity. **Leave it empty on a new row** and run `frasch check-inputs --fix`, which fills it from the Frisian name (German, then Danish, when there is none; `-2`, `-3` on repeats). Never change an id once written: it would break the share links to that place. |
 
 The sheet's other columns (inhabitant adjectives, Low German, South Jutish,
 old names, sources) were deliberately not imported: the map does not use them.
@@ -67,7 +68,7 @@ Conventions that apply to every name cell:
   only repeats the column's own dialect is noise — the column says it already
 * no `?` inside names — say `uncertain` in `note`
 
-After editing, `.venv/bin/python names/check.py --fix` gives new rows their
+After editing, `uv run frasch check-inputs --fix` gives new rows their
 `id`, then reports every problem in `places.csv`, `curation.csv`,
 `dialects.csv` and `dialect_areas.csv` with its line: a comma too many or too
 few, unbalanced brackets, a `?`, variants not separated by `; `, a repeated
@@ -75,7 +76,7 @@ variant, an unknown `kind` or `status`, a bad reference, one OSM object or
 Wikidata item on two rows, a `local/` reference without a position, a
 missing or repeated `id`, a hand-set `frasch:ref` in `curation.csv` that names
 no row, one OSM object on two `dialect_areas.csv` rows. Without `--fix` it
-only reports; CI runs it that way on every push. The other scripts refuse a
+only reports; CI runs it that way on every push. The other commands refuse a
 `places.csv` with a row without an `id`.
 
 The rows are in the order of the original sheet (by section, then the owner's
@@ -99,8 +100,8 @@ derive from it, so adding a dialect is one line here plus a column in
 | `note` | free text: which area speaks it |
 
 ```bash
-$PY names/dialects.py            # print the registry
-$PY names/dialects.py --tags     # frr-x-mooring,frr-x-wieding,...  (tiles/build.sh)
+uv run frasch dialects            # print the registry
+uv run frasch dialects --tags     # frr-x-mooring,frr-x-wieding,...  (tiles/build.sh)
 ```
 
 The shared name logic lives in `frasch/dialects.py`, on top of the
@@ -147,7 +148,7 @@ inside the municipality Reußenköge, Nordstrandischmoor inside a Nordstrand
 that has no Frisian area at all.
 
 ```bash
-$PY names/build_dialect_areas.py tiles/data/schleswig-holstein-latest.osm.pbf
+uv run frasch areas tiles/data/schleswig-holstein-latest.osm.pbf
 ```
 
 assembles the polygons (three id-filtered passes, ~2 s, no location cache),
@@ -166,7 +167,7 @@ gap. `--allow-missing` builds anyway. This is separate from an unclosed or
 partial ring: that object still produced *some* geometry, so it stays a
 warning in the report either way.
 
-The same run also writes `names/dialect_areas_parts.geojson` (`--parts-out`):
+The same run also writes `names/dialect_areas_parts.geojson` (`--parts`):
 one Feature per *municipality* rather than per dialect, carrying the row's
 `name` and research `note`, plus every Kreis Nordfriesland municipality that no
 row claims, marked `assigned: false`. It exists for the review overlay in the
@@ -237,7 +238,7 @@ and let the matcher try.
 uv run just update
 ```
 
-It downloads the extracts if they are missing, then runs `names/update.py`:
+It downloads the extracts if they are missing, then runs `frasch update`:
 new rows get their `id`, the hand-edited files are checked (a problem stops
 the run before anything else is written), the decisions of the curation view
 are applied (`work/curate-patch.jsonl`, if there is one), the matcher runs,
@@ -250,16 +251,16 @@ commit.
 
 The slow steps run only when needed: the candidate scan when
 `work/candidates.jsonl` is missing or was built from other extracts (another
-download, `REFRESH=1`), `locate.py` when the rows on the map name other OSM
+download, `REFRESH=1`), `frasch objects` when the rows on the map name other OSM
 objects than `osm_objects.json` holds or the extracts changed, the dialect
 areas when their stamp names another `dialect_areas.csv`, `dialects.csv` or
-extract. (`locate.py` writes only the objects it finds, so while a row names
+extract. (`frasch objects` writes only the objects it finds, so while a row names
 an object no extract holds, it runs every time, and the run stops at the
 search index step — or at the check step, when the missing reference is not
 the row's first. Their advice to run `just objects` does not help here: the
 objects step's `N not in <extract>: <ref>` line names the reference, and the
 fix is that row's `osm` cell.) A step that fails stops the run; a decision
-`curate.py apply` refuses does not — it stays in the patch, and the run
+`frasch curate apply` refuses does not — it stays in the patch, and the run
 exits 1 at its end.
 The tiles are not built (`just tiles`), and nothing is committed.
 
@@ -268,18 +269,17 @@ What the steps do, and how to run each one alone:
 **Let the matcher fill the blanks**:
 
 ```bash
-# from the repository root
-PY=.venv/bin/python           # `uv sync` creates it, see the root README.md
+# from the repository root; `uv sync` creates the venv, see the root README.md
 
 # once per OSM extract (~6 min for SH + DK, ~250 MB, git-ignored)
-$PY names/build_candidates.py tiles/data/schleswig-holstein-latest.osm.pbf \
-                             tiles/data/denmark-latest.osm.pbf
+uv run frasch candidates tiles/data/schleswig-holstein-latest.osm.pbf \
+                         tiles/data/denmark-latest.osm.pbf
 
-$PY names/match.py            # --offline skips the Wikidata API (countries)
+uv run frasch match           # --offline skips the Wikidata API (countries)
 git diff names/places.csv     # review what it filled in
 ```
 
-`build_candidates.py` writes `work/candidates.jsonl` in one step (an
+`frasch candidates` writes `work/candidates.jsonl` in one step (an
 interrupted run leaves the previous file), and its first line names the
 extracts it was read from, with their replication timestamps. It needs
 extracts sorted by id, as Geofabrik's are, and stops on one that is not
@@ -288,17 +288,17 @@ extracts sorted by id, as Geofabrik's are, and stops on one that is not
 Build the candidates from **every** extract: a row the matcher filled from an
 object only one extract has — the Danish places (Fanø, Hoyer, Ripen, Röm, …)
 are only in `denmark-latest` — loses its match when that extract is left out.
-So `match.py` records the extracts it used in `work/match-extracts.json` and
+So `frasch match` records the extracts it used in `work/match-extracts.json` and
 warns when a later run gets candidates from another set of extract files
 (a newer download of the same extract is fine). It also warns about a
 `candidates.jsonl` from before the header: rebuild it.
 
-`match.py --dry-run` shows what a run would do and writes only the
+`frasch match --dry-run` shows what a run would do and writes only the
 git-ignored `work/matches.csv` — neither `places.csv` nor `REPORT.md`.
 `REPORT.md` carries no date, so a real run on unchanged inputs leaves it
 unchanged too.
 
-`match.py` only ever rewrites the `osm`, `wikidata` and `status` cells of rows
+`frasch match` only ever rewrites the `osm`, `wikidata` and `status` cells of rows
 it owns: rows whose `osm`, `wikidata` and `status` are all empty, and rows it
 filled earlier (`status=auto`). A row you filled in, marked `ok` or `skip`, or a
 `not_a_place` row is never touched, so re-running is always safe. Undo a
@@ -306,13 +306,13 @@ single row with `git checkout -p`.
 
 A country row is matched through Wikidata (answers cached in
 `work/wikidata-countries.json`). If the lookup fails, or `--offline` finds no
-cached answer, the row keeps its cells and `match.py` exits with status 1; a
+cached answer, the row keeps its cells and `frasch match` exits with status 1; a
 damaged cache file stops the run (delete it to query again).
 
-`match.py` and `curate.py apply` write `places.csv` in one step, so an
+`frasch match` and `frasch curate apply` write `places.csv` in one step, so an
 interrupted run never leaves it half written, and they refuse to write when
 the file changed on disk while they ran (a spreadsheet saved it, say):
-`places.csv` stays as it was, re-run. `match.py` writes `work/matches.csv`
+`places.csv` stays as it was, re-run. `frasch match` writes `work/matches.csv`
 (in one step too) before `places.csv`, so a run that cannot write it leaves
 `places.csv` alone. They also take `work/.lock`, so only one of them runs at
 a time.
@@ -326,25 +326,25 @@ and the *not found* rows with near misses. Resolve a row by writing the right
 than looking every candidate up on openstreetmap.org:
 
 ```bash
-$PY names/curate.py export     # -> work/curate.json (needs a match.py run)
+uv run frasch curate export    # -> work/curate.json (needs a `frasch match` run)
 cd web && npm run dev          # then open /?curate -- dev server only
-$PY names/curate.py apply --dry-run
-$PY names/curate.py apply
+uv run frasch curate apply --dry-run
+uv run frasch curate apply
 ```
 
 `export` writes every ambiguous and not-found row the matcher still owns, with
 its candidates' positions and its location hint, to `work/curate.json`; rows
 deleted from `places.csv` since the match run are dropped with a note (re-run
-`match.py`). In the browser you pick a candidate, drop a point of your own, or
+`frasch match`). In the browser you pick a candidate, drop a point of your own, or
 `skip` the row; every decision is appended as one line to
 `work/curate-patch.jsonl`, so you can stop and resume. `apply` reads that file
 back — the last entry per row wins, rows are found by their `id`, so hand
 edits to `places.csv` during a session do no harm — and writes `osm`, `wikidata` and
 `status` (`ok`, or `skip`) into `places.csv`, plus one `curation.csv` row per
-place OSM does not have. It touches only the rows `match.py` owns and refuses
+place OSM does not have. It touches only the rows `frasch match` owns and refuses
 the rest. It renames the patch file before reading it (`--keep` leaves it), so
 decisions made while it runs go to a fresh patch; refused entries are appended
-back to it. Re-run `match.py` afterwards and export again.
+back to it. Re-run `frasch match` afterwards and export again.
 
 **Build**:
 
@@ -360,14 +360,14 @@ uv run just check-outputs   # the committed outputs match their inputs (CI runs 
 ### Where the objects are
 
 The map labels and the search index must agree on where a place is, and so
-on which dialect is spoken there. `locate.py` works that out once, from the
+on which dialect is spoken there. `frasch objects` works that out once, from the
 extracts, into the committed `osm_objects.json`: for every OSM reference of a
 row on the map its point (a node's location; a point *inside* the polygon of
 a way or relation that closes into one; else the relation's `label` /
 `admin_centre` member, else its first vertex the extract holds), the outline
 point as a second try for the dialect lookup, the `admin_level` of an
 administrative boundary, and OSM's `name:nds`, `name` and `name:frr`. It is
-stamped with the extracts it was read from. The injector and `export_search_index.py` both read
+stamped with the extracts it was read from. The injector and `frasch index` both read
 it, and both ask `objects.dialect_at` which dialect an object lies in — so a
 label and its search entry cannot disagree. An administrative area above
 municipality level (Kreis Nordfriesland, an Amt) gets no dialect: it spans
@@ -376,20 +376,20 @@ lies.
 
 Give a row a new `osm` reference and both stop until `just objects` has
 located it: a row on the map without a position would otherwise be missing
-from search (or get no dialect on the map). `locate.py` lists the references
+from search (or get no dialect on the map). `frasch objects` lists the references
 no extract holds.
 
 ### What the outputs were built from
 
 `names.json` and the tiles carry the same `built_from` stamp
-(`provenance.py`): the git blob hashes (`git hash-object`, of the content, so
+(`frasch provenance`): the git blob hashes (`git hash-object`, of the content, so
 it also names an uncommitted state) of `places.csv`, `dialects.csv`,
 `curation.csv`, `dialect_areas.geojson` and `osm_objects.json`, plus the
 extracts the objects were located in. The frontend warns in the console when
 the two differ. `dialect_areas*.geojson` record the hashes of
 `dialect_areas.csv` and `dialects.csv` and their extract.
 
-`just check-outputs` (`check_built.py`, run in CI) proves the committed
+`just check-outputs` (`frasch check-outputs`, run in CI) proves the committed
 outputs match the committed inputs: it rebuilds `names.json` and
 `dialects.json` into a temporary directory and compares them byte for byte,
 and checks the stamps of the dialect areas — those, and `osm_objects.json`, need an extract to
@@ -398,7 +398,7 @@ rebuild. `just check-full` rebuilds them from the local extracts as well.
 Dry-run the injection alone:
 
 ```bash
-$PY tiles/inject_names.py tiles/data/schleswig-holstein-latest.osm.pbf /dev/null --dry-run
+uv run frasch inject tiles/data/schleswig-holstein-latest.osm.pbf /dev/null --dry-run
 ```
 
 It lists how many names it writes per dialect, how many objects fall into each
@@ -453,7 +453,7 @@ the synthetic polygons it would add.
   which dialect it is does not matter for matching.
 * **Countries** are keyed by Wikidata QID only (via `wbsearchentities` +
   `wbgetentities`, filtered to country / sovereign-state classes);
-  `inject_names.py` tags whatever place-like object carries that QID.
+  `frasch inject` tags whatever place-like object carries that QID.
 
 ## Places OSM does not have
 
@@ -468,7 +468,7 @@ keyed by the same local reference carries `lat`/`lon` (decimal degrees, from
 OSM or any map) — mandatory for a local reference, and empty for every row
 with a real `osm` reference. One local reference, one row per file.
 
-* **Without `polygon_km2`**, `tiles/inject_names.py` adds a **new node** at
+* **Without `polygon_km2`**, `frasch inject` adds a **new node** at
   `lat`/`lon` to the extract it writes (id above the extract's highest node
   id, written before the first way — like the synthetic polygon nodes),
   tagged with the row's `name:<dialect>` / `frasch:*` tags, `name` = the
@@ -497,10 +497,10 @@ OpenMapTiles takes hamlets and villages from *points* only, so any other
 `place=` on a polygon would label nothing — the loader stops the build
 instead.
 
-`export_search_index.py` takes the position of a local-reference row from
+`frasch index` takes the position of a local-reference row from
 `curation.csv` (`--curation`, default `names/curation.csv`).
 
-`match.py` leaves a row with a local reference alone (`own point` in
+`frasch match` leaves a row with a local reference alone (`own point` in
 `REPORT.md`).
 
 The loader stops the build if: a local reference used by a `places.csv` row
@@ -548,7 +548,7 @@ rather than the square (see below).
 
 ### The two columns do very different things
 
-* **`set_tags` runs BEFORE Planetiler.** `inject_names.py` writes these tags
+* **`set_tags` runs BEFORE Planetiler.** `frasch inject` writes these tags
   into the OSM extract, so they change how the stock OpenMapTiles profile
   *classifies* the feature. That is the only lever for things the profile
   decides itself: OMT emits island labels for `place=island` polygons and drops
@@ -587,7 +587,7 @@ rather than the square (see below).
 `frasch:kind` comes from the name list (`places.csv`'s `kind` column) for every
 injected row; `set_tags` is how an object the list does not mention gets one.
 
-`tiles/build.sh` passes the file to `inject_names.py` automatically;
+`tiles/build.sh` passes the file to `frasch inject` automatically;
 `--no-curation` ignores it, `--curation OTHER.csv` swaps it.
 
 ## License
@@ -613,39 +613,56 @@ references: coordinates and tag fixes belong in `curation.csv` and the build.
 | `dialects.csv` | the dialect registry — edit this |
 | `dialect_areas.csv` | which OSM object belongs to which dialect — edit this |
 | `curation.csv` | per-object map tuning, and the position for places OSM does not have — edit this |
-| `update.py` | `just update`: runs the commands below in the pipeline's order (see [Workflow](#workflow)), skipping the slow steps whose inputs did not change |
-| `check.py` | checks the hand-edited files, every problem with its line (`--fix` gives new rows an id) |
-| `dialects.py` | prints the registry; `--tags` for Planetiler, `--export` writes `web/src/generated/dialects.json` |
-| `locate.py` | OSM extract(s) → `osm_objects.json`: where each object of the name list is |
 | `osm_objects.json` | generated, **committed**: the located objects (see "Where the objects are") |
-| `provenance.py` | prints the tiles' `built_from` stamp |
-| `check_built.py` | `just check-outputs`: the committed outputs match their inputs |
-| `build_candidates.py` | OSM extract(s) → `work/candidates.jsonl` |
-| `match.py` | fills `osm`/`wikidata` in `places.csv`; writes `work/matches.csv` and `REPORT.md` (`--dry-run`: only `work/matches.csv`) |
-| `build_dialect_areas.py` | `dialect_areas.csv` + OSM extract → `dialect_areas.geojson` + `dialect_areas_parts.geojson` |
 | `dialect_areas.geojson` | generated, **committed**: one polygon set per dialect — the lookup file |
 | `dialect_areas_parts.geojson` | generated, **committed**: one polygon per municipality with its `note`, plus the unassigned ones; for the `?areas` review view only, never read by Python |
-| `curate.py` | the review worklist as pins on the map: `export` → `work/curate.json`, `apply` writes the browser's decisions back into `places.csv` / `curation.csv` |
-| `export_search_index.py` | `places.csv` + `osm_objects.json` + `dialect_areas.geojson` → `web/public/data/names.json` (every dialect name, the local form, OSM's Low Saxon name, German, Danish, the QID; keyed by the row `id`, the same string the tiles carry as `frasch:ref`; stamped with `built_from`) |
 | `REPORT.md` | generated worklist |
 | `work/` | git-ignored caches (candidates, matches, Wikidata lookups, the extracts the last match used) and the curation view's `curate.json` / `curate-patch.jsonl` |
 | `bootstrap/` | the original sheet export (`sheet-export.csv`) |
-| `curate-patch.schema.json` | the JSON Schema of one line of `work/curate-patch.jsonl`: the contract between the curation view, the Vite dev server and `curate.py apply` |
-
-The `.py` files here (and `tiles/inject_names.py`, `tiles/check_tiles.py`)
-are launchers: each runs the `main()` of the module of the same name in
-`frasch/` — except `dialects.py` (`frasch/export_dialects.py`) and
-`provenance.py` (`frasch/print_provenance.py`), whose namesakes are the
-libraries under them.
+| `curate-patch.schema.json` | the JSON Schema of one line of `work/curate-patch.jsonl`: the contract between the curation view, the Vite dev server and `frasch curate apply` |
 
 ## Code
 
 All Python code is one package, `frasch/` at the repo root (installed
-editable by `uv sync`). Library code raises (`frasch.errors`: a
-`ValidationError` lists every problem a reader found); only a command's
-`main()` turns that into a message and exit status 1. Nothing is read at
-import: whatever needs the dialect registry takes it as a parameter, the
-default `names/dialects.csv` is read on first use.
+editable by `uv sync`), and its commands are run as `frasch <command>` (`uv
+run frasch <command>`, or just `frasch <command>` inside the venv):
+`[project.scripts]` in `pyproject.toml` points at the command table in
+`frasch/__main__.py`. There are no launcher scripts in `names/` or `tiles/`;
+those directories hold data, tests and the tile build. `frasch --help` lists
+the commands.
+
+| command | what |
+|---|---|
+| `update` | `just update`: runs the commands below in the pipeline's order (see [Workflow](#workflow)), skipping the slow steps whose inputs did not change |
+| `check-inputs` | `just check-inputs`: checks the hand-edited files, every problem with its line (`--fix` gives new rows an id) |
+| `candidates` | OSM extract(s) → `work/candidates.jsonl` |
+| `match` | fills `osm`/`wikidata` in `places.csv`; writes `work/matches.csv` and `REPORT.md` (`--dry-run`: only `work/matches.csv`) |
+| `curate` | the review worklist as pins on the map: `export` → `work/curate.json`, `apply` writes the browser's decisions back into `places.csv` / `curation.csv` |
+| `objects` | OSM extract(s) → `osm_objects.json`: where each object of the name list is |
+| `areas` | `dialect_areas.csv` + OSM extract → `dialect_areas.geojson` + `dialect_areas_parts.geojson` |
+| `dialects` | prints the registry; `--tags` for Planetiler, `--export` writes `web/src/generated/dialects.json` |
+| `index` | `places.csv` + `osm_objects.json` + `dialect_areas.geojson` → `web/public/data/names.json` (every dialect name, the local form, OSM's Low Saxon name, German, Danish, the QID; keyed by the row `id`, the same string the tiles carry as `frasch:ref`; stamped with `built_from`) |
+| `provenance` | prints the tiles' `built_from` stamp |
+| `check-outputs` | `just check-outputs`: the committed outputs match their inputs |
+| `inject` | writes the name tags into an OSM extract, before Planetiler (see `tiles/README.md`) |
+| `check-tiles` | `just check-tiles`: the built tiles agree with `names.json` (see `tiles/README.md`) |
+
+One flag names the same file in every command, so the path of a file is
+always given the same way: `--names` (`places.csv`), `--dialects`
+(`dialects.csv`), `--curation` (`curation.csv`), `--area-list`
+(`dialect_areas.csv`), `--areas` (`dialect_areas.geojson`), `--parts`
+(`dialect_areas_parts.geojson`), `--objects` (`osm_objects.json`), `--index`
+(`names.json`), `--registry-json` (`dialects.json`), `--report` (`REPORT.md`),
+and for the files under `work/` `--candidates`, `--matches`, `--worklist`,
+`--patch`, `--wikidata-cache` and `--extracts-state` (`--work` moves the
+whole directory). A command accepts the flags of the files it reads or
+writes; an output is named by its file's flag, there is no `--out`. Every
+default is the repository's layout, whatever the working directory.
+
+Library code raises (`frasch.errors`: a `ValidationError` lists every problem
+a reader found); only a command's `main()` turns that into a message and exit
+status 1. Nothing is read at import: whatever needs the dialect registry takes
+it as a parameter, and every command reads it from `--dialects`.
 
 Everything is typed and checked by `mypy --strict` in CI (tests included).
 A record with fixed keys is a `TypedDict` in the module that produces it
@@ -655,10 +672,11 @@ A record with fixed keys is a `TypedDict` in the module that produces it
 
 | module | what |
 |---|---|
-| `paths` | the default location of every file |
-| `errors`, `cli` | what library code raises; the `main()` wrapper that turns it into an exit status |
+| `__main__` | the command table: which module's `main()` each command runs |
+| `paths` | `Workspace`, one attribute per file of the pipeline; `Workspace.default()` is the repository's layout |
+| `errors`, `cli` | what library code raises; the `main()` wrapper that turns it into an exit status; `add_workspace_options`, the path flags above |
 | `files` | reading the hand-edited CSVs, atomic writes |
-| `registry` | the one reader of `dialects.csv` |
+| `registry` | the one reader of `dialects.csv`, and its export for the frontend (`frasch dialects --export`) |
 | `placelist` | reads/writes/validates `places.csv`: cells, references, ids, the lock |
 | `curationlist` | the one reader of `curation.csv`, and appending to it |
 | `dialects` | the dialect name logic (`dialect_name`, `local_name`, `osm_local_name`) and the area lookup (`AreaIndex`) |
@@ -666,6 +684,7 @@ A record with fixed keys is a `TypedDict` in the module that produces it
 | `geo` | the North Frisia box, its centre, haversine |
 | `osmscan`, `osmgeom` | the id-filtered passes over an extract; ring assembly and polygons |
 | `candidates`, `nameindex`, `hints` | the candidates file, the name index of the matcher and the curation export, location hints |
-| `searchindex` | builds the search index (`export_search_index` writes it, `check_built` compares it) |
-| `provenance` | the `built_from` stamps |
-| the rest | one module per command, as in the table above |
+| `searchindex` | builds and writes the search index (`frasch index`; `check_outputs` compares it) |
+| `provenance` | the `built_from` stamps, and printing them (`frasch provenance`) |
+| `check_inputs`, `check_outputs` | `frasch check-inputs` and `check-outputs` |
+| the rest | the commands' own modules: `update`, `build_candidates`, `match`, `curate`, `locate` (`objects`), `build_dialect_areas` (`areas`), `inject_names` (`inject`), `check_tiles` (`check-tiles`) |

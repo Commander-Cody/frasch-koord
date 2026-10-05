@@ -190,7 +190,7 @@ then reads TileJSON straight out of the archive itself.
 ### Dialect registry and the selector
 
 `names/dialects.csv` is the single list of North Frisian dialects for the
-whole project; `names/dialects.py --export` (`uv run just dialects`) writes it to `src/generated/dialects.json`
+whole project; `frasch dialects --export` (`uv run just dialects`) writes it to `src/generated/dialects.json`
 (`{tag, column, label, status, view}` per dialect, registry order) which
 `src/config.ts` imports — **generated, do not edit by hand.** `config.ts`
 derives the one dropdown from it:
@@ -258,7 +258,7 @@ today because there is no such polygon in the style yet.
 ### Tile attributes contract (source-layer `place`)
 
 OpenMapTiles schema plus our extras, injected by the `tiles/` build
-(`tiles/inject_names.py` and the Planetiler run — see `tiles/README.md`):
+(`frasch inject` and the Planetiler run — see `tiles/README.md`):
 
 - `class` (string): `country`, `state`, `city`, `town`, `village`, `hamlet`,
   `suburb`, `neighbourhood`, `isolated_dwelling`, `island`, … `rank`
@@ -448,7 +448,7 @@ object) and tiles built before them name the row's OSM reference (or its QID)
 instead; `entryLookup` in `src/names.ts` resolves those too — an object two
 rows claim opens the first.
 
-Written by `names/export_search_index.py` (`uv run just index`); only
+Written by `frasch index` (`uv run just index`); only
 non-empty values are exported, so an absent field really means "no such
 name". An entry lies where the first OSM object of its row lies (a node's
 location, a point inside a polygon; Planetiler places a polygon's map label
@@ -512,7 +512,7 @@ Where the data comes from (`src/names.ts`):
 - Low Saxon (`name_nds`) is the same kind of name: the list has no column for
   it, but both chains fall back to `name:nds` before German. A clicked card
   takes it from the tile, one opened from search from `names.json`
-  (`export_search_index.py` takes it from the object's entry in
+  (`frasch index` takes it from the object's entry in
   `names/osm_objects.json`). It gets its own line (`card.lowSaxon`) only where
   it differs from both the headline and the German name.
 - The generic name (`name_osm`), the `name:latin`/`name` steps near the end
@@ -545,9 +545,9 @@ or missing name" link is issue #8.
 ## Curation view (dev only)
 
 `http://localhost:5173/?curate` swaps the search panel for
-`src/dev/CuratePanel.tsx`: the rows `names/match.py` left `ambiguous`
+`src/dev/CuratePanel.tsx`: the rows `frasch match` left `ambiguous`
 or `not_found`, each with its candidates as numbered pins on the map. Export
-the worklist first — `names/curate.py export` writes `names/work/curate.json`
+the worklist first — `frasch curate export` writes `names/work/curate.json`
 — and run it under `npm run dev`; the endpoints live in a Vite plugin with
 `apply: 'serve'` (`vite-plugins/curate.ts`, `GET /__curate/worklist`,
 `GET`/`POST /__curate/patch`), and `src/main.tsx` only loads the view under
@@ -557,7 +557,7 @@ is a tool for the name list, not part of the map.
 
 Every pick (an OSM reference, a local reference, or a skip) is appended to
 `names/work/curate-patch.jsonl` — append-only, last entry per row wins, a
-`clear` withdraws one — which `names/curate.py apply` folds back into
+`clear` withdraws one — which `frasch curate apply` folds back into
 `names/places.csv` and `names/curation.csv`. Nothing in `names/` is written by
 the browser directly. The selected row is mirrored into the URL
 (`?curate&row=schorkewarw-2`, the row's `id`, next to MapLibre's view hash), so a reload or a pasted
@@ -587,7 +587,7 @@ which belongs to one `dialect_areas.csv` row only); ↑/↓
 or `j`/`k` walk the list. English only on purpose, like the curation view.
 
 Build the geometry first —
-`names/build_dialect_areas.py tiles/data/schleswig-holstein-latest.osm.pbf`
+`uv run just areas`
 writes `names/dialect_areas_parts.geojson` — and run under `npm run dev`; the
 endpoint is a Vite plugin with `apply: 'serve'` (`vite-plugins/areas.ts`,
 `GET /__areas/parts`), and like the curation view it is only loaded under

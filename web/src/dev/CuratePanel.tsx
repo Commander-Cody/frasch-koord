@@ -2,11 +2,11 @@
  * Curation review view (`?curate`, dev only, English-only on purpose — this is
  * a tool for the name-list owner, not part of the public map).
  *
- * It shows the rows `names/curate.py export` could not decide (`ambiguous`) or
+ * It shows the rows `frasch curate export` could not decide (`ambiguous`) or
  * could not find at all (`not_found`), drops the candidates on the map as
  * numbered pins, and writes every pick to `names/work/curate-patch.jsonl`
  * through the dev-server endpoints in `web/vite-plugins/curate.ts`.
- * `names/curate.py apply` later folds that patch into places.csv/curation.csv.
+ * `frasch curate apply` later folds that patch into places.csv/curation.csv.
  *
  * One place can be several OSM objects (a node and its area, a landscape made
  * of relations): tick candidates or lookup results — or shift-click their pins
@@ -149,7 +149,7 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
       needs={
         <>
           The curation view needs the Vite dev server (<code>npm run dev</code>) and a worklist
-          exported with <code>names/curate.py export</code>.
+          exported with <code>frasch curate export</code>.
         </>
       }
       loaded={worklist !== null}

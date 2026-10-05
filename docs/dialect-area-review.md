@@ -13,7 +13,7 @@ OSM reference, which stays put when rows are added or removed.
 ## How to check a row
 
 ```bash
-.venv/bin/python names/build_dialect_areas.py tiles/data/schleswig-holstein-latest.osm.pbf
+uv run frasch areas tiles/data/schleswig-holstein-latest.osm.pbf
 cd web && npm run dev      # then open http://localhost:5173/?areas
 ```
 

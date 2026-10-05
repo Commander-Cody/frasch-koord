@@ -23,7 +23,7 @@ import type { Plugin } from 'vite';
 const BASE = '/__areas/';
 
 /** Told to the user when the file is not there yet; the only way to make one. */
-const BUILD_HINT = 'run names/build_dialect_areas.py tiles/data/schleswig-holstein-latest.osm.pbf';
+const BUILD_HINT = 'run `just areas`';
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.statusCode = status;

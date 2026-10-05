@@ -54,7 +54,7 @@ export interface DialectEntry {
 
 /**
  * The dialect registry, in registry order. Generated from names/dialects.csv
- * by `names/dialects.py --export` (`just dialects`) — do not edit generated/dialects.json by hand.
+ * by `frasch dialects --export` (`just dialects`) — do not edit generated/dialects.json by hand.
  * Cast because a JSON import widens every value to `string`;
  * frasch/registry.py checks `status` and `view` before it exports them.
  */

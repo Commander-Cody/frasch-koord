@@ -1,5 +1,5 @@
 // The browser's side of the curation worklist (names/work/curate.json, which
-// `names/curate.py export` writes): its shape, loading it together with the
+// `frasch curate export` writes): its shape, loading it together with the
 // patch, the list's filter, and the text helpers of the decision forms.
 
 import type { PatchEntry } from './curatePatch';
@@ -10,7 +10,7 @@ export interface CurateCandidate {
   ref: string;
   name: string;
   class: string;
-  /** Distance to the hint point in km, as computed by match.py. */
+  /** Distance to the hint point in km, as computed by `frasch match`. */
   km: number;
   /** Absent/null when candidates.jsonl had no position for the object. */
   lon?: number | null;
@@ -30,7 +30,7 @@ export interface CurateRow {
   line: number;
   kind: string;
   result: 'ambiguous' | 'not_found';
-  /** The Frisian name match.py worked with. */
+  /** The Frisian name `frasch match` worked with. */
   name: string;
   /** Every non-empty name column, raw cell text, keyed by column name. */
   names: Record<string, string>;

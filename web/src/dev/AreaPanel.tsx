@@ -11,7 +11,7 @@
  * coverage cannot be missed.
  *
  * Nothing writes back. Edit `names/dialect_areas.csv`, re-run
- * `names/build_dialect_areas.py`, press Reload.
+ * `just areas`, press Reload.
  *
  * English-only on purpose, like the curation view: this is a tool, not the map.
  */
@@ -280,7 +280,7 @@ export default function AreaPanel({ mapRef }: AreaPanelProps) {
   // `?areas&area=relation/1147134` opens the municipality with that OSM
   // reference — a link from the checklist, or just resuming where the last
   // session stopped. A reference belongs to one dialect_areas.csv row only
-  // (frasch/check.py enforces it), and unlike a line number it stays put when
+  // (frasch/check_inputs.py enforces it), and unlike a line number it stays put when
   // rows are added. An unknown one is ignored.
   const openLinkedArea = useCallback(
     (ref: string) => {
@@ -416,7 +416,7 @@ export default function AreaPanel({ mapRef }: AreaPanelProps) {
       needs={
         <>
           This view needs the Vite dev server (<code>npm run dev</code>) and the geometry built by{' '}
-          <code>names/build_dialect_areas.py</code>.
+          <code>just areas</code>.
         </>
       }
       loaded={collection !== null}
@@ -524,7 +524,7 @@ export default function AreaPanel({ mapRef }: AreaPanelProps) {
               <p className="dev-panel-hint">
                 No row claims this municipality, so nothing inside it gets a dialect. To add it,
                 paste this into <code>names/dialect_areas.csv</code>, re-run
-                <code> names/build_dialect_areas.py</code>, then press Reload.
+                <code> just areas</code>, then press Reload.
               </p>
               <button
                 type="button"
