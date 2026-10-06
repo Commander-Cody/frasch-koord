@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from frasch import placelist, registry
+from frasch import placelist, registry, tables
 from frasch.errors import PipelineError, Problem, ValidationError
 from conftest import REGISTRY, TOFTUM, places_text
 
@@ -29,8 +29,9 @@ def test_a_missing_list_is_a_pipeline_error_not_a_traceback(tmp_path: Path) -> N
 def test_refuses_a_semicolon_separated_list_with_a_clear_message(tmp_path: Path) -> None:
     path = tmp_path / "places.csv"
     path.write_text(places_text([TOFTUM]).replace(",", ";"), encoding="utf-8")
-    with pytest.raises(ValidationError, match="separated by `;`"):
+    with pytest.raises(ValidationError) as exc:
         placelist.read(str(path), REGISTRY)
+    assert exc.value.problems == [Problem(str(path), 1, tables.SEMICOLON_SEPARATED)]
 
 
 def test_refuses_a_row_with_a_comma_too_few_as_such(tmp_path: Path) -> None:
@@ -91,6 +92,17 @@ def test_every_broken_row_is_reported_at_once(tmp_path: Path) -> None:
     assert exc.value.problems == [
         Problem(str(path), 2, "unknown kind 'town'"),
         Problem(str(path), 4, "unknown status 'done' (auto / ok / skip / empty)"),
+    ]
+
+
+def test_every_problem_of_a_row_is_reported_not_only_its_first(tmp_path: Path) -> None:
+    path = tmp_path / "places.csv"
+    path.write_text(places_text([{**TOFTUM, "kind": "town", "status": "done"}]), encoding="utf-8")
+    with pytest.raises(ValidationError) as exc:
+        placelist.read(str(path), REGISTRY)
+    assert exc.value.problems == [
+        Problem(str(path), 2, "unknown kind 'town'"),
+        Problem(str(path), 2, "unknown status 'done' (auto / ok / skip / empty)"),
     ]
 
 

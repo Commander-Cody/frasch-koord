@@ -44,6 +44,16 @@ def test_every_broken_row_is_reported_at_once(tmp_path: Path) -> None:
     ]
 
 
+def test_the_problems_are_in_the_order_of_the_lines(tmp_path: Path) -> None:
+    # Whatever kind they are of: a broken rule above a comma too few.
+    path = write(
+        tmp_path,
+        HEADER + "frr-x-fering,fering,Fering,alive,no,\n" + "frr-x-mooring,mooring,Mooring\n",
+    )
+    _, problems = registry.rows(path)
+    assert [p.line for p in problems] == [2, 3]
+
+
 def test_an_unknown_tag_is_a_pipeline_error(tmp_path: Path) -> None:
     reg = registry.read(write(tmp_path, HEADER + MOORING))
     with pytest.raises(PipelineError, match="frr-x-fering"):

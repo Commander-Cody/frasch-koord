@@ -293,10 +293,12 @@ def header_problem(fields: Sequence[str], reg: Registry) -> str | None:
             "`lat`/`lon` moved to names/curation.csv (2026-09-18): reference "
             "the place as local/<slug> in `osm` and delete the two columns"
         )
-    what = tables.header_problem(fields, columns(reg))
+    if what := tables.unreadable_header(fields):
+        return what
+    what = tables.missing_columns(fields, columns(reg))
     if what and "id" not in fields:
         what += " (`frasch check-inputs --fix` adds `id`)"
-    elif what and what.startswith("missing"):
+    elif what:
         what += " (dialect columns come from names/dialects.csv)"
     return what
 
@@ -381,12 +383,12 @@ def fill_ids(path: str, reg: Registry) -> int:
     without an id; a row whose cells do not line up with the header stops it,
     since there is no telling which cell would be the id."""
     found = table(path)
+    if found.problems:
+        raise ValidationError(found.problems)
     header = found.header
     fields = header if "id" in header else header + ["id"]
     if what := header_problem(fields, reg):
         raise ValidationError([Problem(path, 1, what)])
-    if found.problems:
-        raise ValidationError(found.problems)
     rows = [dict(zip(header, cells, strict=True)) for _, cells in found.rows]
     taken = {r["id"].strip() for r in rows if r.get("id", "").strip()}
     given = 0
@@ -412,7 +414,9 @@ def table(path: str) -> Table:
 
 
 def ids(names: Table) -> set[str]:
-    """The `id` cells of the name list, whatever else is wrong with its rows."""
+    """The `id` cells of the rows of the name list, whatever rule they break.
+    A row whose cells do not line up with the header is not among them, and
+    under an unreadable header none is."""
     if "id" not in names.header:
         return set()
     return {row["id"] for _, row in names.records()}

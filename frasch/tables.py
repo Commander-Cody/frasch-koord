@@ -59,14 +59,19 @@ def _decode(data: bytes) -> str:
     return data.decode("utf-8-sig")
 
 
-def header_problem(fields: Sequence[str], required: Sequence[str]) -> str | None:
-    """What makes a CSV header unreadable -- a `;`-separated export, a column
-    named twice, a missing one -- or None."""
+def unreadable_header(fields: Sequence[str]) -> str | None:
+    """What makes a CSV header unreadable whatever its columns should be -- a
+    `;`-separated export, a column named twice -- or None."""
     if len(fields) == 1 and ";" in fields[0]:
         return SEMICOLON_SEPARATED
     twice = sorted({c for c in fields if fields.count(c) > 1})
     if twice:
         return f"column(s) named twice: {', '.join(twice)}"
+    return None
+
+
+def missing_columns(fields: Sequence[str], required: Sequence[str]) -> str | None:
+    """The `required` columns a CSV header lacks, as a problem, or None."""
     missing = [c for c in required if c not in fields]
     if missing:
         return f"missing column(s) {', '.join(missing)}"
@@ -88,7 +93,7 @@ def read_table(path: str, required: Sequence[str] = ()) -> Table:
         data = fh.read()
     reader = csv.reader(io.StringIO(_decode(data), newline=""))
     header = next(reader, [])
-    if what := header_problem(header, required):
+    if what := unreadable_header(header) or missing_columns(header, required):
         return Table(path, data, header, [], [Problem(path, 1, what)])
     rows: list[tuple[int, list[str]]] = []
     problems: list[Problem] = []

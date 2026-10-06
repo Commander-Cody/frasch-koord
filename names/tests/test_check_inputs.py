@@ -10,7 +10,7 @@ from typing import Protocol
 
 import pytest
 
-from frasch import check_inputs, placelist
+from frasch import check_inputs, placelist, tables
 from frasch.__main__ import main
 from frasch.errors import Problem
 from frasch.paths import Workspace
@@ -462,6 +462,23 @@ def test_fix_gives_each_new_row_an_id_from_its_frisian_name(ws: Workspace, world
         "danemark",
         "toftem",
         "toftem-2",
+    ]
+
+
+def test_fix_reports_a_semicolon_separated_list_as_such(
+    ws: Workspace, world: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # It used to look for its columns in `<the one cell>, id` and miss them all.
+    places = world / "places.csv"
+    places.write_text(places_text([TOFTUM]).replace(",", ";"), encoding="utf-8")
+    fix(ws)
+    assert f"no id given: {places}:1: {tables.SEMICOLON_SEPARATED}\n" in capsys.readouterr().err
+
+
+def test_a_list_without_the_id_column_is_reported_on_the_header(names: CheckNames) -> None:
+    without = "".join(line.rsplit(",", 1)[0] + "\n" for line in places_text([TOFTUM]).splitlines())
+    assert [(p.line, p.message) for p in names(without)] == [
+        (1, "missing column(s) id (`frasch check-inputs --fix` adds `id`)")
     ]
 
 
