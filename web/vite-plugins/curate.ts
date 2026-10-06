@@ -3,8 +3,8 @@
  * (`?curate`, see src/dev/CuratePanel.tsx).
  *
  * The browser cannot read or append to files in `names/work/`, so the Vite dev
- * server does it: it hands out the worklist `names/curate.py export` wrote and
- * appends every pick to an append-only JSONL patch that `names/curate.py apply`
+ * server does it: it hands out the worklist `frasch curate export` wrote and
+ * appends every pick to an append-only JSONL patch that `frasch curate apply`
  * consumes. Dev only (`apply: 'serve'`) — a production build has no such thing,
  * which is why the panel tells the user to start the dev server when the fetch
  * fails.
@@ -215,7 +215,7 @@ export function createCurateMiddleware(paths: CuratePaths): Connect.NextHandleFu
             text = await readFile(worklistPath, 'utf8');
           } catch (err) {
             if (!isMissing(err)) throw err;
-            sendJson(res, 404, { error: 'run names/curate.py export' });
+            sendJson(res, 404, { error: 'run frasch curate export' });
             return;
           }
           // Passed through verbatim: the exporter owns the schema.

@@ -1,12 +1,15 @@
-"""Shared fixtures for the name-pipeline tests: a throwaway copy of the name
-list's world (places.csv, curation.csv, work/) in a temp directory, built from
-the real column layout (names/dialects.csv)."""
+"""Shared fixtures for the name-pipeline tests: a throwaway workspace in a
+temp directory (`ws`; `world` is its names/ with places.csv, curation.csv,
+dialects.csv and work/), and the dialect registry the tests work with -- one
+of their own, so that an edit to names/dialects.csv changes no test."""
 
 from __future__ import annotations
 
 import csv
+import dataclasses
 import io
 import json
+import os
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 
@@ -14,18 +17,45 @@ import pytest
 
 from frasch import curationlist, placelist
 from frasch.candidates import Candidate, HeaderLine
+from frasch.paths import Workspace
+from frasch.registry import Dialect, Registry
+
+# the dialects of the tests: (column, label, status, view)
+_DIALECTS = [
+    ("mooring", "Mooring", "living", "yes"),
+    ("wieding", "Wiedingharder", "living", "no"),
+    ("nordgoes", "Nordergoesharder", "living", "no"),
+    ("suedgoes", "Südergoesharder", "extinct", "no"),
+    ("fering", "Fering", "living", "no"),
+    ("oomrang", "Öömrang", "living", "no"),
+    ("solring", "Sölring", "living", "no"),
+    ("hallig", "Halligfriesisch", "living", "no"),
+]
+REGISTRY = Registry(
+    [
+        Dialect(
+            tag=f"frr-x-{column}", column=column, label=label, status=status, view=view, note=""
+        )
+        for column, label, status, view in _DIALECTS
+    ]
+)
+# the same registry as a dialects.csv
+REGISTRY_CSV = "tag,column,label,status,view,note\n" + "".join(
+    f"{d['tag']},{d['column']},{d['label']},{d['status']},{d['view']},\n" for d in REGISTRY
+)
 
 
 def places_text(rows: Iterable[Mapping[str, str]]) -> str:
-    """A places.csv with the real header; `rows` are dicts of the cells that
-    are not empty.  A row without an `id` key gets `row-<n>` (n counting from
-    1); pass `id` explicitly -- even empty -- to control it."""
+    """A places.csv with the header REGISTRY gives it; `rows` are dicts of the
+    cells that are not empty.  A row without an `id` key gets `row-<n>` (n
+    counting from 1); pass `id` explicitly -- even empty -- to control it."""
+    columns = placelist.columns(REGISTRY)
     buf = io.StringIO(newline="")
-    w = csv.DictWriter(buf, fieldnames=placelist.columns(), lineterminator="\n")
+    w = csv.DictWriter(buf, fieldnames=columns, lineterminator="\n")
     w.writeheader()
     for n, r in enumerate(rows, start=1):
         r = {"id": f"row-{n}", **r}
-        w.writerow({k: r.get(k, "") for k in placelist.columns()})
+        w.writerow({k: r.get(k, "") for k in columns})
     return buf.getvalue()
 
 
@@ -69,6 +99,7 @@ def write_candidates(path: Path, *recs: Candidate | HeaderLine) -> Path:
 
 
 CURATION_HEADER = "osm,name,lat,lon,set_tags,minzoom,maxzoom,polygon_km2,note\n"
+AREA_LIST_HEADER = "dialect,name,osm,note\n"
 
 
 def curation_file(directory: Path, *rows: Mapping[str, str]) -> str:
@@ -85,8 +116,51 @@ def curation_file(directory: Path, *rows: Mapping[str, str]) -> str:
 
 
 @pytest.fixture
-def world(tmp_path: Path) -> Path:
-    """`tmp_path` laid out like names/: places.csv, curation.csv, work/."""
-    (tmp_path / "work").mkdir()
-    (tmp_path / "curation.csv").write_text(CURATION_HEADER, encoding="utf-8")
-    return tmp_path
+def ws(tmp_path: Path) -> Workspace:
+    """A workspace in `tmp_path`, with the dialect registry REGISTRY, an
+    empty curation, an empty dialect area list and its work directory."""
+    workspace = Workspace.at(tmp_path)
+    os.makedirs(os.path.dirname(workspace.lock))
+    Path(workspace.curation).write_text(CURATION_HEADER, encoding="utf-8")
+    Path(workspace.dialects).write_text(REGISTRY_CSV, encoding="utf-8")
+    Path(workspace.area_list).write_text(AREA_LIST_HEADER, encoding="utf-8")
+    return workspace
+
+
+def workspace(world: Path) -> Workspace:
+    """The workspace whose names/ directory `world` is."""
+    return Workspace.at(world.parent)
+
+
+def flat_workspace(directory: Path) -> Workspace:
+    """A workspace whose name files all lie in `directory` itself, as the
+    tile-build tests lay theirs out (the dialect areas as areas.geojson);
+    writes its dialect registry, REGISTRY."""
+    (directory / "dialects.csv").write_text(REGISTRY_CSV, encoding="utf-8")
+    return dataclasses.replace(
+        Workspace.at(directory),
+        names=str(directory / "places.csv"),
+        dialects=str(directory / "dialects.csv"),
+        curation=str(directory / "curation.csv"),
+        areas=str(directory / "areas.geojson"),
+        objects=str(directory / "osm_objects.json"),
+        index=str(directory / "names.json"),
+    )
+
+
+def path_options(ws: Workspace, *names: str) -> list[str]:
+    """What points a command at the files `names` of `ws`: the path option of
+    each (`work`: of its scratch directory)."""
+    paths = {"work": os.path.dirname(ws.lock)}
+    return [
+        arg
+        for name in names
+        for arg in ("--" + name.replace("_", "-"), paths.get(name) or getattr(ws, name))
+    ]
+
+
+@pytest.fixture
+def world(ws: Workspace) -> Path:
+    """The names/ directory of `ws`: places.csv, curation.csv, dialects.csv,
+    work/."""
+    return Path(ws.names).parent

@@ -12,7 +12,8 @@ import pytest
 import requests
 
 from frasch import match
-from conftest import places_text
+from frasch.errors import PipelineError
+from conftest import REGISTRY, places_text, workspace
 
 COUNTRIES = [
     {
@@ -33,7 +34,7 @@ COUNTRIES = [
 
 
 class RunMatch(Protocol):
-    def __call__(self, *extra: str) -> int: ...
+    def __call__(self, offline: bool = False) -> int: ...
 
 
 # the `outage` fixture: the positional arguments of every Session.get call
@@ -47,22 +48,8 @@ def run(world: Path) -> tuple[RunMatch, Path, Path]:
     (world / "work" / "candidates.jsonl").write_text("", encoding="utf-8")
     cache = world / "work" / "wikidata-countries.json"
 
-    def run_match(*extra: str) -> int:
-        return match.main(
-            [
-                "--names",
-                str(places),
-                "--candidates",
-                str(world / "work" / "candidates.jsonl"),
-                "--matches",
-                str(world / "work" / "matches.csv"),
-                "--report",
-                str(world / "REPORT.md"),
-                "--wikidata-cache",
-                str(cache),
-                *extra,
-            ]
-        )
+    def run_match(offline: bool = False) -> int:
+        return match.run(workspace(world), REGISTRY, offline=offline)
 
     return run_match, places, cache
 
@@ -101,7 +88,7 @@ def test_offline_without_cache_keeps_the_country_rows_and_fails(
 ) -> None:
     run_match, places, _cache = run
     before = places.read_bytes()
-    assert run_match("--offline") == 1
+    assert run_match(offline=True) == 1
     assert not outage, "--offline must not call the API"
     assert places.read_bytes() == before
 
@@ -111,30 +98,28 @@ def test_not_found_is_still_not_found(run: tuple[RunMatch, Path, Path], outage: 
     still clears the row the matcher filled earlier."""
     run_match, places, cache = run
     cache.write_text(json.dumps({"Dänemark": "", "Niederlande": "Q55"}), encoding="utf-8")
-    assert run_match("--offline") == 0
+    assert run_match(offline=True) == 0
     text = places.read_text(encoding="utf-8")
     assert "Q35" not in text
     assert "Q55" in text
 
 
 def test_corrupt_cache_fails_instead_of_starting_empty(
-    run: tuple[RunMatch, Path, Path], outage: Calls, capsys: pytest.CaptureFixture[str]
+    run: tuple[RunMatch, Path, Path], outage: Calls
 ) -> None:
     run_match, places, cache = run
     before = places.read_bytes()
     cache.write_text('{"Dänemark": "Q35", ', encoding="utf-8")
-    assert run_match("--offline") == 1
-    assert "Wikidata cache" in capsys.readouterr().err
+    with pytest.raises(PipelineError, match="Wikidata cache"):
+        run_match(offline=True)
     assert places.read_bytes() == before
 
 
-def test_cache_of_the_wrong_shape_fails(
-    run: tuple[RunMatch, Path, Path], outage: Calls, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_cache_of_the_wrong_shape_fails(run: tuple[RunMatch, Path, Path], outage: Calls) -> None:
     run_match, _places, cache = run
     cache.write_text('["Q35"]', encoding="utf-8")
-    assert run_match("--offline") == 1
-    assert "delete the file" in capsys.readouterr().err
+    with pytest.raises(PipelineError, match="delete the file"):
+        run_match(offline=True)
 
 
 def test_user_agent_names_a_contact() -> None:
@@ -153,11 +138,7 @@ def test_each_country_answer_shows_in_matches_csv_and_the_summary(
     cache = world / "work" / "wikidata-countries.json"
     cache.write_text(json.dumps({"Dänemark": "Q35", "Niederlande": ""}), encoding="utf-8")
     matches = world / "work" / "matches.csv"
-    code = match.main(
-        ["--names", str(places), "--candidates", str(world / "work" / "candidates.jsonl")]
-        + ["--matches", str(matches), "--report", str(world / "REPORT.md")]
-        + ["--wikidata-cache", str(cache), "--offline"]
-    )
+    code = match.run(workspace(world), REGISTRY, offline=True)
     assert code == 1
     with open(matches, encoding="utf-8", newline="") as fh:
         got = [

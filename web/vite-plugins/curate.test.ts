@@ -201,7 +201,7 @@ describe('createCurateMiddleware', () => {
     ['without an id', { ...validEntry, id: undefined }],
     ['with an empty id', { ...validEntry, id: '' }],
     ['with a line number for an id', { ...validEntry, id: 3 }],
-  ])('rejects an entry %s with 400: curate.py apply finds the row by it', async (_, entry) => {
+  ])('rejects an entry %s with 400: frasch curate apply finds the row by it', async (_, entry) => {
     const res = await post(jsonHeaders, JSON.stringify(entry));
     expect(res.status).toBe(400);
     expect(await readPatchEntries()).toEqual([]);

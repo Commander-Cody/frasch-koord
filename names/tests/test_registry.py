@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from frasch import registry
+from frasch.__main__ import main
 from frasch.errors import ValidationError
 
 HEADER = "tag,column,label,status,view,note\n"
@@ -47,3 +48,24 @@ def test_an_unknown_tag_is_a_validation_error(tmp_path: Path) -> None:
     reg = registry.read(write(tmp_path, HEADER + MOORING))
     with pytest.raises(ValidationError, match="frr-x-fering"):
         reg.column_of("frr-x-fering")
+
+
+def test_the_frontend_gets_the_registry_without_the_notes(tmp_path: Path) -> None:
+    reg = registry.read(
+        write(tmp_path, HEADER + "frr-x-mooring,mooring,Mooring,living,yes,Bökingharde\n")
+    )
+    out = tmp_path / "generated" / "dialects.json"
+    registry.export_json(reg, str(out))
+    assert out.read_text(encoding="utf-8") == (
+        '[{"tag":"frr-x-mooring","column":"mooring","label":"Mooring",'
+        '"status":"living","view":"yes"}]\n'
+    )
+
+
+def test_the_export_command_writes_the_file_its_option_names(tmp_path: Path) -> None:
+    out = tmp_path / "dialects.json"
+    dialects_csv = write(tmp_path, HEADER + MOORING)
+    assert (
+        main(["dialects", "--export", "--dialects", dialects_csv, "--registry-json", str(out)]) == 0
+    )
+    assert out.exists()

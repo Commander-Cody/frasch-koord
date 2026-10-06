@@ -1,8 +1,7 @@
-#!/usr/bin/env python3
 """Check the hand-edited name files for damage -- all of it, with line numbers.
 
-    .venv/bin/python names/check.py            # exit 1 if anything is wrong
-    .venv/bin/python names/check.py --fix      # first give new rows an id
+    frasch check-inputs            # exit 1 if anything is wrong
+    frasch check-inputs --fix      # first give new rows an id
 
 `placelist.read` refuses the problems it cannot live with, but silently
 accepts some it can (a row with a comma too few is padded, and its names
@@ -14,13 +13,13 @@ spreadsheet export or a hand edit broke.
 
 from __future__ import annotations
 
-import argparse
 import csv
 import os
 import re
 import sys
 from collections.abc import Container, Sequence
 from dataclasses import dataclass
+from typing import NamedTuple
 
 from frasch import (
     cli,
@@ -28,11 +27,10 @@ from frasch import (
     dialects,
     errors,
     files,
-    paths,
     placelist,
     registry,
 )
-from frasch.paths import StrPath
+from frasch.paths import Workspace
 from frasch.registry import Registry
 
 
@@ -189,36 +187,44 @@ def check_places(
     return problems
 
 
-def variant_columns(reg: Registry | None) -> list[str]:
+def variant_columns(reg: Registry) -> list[str]:
     """The name columns: `;`-separated variants with `(…)` remarks, the
     conventions names/README.md sets for every name cell."""
     return placelist.name_columns(reg) + ["de", "da"]
 
 
-def check(
-    places: StrPath = paths.PLACES,
-    curation: StrPath = paths.CURATION,
-    dialects_csv: StrPath = paths.DIALECTS,
-    areas: StrPath = paths.DIALECT_AREA_LIST,
-) -> list[Problem]:
-    """Every problem in the name list `places`, the map curation `curation`,
-    the dialect registry `dialects_csv` and the dialect area list `areas`,
-    file by file, in file order.  The name list is checked against the sound
-    rows of the registry (not at all when it has none, the registry's
-    problems say why), the area list only against a sound registry."""
-    places_path, curation_path, dialects_path, areas_path = (
-        os.fspath(path) for path in (places, curation, dialects_csv, areas)
-    )
-    curation_problems, positioned = check_curation(curation_path, row_ids(places_path))
-    reg, registry_problems = check_dialects(dialects_path)
-    place_problems = check_places(places_path, curation_path, positioned, reg) if reg else []
-    area_problems = check_dialect_areas(areas_path, reg) if reg and not registry_problems else []
+def check(ws: Workspace) -> list[Problem]:
+    """Every problem in the name list, the map curation, the dialect registry
+    and the dialect area list of the workspace, file by file, in file order.
+    The name list is checked against the sound rows of the registry (not at
+    all when it has none, the registry's problems say why), the area list
+    only against a sound registry."""
+    reg, registry_problems = check_dialects(ws.dialects)
+    return _check(ws, reg, registry_problems)
+
+
+def _check(ws: Workspace, reg: Registry | None, registry_problems: list[Problem]) -> list[Problem]:
+    """`check`, with the registry as `check_dialects` read it."""
+    curation_problems, positioned = check_curation(ws.curation, row_ids(ws.names))
+    place_problems = check_places(ws.names, ws.curation, positioned, reg) if reg else []
+    area_problems = check_dialect_areas(ws.area_list, reg) if reg and not registry_problems else []
     return place_problems + curation_problems + registry_problems + area_problems
+
+
+def fill_ids(ws: Workspace, reg: Registry) -> None:
+    """Give every row of the name list without an `id` one, and say how many
+    got one -- or why none did: the report `check` gives lists that problem
+    and every other one."""
+    try:
+        with placelist.lock(ws.lock):
+            print(f"gave {placelist.fill_ids(ws.names, reg)} row(s) an id", file=sys.stderr)
+    except errors.PipelineError as exc:
+        print(f"no id given: {exc}", file=sys.stderr)
 
 
 def markdown(problems: Sequence[Problem]) -> str:
     """The result as a Markdown table, for the summary page of a CI run."""
-    out = ["### names/check.py", ""]
+    out = ["### frasch check-inputs", ""]
     if not problems:
         return "\n".join(out + ["no problems", ""]) + "\n"
     out += [f"{len(problems)} problem(s):", "", "| where | problem |", "|---|---|"]
@@ -231,13 +237,37 @@ def markdown(problems: Sequence[Problem]) -> str:
     return "\n".join(out + [""]) + "\n"
 
 
+class Checked(NamedTuple):
+    """What `run` found: the problems, and the dialect registry as it read
+    it -- the sound rows, so the whole of it when there are no problems."""
+
+    problems: list[Problem]
+    registry: Registry | None
+
+
+def run(ws: Workspace, *, fix: bool = False, summary: str | None = None) -> Checked:
+    """Check the workspace's hand-edited files and print what is wrong with
+    them.  `fix`: first give the name list's new rows an id.  `summary`: a
+    file to append the result to as Markdown."""
+    reg, registry_problems = check_dialects(ws.dialects)
+    if fix and reg and not registry_problems:
+        fill_ids(ws, reg)
+    elif fix:
+        print(f"no id given: {ws.dialects} has problems", file=sys.stderr)
+    problems = _check(ws, reg, registry_problems)
+    for p in problems:
+        print(p)
+    if summary:
+        with open(summary, "a", encoding="utf-8") as fh:
+            fh.write(markdown(problems))
+    print(f"{len(problems)} problem(s)" if problems else "no problems", file=sys.stderr)
+    return Checked(problems, reg)
+
+
 @cli.command
 def main(argv: Sequence[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--names", default=paths.PLACES)
-    ap.add_argument("--curation", default=paths.CURATION)
-    ap.add_argument("--dialects", default=paths.DIALECTS)
-    ap.add_argument("--areas", default=paths.DIALECT_AREA_LIST)
+    ap = cli.parser("check-inputs", __doc__.split("\n\n")[0])
+    cli.add_workspace_options(ap, "names", "curation", "dialects", "area_list", "work")
     ap.add_argument(
         "--fix",
         action="store_true",
@@ -249,21 +279,4 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="also append the result as Markdown to FILE (CI passes $GITHUB_STEP_SUMMARY)",
     )
     a = ap.parse_args(argv)
-    if a.fix:
-        try:
-            with placelist.lock(a.names):
-                print(
-                    f"gave {placelist.fill_ids(a.names, registry.read(a.dialects))} row(s) an id",
-                    file=sys.stderr,
-                )
-        except errors.PipelineError as exc:
-            # the report below lists this problem and every other one
-            print(f"no id given: {exc}", file=sys.stderr)
-    problems = check(a.names, a.curation, a.dialects, a.areas)
-    for p in problems:
-        print(p)
-    if a.summary:
-        with open(a.summary, "a", encoding="utf-8") as fh:
-            fh.write(markdown(problems))
-    print(f"{len(problems)} problem(s)" if problems else "no problems", file=sys.stderr)
-    return 1 if problems else 0
+    return 1 if run(cli.workspace(a), fix=a.fix, summary=a.summary).problems else 0

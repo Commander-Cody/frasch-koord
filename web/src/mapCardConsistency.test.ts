@@ -90,7 +90,7 @@ function listed(
 }
 
 // A clicked label of a place in the name list: its names.json entry together
-// with the tile properties of its object, as tiles/inject_names.py writes
+// with the tile properties of its object, as `frasch inject` writes
 // them. The card then reads the entry first, so these exercise cardEntry's
 // merge as well. Since issue #61 the injector writes the list's `de` as
 // `name:de`, the step where the card's German name comes from the list.

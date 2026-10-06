@@ -12,9 +12,11 @@ names/dialect_areas.geojson -- records its inputs in a `built_from` object:
   is -- Geofabrik's `-latest` files change every day).
 
 The search index and the tiles share one stamp (`stamp`): the files both
-are built from.  tiles/build.sh writes it into the archive's metadata
-(names/provenance.py prints it, see frasch.print_provenance), and the
-frontend warns when the stamp of names.json differs from the tiles'.
+are built from.  tiles/build.sh writes it into the archive's metadata, and
+the frontend warns when the stamp of names.json differs from the tiles'.
+
+`frasch provenance` prints that stamp, `{"built_from": {...}}`, for
+tiles/build.sh.
 """
 
 from __future__ import annotations
@@ -22,11 +24,11 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import TypedDict
 
-from frasch import osmscan
-from frasch.paths import StrPath
+from frasch import cli, osmscan
+from frasch.paths import StrPath, Workspace
 
 
 class ExtractStamp(TypedDict):
@@ -72,22 +74,29 @@ def recorded(path: StrPath) -> BuiltFrom:
     return found
 
 
-def stamp(
-    places: StrPath, dialects: StrPath, curation: StrPath, areas: StrPath, objects: StrPath
-) -> BuiltFrom:
+def stamp(ws: Workspace) -> BuiltFrom:
     """What the search index and the tiles are built from: the name list,
     the dialect registry, the curation, the dialect areas and the located
     objects -- and, through the objects file, the extracts they were located
     in."""
-    with open(objects, encoding="utf-8") as fh:
+    with open(ws.objects, encoding="utf-8") as fh:
         extracts: list[ExtractStamp] = json.load(fh)["built_from"]["extracts"]
     return built_from(
         {
-            "places.csv": places,
-            "dialects.csv": dialects,
-            "curation.csv": curation,
-            "dialect_areas.geojson": areas,
-            "osm_objects.json": objects,
+            "places.csv": ws.names,
+            "dialects.csv": ws.dialects,
+            "curation.csv": ws.curation,
+            "dialect_areas.geojson": ws.areas,
+            "osm_objects.json": ws.objects,
         },
         extracts,
     )
+
+
+@cli.command
+def main(argv: Sequence[str] | None = None) -> int:
+    ap = cli.parser("provenance", __doc__)
+    cli.add_workspace_options(ap, "names", "dialects", "curation", "areas", "objects")
+    ws = cli.workspace(ap.parse_args(argv))
+    print(json.dumps({"built_from": stamp(ws)}, separators=(",", ":")))
+    return 0

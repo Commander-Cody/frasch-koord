@@ -16,10 +16,13 @@
 #   dialects                                              web/src/generated/dialects.json
 #
 # `update` runs the name part of it in one go -- after an edit to places.csv
-# or a session in the curation view: ids and checks, the view's decisions,
-# candidates, match, objects, areas, the dialect registry, index, the
-# worklist for the view, check-outputs.
-# It skips the slow steps whose inputs did not change (names/update.py).
+# or a session in the curation view: ids and check-inputs, the view's
+# decisions, candidates, match, objects, areas, the dialect registry, index,
+# the worklist for the view, check-outputs.
+# It skips the slow steps whose inputs did not change (frasch/update.py).
+#
+# The pipeline's commands are those of `frasch` (`uv run frasch --help`); a
+# recipe has its command's name.
 #
 # `objects`, `areas`, `index` and `dialects` write committed files;
 # `check-outputs` (CI) proves they match their inputs.  just has no file
@@ -31,13 +34,13 @@
 
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
-py := "uv run python"
+frasch := "uv run frasch"
 # the region the tiles are built for, and the extracts the name list's
 # objects are found in -- North Frisia reaches into Denmark (Fanø, Röm, Ripen)
 region := "schleswig-holstein"
 extracts := "tiles/data/schleswig-holstein-latest.osm.pbf tiles/data/denmark-latest.osm.pbf"
 # in CI, where GITHUB_STEP_SUMMARY names the run's summary page, pytest and
-# names/check.py write their overviews onto it
+# `frasch check-inputs` write their overviews onto it
 summary := env("GITHUB_STEP_SUMMARY", "")
 pytest_summary := if summary == "" { "" } else { "--md-report --md-report-flavor gfm --md-report-color never --md-report-zeros empty --md-report-output " + quote(summary) }
 names_check_summary := if summary == "" { "" } else { "--summary " + quote(summary) }
@@ -72,7 +75,7 @@ check-python:
       "uv run ruff format --check ." \
       "uv run mypy" \
       "uv run pytest {{pytest_summary}}" \
-      "{{py}} names/check.py {{names_check_summary}}" \
+      "{{frasch}} check-inputs {{names_check_summary}}" \
       "{{just_executable()}} check-outputs" \
       "uv run shellcheck scripts/*.sh tiles/*.sh web/scripts/*.sh"
 
@@ -95,12 +98,17 @@ smoke:
 # after editing places.csv or curating in /?curate: bring every name file up to date
 [group('name pipeline')]
 update: extracts
-    {{py}} names/update.py {{extracts}} --area-extract tiles/data/schleswig-holstein-latest.osm.pbf
+    {{frasch}} update {{extracts}} --area-extract tiles/data/schleswig-holstein-latest.osm.pbf
+
+# check the hand-edited name files for damage (pass --fix to give new rows an id; runs in CI)
+[group('name pipeline')]
+check-inputs *args:
+    {{frasch}} check-inputs {{args}}
 
 # prove the committed outputs match the committed inputs (no extract needed; runs in CI)
 [group('name pipeline')]
 check-outputs:
-    {{py}} names/check_built.py
+    {{frasch}} check-outputs
 
 # SNAPSHOT=yymmdd builds from Geofabrik's extract of that day instead of the latest one
 # build the tiles of a region (tiles/data/<region>.pmtiles); extra args go to Planetiler
@@ -111,7 +119,7 @@ tiles region=region *args:
 # compare a built tile archive with names.json, label by label
 [group('tiles')]
 check-tiles region=region:
-    {{py}} tiles/check_tiles.py tiles/data/{{file_name(region)}}.pmtiles
+    {{frasch}} check-tiles tiles/data/{{file_name(region)}}.pmtiles
 
 # publish the built tiles as a GitHub release and pin web/tiles.lock to them (needs gh)
 [group('tiles')]
@@ -135,34 +143,34 @@ extracts:
 # scan the extracts for every object that could be a place (names/work/candidates.jsonl)
 [group('pipeline steps')]
 candidates: extracts
-    {{py}} names/build_candidates.py {{extracts}}
+    {{frasch}} candidates {{extracts}}
 
 # fill the empty osm cells of places.csv (pass --dry-run to only look)
 [group('pipeline steps')]
 match *args:
-    {{py}} names/match.py {{args}}
+    {{frasch}} match {{args}}
 
 # locate the name list's objects in the extracts (names/osm_objects.json)
 [group('pipeline steps')]
 objects: extracts
-    {{py}} names/locate.py {{extracts}}
+    {{frasch}} objects {{extracts}}
 
 # build the dialect areas from dialect_areas.csv (names/dialect_areas*.geojson)
 [group('pipeline steps')]
 areas: extracts
-    {{py}} names/build_dialect_areas.py tiles/data/schleswig-holstein-latest.osm.pbf
+    {{frasch}} areas tiles/data/schleswig-holstein-latest.osm.pbf
 
 # export the dialect registry for the frontend (web/src/generated/dialects.json)
 [group('pipeline steps')]
 dialects:
-    {{py}} names/dialects.py --export web/src/generated/dialects.json
+    {{frasch}} dialects --export
 
 # export the search index (web/public/data/names.json)
 [group('pipeline steps')]
 index: dialects
-    {{py}} names/export_search_index.py
+    {{frasch}} index
 
 # like check-outputs, and also rebuild objects and areas from the local extracts and compare
 [group('pipeline steps')]
 check-full: extracts
-    {{py}} names/check_built.py --extracts {{extracts}}
+    {{frasch}} check-outputs --extracts {{extracts}}

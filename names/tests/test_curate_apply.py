@@ -1,4 +1,4 @@
-"""`curate.py apply` loses no decision and writes nothing half (#21, M1),
+"""`frasch curate apply` loses no decision and writes nothing half (#21, M1),
 and finds each decision's row by its id however the list changed (#23)."""
 
 from __future__ import annotations
@@ -14,8 +14,9 @@ import pytest
 from frasch import curate
 from frasch import match
 from frasch import placelist
-from frasch.paths import StrPath
-from conftest import CURATION_HEADER, places_text, write_candidates
+from frasch.errors import PipelineError
+from frasch.paths import StrPath, Workspace
+from conftest import CURATION_HEADER, REGISTRY, places_text, workspace, write_candidates
 
 ROWS = [
     {"id": "taarep", "kind": "settlement", "mooring": "Taarep", "de": "Dorf"},  # line 2
@@ -63,20 +64,11 @@ class World:
     places: Path
     curation: Path
     patch: Path
+    ws: Workspace
 
-    def apply(self, *extra: str) -> int:
-        return curate.main(
-            [
-                "apply",
-                "--names",
-                str(self.places),
-                "--curation",
-                str(self.curation),
-                "--patch",
-                str(self.patch),
-                *extra,
-            ]
-        )
+    def apply(self, dry_run: bool = False, keep: bool = False) -> int:
+        """Apply the patch; -> how many of its decisions were refused."""
+        return curate.apply(self.ws, REGISTRY, dry_run=dry_run, keep=keep)
 
 
 @pytest.fixture
@@ -87,6 +79,7 @@ def w(world: Path) -> World:
         places=world / "places.csv",
         curation=world / "curation.csv",
         patch=world / "work" / "curate-patch.jsonl",
+        ws=workspace(world),
     )
 
 
@@ -159,9 +152,7 @@ def test_a_newer_decision_is_found_whatever_characters_its_note_has(
     assert lines(w.patch) == [newer]
 
 
-def test_bad_curation_csv_leaves_places_csv_untouched(
-    w: World, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_bad_curation_csv_leaves_places_csv_untouched(w: World) -> None:
     w.curation.write_text("osm,name,lat,lon,note\n", encoding="utf-8")  # columns missing
     append(
         w.patch,
@@ -169,15 +160,15 @@ def test_bad_curation_csv_leaves_places_csv_untouched(
         entry(3, action="osm", osm="node/1"),
     )
     before, patch_before = w.places.read_bytes(), w.patch.read_bytes()
-    assert w.apply() == 1
-    assert "missing column" in capsys.readouterr().err
+    with pytest.raises(PipelineError, match="missing column"):
+        w.apply()
     assert w.places.read_bytes() == before
     assert w.patch.read_bytes() == patch_before
     assert archived(w) == []
 
 
 def test_places_csv_changed_meanwhile_writes_nothing_and_restores_the_patch(
-    w: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    w: World, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     first = entry(2, action="local", slug="taarep", lat=54.6, lon=8.9)
     append(w.patch, first)
@@ -189,8 +180,8 @@ def test_places_csv_changed_meanwhile_writes_nothing_and_restores_the_patch(
         append(w.patch, late)  # the browser appends
 
     during_read(monkeypatch, meanwhile)
-    assert w.apply() == 1
-    assert "changed on disk" in capsys.readouterr().err
+    with pytest.raises(PipelineError, match="changed on disk"):
+        w.apply()
     assert w.places.read_text(encoding="utf-8") == theirs
     assert w.curation.read_text(encoding="utf-8") == CURATION_HEADER
     assert lines(w.patch) == [first, late]  # in decision order
@@ -198,15 +189,15 @@ def test_places_csv_changed_meanwhile_writes_nothing_and_restores_the_patch(
 
 
 def test_curation_csv_changed_meanwhile_writes_nothing(
-    w: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    w: World, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     first = entry(2, action="local", slug="taarep", lat=54.6, lon=8.9)
     append(w.patch, first)
     theirs = CURATION_HEADER + "local/nai,Neu,54.7,8.8,,,,,by hand\n"
     before = w.places.read_bytes()
     during_read(monkeypatch, lambda: w.curation.write_text(theirs, encoding="utf-8"))
-    assert w.apply() == 1
-    assert "changed on disk" in capsys.readouterr().err
+    with pytest.raises(PipelineError, match="changed on disk"):
+        w.apply()
     assert w.places.read_bytes() == before
     assert w.curation.read_text(encoding="utf-8") == theirs
     assert lines(w.patch) == [first]
@@ -214,7 +205,7 @@ def test_curation_csv_changed_meanwhile_writes_nothing(
 
 
 def test_failed_places_write_removes_a_new_curation_csv(
-    w: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    w: World, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """curation.csv is written first; a places.csv write that then fails
     takes it out again -- here, a file that did not exist before."""
@@ -222,8 +213,8 @@ def test_failed_places_write_removes_a_new_curation_csv(
     append(w.patch, entry(2, action="local", slug="taarep", lat=54.6, lon=8.9))
     theirs = places_text(ROWS + [{"kind": "settlement", "mooring": "Nai", "de": "Neu"}])
     during_read(monkeypatch, lambda: w.places.write_text(theirs, encoding="utf-8"))
-    assert w.apply() == 1
-    assert "changed on disk" in capsys.readouterr().err
+    with pytest.raises(PipelineError, match="changed on disk"):
+        w.apply()
     assert not w.curation.exists()
     assert w.places.read_text(encoding="utf-8") == theirs
 
@@ -257,17 +248,17 @@ def test_local_decision_writes_both_files(w: World) -> None:
 def test_dry_run_and_keep_leave_the_patch_in_place(w: World) -> None:
     append(w.patch, entry(2, action="osm", osm="node/1"))
     before = w.places.read_bytes()
-    w.apply("--dry-run")
+    w.apply(dry_run=True)
     assert w.places.read_bytes() == before
     assert w.patch.exists() and archived(w) == []
-    w.apply("--keep")
+    w.apply(keep=True)
     assert "node/1" in w.places.read_text(encoding="utf-8")
     assert w.patch.exists() and archived(w) == []
 
 
 # ------------------------------------------------------------ row ids (#23) ---
 def rows_by_id(w: World) -> dict[str, placelist.PlaceRow]:
-    return {r["id"]: r for r in placelist.read(str(w.places))[0]}
+    return {r["id"]: r for r in placelist.read(str(w.places), REGISTRY)[0]}
 
 
 def test_a_withdrawn_decision_stays_withdrawn_whatever_line_it_was_sent_with(w: World) -> None:
@@ -304,42 +295,10 @@ SESSION = [
 def test_a_curation_session_survives_hand_edits_to_the_list(w: World) -> None:
     # the worklist: every row is `not_found` (no candidates at all)
     w.places.write_text(places_text(SESSION), encoding="utf-8")
-    cands = write_candidates(w.work / "candidates.jsonl")
-    assert (
-        match.main(
-            [
-                "--names",
-                str(w.places),
-                "--candidates",
-                str(cands),
-                "--matches",
-                str(w.work / "matches.csv"),
-                "--report",
-                str(w.work / "REPORT.md"),
-                "--offline",
-                "--wikidata-cache",
-                str(w.work / "wd.json"),
-            ]
-        )
-        == 0
-    )
+    write_candidates(w.work / "candidates.jsonl")
+    assert match.run(w.ws, REGISTRY, offline=True) == 0
     worklist = w.work / "curate.json"
-    assert (
-        curate.main(
-            [
-                "export",
-                "--names",
-                str(w.places),
-                "--matches",
-                str(w.work / "matches.csv"),
-                "--candidates",
-                str(cands),
-                "--out",
-                str(worklist),
-            ]
-        )
-        == 0
-    )
+    curate.export(w.ws, REGISTRY)
     # the browser decides every row of it, one object each
     exported = json.loads(worklist.read_text(encoding="utf-8"))["rows"]
     decided = {row["id"]: f"node/{n}" for n, row in enumerate(exported, start=1)}
@@ -378,7 +337,7 @@ def test_every_decision_without_an_id_is_refused_and_kept(w: World) -> None:
     # none of the decisions may vanish into the archive
     old = [{k: v for k, v in entry(n, action="skip").items() if k != "id"} for n in (2, 3)]
     append(w.patch, *old)
-    assert w.apply() == 1
+    assert w.apply() == 2
     assert lines(w.patch) == old
 
 
@@ -461,7 +420,7 @@ def mixed_patch(w: World) -> None:
 
 def test_apply_logs_each_decision_and_sums_up(w: World, capsys: pytest.CaptureFixture[str]) -> None:
     mixed_patch(w)
-    assert w.apply() == 1
+    assert w.apply() == 2
     (snapshot,) = archived(w)
     assert capsys.readouterr().out == (
         # an entry without a `line` comes first
@@ -483,7 +442,7 @@ def test_apply_logs_each_decision_and_sums_up(w: World, capsys: pytest.CaptureFi
 
 def test_dry_run_says_what_would_change(w: World, capsys: pytest.CaptureFixture[str]) -> None:
     mixed_patch(w)
-    assert w.apply("--dry-run") == 1
+    assert w.apply(dry_run=True) == 2
     out = capsys.readouterr().out
     assert out.endswith(
         "dry run: 2 row(s) would change, 1 curation row(s) would be appended, "
@@ -497,7 +456,7 @@ def test_keep_applies_without_archiving_or_appending_back(
 ) -> None:
     mixed_patch(w)
     patch_before = w.patch.read_bytes()
-    assert w.apply("--keep") == 1
+    assert w.apply(keep=True) == 2
     assert capsys.readouterr().out.splitlines()[-1] == (
         f"2 row(s) written to {w.places}, 1 appended to {w.curation}, 2 refused"
     )
@@ -509,7 +468,7 @@ def test_a_refused_entry_decided_again_meanwhile_is_counted_apart(
 ) -> None:
     append(w.patch, entry(4, action="osm", osm="node/5"), {"id": "nai", "action": "skip"})
     during_read(monkeypatch, lambda: append(w.patch, entry(4, action="clear")))
-    assert w.apply() == 1
+    assert w.apply() == 2
     assert (
         f"1 refused entry kept in {w.patch} (1 decided again in the browser meanwhile)\n"
         in capsys.readouterr().out
@@ -525,11 +484,12 @@ def test_a_local_slug_of_another_row_is_taken(w: World, capsys: pytest.CaptureFi
     assert w.curation.read_text(encoding="utf-8") == CURATION_HEADER
 
 
-def test_no_patch_is_an_error(w: World, capsys: pytest.CaptureFixture[str]) -> None:
+def test_no_patch_is_an_error(w: World) -> None:
     before = w.places.read_bytes()
-    assert w.apply() == 1
-    assert capsys.readouterr().err == (
-        f"{w.patch} not found -- decide some rows in the browser first (web/, `?curate`)\n"
+    with pytest.raises(PipelineError) as stop:
+        w.apply()
+    assert str(stop.value) == (
+        f"{w.patch} not found -- decide some rows in the browser first (web/, `?curate`)"
     )
     assert w.places.read_bytes() == before
 
@@ -540,7 +500,6 @@ def test_a_failed_apply_says_the_patch_is_restored(
     append(w.patch, entry(2, action="skip"))
     theirs = places_text(ROWS + [{"kind": "settlement", "mooring": "Nai", "de": "Neu"}])
     during_read(monkeypatch, lambda: w.places.write_text(theirs, encoding="utf-8"))
-    assert w.apply() == 1
-    err = capsys.readouterr().err
-    assert err.startswith(f"nothing applied -- {w.patch} restored\n")
-    assert "changed on disk" in err
+    with pytest.raises(PipelineError, match="changed on disk"):
+        w.apply()
+    assert capsys.readouterr().err == f"nothing applied -- {w.patch} restored\n"

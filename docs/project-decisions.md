@@ -411,6 +411,7 @@ the 2026-09-17 note on how the search index looks positions up.
 All Python of `names/` and `tiles/` moved into the package `frasch/` at the
 repo root, installed editable by uv; the scripts stay where they were as
 launchers, so the justfile, `tiles/build.sh` and the docs keep their paths.
+*Superseded 2026-10-06 (#91): the launchers are gone, see the entry of that date.*
 Library code raises (`ValidationError` with every problem found, not only the
 first); only a command's `main()` exits. Each concept exists once: the dialect
 registry reader (passed in, not read at import), the curation file
@@ -626,6 +627,72 @@ copy of `public/` and builds anyway). It does so with `VITE_TILES_URL` too.
 but warns instead of saying the dev server serves it (owner's choice over
 replacing it: the link may have been set ahead of the first tile build).
 
+## Decided 2026-10-06: one `frasch` command, no launchers (issue #91)
+
+This supersedes the 2026-09-28 decision to keep `names/*.py` and
+`tiles/*.py` as thin launchers (issue #25). The 13 launchers are deleted; the
+package `frasch/` is run as one installed command, `uv run frasch <command>`
+(`frasch <command>` inside the venv): `[project.scripts]` in `pyproject.toml`
+points at the command table in `frasch/__main__.py`. The justfile, `tiles/build.sh`,
+the docs and the web app's hints name the command instead of a script path.
+Earlier entries of this log keep the script names they were written with:
+
+| was | is |
+|---|---|
+| `names/check.py` | `frasch check-inputs` (and a new `just check-inputs`) |
+| `names/check_built.py` | `frasch check-outputs` |
+| `names/build_candidates.py` | `frasch candidates` |
+| `names/match.py` | `frasch match` |
+| `names/locate.py` | `frasch objects` |
+| `names/build_dialect_areas.py` | `frasch areas` |
+| `names/dialects.py` | `frasch dialects` |
+| `names/export_search_index.py` | `frasch index` |
+| `names/provenance.py` | `frasch provenance` |
+| `names/update.py` | `frasch update` |
+| `names/curate.py` | `frasch curate` (`export` / `apply`) |
+| `tiles/inject_names.py` | `frasch inject` |
+| `tiles/check_tiles.py` | `frasch check-tiles` |
+
+- **The file layout is one object**: `frasch.paths.Workspace`, a dataclass with
+  one attribute per file of the pipeline; `Workspace.default()` is the
+  repository's layout. A command takes the paths from it, whatever the
+  working directory.
+- **One flag vocabulary**: a flag names the same file in every command
+  (`--names`, `--dialects`, `--curation`, `--area-list`, `--areas`, `--parts`,
+  `--objects`, `--index`, `--registry-json`, `--report`, ..., and `--work` for
+  the scratch directory). Renamed to make that true: `--registry` is
+  `--dialects`; the area list is `--area-list` and `--areas` is the geojson
+  (it was the csv in `check.py` and `build_dialect_areas.py`); `--parts-out`
+  is `--parts`. `--out` is gone: an output is named by its file's flag
+  (`frasch objects --objects`, `frasch index --index`). `dialects --export`
+  is a switch that writes the file `--registry-json` names. `tiles/build.sh`
+  passes `NAMES`, `DIALECTS`, `AREAS`, `OBJECTS` and `CURATION` on only when
+  the environment variable is set; otherwise the command's own default holds.
+  A command takes only the flags of the files it works on
+  (`cli.add_workspace_options`), so a path it would ignore is an error.
+  Two options made way for the vocabulary: `frasch candidates --index`
+  (pyosmium's node index) is `--location-index`, and `--parts-out ''` is
+  `frasch areas --no-parts`.
+- **Typed functions under every command**: a command's `main()` parses and
+  calls a function that takes the `Workspace` and the `Registry`
+  (`locate.build`, `match.run`, `curate.apply`, ...); `update` and
+  `check-outputs` call those functions instead of other commands' `main()`
+  with argument lists. `update` reads the registry once -- its first step,
+  the input check, hands it to the later ones --, so `update --dialects X`
+  uses X in every step. The parsers take no abbreviated options
+  (`cli.parser`): the old `--registry` must not pass for `--registry-json`.
+- **The tests have a dialect registry of their own** (`names/tests/conftest.py`)
+  and work on a `Workspace` in a temp directory through the typed functions;
+  each command keeps one test through `frasch.__main__.main`. No test reads
+  `names/dialects.csv`.
+- **The dialect registry is always passed explicitly**: `registry.default()`
+  (a default registry, read on first use) is removed; every command
+  reads it from `--dialects` and hands it down.
+- **Modules**: `check` is `check_inputs` and `check_built` is `check_outputs`;
+  `export_search_index` is merged into `searchindex`, `print_provenance` into
+  `provenance` and `export_dialects` into `registry`. The other modules keep
+  their names. See `names/README.md#code`.
+
 ## Remaining open questions
 1. Hosting provider for the site (R2 + Pages proposed, nothing set up yet); the tiles are GitHub release assets for now (issue #28).
 2. When to do the planet build (needs the VM; only after the North Frisia build looks right).
@@ -633,7 +700,7 @@ replacing it: the link may have been set ahead of the first tile build).
 
 ## Name-mapping pipeline (built 2026-09-15)
 
-Scripts in `names/` (see `names/README.md` for the workflow): `placelist.py` (reads/validates `places.csv`, shared); `build_candidates.py` (one pyosmium pass over the SH + DK extracts, ~8.5 min, 182k candidates); `match.py` (exact match after normalisation, no fuzzy matching; fills empty `osm`/`wikidata` cells of `places.csv` and marks them `status=auto`; writes `names/work/matches.csv` with the details and `names/REPORT.md` as the hand-review worklist); `tiles/inject_names.py` (tags the PBF). Keys: OSM reference `type/id` (several allowed for split rivers/dykes) plus the Wikidata QID where the object has one; countries via Wikidata only.
+Scripts in `names/` (see `names/README.md` for the workflow; since #91 they are the commands of `frasch`, see the 2026-10-06 entry): `placelist.py` (reads/validates `places.csv`, shared); `build_candidates.py` (one pyosmium pass over the SH + DK extracts, ~8.5 min, 182k candidates); `match.py` (exact match after normalisation, no fuzzy matching; fills empty `osm`/`wikidata` cells of `places.csv` and marks them `status=auto`; writes `names/work/matches.csv` with the details and `names/REPORT.md` as the hand-review worklist); `tiles/inject_names.py` (tags the PBF). Keys: OSM reference `type/id` (several allowed for split rivers/dykes) plus the Wikidata QID where the object has one; countries via Wikidata only.
 
 First run: 825 place rows → **437 matched, 41 ambiguous, 340 not found**, 7 not places. Settlements 225/334 matched; Köge 25/87; Warften 117/276; waters 24/45; islands 26/41; Harden 0/8; countries 12/12. 447 objects tagged in the SH extract (Denmark rows resolve once a DK-covering build exists). 34 matches spot-checked by hand, all correct; all 59 location-hinted matches verified geometrically.
 

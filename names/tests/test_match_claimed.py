@@ -10,7 +10,7 @@ from pathlib import Path
 from frasch import placelist
 from frasch import match
 from frasch.candidates import Candidate
-from conftest import cand, places_text, write_candidates
+from conftest import REGISTRY, cand, places_text, workspace, write_candidates
 
 LANGERDEICH = cand(
     "w", 28330569, 8.865771, 54.471785, man_made="dyke", highway="residential", name="Langerdeich"
@@ -24,23 +24,8 @@ def run_match(
     places = world / "places.csv"
     places.write_text(places_text(rows), encoding="utf-8")
     write_candidates(world / "work" / "candidates.jsonl", *candidates)
-    code = match.main(
-        [
-            "--names",
-            str(places),
-            "--candidates",
-            str(world / "work" / "candidates.jsonl"),
-            "--matches",
-            str(world / "work" / "matches.csv"),
-            "--report",
-            str(world / "REPORT.md"),
-            "--offline",
-            "--wikidata-cache",
-            str(world / "work" / "wd.json"),
-        ]
-    )
-    assert code == 0
-    return placelist.read(str(places))[0]
+    assert match.run(workspace(world), REGISTRY, offline=True) == 0
+    return placelist.read(str(places), REGISTRY)[0]
 
 
 def test_an_unclaimed_object_is_matched(world: Path) -> None:

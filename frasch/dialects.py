@@ -11,7 +11,7 @@ One name belongs to a place beyond its dialect columns:
   gives no local name at all, OSM's own Frisian name is it inside a dialect
   area (`osm_local_name`).
 
-The command that prints and exports the registry is frasch.export_dialects.
+The command that prints and exports the registry is `frasch dialects` (frasch.registry).
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from typing import TypedDict
 
 from shapely.geometry.base import BaseGeometry
 
-from frasch import files, paths, placelist
+from frasch import files, placelist
 from frasch.errors import Invalid, ValidationError
 from frasch.placelist import OsmRef, Row
 from frasch.registry import LOCAL_COLUMN, Registry
@@ -45,7 +45,7 @@ def area_rows(path: str, reg: Registry) -> tuple[list[AreaRow], list[tuple[int, 
     `note`, `osm` (normalised) and `refs` (parsed) -- and `(line, reason)` for
     every one that does not.  The one reading of the file's rules, shared by
     frasch.build_dialect_areas (which stops at the first problem) and
-    frasch.check (which lists them).
+    frasch.check_inputs (which lists them).
 
     An OSM reference belongs to one row only: the review overlay's
     `?areas&area=` links name a row by it."""
@@ -152,7 +152,7 @@ def variety(row: Row) -> str:
 # --------------------------------------------------------------- areas ----
 class AreaIndex:
     """Which dialect is spoken where: point-in-polygon against
-    names/dialect_areas.geojson (built by names/build_dialect_areas.py).
+    names/dialect_areas.geojson (built by `frasch areas`).
 
     The smallest polygon containing the point wins, so a small area inside a
     larger one of another dialect is answered correctly -- the Hamburger
@@ -170,7 +170,7 @@ class AreaIndex:
         self.tree = STRtree(self.geoms) if self.geoms else None
 
     @classmethod
-    def from_geojson(cls, path: str = paths.DIALECT_AREAS) -> AreaIndex:
+    def from_geojson(cls, path: str) -> AreaIndex:
         from shapely.geometry import shape
 
         with open(path, encoding="utf-8") as fh:

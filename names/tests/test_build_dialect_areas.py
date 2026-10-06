@@ -1,4 +1,4 @@
-"""build_dialect_areas.py: dialect_areas.csv plus an extract become the
+"""`frasch areas`: dialect_areas.csv plus an extract become the
 dialect areas, or the build stops and writes nothing."""
 
 from __future__ import annotations
@@ -9,10 +9,13 @@ from pathlib import Path
 
 import pytest
 
-from frasch import build_dialect_areas as bda, paths, registry
-from frasch.errors import ValidationError
+from frasch import build_dialect_areas as bda
+from frasch.__main__ import main
+from frasch.errors import PipelineError, ValidationError
 from frasch import dialects
 from frasch import provenance
+from frasch.paths import Workspace
+from conftest import REGISTRY, path_options
 from osm_fixture import RingNodes, ring, write_extract
 
 
@@ -32,52 +35,31 @@ def test_an_osm_reference_on_two_rows_is_refused(tmp_path: Path) -> None:
         match=r"dialect_areas.csv:4: relation/1147134 "
         r"is already on line 2",
     ):
-        bda.read_areas(str(areas), registry.read())
+        bda.read_areas(str(areas), REGISTRY)
 
 
-# ------------------------------------------------------------------ main ---
-# A tiny triangle way stands in for a whole municipality; `--registry` still
-# points at the real dialects.csv so `frr-x-mooring` is a known tag.
-def _write_fixture(
-    tmp_path: Path, csv_rows: str, timestamp: str | None = None
-) -> tuple[Path, Path]:
+# ------------------------------------------------------------------- run ---
+# A tiny triangle way stands in for a whole municipality.
+def _write_fixture(ws: Workspace, csv_rows: str, timestamp: str | None = None) -> Path:
+    """Write the area list of `ws` and an extract next to it; -> the extract."""
     nodes, way = ring(1, (8.80, 54.55), (8.82, 54.55), (8.82, 54.57))
-    pbf = write_extract(
-        tmp_path / "extract.osm.pbf", nodes=nodes, ways={1: (way, {})}, timestamp=timestamp
-    )
-    areas = tmp_path / "dialect_areas.csv"
+    areas = Path(ws.area_list)
     areas.write_text("dialect,osm,name,note\n" + csv_rows, encoding="utf-8")
-    return pbf, areas
-
-
-def test_main_exits_nonzero_on_a_missing_reference_and_writes_nothing(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    pbf, areas = _write_fixture(
-        tmp_path, "frr-x-mooring,way/1,Existing,\nfrr-x-mooring,way/999,Missing,\n"
+    return write_extract(
+        areas.parent / "extract.osm.pbf", nodes=nodes, ways={1: (way, {})}, timestamp=timestamp
     )
-    out = tmp_path / "areas.geojson"
-    parts_out = tmp_path / "parts.geojson"
+
+
+def test_a_missing_reference_stops_the_build_and_nothing_is_written(ws: Workspace) -> None:
+    pbf = _write_fixture(ws, "frr-x-mooring,way/1,Existing,\nfrr-x-mooring,way/999,Missing,\n")
+    out, parts_out = Path(ws.areas), Path(ws.parts)
     out.write_bytes(b"stale-out")
     parts_out.write_bytes(b"stale-parts")
 
-    assert (
-        bda.main(
-            [
-                str(pbf),
-                "--areas",
-                str(areas),
-                "--out",
-                str(out),
-                "--parts-out",
-                str(parts_out),
-                "--no-unassigned",
-            ]
-        )
-        == 1
-    )
+    with pytest.raises(PipelineError) as stop:
+        bda.run(ws, REGISTRY, [pbf], bda.Options(unassigned_ags=None))
 
-    message = capsys.readouterr().err
+    message = str(stop.value)
     assert "way/999" in message
     assert "Missing" in message
     assert "frr-x-mooring" in message
@@ -86,56 +68,24 @@ def test_main_exits_nonzero_on_a_missing_reference_and_writes_nothing(
     assert parts_out.read_bytes() == b"stale-parts"
 
 
-def test_allow_missing_writes_despite_a_missing_reference(tmp_path: Path) -> None:
-    pbf, areas = _write_fixture(
-        tmp_path, "frr-x-mooring,way/1,Existing,\nfrr-x-mooring,way/999,Missing,\n"
-    )
-    out = tmp_path / "areas.geojson"
-    parts_out = tmp_path / "parts.geojson"
+def test_allow_missing_writes_despite_a_missing_reference(ws: Workspace) -> None:
+    pbf = _write_fixture(ws, "frr-x-mooring,way/1,Existing,\nfrr-x-mooring,way/999,Missing,\n")
 
-    rc = bda.main(
-        [
-            str(pbf),
-            "--areas",
-            str(areas),
-            "--out",
-            str(out),
-            "--parts-out",
-            str(parts_out),
-            "--no-unassigned",
-            "--allow-missing",
-        ]
-    )
+    bda.run(ws, REGISTRY, [pbf], bda.Options(unassigned_ags=None, allow_missing=True))
 
-    assert rc == 0
-    assert out.exists()
-    assert parts_out.exists()
+    assert Path(ws.areas).exists()
+    assert Path(ws.parts).exists()
 
 
-def test_output_is_stamped_with_its_inputs(tmp_path: Path) -> None:
-    pbf, areas = _write_fixture(
-        tmp_path, "frr-x-mooring,way/1,Existing,\n", timestamp="2026-09-22T20:22:59Z"
-    )
-    out = tmp_path / "areas.geojson"
-    parts_out = tmp_path / "parts.geojson"
+def test_output_is_stamped_with_its_inputs(ws: Workspace) -> None:
+    pbf = _write_fixture(ws, "frr-x-mooring,way/1,Existing,\n", timestamp="2026-09-22T20:22:59Z")
+    out, parts_out = Path(ws.areas), Path(ws.parts)
 
-    rc = bda.main(
-        [
-            str(pbf),
-            "--areas",
-            str(areas),
-            "--out",
-            str(out),
-            "--parts-out",
-            str(parts_out),
-            "--no-unassigned",
-        ]
-    )
+    bda.run(ws, REGISTRY, [pbf], bda.Options(unassigned_ags=None))
 
-    assert rc == 0
     expected = {
-        "dialect_areas.csv": provenance.blob_hash(areas),
-        "dialects.csv": provenance.blob_hash(paths.DIALECTS),
+        "dialect_areas.csv": provenance.blob_hash(ws.area_list),
+        "dialects.csv": provenance.blob_hash(ws.dialects),
         "extracts": [{"file": "extract.osm.pbf", "replication_timestamp": "2026-09-22T20:22:59Z"}],
     }
     fc = json.loads(out.read_text())
@@ -160,8 +110,9 @@ def _square(first_id: int, lon: float) -> tuple[RingNodes, list[int]]:
     return ring(first_id, (lon, 54.60), (lon + 0.02, 54.60), (lon + 0.02, 54.62), (lon, 54.62))
 
 
-def _write_district(tmp_path: Path) -> tuple[Path, Path, Path]:
-    """-> (first extract, second extract, dialect_areas.csv)."""
+def _write_district(ws: Workspace) -> tuple[Path, Path]:
+    """Write the area list of `ws` and two extracts next to it; -> the extracts."""
+    tmp_path = Path(ws.area_list).parent
     nodes, way1 = ring(1, (8.80, 54.55), (8.82, 54.55), (8.82, 54.57))
     squares = {w: _square(w, lon) for w, lon in ((10, 8.90), (20, 8.93), (30, 8.96), (40, 9.50))}
     for square_nodes, _ in squares.values():
@@ -198,35 +149,29 @@ def _write_district(tmp_path: Path) -> tuple[Path, Path, Path]:
         ways={8: (way8, {}), 20: (squares[20][1], {})},
         relations={200: relations[200]},
     )
-    areas = tmp_path / "dialect_areas.csv"
-    areas.write_text(
+    Path(ws.area_list).write_text(
         "dialect,osm,name,note\n"
         "frr-x-mooring,way/1,Existing,a way\n"
         "frr-x-solring,relation/100,Claimedtown,a municipality\n"
         "frr-x-solring,way/8,Second,only in the second extract\n",
         encoding="utf-8",
     )
-    return first, second, areas
+    return first, second
 
 
-def _run(argv: list[str], capsys: pytest.CaptureFixture[str]) -> tuple[int, str, str]:
-    """-> (exit status, stdout, stderr), the scan times blanked."""
-    rc = bda.main(argv)
+def _printed(capsys: pytest.CaptureFixture[str]) -> tuple[str, str]:
+    """-> (stdout, stderr), the scan times blanked."""
     out, err = capsys.readouterr()
-    return rc, re.sub(r"\(\d+s\)", "(Ns)", out), err
+    return re.sub(r"\(\d+s\)", "(Ns)", out), err
 
 
-def test_main_reports_every_step_of_a_full_build(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    first, second, areas = _write_district(tmp_path)
-    out = tmp_path / "areas.geojson"
-    parts_out = tmp_path / "parts.geojson"
-    argv = [str(first), str(second), "--areas", str(areas), "--out", str(out)]
+def test_a_full_build_reports_every_step(ws: Workspace, capsys: pytest.CaptureFixture[str]) -> None:
+    first, second = _write_district(ws)
+    areas, out, parts_out = ws.area_list, Path(ws.areas), Path(ws.parts)
 
-    rc, stdout, stderr = _run([*argv, "--parts-out", str(parts_out)], capsys)
+    bda.run(ws, REGISTRY, [first, second])
 
-    assert rc == 0
+    stdout, stderr = _printed(capsys)
     assert stderr == ""
     # the second extract is only asked for what the first one lacked, and
     # Freetown, already found there, is not counted again; Brokentown's
@@ -296,17 +241,17 @@ def test_main_reports_every_step_of_a_full_build(
     ]
 
 
-def test_main_without_parts_out_skips_the_unassigned_scan(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+def test_a_build_without_the_parts_skips_the_unassigned_scan(
+    ws: Workspace, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    first, _second, areas = _write_district(tmp_path)
-    out = tmp_path / "areas.geojson"
-    argv = [str(first), "--areas", str(areas), "--out", str(out), "--allow-missing"]
+    first, _second = _write_district(ws)
+    areas, out = ws.area_list, ws.areas
 
-    rc, stdout, stderr = _run([*argv, "--parts-out", ""], capsys)
+    bda.run(ws, REGISTRY, [first], bda.Options(allow_missing=True, parts=False))
 
-    assert rc == 0
+    stdout, stderr = _printed(capsys)
     assert stderr == ""
+    assert not Path(ws.parts).exists()
     assert stdout == (
         f"area list : {areas} -> 3 OSM objects, 2 dialects\n"
         "first.osm.pbf: 1/1 relations, 3 ways, 9 nodes (Ns)\n"
@@ -322,40 +267,48 @@ def test_main_without_parts_out_skips_the_unassigned_scan(
     )
 
 
-def test_main_refuses_with_the_report_of_what_is_missing(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+def test_a_build_refuses_with_the_report_of_what_is_missing(
+    ws: Workspace, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    first, _second, areas = _write_district(tmp_path)
-    out = tmp_path / "areas.geojson"
+    first, _second = _write_district(ws)
 
-    rc, stdout, stderr = _run([str(first), "--areas", str(areas), "--out", str(out)], capsys)
+    with pytest.raises(PipelineError) as stop:
+        bda.run(ws, REGISTRY, [first])
 
-    assert rc == 1
-    assert stdout.endswith(
+    assert _printed(capsys)[0].endswith(
         "  ! relation/100: 1 unclosed outer ring(s) -- skipped\n"
         "\n"
         "1 object(s) not found in the extract(s):\n"
         "  way/8  Second (frr-x-solring)\n"
     )
-    assert stderr == (
+    assert str(stop.value) == (
         "1 object(s) not found in the extract(s):\n"
         "  way/8  Second (frr-x-solring)\n"
         "\n"
+        "run with --allow-missing to build anyway; nothing was written"
+    )
+    assert not Path(ws.areas).exists()
+
+
+def test_a_build_refuses_when_no_reference_produced_any_geometry(ws: Workspace) -> None:
+    pbf = _write_fixture(ws, "frr-x-mooring,way/999,Missing,\n")
+
+    with pytest.raises(
+        PipelineError, match=r"^no geometry found -- is the extract the right region\?$"
+    ):
+        bda.run(ws, REGISTRY, [pbf], bda.Options(allow_missing=True))
+
+    assert not Path(ws.areas).exists()
+
+
+def test_the_command_builds_the_files_its_options_name_and_fails_on_a_missing_reference(
+    ws: Workspace, capsys: pytest.CaptureFixture[str]
+) -> None:
+    first, _second = _write_district(ws)
+    files = path_options(ws, "area_list", "dialects", "areas", "parts")
+
+    assert main(["areas", str(first), *files, "--no-parts"]) == 1
+
+    assert capsys.readouterr().err.endswith(
         "run with --allow-missing to build anyway; nothing was written\n"
     )
-    assert not out.exists()
-
-
-def test_main_refuses_when_no_reference_produced_any_geometry(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    pbf, areas = _write_fixture(tmp_path, "frr-x-mooring,way/999,Missing,\n")
-    out = tmp_path / "areas.geojson"
-
-    rc, _stdout, stderr = _run(
-        [str(pbf), "--areas", str(areas), "--out", str(out), "--allow-missing"], capsys
-    )
-
-    assert rc == 1
-    assert stderr == "no geometry found -- is the extract the right region?\n"
-    assert not out.exists()

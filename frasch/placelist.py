@@ -16,15 +16,14 @@ map.  Its conventions (see names/README.md):
   ONE local reference `local/<slug>` for a place OSM does not have.  The
   slug keys a row of names/curation.csv that carries the position (`lat` /
   `lon`); the injector adds a node (or a label polygon) of its own for it
-* `status` is `auto` (written by match.py, recomputed on every run), `ok`
+* `status` is `auto` (written by the matcher, recomputed on every run), `ok`
   (checked by a human), `skip` (never put on the map) or empty
 
 Everything here is deliberately small and free of OSM libraries so that the
 matcher, the injector and the checks can all share it.  The column layout
 depends on the dialect registry: the functions that need it take a
-`Registry` (frasch.registry) and fall back to the default one.  The
-dialect-aware name logic (the fallbacks) lives one layer up in
-frasch.dialects.
+`Registry` (frasch.registry).  The dialect-aware name logic (the fallbacks)
+lives one layer up in frasch.dialects.
 """
 
 from __future__ import annotations
@@ -38,20 +37,20 @@ import re
 import unicodedata
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 
-from frasch import files, paths, registry
+from frasch import files
 from frasch.errors import Invalid, PipelineError, ValidationError
 from frasch.registry import LOCAL_COLUMN, Registry
 
 
-def name_columns(reg: Registry | None = None) -> list[str]:
+def name_columns(reg: Registry) -> list[str]:
     """The name columns in the order `any_name` tries them: the first
     (= Mooring) dialect, `local` -- the sub-dialect form of the place itself,
     not a dialect of its own -- then the other dialects."""
-    dialect_columns = (reg or registry.default()).columns
+    dialect_columns = reg.columns
     return [dialect_columns[0], LOCAL_COLUMN] + dialect_columns[1:]
 
 
-def columns(reg: Registry | None = None) -> list[str]:
+def columns(reg: Registry) -> list[str]:
     """The columns of the name list, in the order it is written in."""
     return (
         ["kind"]
@@ -78,7 +77,7 @@ KINDS = {
 STATUSES = {"", "auto", "ok", "skip"}
 
 # The tile attribute naming the row a label comes from: its `id`.  The
-# injector writes it; a curation.csv row may set it by hand (frasch.check
+# injector writes it; a curation.csv row may set it by hand (frasch.check_inputs
 # makes sure it names a row).
 REF_KEY = "frasch:ref"
 
@@ -173,7 +172,7 @@ def label(row: Row, column: str = "mooring") -> str:
     return primary(row.get(column))
 
 
-def any_name(row: Row, reg: Registry | None = None) -> str:
+def any_name(row: Row, reg: Registry) -> str:
     """The row's Frisian name in any dialect -- the answer to "does this row
     carry a Frisian name at all?".  Mooring first, then `local`, then the
     other dialects in registry order."""
@@ -184,7 +183,7 @@ def any_name(row: Row, reg: Registry | None = None) -> str:
     return ""
 
 
-def point_name(row: Row, reg: Registry | None = None) -> str:
+def point_name(row: Row, reg: Registry) -> str:
     """The generic `name` of the node the injector adds for a row OSM does
     not have (a local reference): its German name, else its Danish one, else
     any Frisian one.  The search index gives the row the same, so the card
@@ -192,7 +191,7 @@ def point_name(row: Row, reg: Registry | None = None) -> str:
     return primary(row.get("de")) or primary(row.get("da")) or any_name(row, reg)
 
 
-def on_map(row: Row, reg: Registry | None = None) -> bool:
+def on_map(row: Row, reg: Registry) -> bool:
     """Whether a row puts names on the map: it has a Frisian name and is
     neither `skip` nor `not_a_place`.  The injector labels these rows'
     objects, and the search index lists them."""
@@ -200,7 +199,7 @@ def on_map(row: Row, reg: Registry | None = None) -> bool:
 
 
 def owned_by_matcher(row: Row) -> bool:
-    """May match.py (and `curate.py apply`) (re)write this row's osm /
+    """May the matcher (and `frasch curate apply`) (re)write this row's osm /
     wikidata / status?  Not a row a human decided -- `ok`/`skip`, a
     hand-filled reference, a local reference, `not_a_place` -- only one it
     filled itself (`auto`) or one with nothing in it yet."""
@@ -273,7 +272,7 @@ def local_ref(cell: str | None) -> str | None:
     Places OSM does not have (Harden, most Köge, vanished Halligen, a Warft
     nobody has mapped) get a reference of our own; names/curation.csv
     positions it and says how the map treats it, the injector adds the object,
-    the search index takes the position from there, and `match.py` leaves the
+    the search index takes the position from there, and the matcher leaves the
     row alone."""
     refs = parse_osm(cell)
     return local_slug(refs[0]) if refs else None
@@ -288,7 +287,7 @@ def claimed_refs(row: Row) -> list[Ref]:
     return parse_osm(row.get("osm"))
 
 
-def header_problem(fields: Sequence[str], reg: Registry | None = None) -> str | None:
+def header_problem(fields: Sequence[str], reg: Registry) -> str | None:
     """What is wrong with the header of the name list, or None."""
     if "lat" in fields or "lon" in fields:
         return (
@@ -297,7 +296,7 @@ def header_problem(fields: Sequence[str], reg: Registry | None = None) -> str | 
         )
     what = files.csv_header_problem(fields, columns(reg))
     if what and "id" not in fields:
-        what += " (names/check.py --fix adds `id`)"
+        what += " (`frasch check-inputs --fix` adds `id`)"
     elif what and what.startswith("missing"):
         what += " (dialect columns come from names/dialects.csv)"
     return what
@@ -305,7 +304,7 @@ def header_problem(fields: Sequence[str], reg: Registry | None = None) -> str | 
 
 def row_problems(row: Row) -> list[str]:
     """What is wrong with one row of the name list (its cells stripped), in
-    the rules `read` enforces.  frasch.check adds the stricter ones."""
+    the rules `read` enforces.  frasch.check_inputs adds the stricter ones."""
     out: list[str] = []
     if row["kind"] not in KINDS:
         out.append(f"unknown kind {row['kind']!r}")
@@ -330,11 +329,11 @@ def id_problem(row: Row, seen: dict[str, int]) -> str | None:
     earlier row (`seen`: id -> line) -- or None."""
     ident = row["id"]
     if not ident:
-        return "no id (run names/check.py --fix to give new rows one)"
+        return "no id (run `frasch check-inputs --fix` to give new rows one)"
     if not SLUG.fullmatch(ident):
         return (
             f"bad id {ident!r} (lowercase letters, digits and hyphens; "
-            f"run names/check.py --fix for a new row)"
+            f"run `frasch check-inputs --fix` for a new row)"
         )
     if ident in seen:
         return f"id {ident} is already used on line {seen[ident]}"
@@ -356,7 +355,7 @@ def slug(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", text).strip("-")
 
 
-def new_id(row: Row, taken: set[str], reg: Registry | None = None) -> str:
+def new_id(row: Row, taken: set[str], reg: Registry) -> str:
     """An id for a row that has none: the slug of its Frisian name (German,
     then Danish, when it has none), with `-2`, `-3`, ... when that is taken."""
     base = (
@@ -372,7 +371,7 @@ def new_id(row: Row, taken: set[str], reg: Registry | None = None) -> str:
     return ident
 
 
-def fill_ids(path: str = paths.PLACES, reg: Registry | None = None) -> int:
+def fill_ids(path: str, reg: Registry) -> int:
     """Give every row of the name list without an `id` one (`new_id`), and
     the file the `id` column when it has none -- the one step that both
     introduced the ids and keeps new rows keyed.  An id, once written, never
@@ -409,15 +408,15 @@ def fill_ids(path: str = paths.PLACES, reg: Registry | None = None) -> int:
     return given
 
 
-def read(path: str = paths.PLACES, reg: Registry | None = None) -> tuple[list[PlaceRow], list[str]]:
+def read(path: str, reg: Registry) -> tuple[list[PlaceRow], list[str]]:
     """-> (rows, fieldnames).  A row is identified by its `id` and knows its
     `line`.  A ValidationError lists every row that breaks the rules."""
     if not os.path.exists(path):
         raise PipelineError(f"name list not found: {path}")
     with open(path, "rb") as fh:
         data = fh.read()
-    # remembered so that `write` can tell whether someone else (match.py,
-    # curate.py apply, a spreadsheet) wrote the file in the meantime
+    # remembered so that `write` can tell whether someone else (the matcher,
+    # the curation, a spreadsheet) wrote the file in the meantime
     _read_digests[os.path.abspath(path)] = files.digest(data)
     with io.StringIO(files.decode(data), newline="") as fh:
         reader = csv.DictReader(fh)
@@ -460,9 +459,7 @@ def _stripped(raw: _RawRow) -> dict[str, str]:
     return {k: v.strip() if isinstance(v, str) else "" for k, v in raw.items() if k is not None}
 
 
-def write(
-    rows: Iterable[Row], path: str = paths.PLACES, fields: Sequence[str] | None = None
-) -> None:
+def write(rows: Iterable[Row], path: str, fields: Sequence[str]) -> None:
     """Write the name list -- atomically, and only if nobody else changed the
     file since this process `read` it.
 
@@ -471,7 +468,6 @@ def write(
     temporary file that then replaces the original in one step), and a run
     must not overwrite what a spreadsheet or another script saved while it
     was busy (it stops instead with `Conflict`; re-run it)."""
-    fields = fields or columns()
     expect = _read_digests.get(os.path.abspath(path))
     if expect is None:
         raise RuntimeError(
@@ -492,16 +488,14 @@ _read_digests: dict[str, str] = {}  # abspath -> sha256 of what `read` saw
 
 
 @contextlib.contextmanager
-def lock(names_path: str = paths.PLACES) -> Iterator[None]:
-    """Hold `work/.lock` next to the name list for the duration of a
-    read-modify-write run, so that match.py and curate.py apply never run at
-    the same time.  Advisory (`flock`): a spreadsheet does not take it -- that
-    is what the check in `write` is for."""
+def lock(lock_path: str) -> Iterator[None]:
+    """Hold the workspace's lock file for the duration of a read-modify-write
+    run, so that `frasch match` and `frasch curate apply` never run at the
+    same time.  Advisory (`flock`): a spreadsheet does not take it -- that is
+    what the check in `write` is for."""
     import fcntl  # POSIX only; the pipeline runs in WSL
 
-    work = os.path.join(os.path.dirname(os.path.abspath(names_path)), "work")
-    os.makedirs(work, exist_ok=True)
-    lock_path = os.path.join(work, ".lock")
+    os.makedirs(os.path.dirname(os.path.abspath(lock_path)), exist_ok=True)
     with open(lock_path, "a") as fh:
         try:
             fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -509,8 +503,8 @@ def lock(names_path: str = paths.PLACES) -> Iterator[None]:
             if exc.errno not in (errno.EWOULDBLOCK, errno.EAGAIN, errno.EACCES):
                 raise
             raise PipelineError(
-                f"{lock_path} is held: another match.py or "
-                f"curate.py apply is running -- wait for it to "
+                f"{lock_path} is held: another `frasch match` or "
+                f"`frasch curate apply` is running -- wait for it to "
                 f"finish"
             ) from None
         try:
@@ -519,7 +513,7 @@ def lock(names_path: str = paths.PLACES) -> Iterator[None]:
             fcntl.flock(fh, fcntl.LOCK_UN)
 
 
-def describe(row: Row, reg: Registry | None = None) -> str:
+def describe(row: Row, reg: Registry) -> str:
     """One-line human reference to a row for messages and the report."""
     name = any_name(row, reg) or "-"
     de = primary(row.get("de")) or primary(row.get("da")) or "-"

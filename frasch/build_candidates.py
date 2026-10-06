@@ -1,10 +1,9 @@
-#!/usr/bin/env python3
 """One pyosmium pass per OSM extract, collecting every named object that could
 be a place / water / landscape / Warft / Koog / road / country.
 
 Output: names/work/candidates.jsonl  (one JSON object per line)
   first line  {"header": {"extracts": [{"file", "replication_timestamp"}, ...]}}
-              -- the extracts it was built from (frasch.candidates); match.py warns
+              -- the extracts it was built from (frasch.candidates); `frasch match` warns
               when that set changes between two of its runs
   then        {"src","t","id","lon","lat","cls","tags":{...}}  per candidate
               (frasch.candidates)
@@ -29,12 +28,11 @@ Why these: a reconnaissance pass over Schleswig-Holstein showed that
   * big waters (Nordsee, Wattenmeer) are place=sea relations whose `name` is a
     multilingual slash-list -- only name:de is usable.
 
-Run:  .venv/bin/python names/build_candidates.py tiles/data/*.osm.pbf
+Run:  frasch candidates tiles/data/*.osm.pbf
 """
 
 from __future__ import annotations
 
-import argparse
 import array
 import bisect
 import collections
@@ -47,8 +45,9 @@ from typing import IO
 
 import osmium
 
-from frasch import candidates, cli, files, geo, paths
+from frasch import candidates, cli, files, geo
 from frasch.geo import LonLat
+from frasch.paths import Workspace
 
 
 NATURAL_KEEP = {
@@ -328,29 +327,20 @@ def _record(
     }
 
 
-@cli.command
-def main(argv: Sequence[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-    ap.add_argument("pbf", nargs="+", help="OSM extracts to scan")
-    ap.add_argument("--out", default=paths.CANDIDATES)
-    ap.add_argument(
-        "--index", default="flex_mem", help="pyosmium node-location index (default flex_mem)"
-    )
-    args = ap.parse_args(argv)
-
-    os.makedirs(os.path.dirname(args.out), exist_ok=True)
+def run(ws: Workspace, pbfs: Sequence[str], index: str = "flex_mem") -> None:
+    """Scan the extracts `pbfs` into the workspace's candidates file and
+    count what was found; `index`: pyosmium's node-location index."""
+    os.makedirs(os.path.dirname(ws.candidates), exist_ok=True)
     counts: collections.Counter[str] = collections.Counter()
     t0 = time.time()
-    with files.replacing(args.out, text=True) as fh:
-        fh.write(json.dumps(candidates.header(args.pbf), ensure_ascii=False) + "\n")
-        for p in args.pbf:
+    with files.replacing(ws.candidates, text=True) as fh:
+        fh.write(json.dumps(candidates.header(pbfs), ensure_ascii=False) + "\n")
+        for p in pbfs:
             src = os.path.basename(p).split("-latest")[0].split(".")[0]
             print(f"scanning {p} ...", file=sys.stderr)
-            process(p, src, fh, counts, args.index)
+            process(p, src, fh, counts, index)
 
-    print(f"\nwrote {counts['_total']:,} candidates to {args.out} in {time.time() - t0:.0f}s")
+    print(f"\nwrote {counts['_total']:,} candidates to {ws.candidates} in {time.time() - t0:.0f}s")
     print(
         f"  nodes {counts['_total_n']:,}  ways {counts['_total_w']:,}  "
         f"relations {counts['_total_r']:,}"
@@ -359,4 +349,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     for k, v in sorted(counts.items()):
         if not k.startswith("_"):
             print(f"  {v:8,d}  {k}")
+
+
+@cli.command
+def main(argv: Sequence[str] | None = None) -> int:
+    ap = cli.parser("candidates", __doc__)
+    ap.add_argument("pbf", nargs="+", help="OSM extracts to scan")
+    cli.add_workspace_options(ap, "candidates", "work")
+    ap.add_argument(
+        "--location-index",
+        default="flex_mem",
+        help="pyosmium node-location index (default flex_mem)",
+    )
+    a = ap.parse_args(argv)
+    run(cli.workspace(a), a.pbf, a.location_index)
     return 0

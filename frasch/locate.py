@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Where the objects of the name list are: OSM extract(s) -> names/osm_objects.json.
 
 The map labels and the search index must agree on where a place is and
@@ -8,24 +7,21 @@ tags, the search export from the matcher's cache of vertex averages, days
 apart -- and disagreed on Sylt, Amrum, Stiardebel and more (#24).  Now it is
 worked out once, here, and both read the result:
 
-    locate.py <in.osm.pbf> [<in.osm.pbf> ...]
-              [--names names/places.csv] [--dialects names/dialects.csv]
-              [--out names/osm_objects.json]
+    frasch objects <in.osm.pbf> [<in.osm.pbf> ...]
 
 What the file records, and why it is committed: frasch.objects.
 """
 
 from __future__ import annotations
 
-import argparse
 import os
 from collections.abc import Collection, Iterable, Mapping, Sequence
 
-from frasch import cli, files, osmgeom, osmscan, paths, placelist, provenance, registry
+from frasch import cli, files, osmgeom, osmscan, placelist, provenance, registry
 from frasch.geo import LonLat
 from frasch.objects import Facts, LocatedObject, Objects, Point, objects_json
 from frasch.osmscan import Rings
-from frasch.paths import StrPath
+from frasch.paths import StrPath, Workspace
 from frasch.placelist import OsmRef, Row
 from frasch.registry import Registry
 
@@ -183,29 +179,47 @@ def _outline_point(
     return locs.get(first[0]) if first else None
 
 
-@cli.command
-def main(argv: Sequence[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-    ap.add_argument("pbf", nargs="+", help="OSM extract(s) holding the objects")
-    ap.add_argument("--names", default=paths.PLACES)
-    ap.add_argument("--dialects", default=paths.DIALECTS)
-    ap.add_argument("--out", default=paths.OBJECTS)
-    a = ap.parse_args(argv)
-    reg = registry.read(a.dialects)
-    rows, _ = placelist.read(a.names, reg)
-    refs = mapped_refs(rows, reg)
-    objects = Objects(
-        locate(a.pbf, refs), {"extracts": [provenance.extract_stamp(p) for p in a.pbf]}
-    )
-    files.atomic_write(a.out, objects_json(objects))
-    print(f"wrote {a.out}: {len(objects.by_ref)} of {len(refs)} objects located")
+def build(ws: Workspace, reg: Registry, pbfs: Sequence[StrPath]) -> Objects:
+    """The objects of the rows on the map, located in the extracts `pbfs`."""
+    return located(wanted_refs(ws, reg), pbfs)
+
+
+def wanted_refs(ws: Workspace, reg: Registry) -> set[OsmRef]:
+    """The OSM references of the rows on the map, as the name list has them now."""
+    rows, _ = placelist.read(ws.names, reg)
+    return mapped_refs(rows, reg)
+
+
+def located(refs: Collection[OsmRef], pbfs: Sequence[StrPath]) -> Objects:
+    """The objects `refs` found in the extracts `pbfs`, stamped with them."""
+    return Objects(locate(pbfs, refs), {"extracts": extract_stamps(pbfs)})
+
+
+def extract_stamps(pbfs: Iterable[StrPath]) -> list[provenance.ExtractStamp]:
+    return [provenance.extract_stamp(p) for p in pbfs]
+
+
+def run(ws: Workspace, reg: Registry, pbfs: Sequence[StrPath]) -> None:
+    """Locate the objects, write the objects file and say what is missing."""
+    refs = wanted_refs(ws, reg)
+    objects = located(refs, pbfs)
+    files.atomic_write(ws.objects, objects_json(objects))
+    print(f"wrote {ws.objects}: {len(objects.by_ref)} of {len(refs)} objects located")
     missing = sorted(refs - set(objects.by_ref), key=lambda ref: ("nwr".index(ref[0]), ref[1]))
     if missing:
         # the search export and the injector stop on these; fix the rows
         print(
-            f"{len(missing)} not in {', '.join(map(os.path.basename, a.pbf))}: "
+            f"{len(missing)} not in {', '.join(os.path.basename(p) for p in pbfs)}: "
             + ", ".join(placelist.format_osm([ref]) for ref in missing)
         )
+
+
+@cli.command
+def main(argv: Sequence[str] | None = None) -> int:
+    ap = cli.parser("objects", __doc__)
+    ap.add_argument("pbf", nargs="+", help="OSM extract(s) holding the objects")
+    cli.add_workspace_options(ap, "names", "dialects", "objects")
+    a = ap.parse_args(argv)
+    ws = cli.workspace(a)
+    run(ws, registry.read(ws.dialects), a.pbf)
     return 0

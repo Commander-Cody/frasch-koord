@@ -123,7 +123,7 @@ def _replacing(path: str, expect: str | None, text: bool) -> Iterator[IO[bytes] 
         if expect is not None and fingerprint(path) != expect:
             raise Conflict(
                 f"{path} changed on disk while this was running "
-                f"(a spreadsheet, match.py or curate.py apply?) -- "
+                f"(a spreadsheet, `frasch match` or `frasch curate apply`?) -- "
                 f"not overwriting it.  Nothing was written; save or "
                 f"commit the other change and run this again."
             )
