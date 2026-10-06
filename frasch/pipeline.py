@@ -107,9 +107,11 @@ class Output:
     what: str
     files: tuple[str, ...]  # by their attribute of the workspace
     source: From
-    build: Callable[[Run], None]  # writes the files of the run's workspace
-    # what a build would record now; None for a file that carries no stamp
-    stamp: Callable[[Run], Stamp] | None = None
+    # writes the files in the run's workspace, from the extracts it reads
+    make: Callable[[Run, Sequence[str]], None]
+    # what a build would record now, given the stamps of its extracts (None:
+    # not at hand); None for a file that carries no stamp
+    stamp: Callable[[Run, Sequence[ExtractStamp] | None], Stamp] | None = None
     # a reason of its own why it is stale, besides the stamp
     outdated: Callable[[Run], str | None] | None = None
     committed: bool = True  # False for a git-ignored scratch file
@@ -126,6 +128,16 @@ class Output:
 
     def paths(self, ws: Workspace) -> list[str]:
         return [getattr(ws, name) for name in self.files]
+
+    def build(self, run: Run) -> None:
+        """Build it in the run's workspace; stops when it is built from
+        extracts and the run has none."""
+        pbfs = run.pbfs(self.source)
+        if self.scans and pbfs is None:
+            raise PipelineError(
+                f"{self.name} is built from OSM extracts: name them, or run {self.recipe}"
+            )
+        self.make(run, pbfs or [])
 
     def due(self, run: Run) -> bool:
         """Whether `frasch update` builds it: every time -- unless its build
@@ -172,7 +184,7 @@ class Output:
         """Its first file whose stamp names other inputs than the run's."""
         if self.stamp is None:
             return None
-        current = self.stamp(run)
+        current = self.stamp(run, run.stamps(self.source))
         for path in self.paths(run.ws):
             differing = (Stamp.read(path) or _NO_STAMP).other_than(current)
             if differing:
@@ -205,20 +217,10 @@ def _other_references(run: Run) -> str | None:
     )
 
 
-def _match(run: Run) -> None:
+def _match(run: Run, _extracts: Sequence[str]) -> None:
     """Run the matcher, which says itself what it could not do."""
     if match.run(run.ws, run.reg):
         raise PipelineError("the matcher could not finish")
-
-
-def _extracts(output: str, run: Run, source: From) -> list[str]:
-    """The extracts the build of `output` reads; stops when the run has none."""
-    pbfs = run.pbfs(source)
-    if pbfs is None:
-        raise PipelineError(
-            f"{output} is built from OSM extracts: name them, or run {rebuild(output)}"
-        )
-    return pbfs
 
 
 OUTPUTS = (
@@ -227,8 +229,8 @@ OUTPUTS = (
         "every object of the extracts that could be a place",
         files=("candidates",),
         source=From.EXTRACTS,
-        build=lambda run: build_candidates.run(run.ws, _extracts("candidates", run, From.EXTRACTS)),
-        stamp=lambda run: Stamp.of({}, run.stamps(From.EXTRACTS)),
+        make=lambda run, pbfs: build_candidates.run(run.ws, pbfs),
+        stamp=lambda run, extracts: Stamp.of({}, extracts),
         committed=False,
     ),
     Output(
@@ -236,16 +238,16 @@ OUTPUTS = (
         "the matcher's hand-review worklist (the matcher fills the name list's osm cells too)",
         files=("report",),
         source=From.CANDIDATES,
-        build=_match,
-        stamp=lambda run: match.stamp(run.ws, run.stamps(From.CANDIDATES)),
+        make=_match,
+        stamp=lambda run, extracts: match.stamp(run.ws, extracts),
     ),
     Output(
         "objects",
         "where the name list's objects are",
         files=("objects",),
         source=From.EXTRACTS,
-        build=lambda run: locate.run(run.ws, run.reg, _extracts("objects", run, From.EXTRACTS)),
-        stamp=lambda run: Stamp.of({}, run.stamps(From.EXTRACTS)),
+        make=lambda run, pbfs: locate.run(run.ws, run.reg, pbfs),
+        stamp=lambda run, extracts: Stamp.of({}, extracts),
         outdated=_other_references,
     ),
     Output(
@@ -253,25 +255,24 @@ OUTPUTS = (
         "the dialect areas, and their parts for the review overlay",
         files=("areas", "parts"),
         source=From.AREA_EXTRACT,
-        build=lambda run: build_dialect_areas.run(
-            run.ws, run.reg, _extracts("areas", run, From.AREA_EXTRACT)
-        ),
-        stamp=lambda run: build_dialect_areas.stamp(run.ws, run.stamps(From.AREA_EXTRACT)),
+        make=lambda run, pbfs: build_dialect_areas.run(run.ws, run.reg, pbfs),
+        stamp=lambda run, extracts: build_dialect_areas.stamp(run.ws, extracts),
     ),
     Output(
         "dialects",
         "the dialect registry as the frontend compiles it in",
         files=("registry_json",),
         source=From.FILES,
-        build=lambda run: registry.export_json(run.reg, run.ws.registry_json),
+        make=lambda run, _: registry.export_json(run.reg, run.ws.registry_json),
     ),
     Output(
         "index",
         "the search index of the site",
         files=("index",),
         source=From.FILES,
-        build=lambda run: searchindex.run(run.ws, run.reg),
-        stamp=lambda run: provenance.stamp(run.ws),
+        make=lambda run, _: searchindex.run(run.ws, run.reg),
+        # its extracts are those of the objects file
+        stamp=lambda run, _: provenance.stamp(run.ws),
     ),
 )
 

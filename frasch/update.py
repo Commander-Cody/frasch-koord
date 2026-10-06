@@ -98,7 +98,7 @@ class Inputs:
         return self.checked
 
     @property
-    def build(self) -> Run:
+    def run(self) -> Run:
         """What the outputs are built from."""
         return Run(self.ws, self.reg, self.extracts)
 
@@ -123,6 +123,7 @@ def steps(inputs: Inputs) -> list[Step]:
         ),
         *(build_step(output, inputs) for output in pipeline.OUTPUTS),
         Step("curation worklist", done(lambda: curate.export(ws, inputs.reg))),
+        # without the extracts: with them, the check would scan them again
         Step(
             "output check",
             unless(lambda: check_outputs.run(Run(ws, inputs.reg)), Outcome.FAILED),
@@ -134,8 +135,8 @@ def build_step(output: Output, inputs: Inputs) -> Step:
     """The step that builds an output, when it is due."""
     return Step(
         output.name,
-        done(lambda: output.build(inputs.build)),
-        needed=lambda: output.due(inputs.build),
+        done(lambda: output.build(inputs.run)),
+        needed=lambda: output.due(inputs.run),
     )
 
 

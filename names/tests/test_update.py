@@ -157,6 +157,11 @@ def test_a_missing_extract_stops_the_run_with_how_to_get_it(workspace: Path) -> 
     assert not index_file(workspace).exists()
 
 
+def test_a_run_without_an_extract_stops(workspace: Path) -> None:
+    with pytest.raises(PipelineError, match="no OSM extract"):
+        update.run(workspace_of(workspace), [])
+
+
 def test_a_second_run_on_the_same_extracts_skips_the_slow_steps(
     workspace: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
