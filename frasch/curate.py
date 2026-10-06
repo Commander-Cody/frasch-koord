@@ -73,7 +73,7 @@ from frasch import (
     registry,
 )
 from frasch.candidates import Candidate
-from frasch.errors import PipelineError, ValidationError
+from frasch.errors import PipelineError
 from frasch.hints import HINT_FALLBACK, Circle, HintResolver
 from frasch.paths import StrPath, Workspace
 from frasch.placelist import OsmRef, PlaceRow, Row
@@ -259,7 +259,7 @@ def _read_work(ws: Workspace, reg: Registry) -> _Work:
     with open(matches, encoding="utf-8", newline="") as fh:
         reader = csv.DictReader(fh)
         if "id" not in (reader.fieldnames or []):
-            raise ValidationError(
+            raise PipelineError(
                 f"{matches} has no `id` column (written before "
                 f"places.csv had ids) -- re-run `frasch match`"
             )

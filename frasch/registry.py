@@ -34,15 +34,14 @@ parameter.
 
 from __future__ import annotations
 
-import csv
 import json
 import os
 import re
 from collections.abc import Collection, Iterator, Mapping, Sequence
 from typing import Literal, TypedDict
 
-from frasch import cli, files
-from frasch.errors import PipelineError, ValidationError
+from frasch import cli, files, tables
+from frasch.errors import PipelineError, Problem, ValidationError
 
 FIELDS = ["tag", "column", "label", "status", "view", "note"]
 EXPORT_FIELDS = FIELDS[:-1]  # what the frontend gets: all but `note`
@@ -97,7 +96,7 @@ class Registry:
         for d in self.dialects:
             if d[field] == value:
                 return d
-        raise ValidationError(f"unknown dialect {field} {value!r} (not in the dialect registry)")
+        raise PipelineError(f"unknown dialect {field} {value!r} (not in the dialect registry)")
 
 
 def row_problem(
@@ -126,40 +125,29 @@ def row_problem(
     return None
 
 
-def rows(path: str) -> tuple[list[Dialect], list[tuple[int, str]]]:
+def rows(path: str) -> tuple[list[Dialect], list[Problem]]:
     """-> (dialects, problems): the rows of the registry that follow its
-    rules, and `(line, reason)` for every one that does not.  A registry
-    without a dialect is one problem."""
+    rules, and what is wrong with the others.  A registry without a dialect
+    is one problem."""
     if not os.path.exists(path):
         raise PipelineError(f"dialect registry not found: {path}")
-    with files.open_csv(path) as fh:
-        reader = csv.reader(fh)
-        header = next(reader, [])
-        if what := files.csv_header_problem(header, FIELDS):
-            return [], [(1, what)]
-        found: list[Dialect] = []
-        problems: list[tuple[int, str]] = []
-        seen_tags: set[str] = set()
-        seen_cols: set[str] = set()
-        for cells in reader:
-            n = reader.line_num
-            if not cells:
-                continue
-            if what := files.cell_count_problem(cells, header):
-                problems.append((n, what))
-                continue
-            row = {k: v.strip() for k, v in zip(header, cells, strict=True)}
-            if not row["tag"]:
-                continue  # blank spacer line
-            if what := row_problem(row, seen_tags, seen_cols):
-                problems.append((n, what))
-            else:
-                found.append(_dialect(row))
-            seen_tags.add(row["tag"])
-            seen_cols.add(row["column"])
+    table = tables.read_table(path, FIELDS)
+    found: list[Dialect] = []
+    problems = list(table.problems)
+    seen_tags: set[str] = set()
+    seen_cols: set[str] = set()
+    for n, row in table.records():
+        if not row["tag"]:
+            continue  # blank spacer line
+        if what := row_problem(row, seen_tags, seen_cols):
+            problems.append(Problem(path, n, what))
+        else:
+            found.append(_dialect(row))
+        seen_tags.add(row["tag"])
+        seen_cols.add(row["column"])
     if not found and not problems:
-        problems.append((1, "no dialects"))
-    return found, problems
+        problems.append(Problem(path, 1, "no dialects"))
+    return found, tables.by_line(problems)
 
 
 def _dialect(row: Mapping[str, str]) -> Dialect:
@@ -177,7 +165,7 @@ def read(path: str) -> Registry:
     """The registry, validated; a ValidationError lists every problem."""
     found, problems = rows(path)
     if problems:
-        raise ValidationError([f"{path}:{n}: {what}" for n, what in problems])
+        raise ValidationError(problems)
     return Registry(found)
 
 

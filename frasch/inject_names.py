@@ -119,7 +119,7 @@ from frasch import (
     registry,
 )
 from frasch.curationlist import LocalPoint, Square, Tuning
-from frasch.errors import PipelineError, ValidationError
+from frasch.errors import PipelineError
 from frasch.geo import LonLat
 from frasch.objects import LocatedObject, dialect_at, read_objects
 from frasch.paths import Workspace
@@ -265,7 +265,7 @@ def point_tags(
     tags.update(name_tags(rows, area_tag, reg))
     tags.update(curation_tags)
     if "place" not in tags:
-        raise ValidationError(
+        raise PipelineError(
             f"{where}: kind {row['kind']!r} (places.csv line "
             f"{row.line}) has no default place= (POINT_TAGS in "
             f"frasch/curationlist.py) -- give the curation row "
@@ -287,7 +287,7 @@ def check_local(
             continue
         tags = point_tags(rows, None, reg, p["tags"], p["where"])
         if p["km2"] is not None and tags["place"] != "island":
-            raise ValidationError(
+            raise PipelineError(
                 f"{p['where']}: polygon_km2 on {placelist.format_osm([key])} "
                 f"needs place=island (got place={tags['place']}; "
                 f"OpenMapTiles labels polygons only as islands) -- "
@@ -839,7 +839,7 @@ def _check_local_refs(
             f"(places.csv line {by_id[k][0].line})"
             for k in unplaced
         )
-        raise ValidationError(
+        raise PipelineError(
             f"{len(unplaced)} local reference(s) in {names_csv} have no "
             f"row with lat/lon in {curation_csv or 'the curation file (which is switched off)'}:\n{
                 lines

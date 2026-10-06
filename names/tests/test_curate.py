@@ -13,7 +13,7 @@ from frasch import curate
 from frasch import match
 from frasch.__main__ import main
 from frasch.candidates import Candidate
-from frasch.errors import ValidationError
+from frasch.errors import PipelineError
 from conftest import REGISTRY, cand, path_options, places_text, workspace, write_candidates
 
 
@@ -294,7 +294,7 @@ def test_export_refuses_matches_without_ids(world: Path) -> None:
     (world / "places.csv").write_text(places_text(EXPORT_PLACES), encoding="utf-8")
     matches = world / "work" / "matches.csv"
     matches.write_text("line,result,candidates,note\n2,not_found,,\n", encoding="utf-8")
-    with pytest.raises(ValidationError) as stop:
+    with pytest.raises(PipelineError) as stop:
         export(world)
     assert str(stop.value) == (
         f"{matches} has no `id` column (written before places.csv had ids) -- re-run `frasch match`"

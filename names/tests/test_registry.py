@@ -8,7 +8,7 @@ import pytest
 
 from frasch import registry
 from frasch.__main__ import main
-from frasch.errors import ValidationError
+from frasch.errors import PipelineError, Problem, ValidationError
 
 HEADER = "tag,column,label,status,view,note\n"
 MOORING = "frr-x-mooring,mooring,Mooring,living,yes,\n"
@@ -39,14 +39,24 @@ def test_every_broken_row_is_reported_at_once(tmp_path: Path) -> None:
     with pytest.raises(ValidationError) as exc:
         registry.read(path)
     assert exc.value.problems == [
-        f"{path}:3: status 'alive' (living / extinct)",
-        f"{path}:4: no label",
+        Problem(path, 3, "status 'alive' (living / extinct)"),
+        Problem(path, 4, "no label"),
     ]
 
 
-def test_an_unknown_tag_is_a_validation_error(tmp_path: Path) -> None:
+def test_the_problems_are_in_the_order_of_the_lines(tmp_path: Path) -> None:
+    # Whatever kind they are of: a broken rule above a comma too few.
+    path = write(
+        tmp_path,
+        HEADER + "frr-x-fering,fering,Fering,alive,no,\n" + "frr-x-mooring,mooring,Mooring\n",
+    )
+    _, problems = registry.rows(path)
+    assert [p.line for p in problems] == [2, 3]
+
+
+def test_an_unknown_tag_is_a_pipeline_error(tmp_path: Path) -> None:
     reg = registry.read(write(tmp_path, HEADER + MOORING))
-    with pytest.raises(ValidationError, match="frr-x-fering"):
+    with pytest.raises(PipelineError, match="frr-x-fering"):
         reg.column_of("frr-x-fering")
 
 

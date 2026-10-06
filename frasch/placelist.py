@@ -29,17 +29,16 @@ lives one layer up in frasch.dialects.
 from __future__ import annotations
 
 import contextlib
-import csv
 import errno
-import io
 import os
 import re
 import unicodedata
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 
-from frasch import files
-from frasch.errors import Invalid, PipelineError, ValidationError
+from frasch import files, tables
+from frasch.errors import Invalid, PipelineError, Problem, ValidationError
 from frasch.registry import LOCAL_COLUMN, Registry
+from frasch.tables import Table
 
 
 def name_columns(reg: Registry) -> list[str]:
@@ -294,10 +293,12 @@ def header_problem(fields: Sequence[str], reg: Registry) -> str | None:
             "`lat`/`lon` moved to names/curation.csv (2026-09-18): reference "
             "the place as local/<slug> in `osm` and delete the two columns"
         )
-    what = files.csv_header_problem(fields, columns(reg))
+    if what := tables.unreadable_header(fields):
+        return what
+    what = tables.missing_columns(fields, columns(reg))
     if what and "id" not in fields:
         what += " (`frasch check-inputs --fix` adds `id`)"
-    elif what and what.startswith("missing"):
+    elif what:
         what += " (dialect columns come from names/dialects.csv)"
     return what
 
@@ -378,23 +379,17 @@ def fill_ids(path: str, reg: Registry) -> int:
     changes.  Writes nothing when every row has one.  -> the number of ids
     given.
 
-    It reads the file as raw CSV, because `read` refuses a row without an id;
-    a row whose cells do not line up with the header stops it, since there is
-    no telling which cell would be the id."""
-    with open(path, "rb") as fh:
-        data = fh.read()
-    reader = csv.reader(io.StringIO(files.decode(data), newline=""))
-    header = next(reader, [])
+    It takes the file's cells as they are, because `read` refuses a row
+    without an id; a row whose cells do not line up with the header stops it,
+    since there is no telling which cell would be the id."""
+    found = table(path)
+    if found.problems:
+        raise ValidationError(found.problems)
+    header = found.header
     fields = header if "id" in header else header + ["id"]
     if what := header_problem(fields, reg):
-        raise ValidationError(f"{path}: {what}")
-    rows: list[dict[str, str]] = []
-    for cells in reader:
-        if not cells:
-            continue
-        if what := files.cell_count_problem(cells, header):
-            raise ValidationError(f"{path}:{reader.line_num}: {what}")
-        rows.append(dict(zip(header, cells, strict=True)))
+        raise ValidationError([Problem(path, 1, what)])
+    rows = [dict(zip(header, cells, strict=True)) for _, cells in found.rows]
     taken = {r["id"].strip() for r in rows if r.get("id", "").strip()}
     given = 0
     for r in rows:
@@ -403,60 +398,57 @@ def fill_ids(path: str, reg: Registry) -> int:
             taken.add(r["id"])
             given += 1
     if given or fields is not header:
-        _read_digests[os.path.abspath(path)] = files.digest(data)
         write(rows, path, fields)
     return given
 
 
-def read(path: str, reg: Registry) -> tuple[list[PlaceRow], list[str]]:
-    """-> (rows, fieldnames).  A row is identified by its `id` and knows its
-    `line`.  A ValidationError lists every row that breaks the rules."""
+def table(path: str) -> Table:
+    """The name list as it is on disk -- the one place that opens it."""
     if not os.path.exists(path):
         raise PipelineError(f"name list not found: {path}")
-    with open(path, "rb") as fh:
-        data = fh.read()
+    found = tables.read_table(path)
     # remembered so that `write` can tell whether someone else (the matcher,
     # the curation, a spreadsheet) wrote the file in the meantime
-    _read_digests[os.path.abspath(path)] = files.digest(data)
-    with io.StringIO(files.decode(data), newline="") as fh:
-        reader = csv.DictReader(fh)
-        fields = list(reader.fieldnames or [])
-        if what := header_problem(fields, reg):
-            raise ValidationError(f"{path}: {what}")
-        rows: list[PlaceRow] = []
-        problems: list[str] = []
-        seen: dict[str, int] = {}
-        for raw in reader:
-            n = reader.line_num  # blank lines count too
-            what = _row_problem(raw, seen)
-            if what:
-                problems.append(f"{path}:{n}: {what}")
-                continue
-            row = PlaceRow(_stripped(raw), n)
-            seen[row["id"]] = n
-            rows.append(row)
+    _read_digests[os.path.abspath(path)] = found.digest
+    return found
+
+
+def ids(names: Table) -> set[str]:
+    """The `id` cells of the rows of the name list, whatever rule they break.
+    A row whose cells do not line up with the header is not among them, and
+    under an unreadable header none is."""
+    if "id" not in names.header:
+        return set()
+    return {row["id"] for _, row in names.records()}
+
+
+def rows(names: Table, reg: Registry) -> tuple[list[PlaceRow], list[Problem]]:
+    """-> (rows, problems): every row of the name list (`names`, see `table`)
+    whose cells line up with the header -- identified by its `id`, knowing
+    its `line` -- and what is wrong with the file by the rules `read`
+    enforces.  A row that breaks one is among the rows all the same:
+    frasch.check_inputs has more to say about it.  Without its columns the
+    list has no rows."""
+    if what := header_problem(names.header, reg):
+        return [], [Problem(names.path, 1, what)]
+    found = [PlaceRow(cells, n) for n, cells in names.records()]
+    problems = list(names.problems)
+    seen: dict[str, int] = {}
+    for row in found:
+        whats = [*row_problems(row), id_problem(row, seen)]
+        problems += [Problem(names.path, row.line, what) for what in whats if what]
+        seen.setdefault(row["id"], row.line)
+    return found, tables.by_line(problems)
+
+
+def read(path: str, reg: Registry) -> tuple[list[PlaceRow], list[str]]:
+    """-> (rows, fieldnames).  A row is identified by its `id` and knows its
+    `line`.  A ValidationError lists everything that breaks the rules."""
+    found = table(path)
+    place_rows, problems = rows(found, reg)
     if problems:
         raise ValidationError(problems)
-    return rows, fields
-
-
-# a row as `csv.DictReader` gives it: the cells beyond the header's columns
-# under None, a column the row has no cell for with None
-_RawRow = Mapping[str | None, str | list[str] | None]
-
-
-def _row_problem(raw: _RawRow, seen: dict[str, int]) -> str | None:
-    """The first thing wrong with one raw row of `read`, or None."""
-    if None in raw:  # more cells than columns
-        return f"row has more cells than the header (a stray comma?): {raw[None]}"
-    row = _stripped(raw)
-    problems = row_problems(row) + [id_problem(row, seen)]
-    return next((p for p in problems if p), None)
-
-
-def _stripped(raw: _RawRow) -> dict[str, str]:
-    """The cells of a raw row that `_row_problem` let through, stripped."""
-    return {k: v.strip() if isinstance(v, str) else "" for k, v in raw.items() if k is not None}
+    return place_rows, found.header
 
 
 def write(rows: Iterable[Row], path: str, fields: Sequence[str]) -> None:
@@ -474,12 +466,7 @@ def write(rows: Iterable[Row], path: str, fields: Sequence[str]) -> None:
             f"placelist.write({path!r}) without a placelist.read "
             f"of it first -- nothing to check for changes against"
         )
-    buf = io.StringIO(newline="")
-    w = csv.DictWriter(buf, fieldnames=fields, lineterminator="\n", extrasaction="ignore")
-    w.writeheader()
-    for r in rows:
-        w.writerow({k: r.get(k, "") for k in fields})
-    data = buf.getvalue().encode("utf-8")
+    data = tables.write_rows(fields, rows)
     files.atomic_write(path, data, expect=expect)
     _read_digests[os.path.abspath(path)] = files.digest(data)
 

@@ -63,7 +63,6 @@ dialect with coordinates rounded to 5 decimals.
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 import math
 import os
@@ -173,14 +172,7 @@ def read_areas(
         raise PipelineError(f"dialect area list not found: {path}")
     rows, problems = dialects.area_rows(path, reg)
     if problems:
-        n, what = problems[0]
-        raise ValidationError([f"{path}:{n}: {what}" for n, what in problems])
-    with files.open_csv(path) as fh:
-        fields = csv.DictReader(fh).fieldnames or []
-    for col in ("name", "note"):
-        # Only the review overlay needs these; an older CSV still builds.
-        if col not in fields:
-            print(f"{path}: no {col!r} column -- parts output leaves it empty")
+        raise ValidationError(problems)
     by_ref = {ref: row["dialect"] for row in rows for ref in row["refs"]}
     labels = {ref: row["name"] for row in rows for ref in row["refs"]}
     return by_ref, labels, rows

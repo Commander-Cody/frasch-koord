@@ -12,7 +12,7 @@ import pytest
 
 from frasch import build_dialect_areas, placelist, provenance, registry, update
 from frasch.__main__ import main
-from frasch.errors import PipelineError
+from frasch.errors import PipelineError, Problem
 from frasch.objects import Objects, objects_json
 from frasch.provenance import ExtractStamp
 from conftest import REGISTRY_CSV, cand, path_options, places_text, write_candidates
@@ -236,7 +236,7 @@ def test_a_run_reads_the_dialect_registry_once(
     read_rows = registry.rows
     reads = []
 
-    def counted(path: str) -> tuple[list[registry.Dialect], list[tuple[int, str]]]:
+    def counted(path: str) -> tuple[list[registry.Dialect], list[Problem]]:
         reads.append(path)
         return read_rows(path)
 

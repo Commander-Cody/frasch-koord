@@ -3,45 +3,27 @@
     frasch check-inputs            # exit 1 if anything is wrong
     frasch check-inputs --fix      # first give new rows an id
 
-`placelist.read` refuses the problems it cannot live with, but silently
-accepts some it can (a row with a comma too few is padded, and its names
-shift one column to the left), and knows nothing of the other files.  This
-reads all of them as raw CSV instead and lists every problem it finds, with
-the stricter rules of the name cells, so that one run shows everything a
-spreadsheet export or a hand edit broke.
+The commands refuse a file that breaks the rules they cannot live with, each
+its own file and only when it gets to it.  This reads all four with their
+own readers and lists every problem they find, plus the stricter rules of the
+name cells, so that one run shows everything a spreadsheet export or a hand
+edit broke.
 """
 
 from __future__ import annotations
 
-import csv
 import os
 import re
 import sys
 from collections.abc import Container, Sequence
-from dataclasses import dataclass
 from typing import NamedTuple
 
-from frasch import (
-    cli,
-    curationlist,
-    dialects,
-    errors,
-    files,
-    placelist,
-    registry,
-)
+from frasch import cli, curationlist, dialects, errors, placelist, registry, tables
+from frasch.errors import Problem
 from frasch.paths import Workspace
+from frasch.placelist import PlaceRow
 from frasch.registry import Registry
-
-
-@dataclass(frozen=True)
-class Problem:
-    path: str
-    line: int
-    message: str
-
-    def __str__(self) -> str:
-        return f"{self.path}:{self.line}: {self.message}"
+from frasch.tables import Table
 
 
 # a variant: the name, then optional remarks, each after one space
@@ -81,26 +63,6 @@ def cell_problem(cell: str) -> str | None:
     return None
 
 
-def _rows(path: str) -> tuple[list[str], list[tuple[int, list[str]]]]:
-    """-> (header, [(line, cells), ...]) of a CSV file.  Blank lines are left
-    out, as the readers skip them, but still counted: `line` is the line an
-    editor sees the row on, as a `placelist.PlaceRow`'s `line`."""
-    with files.open_csv(path) as fh:
-        reader = csv.reader(fh)
-        header = next(reader, [])
-        rows = [(reader.line_num, cells) for cells in reader if cells]
-    return header, rows
-
-
-def row_ids(path: str) -> set[str]:
-    """The `id` cells of the name list, whatever else is wrong with it."""
-    header, rows = _rows(path)
-    if "id" not in header:
-        return set()
-    column = header.index("id")
-    return {cells[column].strip() for _, cells in rows if len(cells) > column}
-
-
 def check_curation(path: str, ids: Container[str]) -> tuple[list[Problem], set[str]]:
     """-> (the problems in names/curation.csv, the slugs of the local
     references it positions).  The rules are those the tile build enforces
@@ -112,79 +74,84 @@ def check_curation(path: str, ids: Container[str]) -> tuple[list[Problem], set[s
         ref = e["tags"].get(placelist.REF_KEY)
         if ref is not None and ref not in ids:
             problems.append(
-                (
+                Problem(
+                    path,
                     e["line"],
                     f"{placelist.REF_KEY}={ref} names no row of the "
                     f"name list (it takes a row's `id`)",
                 )
             )
     positioned = {e["local"] for e in entries if e["local"]}
-    problems.sort(key=lambda p: p[0])
-    return [Problem(path, n, what) for n, what in problems], positioned
+    return tables.by_line(problems), positioned
 
 
 def check_dialects(path: str) -> tuple[Registry | None, list[Problem]]:
     """-> (the sound rows of the dialect registry, names/dialects.csv -- None
     when there are none --, the problems in it)."""
     found, problems = registry.rows(path)
-    return (Registry(found) if found else None, [Problem(path, n, what) for n, what in problems])
+    return (Registry(found) if found else None, problems)
 
 
 def check_dialect_areas(path: str, reg: Registry) -> list[Problem]:
     """The problems in the dialect area list, names/dialect_areas.csv, by the
     rules the area build enforces (`dialects.area_rows`)."""
     _rows, problems = dialects.area_rows(path, reg)
-    return [Problem(path, n, what) for n, what in problems]
+    return problems
 
 
 def check_places(
-    path: str, curation: str, positioned: Container[str], reg: Registry
+    names: Table, curation: str, positioned: Container[str], reg: Registry
 ) -> list[Problem]:
-    """The problems in the name list, whose columns `reg` says; `positioned`
-    are the local references `curation` has a position for."""
-    header, rows = _rows(path)
-    if what := placelist.header_problem(header, reg):
-        return [Problem(path, 1, what)]  # without its columns no row can be read
-    problems: list[Problem] = []
+    """The problems in the name list (`names`), whose columns `reg` says:
+    those `placelist.read` refuses it for, and the stricter rules of its name
+    cells and of what its rows claim.  `positioned` are the local references
+    `curation` has a position for."""
+    rows, problems = placelist.rows(names, reg)
     claimed: dict[str, int] = {}  # `way/1` or `Q1` -> line of the first row
-    ids: dict[str, int] = {}  # id -> line of the first row
-    for n, cells in rows:
+    for row in rows:
+        whats = _cell_problems(row, reg) + _claim_problems(row, curation, positioned, claimed)
+        problems += [Problem(names.path, row.line, what) for what in whats]
+    return tables.by_line(problems)
 
-        def problem(message: str, n: int = n) -> None:
-            problems.append(Problem(path, n, message))
 
-        if what := files.cell_count_problem(cells, header):
-            problem(what)  # its columns cannot be trusted, nothing else is
-            continue
-        row = {k: v.strip() for k, v in zip(header, cells, strict=True)}
-        for what in placelist.row_problems(row):
-            problem(what)
-        if what := placelist.id_problem(row, ids):
-            problem(what)
-        ids.setdefault(row["id"], n)
-        for column in variant_columns(reg):
-            if row[column] and (what := cell_problem(row[column])):
-                problem(f"{column}: {what}: {row[column]!r}")
-        if _BAD_SEPARATOR.search(row["osm"]):
-            problem(f"osm: references are separated by `; `: {row['osm']!r}")
-        try:
-            slug = placelist.local_ref(row["osm"])
-            refs = placelist.claimed_refs(row)
-        except errors.Invalid:
-            slug, refs = None, []  # row_problems reported it
-        if slug and slug not in positioned:
-            problem(f"local/{slug} has no row with `lat`/`lon` in {curation}")
-        keys = [placelist.format_osm([ref]) for ref in refs]
-        if row["wikidata"] and row["status"] != "skip":
-            keys.append(row["wikidata"])
-        for key in keys:
-            if key in claimed:
-                problem(
-                    f"{key} is already claimed by line {claimed[key]} "
-                    f"-- only one name can go on the map"
-                )
-            claimed.setdefault(key, n)
-    return problems
+def _cell_problems(row: PlaceRow, reg: Registry) -> list[str]:
+    """What is wrong with the syntax of a row's name cells and of its `osm`
+    cell."""
+    found = [
+        f"{column}: {what}: {row[column]!r}"
+        for column in variant_columns(reg)
+        if row[column] and (what := cell_problem(row[column]))
+    ]
+    if _BAD_SEPARATOR.search(row["osm"]):
+        found.append(f"osm: references are separated by `; `: {row['osm']!r}")
+    return found
+
+
+def _claim_problems(
+    row: PlaceRow, curation: str, positioned: Container[str], claimed: dict[str, int]
+) -> list[str]:
+    """What is wrong with what a row puts on the map: a local reference
+    `curation` has no position for, an object or Wikidata item a row above
+    it claimed already (`claimed`, which takes this row's)."""
+    try:
+        slug = placelist.local_ref(row["osm"])
+        refs = placelist.claimed_refs(row)
+    except errors.Invalid:
+        slug, refs = None, []  # `placelist.rows` reported it
+    found: list[str] = []
+    if slug and slug not in positioned:
+        found.append(f"local/{slug} has no row with `lat`/`lon` in {curation}")
+    keys = [placelist.format_osm([ref]) for ref in refs]
+    if row["wikidata"] and row["status"] != "skip":
+        keys.append(row["wikidata"])
+    for key in keys:
+        if key in claimed:
+            found.append(
+                f"{key} is already claimed by line {claimed[key]} "
+                f"-- only one name can go on the map"
+            )
+        claimed.setdefault(key, row.line)
+    return found
 
 
 def variant_columns(reg: Registry) -> list[str]:
@@ -205,8 +172,9 @@ def check(ws: Workspace) -> list[Problem]:
 
 def _check(ws: Workspace, reg: Registry | None, registry_problems: list[Problem]) -> list[Problem]:
     """`check`, with the registry as `check_dialects` read it."""
-    curation_problems, positioned = check_curation(ws.curation, row_ids(ws.names))
-    place_problems = check_places(ws.names, ws.curation, positioned, reg) if reg else []
+    names = placelist.table(ws.names)
+    curation_problems, positioned = check_curation(ws.curation, placelist.ids(names))
+    place_problems = check_places(names, ws.curation, positioned, reg) if reg else []
     area_problems = check_dialect_areas(ws.area_list, reg) if reg and not registry_problems else []
     return place_problems + curation_problems + registry_problems + area_problems
 

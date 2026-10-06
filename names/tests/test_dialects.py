@@ -9,8 +9,9 @@ import pytest
 from shapely.geometry import box
 from shapely.geometry.base import BaseGeometry
 
-from frasch import dialects, registry
+from frasch import dialects, registry, tables
 from frasch import placelist
+from frasch.errors import Problem
 from conftest import REGISTRY
 
 
@@ -148,11 +149,9 @@ def test_area_rows_rejects_a_node_reference(tmp_path: Path, reg: registry.Regist
     areas.write_text("dialect,osm,name,note\nfrr-x-mooring,node/1,A node,\n", encoding="utf-8")
     rows, problems = dialects.area_rows(str(areas), reg)
     assert rows == []
-    assert len(problems) == 1
-    line, reason = problems[0]
-    assert line == 2
-    assert "node/1" in reason
-    assert "way" in reason and "relation" in reason
+    assert problems == [
+        Problem(str(areas), 2, "node/1: only way/ or relation/ references are allowed here")
+    ]
 
 
 def test_area_rows_rejects_a_local_reference(tmp_path: Path, reg: registry.Registry) -> None:
@@ -162,10 +161,11 @@ def test_area_rows_rejects_a_local_reference(tmp_path: Path, reg: registry.Regis
     )
     rows, problems = dialects.area_rows(str(areas), reg)
     assert rows == []
-    assert len(problems) == 1
-    line, reason = problems[0]
-    assert line == 2
-    assert "local/some-slug" in reason
+    assert problems == [
+        Problem(
+            str(areas), 2, "local/some-slug: only way/ or relation/ references are allowed here"
+        )
+    ]
 
 
 def test_area_rows_still_accepts_way_and_relation_references(
@@ -178,3 +178,45 @@ def test_area_rows_still_accepts_way_and_relation_references(
     rows, problems = dialects.area_rows(str(areas), reg)
     assert problems == []
     assert rows[0]["refs"] == [("w", 1), ("r", 2)]
+
+
+# What a spreadsheet does to the file is reported as for the other three
+# hand-edited files (#92): the area list used to have a reader of its own.
+def test_area_rows_reports_a_semicolon_separated_export_as_such(
+    tmp_path: Path, reg: registry.Registry
+) -> None:
+    areas = tmp_path / "dialect_areas.csv"
+    areas.write_text("dialect;osm;name;note\nfrr-x-mooring;relation/1;Fine;\n", encoding="utf-8")
+    _, problems = dialects.area_rows(str(areas), reg)
+    assert problems == [Problem(str(areas), 1, tables.SEMICOLON_SEPARATED)]
+
+
+def test_area_rows_reports_a_row_with_the_wrong_number_of_cells(
+    tmp_path: Path, reg: registry.Registry
+) -> None:
+    areas = tmp_path / "dialect_areas.csv"
+    areas.write_text("dialect,osm,name,note\nfrr-x-mooring,relation/1,Fine\n", encoding="utf-8")
+    _, problems = dialects.area_rows(str(areas), reg)
+    assert problems == [
+        Problem(str(areas), 2, "3 cells, the header has 4 (a comma too many or too few?)")
+    ]
+
+
+def test_area_rows_reports_a_problem_after_a_blank_line_on_its_own_line(
+    tmp_path: Path, reg: registry.Registry
+) -> None:
+    areas = tmp_path / "dialect_areas.csv"
+    areas.write_text(
+        "dialect,osm,name,note\nfrr-x-mooring,relation/1,Fine,\n\nfrr-x-mooring,node/2,A node,\n",
+        encoding="utf-8",
+    )
+    _, problems = dialects.area_rows(str(areas), reg)
+    assert [p.line for p in problems] == [4]
+
+
+def test_area_rows_needs_every_column_of_the_file(tmp_path: Path, reg: registry.Registry) -> None:
+    # `name` and `note` are what the review overlay shows of a row.
+    areas = tmp_path / "dialect_areas.csv"
+    areas.write_text("dialect,osm\nfrr-x-mooring,relation/1\n", encoding="utf-8")
+    _, problems = dialects.area_rows(str(areas), reg)
+    assert problems == [Problem(str(areas), 1, "missing column(s) name, note")]

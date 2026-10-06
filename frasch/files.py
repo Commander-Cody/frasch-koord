@@ -1,9 +1,8 @@
-"""Reading the hand-edited CSV files and writing any file safely.
+"""Writing any file safely.
 
-The inputs are edited by hand, some in a spreadsheet, so reading them has to
-cope with what a spreadsheet saves (a byte order mark, a `;`-separated
-export); and the outputs -- the name list above all, which holds uncommitted
-hand edits -- must never be left half-written."""
+The outputs -- the name list above all, which holds uncommitted hand edits --
+must never be left half-written, and a file someone else saved in the
+meantime must not be overwritten."""
 
 from __future__ import annotations
 
@@ -11,54 +10,12 @@ import contextlib
 import hashlib
 import os
 import tempfile
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator
 from typing import IO, Literal, overload
 
 from frasch.errors import Conflict
 
 
-# ---------------------------------------------------------------- reading ---
-def open_csv(path: str) -> IO[str]:
-    """Open one of the hand-edited CSV files for reading.  A spreadsheet's
-    "CSV UTF-8" starts it with a byte order mark, which would otherwise end up
-    in the first column's name."""
-    return open(path, encoding="utf-8-sig", newline="")
-
-
-def decode(data: bytes) -> str:
-    """`open_csv` for a file already read as bytes."""
-    return data.decode("utf-8-sig")
-
-
-SEMICOLON_SEPARATED = (
-    "the cells are separated by `;`, not `,` (a German-locale "
-    "spreadsheet export?) -- save it as comma-separated CSV"
-)
-
-
-def csv_header_problem(fields: Sequence[str], required: Sequence[str]) -> str | None:
-    """What makes a CSV header unreadable -- a `;`-separated export, a column
-    named twice, a missing one -- or None."""
-    if len(fields) == 1 and ";" in fields[0]:
-        return SEMICOLON_SEPARATED
-    twice = sorted({c for c in fields if fields.count(c) > 1})
-    if twice:
-        return f"column(s) named twice: {', '.join(twice)}"
-    missing = [c for c in required if c not in fields]
-    if missing:
-        return f"missing column(s) {', '.join(missing)}"
-    return None
-
-
-def cell_count_problem(cells: Sequence[str], header: Sequence[str]) -> str | None:
-    """A row whose cells do not line up with the header's columns: a comma
-    too many or too few, and every cell after it is in the wrong column."""
-    if len(cells) != len(header):
-        return f"{len(cells)} cells, the header has {len(header)} (a comma too many or too few?)"
-    return None
-
-
-# ---------------------------------------------------------------- writing ---
 MISSING = "missing"  # `expect` for a file that must not exist
 
 

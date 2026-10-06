@@ -693,6 +693,31 @@ Earlier entries of this log keep the script names they were written with:
   `provenance` and `export_dialects` into `registry`. The other modules keep
   their names. See `names/README.md#code`.
 
+## Decided 2026-10-06: one reader for the four hand-edited tables (issue #92)
+
+`places.csv`, `curation.csv`, `dialects.csv` and `dialect_areas.csv` had four
+hand-written CSV readers with three behaviours. They are now parsed in one
+place, `frasch/tables.py`: `read_table` owns the byte order mark, the
+`;`-separated export, columns named twice or missing, the cell count of every
+row, blank lines and the line number an editor sees; `write_rows` writes
+them. Each file's module keeps only the rules of its rows, and each file is
+opened by one function. So all four now answer a `;`-separated export and a
+row with a comma too many or too few with the same message, and name the true
+line after a blank one — the area list did none of the three, and `places.csv`
+refused a comma-short row only by accident.
+
+- **Every documented column is required**, for every command alike:
+  `curation.csv` needs all nine (`frasch check-inputs` and the tile build used
+  to need only `osm`, `frasch curate apply` all of them), `dialect_areas.csv`
+  all four (`name` and `note` were optional). A column of your own beyond
+  them is still fine.
+- **A problem has one shape**: `errors.Problem(path, line, message)`. A
+  `ValidationError` means "a hand-edited file breaks its rules" and carries a
+  list of them. What cannot name a line of such a file — an unknown dialect
+  tag, a local reference without a position at build time, an old
+  `work/matches.csv` — is a plain `PipelineError`; `Invalid` (one cell that
+  breaks the rules) is one too. Messages and exit codes are unchanged.
+
 ## Remaining open questions
 1. Hosting provider for the site (R2 + Pages proposed, nothing set up yet); the tiles are GitHub release assets for now (issue #28).
 2. When to do the planet build (needs the VM; only after the North Frisia build looks right).
