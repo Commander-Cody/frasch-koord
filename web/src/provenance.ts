@@ -34,7 +34,7 @@ export function provenanceWarning(index: BuiltFrom, tiles: BuiltFrom | undefined
   if (differing.length === 0) return null;
   return (
     `names.json and the tiles were built from different ${differing.join(', ')}: ` +
-    'map labels and place cards may disagree. Rebuild both (`just index tiles`).'
+    'map labels and place cards may disagree. Rebuild both (`just rebuild index`, `just tiles`).'
   );
 }
 

@@ -1,4 +1,4 @@
-"""`frasch objects`: where each object of the name list is, worked out once
+"""`frasch build objects`: where each object of the name list is, worked out once
 from the extract(s) into names/osm_objects.json -- the one answer the
 injector (tiles) and the search index share (#24)."""
 

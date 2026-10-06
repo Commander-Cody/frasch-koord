@@ -52,7 +52,7 @@ the *local* one at this spot (`frasch:local`, the "local dialect" map view),
 and which dialect a place's own `local` column belongs to.  The smallest area
 containing the object wins.  Without the file the injector still runs -- it
 warns and writes `frasch:local` only for rows with an explicit `local` name.
-Where an object lies comes from `names/osm_objects.json` (`frasch objects`),
+Where an object lies comes from `names/osm_objects.json` (`frasch build objects`),
 and `objects.dialect_at` turns that into a dialect -- the same file and the same
 function the search index uses (frasch.searchindex), so a map label
 and its search entry cannot disagree (#24).  An object of the name list the
@@ -464,7 +464,7 @@ class Injector:
 
     def area_of(self, key: OsmRef, o: _OsmObject) -> str | None:
         """The dialect spoken where this object lies, or None: from the
-        objects file (`frasch objects`), which the search index reads too.
+        objects file (`frasch build objects`), which the search index reads too.
         A node found only through its QID is asked at its own location; a
         way or relation found that way gets none."""
         if key in self.objects:

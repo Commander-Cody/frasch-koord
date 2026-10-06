@@ -18,12 +18,18 @@ file records
   name         OSM's generic name (see `locate.object_facts`)
   name_frr     OSM's Frisian name (see `locate.object_facts`)
 
-and, as `built_from`, the extracts it was read from (frasch.provenance).
+and, as `built_from`, the extracts it was read from (frasch.provenance).  A
+reference that none of them holds is listed in `not_found` (left out when
+there is none), so the file says what it was located for: the references it
+has an object for and those.  It is stale when the rows on the map name
+other ones (frasch.pipeline).
 
 The file is **committed**, like names/dialect_areas.geojson: it is small, and
 the search index can then be rebuilt -- and checked in CI -- without an
-extract.  Rebuild it (`just objects`) when a row gets a new `osm` reference;
-the search export and the injector stop on a reference it does not know.
+extract.  Rebuild it (`just rebuild objects`) when a row gets a new `osm`
+reference; the search export and the injector stop on a reference it has no
+object for, and say what helps (`unlocated`): locating it, or -- when no
+extract holds it -- correcting the row.
 """
 
 from __future__ import annotations

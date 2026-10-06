@@ -8,29 +8,33 @@
 # The pipeline, from the committed name files and the OSM extracts to the
 # search index and the tiles:
 #
-#   extracts (download) ─┬─ candidates ── match           the matcher's worklist
+#   extracts (download) ─┬─ candidates ── report          the matcher's worklist
 #                        ├─ objects ─┐                    names/osm_objects.json
 #                        └─ areas ───┼─ index             web/public/data/names.json
 #                                    └─ tiles             tiles/data/<region>.pmtiles
 #                                         └─ publish-tiles  a release + web/tiles.lock
 #   dialects                                              web/src/generated/dialects.json
 #
-# `update` runs the name part of it in one go -- after an edit to places.csv
-# or a session in the curation view: ids and check-inputs, the view's
-# decisions, candidates, match, objects, areas, the dialect registry, index,
-# the worklist for the view, check-outputs.
-# It skips the slow steps whose inputs did not change (frasch/update.py).
+# The generated files of its name part -- candidates, report, objects, areas,
+# dialects, index -- are defined once, in frasch/pipeline.py: what builds
+# each, from what, and when it is stale.  `rebuild <name>` builds one of
+# them; `uv run frasch build --help` lists them.
+#
+# `update` builds them all in one go -- after an edit to places.csv or a
+# session in the curation view: ids and check-inputs, the view's decisions,
+# the generated files in the order above, the worklist for the view,
+# check-outputs.  It skips a scan of the extracts whose output is not stale.
 #
 # The pipeline's commands are those of `frasch` (`uv run frasch --help`); a
-# recipe has its command's name.
+# recipe has its command's name -- but `rebuild`, which runs `frasch build`,
+# since `build` is the site's.
 #
-# `objects`, `areas`, `index` and `dialects` write committed files;
+# All of the generated files but the candidates are committed;
 # `check-outputs` (CI) proves they match their inputs.  just has no file
 # timestamps: a recipe runs when you ask for it, not when its inputs changed.
-# What a recipe needs first is a dependency instead -- `candidates`,
-# `objects`, `areas` and `check-full` first run `extracts` (which downloads
-# only what is missing), `index` first runs `dialects`; `tiles` downloads its
-# own region's extract.
+# What a recipe needs first is a dependency instead -- `update`, `rebuild`
+# and `check-full` first run `extracts` (which downloads only what is
+# missing); `tiles` downloads its own region's extract.
 
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
@@ -39,6 +43,8 @@ frasch := "uv run frasch"
 # objects are found in -- North Frisia reaches into Denmark (Fanø, Röm, Ripen)
 region := "schleswig-holstein"
 extracts := "tiles/data/schleswig-holstein-latest.osm.pbf tiles/data/denmark-latest.osm.pbf"
+# the one of them the dialect areas are built from
+area_extract := "tiles/data/schleswig-holstein-latest.osm.pbf"
 # in CI, where GITHUB_STEP_SUMMARY names the run's summary page, pytest and
 # `frasch check-inputs` write their overviews onto it
 summary := env("GITHUB_STEP_SUMMARY", "")
@@ -98,7 +104,7 @@ smoke:
 # after editing places.csv or curating in /?curate: bring every name file up to date
 [group('name pipeline')]
 update: extracts
-    {{frasch}} update {{extracts}} --area-extract tiles/data/schleswig-holstein-latest.osm.pbf
+    {{frasch}} update {{extracts}} --area-extract {{area_extract}}
 
 # check the hand-edited name files for damage (pass --fix to give new rows an id; runs in CI)
 [group('name pipeline')]
@@ -140,37 +146,17 @@ extracts:
       fi
     done
 
-# scan the extracts for every object that could be a place (names/work/candidates.jsonl)
+# build one generated file of the pipeline by its name (`uv run frasch build --help` lists them)
 [group('pipeline steps')]
-candidates: extracts
-    {{frasch}} candidates {{extracts}}
+rebuild name: extracts
+    {{frasch}} build {{name}} {{extracts}} --area-extract {{area_extract}}
 
 # fill the empty osm cells of places.csv (pass --dry-run to only look)
 [group('pipeline steps')]
 match *args:
     {{frasch}} match {{args}}
 
-# locate the name list's objects in the extracts (names/osm_objects.json)
-[group('pipeline steps')]
-objects: extracts
-    {{frasch}} objects {{extracts}}
-
-# build the dialect areas from dialect_areas.csv (names/dialect_areas*.geojson)
-[group('pipeline steps')]
-areas: extracts
-    {{frasch}} areas tiles/data/schleswig-holstein-latest.osm.pbf
-
-# export the dialect registry for the frontend (web/src/generated/dialects.json)
-[group('pipeline steps')]
-dialects:
-    {{frasch}} dialects --export
-
-# export the search index (web/public/data/names.json)
-[group('pipeline steps')]
-index: dialects
-    {{frasch}} index
-
 # like check-outputs, and also rebuild objects and areas from the local extracts and compare
 [group('pipeline steps')]
 check-full: extracts
-    {{frasch}} check-outputs --extracts {{extracts}}
+    {{frasch}} check-outputs --extracts {{extracts}} --area-extract {{area_extract}}

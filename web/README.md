@@ -190,7 +190,7 @@ then reads TileJSON straight out of the archive itself.
 ### Dialect registry and the selector
 
 `names/dialects.csv` is the single list of North Frisian dialects for the
-whole project; `frasch dialects --export` (`uv run just dialects`) writes it to `src/generated/dialects.json`
+whole project; `frasch build dialects` (`uv run just rebuild dialects`) writes it to `src/generated/dialects.json`
 (`{tag, column, label, status, view}` per dialect, registry order) which
 `src/config.ts` imports — **generated, do not edit by hand.** `config.ts`
 derives the one dropdown from it:
@@ -448,7 +448,7 @@ object) and tiles built before them name the row's OSM reference (or its QID)
 instead; `entryLookup` in `src/names.ts` resolves those too — an object two
 rows claim opens the first.
 
-Written by `frasch index` (`uv run just index`); only
+Written by `frasch build index` (`uv run just rebuild index`); only
 non-empty values are exported, so an absent field really means "no such
 name". An entry lies where the first OSM object of its row lies (a node's
 location, a point inside a polygon; Planetiler places a polygon's map label
@@ -512,7 +512,7 @@ Where the data comes from (`src/names.ts`):
 - Low Saxon (`name_nds`) is the same kind of name: the list has no column for
   it, but both chains fall back to `name:nds` before German. A clicked card
   takes it from the tile, one opened from search from `names.json`
-  (`frasch index` takes it from the object's entry in
+  (the search index takes it from the object's entry in
   `names/osm_objects.json`). It gets its own line (`card.lowSaxon`) only where
   it differs from both the headline and the German name.
 - The generic name (`name_osm`), the `name:latin`/`name` steps near the end
@@ -587,7 +587,7 @@ which belongs to one `dialect_areas.csv` row only); ↑/↓
 or `j`/`k` walk the list. English only on purpose, like the curation view.
 
 Build the geometry first —
-`uv run just areas`
+`uv run just rebuild areas`
 writes `names/dialect_areas_parts.geojson` — and run under `npm run dev`; the
 endpoint is a Vite plugin with `apply: 'serve'` (`vite-plugins/areas.ts`,
 `GET /__areas/parts`), and like the curation view it is only loaded under

@@ -7,7 +7,7 @@ currently labels with: somebody who knows a Hallig as *Hansweerf* must find it
 while the map shows Mooring.
 
 Where a place is, and so which dialect is the *local* one there, comes from
-names/osm_objects.json (`frasch objects`) and names/dialect_areas.geojson --
+names/osm_objects.json (`frasch build objects`) and names/dialect_areas.geojson --
 the same files, read through the same `objects.dialect_at`, as the injector
 uses for the tiles, so a search result and the map label agree.  An entry
 lies where the first object of its row's `osm` cell lies.  A row for a place
@@ -23,9 +23,9 @@ The local name (`local`) of a row that has none is the object's OSM
 `name:frr` inside a dialect area (`dialects.osm_local_name`), as the injector
 writes it into `frasch:local` (#81).
 
-A row with an OSM reference the objects file does not know stops the export
--- it is on the map, and would be missing from search.  Re-run
-`just objects` after giving a row a new reference.  Rows keyed by a Wikidata
+A row whose entry lies at an object the objects file has none for stops the
+export -- it is on the map, and would be missing from search
+(`objects.require_located` says what helps).  Rows keyed by a Wikidata
 QID alone (the countries) have no position and are left out.
 
 The output records what it was built from (`built_from`, see

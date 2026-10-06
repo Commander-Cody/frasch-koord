@@ -718,6 +718,64 @@ refused a comma-short row only by accident.
   `work/matches.csv` — is a plain `PipelineError`; `Invalid` (one cell that
   breaks the rules) is one too. Messages and exit codes are unchanged.
 
+## Decided 2026-10-06: the pipeline is defined once (issue #95)
+
+For each generated file there were three answers to "what makes it, from
+what, and is it current": a just recipe, a step of `frasch update` with its
+own staleness rule, and a check in `frasch check-outputs` with the recipe's
+name as a string. The two Python sides disagreed (for the dialect areas
+`update` compared the whole stamp, the check only its hashes; for the objects
+`update` wanted exactly the references on the map, the check only that none
+was missing), and `REPORT.md` was committed without any check.
+
+- **One table, `frasch/pipeline.py`**: an `Output` per generated file —
+  `candidates`, `report`, `objects`, `areas`, `dialects`, `index` — with its
+  files, what it is built from, `build` and `stale()`. `frasch update` builds
+  the table's outputs in order, `frasch check-outputs` reports the committed
+  ones that are stale or that a rebuild gives another file for, and
+  `frasch build <name>` builds one. A new generated file is one entry.
+- **One `stale()` for both.** The extracts are compared where they are at
+  hand (`update`, `check-full`) and only the inputs where they are not (CI).
+  For the objects it is `update`'s rule: located for exactly the references
+  the rows on the map name, so a row taken off the map needs a rebuild too.
+- **`update` skips only a scan of an extract** (candidates, objects, dialect
+  areas) whose output is not stale. The matcher runs every time (owner's
+  decision): it changes `places.csv` and depends on Wikidata's answers,
+  which no stamp covers. The frontend's registry and the search index are
+  cheap and are built every time as well.
+- **One `Stamp`** (`frasch/provenance.py`): `Stamp.of` makes it, `Stamp.read`
+  reads it from any stamped file, `Stamp.other_than` says which inputs
+  differ. Where a file carries it did not change — `built_from` at the top of
+  a JSON file (the tiles carry the same object as `names.json`), in the
+  `properties` of a GeoJSON, as the header line of `candidates.jsonl` — so no
+  committed file changed and the candidates need no rescan.
+  `dialects.json` carries none: the frontend compiles the array in, and its
+  check is the byte comparison.
+- **`osm_objects.json` records what was asked for**: `not_found` lists the
+  references no extract holds (left out when empty, so the committed file
+  stayed byte-identical and `names.json`'s stamp still matches the published
+  tiles). Such a reference used to make `update` locate again on every run,
+  with the advice to run `just objects`, which could not help. Now it is not
+  stale, and one message (`objects.unlocated`) tells the two cases apart: not
+  located yet, or in no extract — then the row's `osm` cell is to correct.
+- **`REPORT.md` is stamped and checked** (owner's decision: it stays
+  committed). Its last line is a comment with the stamp: `places.csv` as the
+  matcher left it, `dialects.csv`, and the extracts behind the candidates. It
+  cannot be rebuilt in CI, because the matcher needs the git-ignored
+  candidates, so its check is the stamp. The consequence: after an edit to
+  `places.csv` or `dialects.csv`, CI fails until `just update` (or
+  `frasch match`) has rewritten the report. `work/match-extracts.json` is
+  gone; the matcher's "other extracts than the last match" warning compares
+  with the report's stamp.
+- **Recipes and commands** (owner's decisions): the recipes `objects`,
+  `areas`, `dialects`, `index` and `candidates` became `just rebuild <name>`
+  (`just build` is the site's), which runs `frasch build <name>`. The
+  commands `frasch objects`, `frasch index` and `frasch dialects --export`
+  went, since `frasch build` does the same; `frasch areas` and
+  `frasch candidates` stay for their own options. `just check-full` rebuilds
+  each file from the extracts it is given and no longer picks them by the
+  file names in each stamp.
+
 ## Remaining open questions
 1. Hosting provider for the site (R2 + Pages proposed, nothing set up yet); the tiles are GitHub release assets for now (issue #28).
 2. When to do the planet build (needs the VM; only after the North Frisia build looks right).
