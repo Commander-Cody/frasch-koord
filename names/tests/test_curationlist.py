@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from frasch import curationlist
-from frasch.errors import ValidationError
+from frasch.errors import Invalid, Problem, ValidationError
 from conftest import curation_file
 
 
@@ -137,7 +137,7 @@ def test_second_row_for_one_osm_object_stops_the_build(tmp_path: Path, first: st
     )
     with pytest.raises(ValidationError) as exc:
         curationlist.read(path)
-    assert exc.value.problems == [f"{path}:3: second row for way/44051131 (line 2)"]
+    assert exc.value.problems == [Problem(path, 3, "second row for way/44051131 (line 2)")]
 
 
 def test_a_node_with_a_square_may_have_a_row_of_its_own(tmp_path: Path) -> None:
@@ -161,9 +161,19 @@ def test_every_broken_row_is_reported_at_once(tmp_path: Path) -> None:
     with pytest.raises(ValidationError) as exc:
         curationlist.read(path)
     assert exc.value.problems == [
-        f"{path}:2: minzoom 'ten' is not an integer",
-        f"{path}:4: local/nowhere needs `lat` and `lon`",
+        Problem(path, 2, "minzoom 'ten' is not an integer"),
+        Problem(path, 4, "local/nowhere needs `lat` and `lon`"),
     ]
+
+
+def test_a_file_without_one_of_its_columns_is_refused(tmp_path: Path) -> None:
+    # The tile build, the input check and `frasch curate apply` (which appends
+    # rows to it) all need the same header.
+    path = tmp_path / "curation.csv"
+    path.write_text("osm,name,lat,lon,minzoom,maxzoom,polygon_km2,note\n", encoding="utf-8")
+    with pytest.raises(ValidationError) as exc:
+        curationlist.read(str(path))
+    assert exc.value.problems == [Problem(str(path), 1, "missing column(s) set_tags")]
 
 
 def test_the_local_points_are_the_positions_of_the_local_references(tmp_path: Path) -> None:
@@ -193,7 +203,7 @@ def test_parse_point_of_two_empty_cells_is_no_point() -> None:
 
 @pytest.mark.parametrize("lat,lon", [("54.65097", ""), ("", "8.34019")])
 def test_parse_point_needs_both_cells(lat: str, lon: str) -> None:
-    with pytest.raises(ValidationError, match="go together"):
+    with pytest.raises(Invalid, match="go together"):
         curationlist.parse_point(lat, lon, "curation.csv:15")
 
 
@@ -205,7 +215,7 @@ def test_parse_point_needs_both_cells(lat: str, lon: str) -> None:
     ],
 )
 def test_parse_point_needs_decimal_degrees(lat: str, lon: str) -> None:
-    with pytest.raises(ValidationError, match="not numbers"):
+    with pytest.raises(Invalid, match="not numbers"):
         curationlist.parse_point(lat, lon)
 
 
@@ -213,7 +223,7 @@ def test_parse_point_needs_decimal_degrees(lat: str, lon: str) -> None:
     "lat,lon", [("91", "8.3"), ("-90.5", "8.3"), ("54.6", "181"), ("54.6", "-180.01")]
 )
 def test_parse_point_refuses_coordinates_off_the_globe(lat: str, lon: str) -> None:
-    with pytest.raises(ValidationError, match="out of range"):
+    with pytest.raises(Invalid, match="out of range"):
         curationlist.parse_point(lat, lon)
 
 
@@ -247,10 +257,10 @@ def test_empty_set_tags_are_no_tags() -> None:
 
 
 def test_set_tags_entry_without_equals_is_refused() -> None:
-    with pytest.raises(ValidationError, match="not key=value"):
+    with pytest.raises(Invalid, match="not key=value"):
         curationlist.parse_set_tags("place=island;islet")
 
 
 def test_set_tags_entry_with_empty_key_is_refused() -> None:
-    with pytest.raises(ValidationError, match="empty key"):
+    with pytest.raises(Invalid, match="empty key"):
         curationlist.parse_set_tags("=island")

@@ -16,14 +16,14 @@ The command that prints and exports the registry is `frasch dialects` (frasch.re
 
 from __future__ import annotations
 
-import csv
 import json
+from collections.abc import Collection, Mapping
 from typing import TypedDict
 
 from shapely.geometry.base import BaseGeometry
 
-from frasch import files, placelist
-from frasch.errors import Invalid, ValidationError
+from frasch import placelist, tables
+from frasch.errors import Invalid, PipelineError, Problem
 from frasch.placelist import OsmRef, Row
 from frasch.registry import LOCAL_COLUMN, Registry
 
@@ -39,77 +39,68 @@ class AreaRow(TypedDict):
     refs: list[OsmRef]
 
 
-def area_rows(path: str, reg: Registry) -> tuple[list[AreaRow], list[tuple[int, str]]]:
+AREA_COLUMNS = ["dialect", "osm", "name", "note"]
+
+
+def area_rows(path: str, reg: Registry) -> tuple[list[AreaRow], list[Problem]]:
     """-> (rows, problems) of the dialect area list (names/dialect_areas.csv):
     one dict per row that follows its rules -- `line`, `dialect`, `name`,
-    `note`, `osm` (normalised) and `refs` (parsed) -- and `(line, reason)` for
-    every one that does not.  The one reading of the file's rules, shared by
-    frasch.build_dialect_areas (which stops at the first problem) and
+    `note`, `osm` (normalised) and `refs` (parsed) -- and what is wrong with
+    the others.  The one reading of the file's rules, shared by
+    frasch.build_dialect_areas (which stops on a problem) and
     frasch.check_inputs (which lists them).
 
     An OSM reference belongs to one row only: the review overlay's
     `?areas&area=` links name a row by it."""
+    table = tables.read_table(path, AREA_COLUMNS)
     known = set(reg.tags)
     rows: list[AreaRow] = []
-    problems: list[tuple[int, str]] = []
+    problems = list(table.problems)
     first_line: dict[OsmRef, int] = {}
-    with files.open_csv(path) as fh:
-        reader = csv.DictReader(fh)
-        missing = [c for c in ("dialect", "osm") if c not in (reader.fieldnames or [])]
-        if missing:
-            return [], [(1, f"missing column(s) {', '.join(missing)}")]
-        for n, row in enumerate(reader, start=2):
-            tag = (row.get("dialect") or "").strip()
-            if not tag and not (row.get("osm") or "").strip():
-                continue  # blank spacer line
-            if tag not in known:
-                problems.append((n, f"unknown dialect {tag!r} (not in names/dialects.csv)"))
-                continue
-            try:
-                refs = placelist.parse_osm(row.get("osm"))
-            except Invalid as exc:
-                problems.append((n, exc.reason))
-                continue
-            if not refs:
-                problems.append((n, "no OSM reference"))
-                continue
-            area_refs = [
-                osm for ref in refs if (osm := placelist.as_osm_ref(ref)) and osm[0] in ("w", "r")
-            ]
-            if len(area_refs) < len(refs):
-                # a node can never be a polygon, and `local/` names an object
-                # of our own invention (curation.csv), not an OSM boundary
-                bad = [r for r in refs if r not in area_refs]
-                problems.append(
-                    (
-                        n,
-                        f"{placelist.format_osm(bad)}: only way/ "
-                        f"or relation/ references are allowed here",
-                    )
-                )
-                continue
-            taken = [r for r in area_refs if r in first_line]
-            if taken:
-                problems.append(
-                    (
-                        n,
-                        f"{placelist.format_osm(taken[:1])} is already "
-                        f"on line {first_line[taken[0]]}",
-                    )
-                )
-                continue
-            first_line.update((r, n) for r in area_refs)
-            rows.append(
-                {
-                    "line": n,
-                    "dialect": tag,
-                    "name": (row.get("name") or "").strip(),
-                    "note": (row.get("note") or "").strip(),
-                    "osm": placelist.format_osm(area_refs),
-                    "refs": area_refs,
-                }
-            )
-    return rows, problems
+    for n, row in table.records():
+        if not row["dialect"] and not row["osm"]:
+            continue  # blank spacer line
+        try:
+            refs = _area_refs(row, known, first_line)
+        except Invalid as exc:
+            problems.append(Problem(path, n, exc.reason))
+            continue
+        first_line.update((r, n) for r in refs)
+        rows.append(
+            {
+                "line": n,
+                "dialect": row["dialect"],
+                "name": row["name"],
+                "note": row["note"],
+                "osm": placelist.format_osm(refs),
+                "refs": refs,
+            }
+        )
+    return rows, tables.by_line(problems)
+
+
+def _area_refs(row: Row, known: Collection[str], first_line: Mapping[OsmRef, int]) -> list[OsmRef]:
+    """The areas a row of the list names (`first_line`: those of the rows
+    above it, with their line); `Invalid` when the row breaks a rule."""
+    if row["dialect"] not in known:
+        raise Invalid("", f"unknown dialect {row['dialect']!r} (not in names/dialects.csv)")
+    refs = placelist.parse_osm(row["osm"])
+    if not refs:
+        raise Invalid("", "no OSM reference")
+    area_refs = [osm for ref in refs if (osm := placelist.as_osm_ref(ref)) and osm[0] in ("w", "r")]
+    if len(area_refs) < len(refs):
+        # a node can never be a polygon, and `local/` names an object of our
+        # own invention (curation.csv), not an OSM boundary
+        bad = [r for r in refs if r not in area_refs]
+        raise Invalid(
+            "", f"{placelist.format_osm(bad)}: only way/ or relation/ references are allowed here"
+        )
+    taken = [r for r in area_refs if r in first_line]
+    if taken:
+        raise Invalid(
+            "", f"{placelist.format_osm(taken[:1])} is already on line {first_line[taken[0]]}"
+        )
+    return area_refs
 
 
 # --------------------------------------------------------------- names ----
@@ -179,7 +170,7 @@ class AreaIndex:
         for feat in fc.get("features", []):
             tag = (feat.get("properties") or {}).get("dialect")
             if not tag:
-                raise ValidationError(f"{path}: a feature has no `dialect` property")
+                raise PipelineError(f"{path}: a feature has no `dialect` property")
             geom = shape(feat["geometry"])
             polygons.append((tag, geom))
         # explode MultiPolygons: one entry per island / municipality blob

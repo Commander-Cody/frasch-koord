@@ -23,7 +23,7 @@ from pathlib import Path
 import osmium
 import pytest
 
-from frasch.errors import PipelineError, ValidationError
+from frasch.errors import PipelineError
 from frasch import inject_names
 from frasch import locate
 from frasch import placelist
@@ -955,7 +955,7 @@ def test_dry_run_writes_nothing(tmp_path: Path) -> None:
 
 
 def test_a_local_reference_without_a_position_stops_the_build(tmp_path: Path) -> None:
-    with pytest.raises(ValidationError) as exc:
+    with pytest.raises(PipelineError) as exc:
         report_run(tmp_path, REPORT_PLACES, REPORT_CURATION[:3])
     assert normalized(str(exc.value), tmp_path) == (
         "1 local reference(s) in <dir>/places.csv have no row with lat/lon in "

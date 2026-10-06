@@ -19,16 +19,15 @@ appends rows) all go through it.
 
 from __future__ import annotations
 
-import csv
-import io
 import math
 import os
 from collections.abc import Iterable, Mapping, Sequence
 from typing import NamedTuple, TypedDict
 
-from frasch import files
-from frasch.errors import Invalid, ValidationError
+from frasch import tables
+from frasch.errors import Invalid, Problem, ValidationError
 from frasch.geo import LonLat
+from frasch.tables import Table
 from frasch.placelist import LOCAL_TYPE, Ref, format_osm, local_slug, parse_osm
 
 COLUMNS = ["osm", "name", "lat", "lon", "set_tags", "minzoom", "maxzoom", "polygon_km2", "note"]
@@ -93,7 +92,7 @@ def parse_set_tags(spec: str | None, where: str = "") -> dict[str, str]:
 
 
 def _zoom(row: Mapping[str, str], column: str, found: list[str]) -> int | None:
-    cell = row.get(column, "")
+    cell = row[column]
     if not cell:
         return None
     try:
@@ -114,7 +113,7 @@ def _zooms(row: Mapping[str, str], found: list[str]) -> tuple[int | None, int | 
 
 
 def _km2(row: Mapping[str, str], found: list[str]) -> float | None:
-    cell = row.get("polygon_km2", "")
+    cell = row["polygon_km2"]
     if not cell:
         return None
     try:
@@ -167,8 +166,8 @@ def _entry(n: int, row: Mapping[str, str], seen: _Seen) -> tuple[Entry | None, l
     """-> (the entry of one row, what is wrong with it); no entry for a row
     without a reference (a spacer) or with a problem."""
     try:
-        refs = parse_osm(row.get("osm"))
-        pos = parse_point(row.get("lat"), row.get("lon"))
+        refs = parse_osm(row["osm"])
+        pos = parse_point(row["lat"], row["lon"])
     except Invalid as exc:
         return None, [exc.reason]
     if not refs:
@@ -184,7 +183,7 @@ def _entry(n: int, row: Mapping[str, str], seen: _Seen) -> tuple[Entry | None, l
     if local and local in seen.positioned:
         found.append(f"second row for local/{local}")
     try:
-        tags = parse_set_tags(row.get("set_tags"))
+        tags = parse_set_tags(row["set_tags"])
     except Invalid as exc:
         found.append(exc.reason)
     minzoom, maxzoom = _zooms(row, found)
@@ -210,47 +209,41 @@ def _entry(n: int, row: Mapping[str, str], seen: _Seen) -> tuple[Entry | None, l
         "minzoom": minzoom,
         "maxzoom": maxzoom,
         "km2": km2,
-        "label": row.get("name", ""),
+        "label": row["name"],
     }, []
 
 
-def rows(path: str) -> tuple[list[Entry], list[tuple[int, str]]]:
+def _table(path: str) -> Table:
+    """The file as it is on disk -- the one place that opens it, and that
+    says which columns it must have."""
+    return tables.read_table(path, COLUMNS)
+
+
+def rows(path: str) -> tuple[list[Entry], list[Problem]]:
     """-> (entries, problems): the rows that follow the file's rules, and
-    `(line, reason)` for every one that does not.
+    what is wrong with the others.
 
     An entry: `line`, `refs` (parsed `osm`), `local` (the slug of a local
     reference, else None), `pos` ((lon, lat) or None), `tags` (`set_tags`),
     `minzoom` / `maxzoom` (int or None), `km2` (float or None) and `label`
     (the `name` cell).  Rows without a reference are spacer lines and left
     out."""
+    table = _table(path)
     entries: list[Entry] = []
-    problems: list[tuple[int, str]] = []
+    problems = list(table.problems)
     seen = _Seen()
-    with files.open_csv(path) as fh:
-        reader = csv.reader(fh)
-        header = next(reader, [])
-        if what := files.csv_header_problem(header, ["osm"]):
-            return entries, [(1, what)]
-        for cells in reader:
-            n = reader.line_num
-            if not cells:
-                continue  # a blank line
-            if what := files.cell_count_problem(cells, header):
-                problems.append((n, what))  # its columns cannot be trusted
-                continue
-            entry, found = _entry(
-                n, {k: v.strip() for k, v in zip(header, cells, strict=True)}, seen
-            )
-            problems += [(n, what) for what in found]
-            if entry:
-                entries.append(entry)
-    return entries, problems
+    for n, row in table.records():
+        entry, found = _entry(n, row, seen)
+        problems += [Problem(path, n, what) for what in found]
+        if entry:
+            entries.append(entry)
+    return entries, tables.by_line(problems)
 
 
 def _valid_entries(path: str) -> list[Entry]:
     entries, problems = rows(path)
     if problems:
-        raise ValidationError([f"{path}:{n}: {what}" for n, what in problems])
+        raise ValidationError(problems)
     return entries
 
 
@@ -328,29 +321,21 @@ def local_points(path: str) -> dict[str, LonLat]:
 def read_bytes(path: str) -> tuple[bytes | None, list[str]]:
     """-> (the file's bytes, None when it does not exist; its columns).  The
     columns are the file's own (it is hand-edited, so it may have gained
-    one); COLUMNS must be among them."""
+    one); COLUMNS are among them."""
     if not os.path.exists(path):
         return None, COLUMNS
-    with open(path, "rb") as fh:
-        data = fh.read()
-    fields = next(csv.reader(io.StringIO(files.decode(data), newline="")), None) or COLUMNS
-    missing = [c for c in COLUMNS if c not in fields]
-    if missing:
-        raise ValidationError(f"{path}: missing column(s) {missing}")
-    return data, fields
+    table = _table(path)
+    if table.problems:
+        raise ValidationError(table.problems)
+    return table.data, table.header
 
 
 def appended(data: bytes | None, fields: list[str], new_rows: Iterable[Mapping[str, str]]) -> bytes:
     """The whole file with `new_rows` appended: the old bytes (`read_bytes`)
     untouched, the new rows in the file's column order; with a header when
     there was no file."""
-    buf = io.StringIO(newline="")
-    w = csv.DictWriter(buf, fieldnames=fields, lineterminator="\n", extrasaction="ignore")
     if data is None:
-        w.writeheader()
-        data = b""
-    elif data and not data.endswith(b"\n"):
+        return tables.write_rows(fields, new_rows)
+    if data and not data.endswith(b"\n"):
         data += b"\n"
-    for r in new_rows:
-        w.writerow({k: r.get(k, "") for k in fields})
-    return data + buf.getvalue().encode("utf-8")
+    return data + tables.write_rows(fields, new_rows, header=False)

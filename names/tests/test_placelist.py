@@ -18,7 +18,7 @@ import pytest
 from frasch import paths, placelist
 from frasch.paths import Workspace
 from frasch.registry import LOCAL_COLUMN, Dialect, Registry
-from frasch.errors import ValidationError
+from frasch.errors import Invalid
 
 
 # ------------------------------------------------------------- name cells ---
@@ -123,22 +123,22 @@ def test_a_reference_is_either_an_osm_object_or_a_local_slug(
     ],
 )
 def test_parse_osm_refuses_a_bad_reference(cell: str) -> None:
-    with pytest.raises(ValidationError, match="bad reference"):
+    with pytest.raises(Invalid, match="bad reference"):
         placelist.parse_osm(cell, "places.csv:7")
 
 
 def test_parse_osm_error_says_where() -> None:
-    with pytest.raises(ValidationError, match="places.csv:7"):
+    with pytest.raises(Invalid, match="places.csv:7"):
         placelist.parse_osm("way/abc", "places.csv:7")
 
 
 def test_a_local_reference_cannot_be_combined_with_others() -> None:
-    with pytest.raises(ValidationError, match="stands alone"):
+    with pytest.raises(Invalid, match="stands alone"):
         placelist.parse_osm("local/westerheide-amrum; node/6928685546")
 
 
 def test_two_local_references_cannot_be_combined_either() -> None:
-    with pytest.raises(ValidationError, match="stands alone"):
+    with pytest.raises(Invalid, match="stands alone"):
         placelist.parse_osm("local/merlingmark; local/dreihardereck")
 
 

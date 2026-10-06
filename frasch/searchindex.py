@@ -55,7 +55,7 @@ from frasch import (
     provenance,
     registry,
 )
-from frasch.errors import PipelineError, ValidationError
+from frasch.errors import PipelineError
 from frasch.geo import LonLat
 from frasch.objects import LocatedObject, Objects, dialect_at, read_objects
 from frasch.paths import Workspace
@@ -98,7 +98,7 @@ def entry_object(
     slug = placelist.local_ref(row["osm"])
     if slug:
         if slug not in local_points:
-            raise ValidationError(
+            raise PipelineError(
                 f"{where}: local/{slug} has no row with lat/lon in the curation file"
             )
         lon, lat = local_points[slug]

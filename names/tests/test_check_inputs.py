@@ -12,6 +12,7 @@ import pytest
 
 from frasch import check_inputs, placelist
 from frasch.__main__ import main
+from frasch.errors import Problem
 from frasch.paths import Workspace
 from conftest import CURATION_HEADER, REGISTRY, TOFTUM, places_text
 
@@ -28,7 +29,7 @@ NIEBUELL = {
 class CheckNames(Protocol):
     def __call__(
         self, places: str, curation: str = ..., dialects: str | None = ...
-    ) -> list[check_inputs.Problem]: ...
+    ) -> list[Problem]: ...
 
 
 @pytest.fixture
@@ -38,7 +39,7 @@ def names(ws: Workspace) -> CheckNames:
 
     def run(
         places: str, curation: str = CURATION_HEADER, dialects: str | None = None
-    ) -> list[check_inputs.Problem]:
+    ) -> list[Problem]:
         Path(ws.names).write_text(places, encoding="utf-8")
         Path(ws.curation).write_text(curation, encoding="utf-8")
         if dialects is not None:
@@ -48,7 +49,7 @@ def names(ws: Workspace) -> CheckNames:
     return run
 
 
-def lines(problems: Sequence[check_inputs.Problem]) -> list[int]:
+def lines(problems: Sequence[Problem]) -> list[int]:
     return [p.line for p in problems]
 
 
@@ -388,6 +389,14 @@ def test_a_curation_row_with_the_wrong_number_of_cells_is_reported(
     assert any("cells" in p.message for p in problems)
 
 
+def test_a_curation_file_without_one_of_its_columns_is_reported(names: CheckNames) -> None:
+    # `frasch curate apply` refuses such a file; the check must not pass it.
+    problems = names(places_text([TOFTUM]), "osm,name,lat,lon,minzoom,maxzoom,polygon_km2,note\n")
+    assert [(os.path.basename(p.path), p.line, p.message) for p in problems] == [
+        ("curation.csv", 1, "missing column(s) set_tags")
+    ]
+
+
 def test_a_dialect_row_with_the_wrong_number_of_cells_is_reported(names: CheckNames) -> None:
     problems = names(
         places_text([TOFTUM]),
@@ -418,7 +427,7 @@ def test_an_id_used_twice_is_reported_on_the_second_row(names: CheckNames) -> No
     assert [(p.line, p.message) for p in problems] == [(3, "id toftem is already used on line 2")]
 
 
-def fix(ws: Workspace) -> list[check_inputs.Problem]:
+def fix(ws: Workspace) -> list[Problem]:
     """Give the new rows an id and check the workspace; -> what is wrong with it."""
     return check_inputs.run(ws, fix=True).problems
 

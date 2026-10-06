@@ -47,7 +47,7 @@ def test_interrupted_write_leaves_the_file_alone(
                 raise KeyboardInterrupt("Ctrl-C half-way")
             return super().writerow(row)
 
-    monkeypatch.setattr("frasch.placelist.csv.DictWriter", Crashing)
+    monkeypatch.setattr("frasch.tables.csv.DictWriter", Crashing)
     with pytest.raises(KeyboardInterrupt):
         placelist.write(rows, str(places), fields)
     assert places.read_bytes() == before
