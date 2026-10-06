@@ -715,6 +715,7 @@ A record with fixed keys is a `TypedDict` in the module that produces it
 | `candidates`, `nameindex`, `hints` | the candidates file, the name index of the matcher and the curation export, location hints |
 | `searchindex` | builds and writes the search index |
 | `provenance` | `Stamp`, what a generated file was built from: making one, reading it from any stamped file, comparing two; printing the tiles' (`frasch provenance`) |
+| `locate` | locates the name list's objects in the extracts, for `frasch build objects` |
 | `pipeline` | the table of the generated files (`OUTPUTS`): what builds each, from what, and when it is stale; `frasch build` |
 | `check_inputs`, `check_outputs` | `frasch check-inputs` and `check-outputs` |
-| the rest | the commands' own modules: `update`, `build_candidates`, `match`, `curate`, `locate` (the objects), `build_dialect_areas` (`areas`), `inject_names` (`inject`), `check_tiles` (`check-tiles`) |
+| the rest | the commands' own modules: `update`, `build_candidates`, `match`, `curate`, `build_dialect_areas` (`areas`), `inject_names` (`inject`), `check_tiles` (`check-tiles`) |

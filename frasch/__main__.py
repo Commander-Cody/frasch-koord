@@ -1,8 +1,9 @@
 """`frasch <command>`: the one entry point of the pipeline.
 
-Each command is a module with a `main(argv)`; this is the table of them, by
-the names the just recipes use.  `frasch <command> --help` explains a
-command and its options.
+Each command is a module with a `main(argv)`; this is the table of them.  A
+just recipe that runs one command has the command's name -- but `rebuild`,
+which runs `frasch build`, since `just build` is the site's.
+`frasch <command> --help` explains a command and its options.
 """
 
 from __future__ import annotations
