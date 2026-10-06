@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from frasch import dialects
+from frasch.errors import PipelineError
 from frasch.objects import LocatedObject, Objects, dialect_at, objects_json, read_objects
 from frasch.provenance import Stamp
 
@@ -98,3 +99,12 @@ def test_the_references_without_an_object_are_missing_in_the_files_order() -> No
     objects = Objects({("n", 1): NAIBEL}, NO_EXTRACTS, frozenset({("w", 99)}))
     wanted = {("r", 7), ("w", 99), ("n", 1), ("n", 5)}
     assert objects.missing(wanted) == [("n", 5), ("w", 99), ("r", 7)]
+
+
+def test_a_file_without_a_stamp_stops_the_reader_with_how_to_rebuild_it(tmp_path: Path) -> None:
+    path = tmp_path / "osm_objects.json"
+    path.write_text(json.dumps({"objects": {}}), encoding="utf-8")
+    with pytest.raises(
+        PipelineError, match="was built from -- build it with `just rebuild objects`"
+    ):
+        read_objects(str(path))

@@ -33,7 +33,8 @@ from what, and when it is stale. `frasch update`, `frasch check-outputs` and
 Every step is a recipe of the root `justfile` (`uv run just` lists them):
 `update` runs the name part in one go (see [Workflow](#workflow)); the single
 steps are `extracts`, `rebuild <name>` for one generated file of the table
-(`uv run just rebuild objects`), `match` and `tiles`, and the checks
+(`uv run just rebuild objects`; it downloads the extracts only for a file
+that is built from them), `match` and `tiles`, and the checks
 `check-inputs`, `check-outputs` (CI), `check-full` and `check-tiles`. Behind
 each recipe is one `frasch <command>` (see [Code](#code)), which you can also
 run directly: `uv run frasch match`.
@@ -414,10 +415,12 @@ asks the same `stale()` as `just update`: the stamp must name the inputs that
 are there now, and `osm_objects.json` must be located for exactly the
 references the rows on the map name. Then it rebuilds what can be rebuilt
 without an extract — `names.json` and `dialects.json` — into a temporary
-directory and compares byte for byte. `just check-full` compares the stamps'
-extracts with the local ones too, and rebuilds `osm_objects.json` and the
-dialect areas from them. `REPORT.md` is checked by its stamp alone: the
-matcher needs the git-ignored candidates.
+directory and compares byte for byte. `just check-full` compares the extracts in
+the stamps of `osm_objects.json` and the dialect areas with the local ones
+too, and rebuilds both from them. `REPORT.md` is checked by its stamp alone:
+the matcher needs the git-ignored candidates. Where there are candidates,
+its stamp must name their extracts too, so the report is stale once the
+candidates were scanned again — which is when `just rebuild report` helps.
 
 Dry-run the injection alone:
 

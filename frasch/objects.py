@@ -43,7 +43,7 @@ from frasch import placelist
 from frasch.dialects import AreaIndex
 from frasch.errors import PipelineError, rebuild
 from frasch.placelist import OsmRef, PlaceRow, Ref
-from frasch.provenance import Stamp
+from frasch.provenance import Stamp, unstamped
 from frasch.registry import Registry
 
 ROUND = 6
@@ -126,6 +126,8 @@ def read_objects(path: str) -> Objects:
         raise PipelineError(f"{path} not found -- build it with {rebuild('objects')}")
     with open(path, encoding="utf-8") as fh:
         data = json.load(fh)
+    if "built_from" not in data:
+        raise unstamped(path, "objects")
     by_ref = {placelist.osm_refs(ref)[0]: obj for ref, obj in data["objects"].items()}
     not_found = placelist.osm_refs("; ".join(data.get("not_found", [])))
     return Objects(by_ref, Stamp.from_json(data["built_from"]), frozenset(not_found))

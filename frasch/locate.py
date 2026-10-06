@@ -171,11 +171,6 @@ def _outline_point(
     return locs.get(first[0]) if first else None
 
 
-def build(ws: Workspace, reg: Registry, pbfs: Sequence[StrPath]) -> Objects:
-    """The objects of the rows on the map, located in the extracts `pbfs`."""
-    return located(wanted_refs(ws, reg), pbfs)
-
-
 def wanted_refs(ws: Workspace, reg: Registry) -> set[OsmRef]:
     """The OSM references of the rows on the map, as the name list has them now."""
     rows, _ = placelist.read(ws.names, reg)

@@ -738,6 +738,10 @@ was missing), and `REPORT.md` was committed without any check.
   hand (`update`, `check-full`) and only the inputs where they are not (CI).
   For the objects it is `update`'s rule: located for exactly the references
   the rows on the map name, so a row taken off the map needs a rebuild too.
+  The report is written from the candidates, so its extracts are compared
+  with theirs, where there are candidates: after a new download the
+  candidates are stale, and the report only once they were scanned again —
+  rebuilding it earlier could not help.
 - **`update` skips only a scan of an extract** (candidates, objects, dialect
   areas) whose output is not stale. The matcher runs every time (owner's
   decision): it changes `places.csv` and depends on Wikidata's answers,
@@ -769,7 +773,10 @@ was missing), and `REPORT.md` was committed without any check.
   with the report's stamp.
 - **Recipes and commands** (owner's decisions): the recipes `objects`,
   `areas`, `dialects`, `index` and `candidates` became `just rebuild <name>`
-  (`just build` is the site's), which runs `frasch build <name>`. The
+  (`just build` is the site's), which runs `frasch build <name>` and
+  downloads the extracts only for an output the table says is built from
+  them (`frasch build <name> --scans`), as `index` and `dialects` needed
+  none before. The
   commands `frasch objects`, `frasch index` and `frasch dialects --export`
   went, since `frasch build` does the same; `frasch areas` and
   `frasch candidates` stay for their own options. `just check-full` rebuilds

@@ -47,10 +47,10 @@ from frasch.registry import Registry
 class From(enum.Enum):
     """What an output is built from, besides the hand-edited files."""
 
-    FILES = "the other files of the workspace alone"
+    FILES = "the other committed files alone"
     EXTRACTS = "the extracts the name list's objects are in"
     AREA_EXTRACT = "the extract the dialect areas are in"
-    CANDIDATES = "the candidates, which are scanned from the extracts"
+    CANDIDATES = "the git-ignored candidates: it cannot be rebuilt in CI"
 
 
 @dataclass(frozen=True)
@@ -87,11 +87,15 @@ class Run:
     extracts: Extracts | None = None
 
     def pbfs(self, source: From) -> list[str] | None:
-        """The extracts an output built from `source` reads or, through the
-        candidates, comes from; None when it reads none, or none is at hand."""
-        if self.extracts is None or source is From.FILES:
+        """The extracts an output built from `source` reads; None when it
+        reads none, or none is at hand."""
+        if self.extracts is None:
             return None
-        return [self.extracts.area] if source is From.AREA_EXTRACT else list(self.extracts.objects)
+        scanned = {
+            From.EXTRACTS: list(self.extracts.objects),
+            From.AREA_EXTRACT: [self.extracts.area],
+        }
+        return scanned.get(source)
 
     def stamps(self, source: From) -> list[ExtractStamp] | None:
         """`pbfs`, as a stamp records them."""
@@ -109,8 +113,8 @@ class Output:
     source: From
     # writes the files in the run's workspace, from the extracts it reads
     make: Callable[[Run, Sequence[str]], None]
-    # what a build would record now, given the stamps of its extracts (None:
-    # not at hand); None for a file that carries no stamp
+    # what a build would record now, given the stamps of the extracts it
+    # reads (None: none, or not at hand); None for a file that carries no stamp
     stamp: Callable[[Run, Sequence[ExtractStamp] | None], Stamp] | None = None
     # a reason of its own why it is stale, besides the stamp
     outdated: Callable[[Run], str | None] | None = None
@@ -217,6 +221,14 @@ def _other_references(run: Run) -> str | None:
     )
 
 
+def _report_stamp(run: Run, _extracts: object) -> Stamp:
+    """What the matcher would stamp its report with now: with the extracts
+    of the candidates, where they are there -- so the report is stale once
+    the candidates were scanned again, which is when a rebuild helps."""
+    candidates = Stamp.read(run.ws.candidates)
+    return match.stamp(run.ws, candidates.extracts if candidates else None)
+
+
 def _match(run: Run, _extracts: Sequence[str]) -> None:
     """Run the matcher, which says itself what it could not do."""
     if match.run(run.ws, run.reg):
@@ -239,7 +251,7 @@ OUTPUTS = (
         files=("report",),
         source=From.CANDIDATES,
         make=_match,
-        stamp=lambda run, extracts: match.stamp(run.ws, extracts),
+        stamp=_report_stamp,
     ),
     Output(
         "objects",
@@ -305,12 +317,23 @@ def main(argv: Sequence[str] | None = None) -> int:
         "extracts",
         nargs="*",
         metavar="PBF",
-        help="the OSM extracts the name list's objects are in, for an output built from them",
+        help="the OSM extracts the name list's objects are in; only an output built from "
+        "them reads them",
     )
     add_area_extract_option(ap)
+    ap.add_argument(
+        "--scans",
+        action="store_true",
+        help="build nothing: only say by the exit status whether the output is built from "
+        "the extracts (0) or not (1) -- `just rebuild` asks, and downloads them only then",
+    )
     cli.add_workspace_options(ap, *cli.WORKSPACE_FILES, cli.WORK)
     a = ap.parse_args(argv)
+    found = output(a.output)
+    if a.scans:
+        return 0 if found.scans else 1
     ws = cli.workspace(a)
-    extracts = Extracts.given(a.extracts, a.area_extract)
-    output(a.output).build(Run(ws, registry.read(ws.dialects), extracts))
+    # an output that scans no extract is built whether or not they are there
+    extracts = Extracts.given(a.extracts, a.area_extract) if found.scans else None
+    found.build(Run(ws, registry.read(ws.dialects), extracts))
     return 0

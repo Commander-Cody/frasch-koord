@@ -32,9 +32,10 @@
 # All of the generated files but the candidates are committed;
 # `check-outputs` (CI) proves they match their inputs.  just has no file
 # timestamps: a recipe runs when you ask for it, not when its inputs changed.
-# What a recipe needs first is a dependency instead -- `update`, `rebuild`
-# and `check-full` first run `extracts` (which downloads only what is
-# missing); `tiles` downloads its own region's extract.
+# What a recipe needs first is a dependency instead -- `update` and
+# `check-full` first run `extracts` (which downloads only what is missing),
+# and so does `rebuild` for an output the table says is built from them;
+# `tiles` downloads its own region's extract.
 
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
@@ -148,7 +149,8 @@ extracts:
 
 # build one generated file of the pipeline by its name (`uv run frasch build --help` lists them)
 [group('pipeline steps')]
-rebuild name: extracts
+rebuild name:
+    if {{frasch}} build {{name}} --scans; then {{just_executable()}} extracts; fi
     {{frasch}} build {{name}} {{extracts}} --area-extract {{area_extract}}
 
 # fill the empty osm cells of places.csv (pass --dry-run to only look)

@@ -16,9 +16,10 @@ as far as it can be where it is checked:
                 dialect areas with `--extracts`, the matcher's report never
                 (it takes the git-ignored candidates)
 
-With `--extracts`, a stamp must name those extracts as well.  And a row on
-the map must not name an object that no extract holds: the tile build stops
-on it.  Exits 1 on any of this and says which `just` recipe rebuilds the
+With `--extracts`, the stamp of a file built from them must name those
+extracts as well; the report's must name the extracts of the candidates
+wherever there are candidates.  And a row on the map must not name an object
+that no extract holds: the tile build stops on it.  Exits 1 on any of this and says which `just` recipe rebuilds the
 file.
 """
 
@@ -70,19 +71,7 @@ def run(run: Run) -> int:
 @cli.command
 def main(argv: Sequence[str] | None = None) -> int:
     ap = cli.parser("check-outputs", __doc__)
-    cli.add_workspace_options(
-        ap,
-        "names",
-        "dialects",
-        "curation",
-        "area_list",
-        "areas",
-        "parts",
-        "objects",
-        "report",
-        "index",
-        "registry_json",
-    )
+    cli.add_workspace_options(ap, *cli.WORKSPACE_FILES, cli.WORK)
     ap.add_argument(
         "--extracts",
         nargs="+",

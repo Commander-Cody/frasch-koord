@@ -18,7 +18,8 @@ A file carries its stamp as the `built_from` object
   *.jsonl    as its `header` line   names/work/candidates.jsonl
   *.md       in a comment line      names/REPORT.md
 
-`Stamp.read` reads it from any of them, and `Stamp.other_than` says which
+`Stamp.read` reads it from any of them -- a file of another kind carries
+none, as far as the pipeline can tell -- and `Stamp.other_than` says which
 inputs a file is behind (frasch.pipeline asks, for `update` and
 `check-outputs`).
 
@@ -83,11 +84,10 @@ class Stamp:
     @classmethod
     def read(cls, path: StrPath) -> Stamp | None:
         """The stamp the generated file at `path` carries, where a file of
-        its kind does (`_CARRIERS`); None for a file that has none, or is
-        not there."""
-        if not os.path.exists(path):
-            return None
-        built_from = _CARRIERS[os.path.splitext(path)[1]](path)
+        its kind does (`_CARRIERS`); None for a file that has none, is not
+        there, or is of no kind that carries one."""
+        carrier = _CARRIERS.get(os.path.splitext(path)[1])
+        built_from = carrier(path) if carrier and os.path.exists(path) else None
         return None if built_from is None else cls.from_json(built_from)
 
     @classmethod
@@ -159,6 +159,14 @@ _CARRIERS: dict[str, Callable[[StrPath], BuiltFrom | None]] = {
 }
 
 
+def unstamped(path: StrPath, output: str) -> PipelineError:
+    """What stops a reader of the generated file at `path` -- the output of
+    this name in the pipeline's table -- that needs its stamp and finds none."""
+    return PipelineError(
+        f"{path} does not say what it was built from -- build it with {rebuild(output)}"
+    )
+
+
 def stamp(ws: Workspace) -> Stamp:
     """What the search index and the tiles are built from: the name list,
     the dialect registry, the curation, the dialect areas and the located
@@ -166,10 +174,7 @@ def stamp(ws: Workspace) -> Stamp:
     in."""
     located = Stamp.read(ws.objects)
     if located is None:
-        raise PipelineError(
-            f"{ws.objects} does not say what it was built from -- "
-            f"build it with {rebuild('objects')}"
-        )
+        raise unstamped(ws.objects, "objects")
     return Stamp.of(
         {
             "places.csv": ws.names,

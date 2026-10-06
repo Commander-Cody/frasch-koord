@@ -16,7 +16,7 @@ from frasch.__main__ import main
 from frasch.errors import PipelineError
 from frasch.objects import read_objects
 from frasch.pipeline import Extracts, Run
-from frasch.provenance import Stamp, blob_hash
+from frasch.provenance import Stamp
 from conftest import (
     AREA_LIST,
     REGISTRY,
@@ -183,21 +183,20 @@ def test_dialect_areas_are_stale_when_one_of_the_two_files_is(world: Path) -> No
     )
 
 
-def test_dialect_areas_are_built_from_the_area_extract_alone(world: Path, tmp_path: Path) -> None:
+def test_dialect_areas_are_built_from_the_area_extract_the_run_names(
+    world: Path, tmp_path: Path
+) -> None:
     denmark = write_extract(tmp_path / "denmark-latest.osm.pbf", nodes={7: ((8.4, 55.4), {})})
-    build("areas", with_extracts(world, denmark))
-    assert Stamp.read(workspace_of(world).areas) == Stamp(
+    area_extract = str(world / "schleswig-holstein-latest.osm.pbf")
+    given = Extracts.given([str(denmark), area_extract], area_extract)
+    build("areas", Run(workspace_of(world), REGISTRY, given))
+    built_from = Stamp.read(workspace_of(world).areas)
+    assert built_from is not None and built_from.extracts == [
         {
-            "dialect_areas.csv": blob_hash(world / "dialect_areas.csv"),
-            "dialects.csv": blob_hash(world / "dialects.csv"),
-        },
-        [
-            {
-                "file": "schleswig-holstein-latest.osm.pbf",
-                "replication_timestamp": "2026-09-20T20:21:02Z",
-            }
-        ],
-    )
+            "file": "schleswig-holstein-latest.osm.pbf",
+            "replication_timestamp": "2026-09-20T20:21:02Z",
+        }
+    ]
 
 
 # ------------------------------------------------------------------- report ---
@@ -218,6 +217,22 @@ def test_a_report_is_stale_after_an_edit_to_the_name_list(matched: Path) -> None
     assert stale("report", without_extracts(matched)) == (
         f"{workspace_of(matched).report} was not built from the current places.csv"
     )
+
+
+def test_a_report_is_stale_once_the_candidates_come_from_another_download(matched: Path) -> None:
+    write_sh_extract(matched, timestamp="2026-09-30T20:21:02Z")
+    build("candidates", with_extracts(matched))
+    assert stale("report", without_extracts(matched)) == (
+        f"{workspace_of(matched).report} was not built from the current extracts"
+    )
+
+
+def test_a_new_download_alone_makes_the_candidates_stale_and_not_yet_the_report(
+    matched: Path,
+) -> None:
+    # rebuilding the report could not help: it is written from the candidates
+    write_sh_extract(matched, timestamp="2026-09-30T20:21:02Z")
+    assert stale("report", with_extracts(matched)) is None
 
 
 def test_a_match_that_cannot_finish_stops_the_build_of_the_report(
@@ -303,3 +318,21 @@ def test_the_command_says_which_recipe_names_the_extracts_it_was_not_given(
     assert capsys.readouterr().err == (
         "objects is built from OSM extracts: name them, or run `just rebuild objects`\n"
     )
+
+
+def test_an_output_built_from_the_files_alone_is_built_without_the_extracts_it_is_given(
+    built: Path, tmp_path: Path
+) -> None:
+    inputs = ["names", "dialects", "curation", "areas", "objects"]
+    absent = str(tmp_path / "nowhere-latest.osm.pbf")
+    assert (
+        main(["build", "index", absent, *path_options(workspace_of(built), *inputs, "index")]) == 0
+    )
+
+
+@pytest.mark.parametrize("name,status", [("objects", 0), ("index", 1)])
+def test_the_command_says_by_its_status_whether_an_output_scans_the_extracts(
+    name: str, status: int
+) -> None:
+    # `just rebuild` asks, and downloads the extracts only then
+    assert main(["build", name, "--scans"]) == status

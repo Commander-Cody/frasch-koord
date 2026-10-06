@@ -168,3 +168,10 @@ def test_an_objects_file_without_a_stamp_stops_the_stamp_with_how_to_rebuild_it(
     Path(stamped.objects).write_text(json.dumps({"objects": {}}), encoding="utf-8")
     with pytest.raises(PipelineError, match="osm_objects.json .* `just rebuild objects`"):
         provenance.stamp(stamped)
+
+
+def test_a_file_of_a_kind_that_carries_no_stamp_has_none(tmp_path: Path) -> None:
+    # a path option may name any file: `frasch match --report notes.txt`
+    path = tmp_path / "notes.txt"
+    path.write_text(f"# Name matching report\n{STAMP.as_comment()}\n", encoding="utf-8")
+    assert Stamp.read(path) is None
