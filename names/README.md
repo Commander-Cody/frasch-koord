@@ -659,9 +659,9 @@ whole directory). A command accepts the flags of the files it reads or
 writes; an output is named by its file's flag, there is no `--out`. Every
 default is the repository's layout, whatever the working directory.
 
-Library code raises (`frasch.errors`: a `ValidationError` lists every problem
-a reader found); only a command's `main()` turns that into a message and exit
-status 1. Nothing is read at import: whatever needs the dialect registry takes
+Library code raises (`frasch.errors`: a `ValidationError` lists every
+`Problem` — file, line, message — a reader found in a hand-edited file); only
+a command's `main()` turns that into a message and exit status 1. Nothing is read at import: whatever needs the dialect registry takes
 it as a parameter, and every command reads it from `--dialects`.
 
 Everything is typed and checked by `mypy --strict` in CI (tests included).
@@ -675,11 +675,12 @@ A record with fixed keys is a `TypedDict` in the module that produces it
 | `__main__` | the command table: which module's `main()` each command runs |
 | `paths` | `Workspace`, one attribute per file of the pipeline; `Workspace.default()` is the repository's layout |
 | `errors`, `cli` | what library code raises; the `main()` wrapper that turns it into an exit status; `add_workspace_options`, the path flags above |
-| `files` | reading the hand-edited CSVs, atomic writes |
+| `files` | atomic writes, and the fingerprints that notice a file someone else saved meanwhile |
+| `tables` | the one parser and writer of the four hand-edited CSV files: byte order mark, `;`-separated export, the header's columns, the cell count and line of every row |
 | `registry` | the one reader of `dialects.csv`, and its export for the frontend (`frasch dialects --export`) |
 | `placelist` | reads/writes/validates `places.csv`: cells, references, ids, the lock |
 | `curationlist` | the one reader of `curation.csv`, and appending to it |
-| `dialects` | the dialect name logic (`dialect_name`, `local_name`, `osm_local_name`) and the area lookup (`AreaIndex`) |
+| `dialects` | the dialect name logic (`dialect_name`, `local_name`, `osm_local_name`), the one reader of `dialect_areas.csv` (`area_rows`) and the area lookup (`AreaIndex`) |
 | `objects` | reads and writes the objects file `osm_objects.json`; `dialect_at`, the one dialect lookup of injector and exporter |
 | `geo` | the North Frisia box, its centre, haversine |
 | `osmscan`, `osmgeom` | the id-filtered passes over an extract; ring assembly and polygons |
