@@ -111,6 +111,12 @@ def test_a_missing_output_fails(repo: Workspace) -> None:
     )
 
 
+def test_a_missing_output_that_another_is_built_from_fails(repo: Workspace) -> None:
+    # the search index is stamped with the dialect areas' hash
+    Path(repo.areas).unlink()
+    assert f"{repo.areas} is not there -- rebuild it with `just rebuild areas`" in problems(repo)
+
+
 def test_a_row_whose_object_was_never_located_fails(repo: Workspace, world: Path) -> None:
     (world / "places.csv").write_text(places_text([NAIBEL | {"osm": "node/99"}]), encoding="utf-8")
     assert "naibel (line 2): node/99 is not located yet" in problems(repo)

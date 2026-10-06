@@ -33,6 +33,7 @@ tiles/build.sh.
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import os
@@ -77,7 +78,10 @@ class Stamp:
     @classmethod
     def of(cls, inputs: Mapping[str, StrPath], extracts: Sequence[ExtractStamp] | None) -> Stamp:
         """The stamp of a build from the files `inputs` (label -> the path
-        actually read) and `extracts`."""
+        actually read) and `extracts`.  Stops on an input that is not there."""
+        missing = [os.fspath(path) for path in inputs.values() if not os.path.exists(path)]
+        if missing:
+            raise PipelineError(f"{', '.join(missing)} not found")
         hashes = {label: blob_hash(path) for label, path in inputs.items()}
         return cls(hashes, None if extracts is None else list(extracts))
 
@@ -172,10 +176,7 @@ def stamp(ws: Workspace) -> Stamp:
     the dialect registry, the curation, the dialect areas and the located
     objects -- and, through the objects file, the extracts they were located
     in."""
-    located = Stamp.read(ws.objects)
-    if located is None:
-        raise unstamped(ws.objects, "objects")
-    return Stamp.of(
+    inputs = Stamp.of(
         {
             "places.csv": ws.names,
             "dialects.csv": ws.dialects,
@@ -183,8 +184,12 @@ def stamp(ws: Workspace) -> Stamp:
             "dialect_areas.geojson": ws.areas,
             "osm_objects.json": ws.objects,
         },
-        located.extracts,
+        None,
     )
+    located = Stamp.read(ws.objects)
+    if located is None:
+        raise unstamped(ws.objects, "objects")
+    return dataclasses.replace(inputs, extracts=located.extracts)
 
 
 @cli.command
