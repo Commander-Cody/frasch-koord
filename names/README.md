@@ -418,9 +418,11 @@ without an extract — `names.json` and `dialects.json` — into a temporary
 directory and compares byte for byte. `just check-full` compares the extracts in
 the stamps of `osm_objects.json` and the dialect areas with the local ones
 too, and rebuilds both from them. `REPORT.md` is checked by its stamp alone:
-the matcher needs the git-ignored candidates. Where there are candidates,
-its stamp must name their extracts too, so the report is stale once the
-candidates were scanned again — which is when `just rebuild report` helps.
+the matcher needs the git-ignored candidates. `just check-full` also wants
+its stamp to name the extracts of the candidates, if there are any, so the
+report is stale once the candidates were scanned again — which is when
+`just rebuild report` helps. `just check-outputs` compares no extracts: what
+it says depends on the committed files alone.
 
 Dry-run the injection alone:
 

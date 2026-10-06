@@ -12,6 +12,7 @@ import pytest
 from frasch import curate
 from frasch import match
 from frasch import placelist
+from frasch.errors import PipelineError
 from frasch.nameindex import NameIndex
 from frasch.candidates import HeaderLine, read_records
 from frasch.provenance import ExtractStamp, Stamp, blob_hash
@@ -135,3 +136,11 @@ def test_a_report_that_names_no_extracts_is_not_compared_with(
     capsys.readouterr()
     run_match(world, [SH, DK])
     assert capsys.readouterr().err == ""
+
+
+def test_a_match_without_candidates_stops_with_how_to_scan_them(world: Path) -> None:
+    (world / "places.csv").write_text(places_text(ROWS), encoding="utf-8")
+    with pytest.raises(
+        PipelineError, match="candidates.jsonl not found -- build it with `just rebuild candidates`"
+    ):
+        match.run(workspace(world), REGISTRY, offline=True)

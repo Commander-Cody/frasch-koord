@@ -222,9 +222,18 @@ def test_a_report_is_stale_after_an_edit_to_the_name_list(matched: Path) -> None
 def test_a_report_is_stale_once_the_candidates_come_from_another_download(matched: Path) -> None:
     write_sh_extract(matched, timestamp="2026-09-30T20:21:02Z")
     build("candidates", with_extracts(matched))
-    assert stale("report", without_extracts(matched)) == (
+    assert stale("report", with_extracts(matched)) == (
         f"{workspace_of(matched).report} was not built from the current extracts"
     )
+
+
+def test_without_an_extract_at_hand_the_report_is_judged_by_its_inputs_alone(
+    matched: Path,
+) -> None:
+    # the candidates are scratch files: they must not decide what CI's check says
+    write_sh_extract(matched, timestamp="2026-09-30T20:21:02Z")
+    build("candidates", with_extracts(matched))
+    assert stale("report", without_extracts(matched)) is None
 
 
 def test_a_new_download_alone_makes_the_candidates_stale_and_not_yet_the_report(

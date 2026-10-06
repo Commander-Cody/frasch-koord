@@ -738,10 +738,12 @@ was missing), and `REPORT.md` was committed without any check.
   hand (`update`, `check-full`) and only the inputs where they are not (CI).
   For the objects it is `update`'s rule: located for exactly the references
   the rows on the map name, so a row taken off the map needs a rebuild too.
-  The report is written from the candidates, so its extracts are compared
-  with theirs, where there are candidates: after a new download the
-  candidates are stale, and the report only once they were scanned again —
-  rebuilding it earlier could not help.
+  The report is written from the candidates, so where extracts are at hand
+  its extracts are compared with the candidates', not with the downloaded
+  ones: after a new download the candidates are stale, and the report only
+  once they were scanned again — rebuilding it earlier could not help.
+  Without extracts at hand the candidates are not looked at, so that the
+  plain check says the same on every machine.
 - **`update` skips only a scan of an extract** (candidates, objects, dialect
   areas) whose output is not stale. The matcher runs every time (owner's
   decision): it changes `places.csv` and depends on Wikidata's answers,

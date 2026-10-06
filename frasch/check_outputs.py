@@ -17,9 +17,10 @@ as far as it can be where it is checked:
                 (it takes the git-ignored candidates)
 
 With `--extracts`, the stamp of a file built from them must name those
-extracts as well; the report's must name the extracts of the candidates
-wherever there are candidates.  And a row on the map must not name an object
-that no extract holds: the tile build stops on it.  Exits 1 on any of this and says which `just` recipe rebuilds the
+extracts as well, and the report's the extracts of the candidates, if there
+are candidates.  Without, no extract is compared: what the check says then
+depends on the committed files alone.  And a row on the map must not name an
+object that no extract holds: the tile build stops on it.  Exits 1 on any of this and says which `just` recipe rebuilds the
 file.
 """
 

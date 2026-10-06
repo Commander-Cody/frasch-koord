@@ -222,10 +222,12 @@ def _other_references(run: Run) -> str | None:
 
 
 def _report_stamp(run: Run, _extracts: object) -> Stamp:
-    """What the matcher would stamp its report with now: with the extracts
-    of the candidates, where they are there -- so the report is stale once
-    the candidates were scanned again, which is when a rebuild helps."""
-    candidates = Stamp.read(run.ws.candidates)
+    """What the matcher would stamp its report with now.  Its extracts are
+    those of the candidates, not the run's: the report is stale once the
+    candidates were scanned again, which is when a rebuild helps.  Like any
+    extracts, they count only in a run that has extracts at hand -- the
+    candidates are scratch files, and must not decide what CI's check says."""
+    candidates = Stamp.read(run.ws.candidates) if run.extracts else None
     return match.stamp(run.ws, candidates.extracts if candidates else None)
 
 

@@ -969,7 +969,9 @@ def extract_set_warning(
 def check_extracts(candidates_path: str, report_path: str) -> Sequence[ExtractStamp] | None:
     """Print the extracts behind the candidates, warn when the report of the
     last real run names another set, and return them (None for a file from
-    before the header)."""
+    before the header).  Stops when there are no candidates."""
+    if not os.path.exists(candidates_path):
+        raise PipelineError(f"{candidates_path} not found -- build it with {rebuild('candidates')}")
     header = Stamp.read(candidates_path)
     extracts = header.extracts if header else None
     if extracts is None:
