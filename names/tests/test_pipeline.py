@@ -271,7 +271,9 @@ def built(world: Path) -> Path:
 
 def test_the_exported_registry_carries_no_stamp_to_be_stale_by(built: Path) -> None:
     text = (built / "dialects.csv").read_text(encoding="utf-8")
-    (built / "dialects.csv").write_text(text.replace(",Mooring,", ",Mooring (edited),", 1))
+    (built / "dialects.csv").write_text(
+        text.replace(",Mooring,", ",Mooring (edited),", 1), encoding="utf-8"
+    )
     assert stale("dialects", without_extracts(built)) is None
 
 

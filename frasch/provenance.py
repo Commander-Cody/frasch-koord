@@ -124,22 +124,26 @@ class Stamp:
 def _in_json(path: StrPath) -> BuiltFrom | None:
     """`built_from` at the top level of a JSON object."""
     with open(path, encoding="utf-8") as fh:
-        found: BuiltFrom | None = json.load(fh).get("built_from")
-    return found
+        return _member(json.load(fh), "built_from")
 
 
 def _in_geojson(path: StrPath) -> BuiltFrom | None:
     """`built_from` in the `properties` of a FeatureCollection."""
     with open(path, encoding="utf-8") as fh:
-        found: BuiltFrom | None = json.load(fh).get("properties", {}).get("built_from")
-    return found
+        return _member(_member(json.load(fh), "properties"), "built_from")
 
 
 def _in_json_lines(path: StrPath) -> BuiltFrom | None:
     """The `header` of the first line."""
     with open(path, encoding="utf-8") as fh:
         first = fh.readline()
-    found: BuiltFrom | None = json.loads(first).get("header") if first.strip() else None
+    return _member(json.loads(first), "header") if first.strip() else None
+
+
+def _member(data: object, key: str) -> BuiltFrom | None:
+    """The member `key` of a JSON object; None when there is none, or `data`
+    is no object -- the registry the frontend compiles in is an array."""
+    found: BuiltFrom | None = data.get(key) if isinstance(data, dict) else None
     return found
 
 

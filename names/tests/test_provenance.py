@@ -175,3 +175,10 @@ def test_a_file_of_a_kind_that_carries_no_stamp_has_none(tmp_path: Path) -> None
     path = tmp_path / "notes.txt"
     path.write_text(f"# Name matching report\n{STAMP.as_comment()}\n", encoding="utf-8")
     assert Stamp.read(path) is None
+
+
+def test_a_json_file_that_holds_no_object_has_no_stamp(tmp_path: Path) -> None:
+    # the registry the frontend compiles in is an array
+    path = tmp_path / "dialects.json"
+    path.write_text('[{"tag":"frr-x-mooring"}]\n', encoding="utf-8")
+    assert Stamp.read(path) is None
