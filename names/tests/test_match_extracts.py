@@ -4,7 +4,7 @@ one -- dropping the Denmark extract clears every `auto` row only it has."""
 
 from __future__ import annotations
 
-import json
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
@@ -14,7 +14,7 @@ from frasch import match
 from frasch import placelist
 from frasch.nameindex import NameIndex
 from frasch.candidates import HeaderLine, read_records
-from frasch.provenance import ExtractStamp
+from frasch.provenance import ExtractStamp, Stamp, blob_hash
 from conftest import REGISTRY, cand, places_text, workspace, write_candidates
 
 SH: ExtractStamp = {
@@ -68,9 +68,10 @@ def run_match(world: Path, extracts: list[ExtractStamp] | None, dry_run: bool = 
     assert match.run(workspace(world), REGISTRY, offline=True, dry_run=dry_run) == 0
 
 
-def recorded(world: Path) -> object:
-    path = world / "work" / "match-extracts.json"
-    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
+def recorded(world: Path) -> Sequence[ExtractStamp] | None:
+    """The extracts the report says it was written from."""
+    stamp = Stamp.read(world / "REPORT.md")
+    return stamp.extracts if stamp else None
 
 
 def statuses(world: Path) -> dict[str, str]:
@@ -78,14 +79,18 @@ def statuses(world: Path) -> dict[str, str]:
     return {r["id"]: r["status"] for r in rows}
 
 
-def test_a_run_records_the_extracts_it_used(world: Path) -> None:
+def test_the_report_is_stamped_with_the_extracts_behind_the_candidates(world: Path) -> None:
     run_match(world, [SH, DK])
-    assert recorded(world) == {"extracts": [SH, DK]}
+    assert recorded(world) == [SH, DK]
 
 
-def test_a_dry_run_records_nothing(world: Path) -> None:
-    run_match(world, [SH, DK], dry_run=True)
-    assert recorded(world) is None
+def test_the_report_is_stamped_with_the_name_list_as_the_run_left_it(world: Path) -> None:
+    run_match(world, [SH, DK])
+    stamp = Stamp.read(world / "REPORT.md")
+    assert stamp is not None and stamp.inputs == {
+        "places.csv": blob_hash(world / "places.csv"),
+        "dialects.csv": blob_hash(world / "dialects.csv"),
+    }
 
 
 def test_a_dropped_extract_is_named_and_its_rows_said_to_be_cleared(
@@ -99,7 +104,7 @@ def test_a_dropped_extract_is_named_and_its_rows_said_to_be_cleared(
     assert "dropped: denmark-latest.osm.pbf" in err
     assert "cleared" in err
     assert statuses(world) == {"toftem": "auto", "huuger": ""}
-    assert recorded(world) == {"extracts": [SH]}
+    assert recorded(world) == [SH]
 
 
 def test_an_added_extract_is_named(world: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -120,5 +125,13 @@ def test_candidates_without_a_header_are_to_be_rebuilt(
     world: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     run_match(world, None)
-    assert "rebuild it with `just candidates`" in capsys.readouterr().err
-    assert recorded(world) is None
+    assert "rebuild it with `just rebuild candidates`" in capsys.readouterr().err
+
+
+def test_a_report_that_names_no_extracts_is_not_compared_with(
+    world: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    run_match(world, None)
+    capsys.readouterr()
+    run_match(world, [SH, DK])
+    assert capsys.readouterr().err == ""
