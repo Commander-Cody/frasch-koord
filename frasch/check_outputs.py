@@ -34,13 +34,13 @@ from frasch import (
     files,
     locate,
     placelist,
-    provenance,
     registry,
     searchindex,
 )
 from frasch.errors import PipelineError
 from frasch.objects import objects_json, read_objects
 from frasch.paths import Workspace
+from frasch.provenance import Stamp
 from frasch.registry import Registry
 
 
@@ -96,14 +96,10 @@ def unlocated_problems(ws: Workspace, reg: Registry) -> list[str]:
 
 def stamp_problems(ws: Workspace) -> list[str]:
     """The dialect areas, by the inputs their stamp names."""
-    current = {
-        label: provenance.blob_hash(path)
-        for label, path in build_dialect_areas.stamp_inputs(ws).items()
-    }
+    current = build_dialect_areas.stamp(ws, None)
     found = []
     for path in (ws.areas, ws.parts):
-        stamp = provenance.recorded(path)
-        stale = [k for k, v in current.items() if stamp.get(k) != v]
+        stale = (Stamp.read(path) or Stamp({}, [])).other_than(current)
         if stale:
             found.append(
                 f"{path} was built from another {' and '.join(stale)} "
@@ -146,10 +142,10 @@ def extract_problems(
 def stamped_extracts(path: str, given: Sequence[str]) -> list[str]:
     """The paths among the extracts `given` of those `path` was built from,
     in the stamp's order; a LookupError names one that was not given."""
-    stamp = provenance.recorded(path)
+    stamp = Stamp.read(path)
     by_name = {os.path.basename(p): p for p in given}
-    extracts = stamp.get("extracts")
-    if not isinstance(extracts, list):
+    extracts = stamp.extracts if stamp else None
+    if extracts is None:
         raise LookupError(f"{path} names no extracts it was built from")
     names = [e["file"] for e in extracts]
     absent = [n for n in names if n not in by_name]

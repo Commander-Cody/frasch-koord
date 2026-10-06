@@ -31,6 +31,7 @@ from frasch.__main__ import main
 from frasch.geo import LonLat
 from frasch.inject_names import Use
 from frasch.objects import Objects, objects_json
+from frasch.provenance import Stamp
 from frasch.registry import Registry
 from conftest import REGISTRY, curation_file, flat_workspace, path_options
 from osm_fixture import Nodes, write_extract as write_osm
@@ -654,7 +655,7 @@ def test_an_object_nobody_located_stops_the_build(tmp_path: Path) -> None:
     (tmp_path / "places.csv").write_text(places_csv([PLACES[0]]), encoding="utf-8")
     (tmp_path / "areas.geojson").write_text(json.dumps(AREAS), encoding="utf-8")
     (tmp_path / "osm_objects.json").write_text(
-        objects_json(Objects({}, {"extracts": []})), encoding="utf-8"
+        objects_json(Objects({}, Stamp({}, []))), encoding="utf-8"
     )
     write_extract(tmp_path / "in.osm.pbf")
     with pytest.raises(PipelineError, match=f"node/{HOLM}"):
@@ -990,7 +991,7 @@ def test_report_when_no_object_lies_in_a_dialect_area(
 ) -> None:
     (tmp_path / "areas.geojson").write_text(json.dumps(AREAS), encoding="utf-8")
     (tmp_path / "osm_objects.json").write_text(
-        objects_json(Objects({}, {"extracts": []})), encoding="utf-8"
+        objects_json(Objects({}, Stamp({}, []))), encoding="utf-8"
     )
     # only the North Sea, found through its QID, far out of every area
     report_run(tmp_path, REPORT_PLACES[2:3], [], areas=Use.IF_PRESENT)
@@ -1123,7 +1124,7 @@ def test_a_node_found_by_its_qid_is_asked_for_its_own_frisian_name(tmp_path: Pat
     (tmp_path / "places.csv").write_text(places_csv([hulm]), encoding="utf-8")
     (tmp_path / "areas.geojson").write_text(json.dumps(AREAS), encoding="utf-8")
     (tmp_path / "osm_objects.json").write_text(
-        objects_json(Objects({}, {"extracts": []})), encoding="utf-8"
+        objects_json(Objects({}, Stamp({}, []))), encoding="utf-8"
     )
     holm = {"place": "village", "name": "Holm", "name:frr": "Hoolm", "wikidata": "Q559369"}
     # in the Nordergoesharde box of AREAS

@@ -13,6 +13,7 @@ from frasch import build_dialect_areas, check_outputs, locate, provenance, regis
 from frasch.__main__ import main
 from frasch.objects import Objects, objects_json
 from frasch.paths import Workspace
+from frasch.provenance import Stamp
 from conftest import REGISTRY_CSV, path_options, places_text
 from osm_fixture import Relations, RingNodes, ring, write_extract
 
@@ -49,7 +50,7 @@ def repo(ws: Workspace, world: Path) -> Workspace:
             encoding="utf-8",
         )
     (world / "osm_objects.json").write_text(
-        objects_json(Objects({("n", 240042766): {"lon": 8.83, "lat": 54.79}}, {"extracts": []})),
+        objects_json(Objects({("n", 240042766): {"lon": 8.83, "lat": 54.79}}, Stamp({}, []))),
         encoding="utf-8",
     )
     export(ws)

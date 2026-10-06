@@ -42,13 +42,13 @@ from dataclasses import dataclass
 from frasch import (
     build_candidates,
     build_dialect_areas,
-    candidates,
     check_inputs,
     check_outputs,
     cli,
     curate,
     locate,
     match,
+    osmscan,
     provenance,
     registry,
     searchindex,
@@ -57,7 +57,7 @@ from frasch.errors import PipelineError
 from frasch.objects import read_objects
 from frasch.paths import StrPath, Workspace
 from frasch.placelist import OsmRef
-from frasch.provenance import ExtractStamp
+from frasch.provenance import ExtractStamp, Stamp
 from frasch.registry import Registry
 
 
@@ -102,7 +102,8 @@ def candidates_stale(path: StrPath, extracts: list[ExtractStamp]) -> bool:
     """Are the candidates missing, or built from other extracts than
     `extracts` (another set, or another download of one)?  The scan takes
     minutes; a name list edit alone never needs it."""
-    return not os.path.exists(path) or candidates.read_header(path) != extracts
+    found = Stamp.read(path)
+    return found is None or found.extracts != extracts
 
 
 def objects_stale(path: StrPath, refs: Collection[OsmRef], extracts: list[ExtractStamp]) -> bool:
@@ -112,17 +113,14 @@ def objects_stale(path: StrPath, refs: Collection[OsmRef], extracts: list[Extrac
     if not os.path.exists(path):
         return True
     objects = read_objects(os.fspath(path))
-    return set(objects.by_ref) != set(refs) or objects.built_from["extracts"] != extracts
+    return set(objects.by_ref) != set(refs) or objects.stamp.extracts != extracts
 
 
 def areas_stale(ws: Workspace, extracts: list[ExtractStamp]) -> bool:
     """Is either dialect area file missing, or built from another area list,
     registry or extract than the workspace's and `extracts`?"""
     current = build_dialect_areas.stamp(ws, extracts)
-    return any(
-        not os.path.exists(path) or provenance.recorded(path) != current
-        for path in (ws.areas, ws.parts)
-    )
+    return any(Stamp.read(path) != current for path in (ws.areas, ws.parts))
 
 
 @dataclass
@@ -152,8 +150,8 @@ class Inputs:
 def steps(inputs: Inputs) -> list[Step]:
     """The run's steps, in order."""
     ws, extracts, area_extract = inputs.ws, inputs.extracts, inputs.area_extract
-    stamps = locate.extract_stamps(extracts)
-    area_stamps = locate.extract_stamps([area_extract])
+    stamps = osmscan.extract_stamps(extracts)
+    area_stamps = osmscan.extract_stamps([area_extract])
     return [
         Step("ids and input check", inputs.check),
         Step(

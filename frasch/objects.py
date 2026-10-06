@@ -32,10 +32,11 @@ import json
 import os
 from typing import NamedTuple, NotRequired, TypedDict
 
-from frasch import placelist, provenance
+from frasch import placelist
 from frasch.dialects import AreaIndex
 from frasch.errors import PipelineError
 from frasch.placelist import OsmRef
+from frasch.provenance import Stamp
 
 ROUND = 6
 
@@ -96,7 +97,7 @@ class Objects(NamedTuple):
     """The objects file, read back: `by_ref` maps ('w', 12) to its object."""
 
     by_ref: dict[OsmRef, LocatedObject]
-    built_from: provenance.BuiltFrom
+    stamp: Stamp  # the extracts it was read from
 
 
 def read_objects(path: str) -> Objects:
@@ -105,7 +106,7 @@ def read_objects(path: str) -> Objects:
     with open(path, encoding="utf-8") as fh:
         data = json.load(fh)
     by_ref = {placelist.osm_refs(ref)[0]: obj for ref, obj in data["objects"].items()}
-    return Objects(by_ref, data["built_from"])
+    return Objects(by_ref, Stamp.from_json(data["built_from"]))
 
 
 def objects_json(objects: Objects) -> str:
@@ -116,7 +117,7 @@ def objects_json(objects: Objects) -> str:
         for ref, obj in sorted(objects.by_ref.items(), key=_ref_order)
     ]
     return (
-        f'{{"built_from":{_compact(objects.built_from)},\n"objects":{{\n'
+        f'{{"built_from":{_compact(objects.stamp.as_json())},\n"objects":{{\n'
         + ",\n".join(lines)
         + "\n}}\n"
     )

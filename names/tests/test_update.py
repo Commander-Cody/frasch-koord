@@ -14,7 +14,7 @@ from frasch import build_dialect_areas, placelist, provenance, registry, update
 from frasch.__main__ import main
 from frasch.errors import PipelineError, Problem
 from frasch.objects import Objects, objects_json
-from frasch.provenance import ExtractStamp
+from frasch.provenance import ExtractStamp, Stamp
 from conftest import REGISTRY_CSV, cand, path_options, places_text, write_candidates
 from conftest import workspace as workspace_of
 from osm_fixture import Nodes, ring, write_extract
@@ -282,7 +282,7 @@ def test_objects_are_stale_until_located_for_the_current_references_and_extracts
     path = tmp_path / "osm_objects.json"
     assert update.objects_stale(path, {("n", 1)}, [SH])
     path.write_text(
-        objects_json(Objects({("n", 1): {"lon": 8.83, "lat": 54.71}}, {"extracts": [SH]})),
+        objects_json(Objects({("n", 1): {"lon": 8.83, "lat": 54.71}}, Stamp({}, [SH]))),
         encoding="utf-8",
     )
     assert not update.objects_stale(path, {("n", 1)}, [SH])

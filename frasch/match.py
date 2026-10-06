@@ -87,7 +87,7 @@ from frasch.placelist import (
     primary,
     variants,
 )
-from frasch.provenance import ExtractStamp
+from frasch.provenance import ExtractStamp, Stamp
 from frasch.registry import Registry
 
 if TYPE_CHECKING:
@@ -972,10 +972,11 @@ def extract_set_warning(
     )
 
 
-def check_extracts(candidates_path: str, state_path: str) -> list[ExtractStamp] | None:
+def check_extracts(candidates_path: str, state_path: str) -> Sequence[ExtractStamp] | None:
     """Print the extracts behind the candidates, warn about a changed set, and
     return them (None for a file from before the header)."""
-    extracts = candidates.read_header(candidates_path)
+    header = Stamp.read(candidates_path)
+    extracts = header.extracts if header else None
     if extracts is None:
         print(
             f"warning: {candidates_path} names no extracts (written before "

@@ -17,12 +17,13 @@ from __future__ import annotations
 import os
 from collections.abc import Collection, Iterable, Mapping, Sequence
 
-from frasch import cli, files, osmgeom, osmscan, placelist, provenance, registry
+from frasch import cli, files, osmgeom, osmscan, placelist, registry
 from frasch.geo import LonLat
 from frasch.objects import Facts, LocatedObject, Objects, Point, objects_json
 from frasch.osmscan import Rings
 from frasch.paths import StrPath, Workspace
 from frasch.placelist import OsmRef, Row
+from frasch.provenance import Stamp
 from frasch.registry import Registry
 
 
@@ -192,11 +193,7 @@ def wanted_refs(ws: Workspace, reg: Registry) -> set[OsmRef]:
 
 def located(refs: Collection[OsmRef], pbfs: Sequence[StrPath]) -> Objects:
     """The objects `refs` found in the extracts `pbfs`, stamped with them."""
-    return Objects(locate(pbfs, refs), {"extracts": extract_stamps(pbfs)})
-
-
-def extract_stamps(pbfs: Iterable[StrPath]) -> list[provenance.ExtractStamp]:
-    return [provenance.extract_stamp(p) for p in pbfs]
+    return Objects(locate(pbfs, refs), Stamp.of({}, osmscan.extract_stamps(pbfs)))
 
 
 def run(ws: Workspace, reg: Registry, pbfs: Sequence[StrPath]) -> None:

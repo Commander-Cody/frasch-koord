@@ -181,8 +181,7 @@ def test_the_file_reads_back_by_reference(
     run_locate([{"kind": "settlement", "mooring": "Naibel", "osm": f"node/{NAIBEL}"}], pbf)
     objects = read_objects(str(world / "osm_objects.json"))
     assert objects.by_ref == {("n", NAIBEL): {"lon": 8.8285, "lat": 54.7868}}
-    extracts = objects.built_from["extracts"]
-    assert isinstance(extracts, list) and extracts[0]["file"] == "in.osm.pbf"
+    assert objects.stamp.extracts == [{"file": "in.osm.pbf", "replication_timestamp": ""}]
 
 
 def test_the_command_locates_the_rows_the_registry_of_its_option_puts_on_the_map(

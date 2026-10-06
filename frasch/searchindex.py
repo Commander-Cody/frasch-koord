@@ -178,7 +178,7 @@ def build(ws: Workspace, reg: Registry) -> SearchIndex:
             f"{ws.objects} does not know -- run `just objects` "
             f"to locate them:\n" + "\n".join(unlocated)
         )
-    return {"built_from": provenance.stamp(ws), "places": places}
+    return {"built_from": provenance.stamp(ws).as_json(), "places": places}
 
 
 def write(index: SearchIndex, out: str) -> None:

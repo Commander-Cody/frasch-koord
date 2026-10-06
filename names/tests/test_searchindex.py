@@ -18,7 +18,7 @@ from frasch.errors import PipelineError
 from frasch.paths import StrPath
 from frasch.objects import LocatedObject, Objects, objects_json
 from frasch.placelist import OsmRef
-from frasch.provenance import ExtractStamp
+from frasch.provenance import ExtractStamp, Stamp
 from frasch.searchindex import SearchEntry, SearchIndex
 from conftest import REGISTRY, curation_file, path_options, places_text, workspace
 
@@ -130,7 +130,7 @@ AREAS = {
 def paths(world: Path) -> Path:
     """The export's input files in `world`; `run(rows)` exports them."""
     (world / "osm_objects.json").write_text(
-        objects_json(Objects(OBJECTS, {"extracts": EXTRACTS})), encoding="utf-8"
+        objects_json(Objects(OBJECTS, Stamp({}, EXTRACTS))), encoding="utf-8"
     )
     (world / "dialect_areas.geojson").write_text(json.dumps(AREAS), encoding="utf-8")
     return world

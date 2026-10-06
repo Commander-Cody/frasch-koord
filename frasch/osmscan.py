@@ -5,11 +5,12 @@ alone for pyosmium to build every area of it), so whatever needs geometry
 reads it in three passes that each keep only the objects asked for: the
 relations, then their and the referenced ways, then all of those ways'
 nodes.  frasch.locate and frasch.build_dialect_areas both do.  Besides
-those: the objects that carry a tag (`tagged`), and the extract's header,
-without a pass at all."""
+those: the objects that carry a tag (`tagged`), and the extract's header
+and the stamp made of it, without a pass at all."""
 
 from __future__ import annotations
 
+import os
 from collections.abc import Collection, Iterable
 from typing import TypedDict
 
@@ -20,6 +21,7 @@ from osmium.osm.types import OSMEntity
 from frasch.geo import LonLat
 from frasch.paths import StrPath
 from frasch.placelist import OsmRef
+from frasch.provenance import ExtractStamp
 
 
 class Rings(TypedDict):
@@ -114,6 +116,17 @@ def header(pbf: StrPath) -> osmium.io.Header:
         return reader.header()
     finally:
         reader.close()
+
+
+def extract_stamp(pbf: StrPath) -> ExtractStamp:
+    """An extract as a stamp records it (frasch.provenance): its file name
+    and the replication timestamp of its header, `""` when it has none."""
+    timestamp = header(pbf).get("osmosis_replication_timestamp") or ""
+    return {"file": os.path.basename(pbf), "replication_timestamp": timestamp}
+
+
+def extract_stamps(pbfs: Iterable[StrPath]) -> list[ExtractStamp]:
+    return [extract_stamp(pbf) for pbf in pbfs]
 
 
 def _filtered(
