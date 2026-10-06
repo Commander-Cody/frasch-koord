@@ -235,6 +235,18 @@ def test_a_row_whose_object_was_never_located_stops_the_export(paths: Path) -> N
     assert not Path(workspace(paths).index).exists()
 
 
+def test_an_object_that_was_never_asked_for_is_to_be_located(paths: Path) -> None:
+    with pytest.raises(PipelineError, match="node/99 is not located yet .* `just rebuild objects`"):
+        export_into(paths, [NAIBEL | {"osm": "node/99"}])
+
+
+def test_an_object_no_extract_holds_is_a_matter_of_its_row(paths: Path) -> None:
+    asked_in_vain = Objects(OBJECTS, Stamp({}, EXTRACTS), frozenset({("n", 99)}))
+    (paths / "osm_objects.json").write_text(objects_json(asked_in_vain), encoding="utf-8")
+    with pytest.raises(PipelineError, match="node/99 is in none of the extracts .* `osm` cell"):
+        export_into(paths, [NAIBEL | {"osm": "node/99"}])
+
+
 def test_a_row_keyed_by_wikidata_alone_is_left_out(export: Export) -> None:
     denmark = {
         "id": "danemark",

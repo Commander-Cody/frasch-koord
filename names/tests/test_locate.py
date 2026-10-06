@@ -222,3 +222,11 @@ def test_a_relation_whose_label_node_the_extract_lacks_is_at_a_member_it_has(
         [{"kind": "water", "mooring": "Weestsiie", "osm": "relation/9051063"}], pbf
     )
     assert objects["objects"]["relation/9051063"] == {"lon": 8.0, "lat": 54.0}
+
+
+def test_a_reference_no_extract_holds_is_recorded_as_not_found(
+    run_locate: RunLocate, tmp_path: Path
+) -> None:
+    pbf = write_extract(tmp_path / "in.osm.pbf", nodes={NAIBEL: ((8.8285, 54.7868), {})})
+    rows = [{"kind": "settlement", "mooring": "Naibel", "osm": f"node/{NAIBEL}; way/99"}]
+    assert run_locate(rows, pbf)["not_found"] == ["way/99"]

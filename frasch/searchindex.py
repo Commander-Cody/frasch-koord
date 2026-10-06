@@ -43,7 +43,7 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from typing import NotRequired, TypedDict
 
 from frasch import (
@@ -55,11 +55,11 @@ from frasch import (
     provenance,
     registry,
 )
-from frasch.errors import PipelineError
+from frasch.errors import PipelineError, rebuild
 from frasch.geo import LonLat
-from frasch.objects import LocatedObject, Objects, dialect_at, read_objects
+from frasch.objects import LocatedObject, Objects, dialect_at, read_objects, require_located
 from frasch.paths import Workspace
-from frasch.placelist import Row
+from frasch.placelist import PlaceRow, Ref, Row
 from frasch.registry import Registry
 
 
@@ -94,7 +94,7 @@ def entry_object(
     """The object a row's entry stands for: the object of the first reference
     in its `osm` cell, or for a local reference the point the injector adds --
     at its curation position, with the name the injector gives it.  None for
-    a row keyed by its QID alone; a KeyError for a reference nobody located."""
+    a row keyed by its QID alone."""
     slug = placelist.local_ref(row["osm"])
     if slug:
         if slug not in local_points:
@@ -110,6 +110,11 @@ def entry_object(
     if not refs:
         return None
     return objects.by_ref[refs[0]]
+
+
+def entry_refs(rows: Iterable[PlaceRow]) -> dict[Ref, PlaceRow]:
+    """The reference to an OSM object each row's entry lies at, with its row."""
+    return {refs[0]: row for row in rows if (refs := placelist.osm_refs(row["osm"]))}
 
 
 def entry(row: Row, obj: LocatedObject, areas: dialects.AreaIndex, reg: Registry) -> SearchEntry:
@@ -152,32 +157,19 @@ def entry(row: Row, obj: LocatedObject, areas: dialects.AreaIndex, reg: Registry
 def build(ws: Workspace, reg: Registry) -> SearchIndex:
     """The search index, `{"built_from", "places"}`, from its input files."""
     if not os.path.exists(ws.areas):
-        raise PipelineError(f"{ws.areas} not found -- build it with `just areas`")
+        raise PipelineError(f"{ws.areas} not found -- build it with {rebuild('areas')}")
     areas = dialects.AreaIndex.from_geojson(ws.areas)
     objects = read_objects(ws.objects)
     local_points = curationlist.local_points(ws.curation)
     rows, _ = placelist.read(ws.names, reg)
 
+    on_map = [r for r in rows if placelist.on_map(r, reg)]
+    require_located(objects, ws.objects, entry_refs(on_map))
     places: list[SearchEntry] = []
-    unlocated: list[str] = []
-    for r in rows:
-        if not placelist.on_map(r, reg):
-            continue
-        try:
-            obj = entry_object(r, objects, local_points, reg, f"{ws.names}:{r.line}")
-        except KeyError as missing:
-            unlocated.append(
-                f"  {r['id']} (line {r.line}): {placelist.format_osm([missing.args[0]])}"
-            )
-            continue
+    for r in on_map:
+        obj = entry_object(r, objects, local_points, reg, f"{ws.names}:{r.line}")
         if obj is not None:
             places.append(entry(r, obj, areas, reg))
-    if unlocated:
-        raise PipelineError(
-            f"{len(unlocated)} row(s) on the map have an object that "
-            f"{ws.objects} does not know -- run `just objects` "
-            f"to locate them:\n" + "\n".join(unlocated)
-        )
     return {"built_from": provenance.stamp(ws).as_json(), "places": places}
 
 

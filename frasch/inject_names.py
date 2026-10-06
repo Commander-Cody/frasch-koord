@@ -103,7 +103,7 @@ import collections
 import enum
 import os
 import time
-from collections.abc import Container, Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import NamedTuple, NotRequired, TypedDict
 
@@ -119,9 +119,9 @@ from frasch import (
     registry,
 )
 from frasch.curationlist import LocalPoint, Square, Tuning
-from frasch.errors import PipelineError
+from frasch.errors import PipelineError, rebuild
 from frasch.geo import LonLat
-from frasch.objects import LocatedObject, dialect_at, read_objects
+from frasch.objects import LocatedObject, dialect_at, read_objects, require_located
 from frasch.paths import Workspace
 from frasch.placelist import OsmRef, PlaceRow, Ref, Row
 from frasch.registry import Registry
@@ -374,13 +374,6 @@ def scan_osm_local(path: str, areas: dialects.AreaIndex | None) -> dict[OsmRef, 
         for ref, obj in locate.locate_in(path, set(names)).items()
     }
     return {ref: name for ref, name in local.items() if name}
-
-
-def unlocated(by_id: Iterable[Ref], objects: Container[OsmRef]) -> list[Ref]:
-    """The OSM references of the name list that the objects file does not
-    know -- without a position they would get no dialect, and the search
-    index, which reads the same file, refuses them too."""
-    return sorted(k for k in by_id if k[0] != placelist.LOCAL_TYPE and k not in objects)
 
 
 # -------------------------------------------------------------- injector ----
@@ -749,7 +742,7 @@ def run(
     area_index = _load_areas(None if areas is Use.OFF else ws.areas, areas is Use.REQUIRED)
     curated = _read_curation(curation_csv, curation is Use.REQUIRED)
     _check_local_refs(names.by_id, curated.points, reg, ws.names, curation_csv)
-    objects = _load_objects(area_index, names.by_id, reg, ws.names, ws.objects)
+    objects = _load_objects(area_index, names.by_id, ws.objects)
     members = scan_waterways(inp, names.by_id)
     if members:
         print(f"waterways : {len(members)} member ways of matched waterway relations")
@@ -803,7 +796,7 @@ def _load_areas(areas_geojson: str | None, required: bool) -> dialects.AreaIndex
     print(
         f"areas     : {areas_geojson or 'off'} (no {DIALECT_KEY}; "
         f"{LOCAL_KEY} only from the `local` column). "
-        f"Build it with `just areas`"
+        f"Build it with {rebuild('areas')}"
     )
     return None
 
@@ -856,30 +849,18 @@ def _check_local_refs(
 
 
 def _load_objects(
-    areas: dialects.AreaIndex | None,
-    by_id: Mapping[Ref, Sequence[PlaceRow]],
-    reg: Registry,
-    names_csv: str,
-    objects_json: str,
+    areas: dialects.AreaIndex | None, by_id: Mapping[Ref, Sequence[PlaceRow]], objects_json: str
 ) -> dict[OsmRef, LocatedObject]:
     """Where the name list's objects lie -- needed only with dialect areas,
-    and then for every one of them."""
+    and then for every one of them: without a position an object would get
+    no dialect, and the search index, which reads the same file, refuses it
+    too."""
     if not areas:
         return {}
-    objects = read_objects(objects_json).by_ref
-    missing = unlocated(by_id, objects)
-    if missing:
-        lines = "\n".join(
-            f"  {placelist.format_osm([k])}  {placelist.describe(by_id[k][0], reg)}"
-            for k in missing
-        )
-        raise PipelineError(
-            f"{len(missing)} object(s) of {names_csv} are not in "
-            f"{objects_json} -- run `just objects` "
-            f"to locate them:\n{lines}"
-        )
-    print(f"objects   : {objects_json} -> {len(objects)} located object(s)")
-    return objects
+    objects = read_objects(objects_json)
+    require_located(objects, objects_json, {key: rows[0] for key, rows in by_id.items()})
+    print(f"objects   : {objects_json} -> {len(objects.by_ref)} located object(s)")
+    return objects.by_ref
 
 
 def _inject(inp: str, out: str | None, inputs: _Inputs) -> Injector:

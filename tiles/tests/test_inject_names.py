@@ -658,7 +658,7 @@ def test_an_object_nobody_located_stops_the_build(tmp_path: Path) -> None:
         objects_json(Objects({}, Stamp({}, []))), encoding="utf-8"
     )
     write_extract(tmp_path / "in.osm.pbf")
-    with pytest.raises(PipelineError, match=f"node/{HOLM}"):
+    with pytest.raises(PipelineError, match=f"node/{HOLM} is not located yet"):
         inject(tmp_path, areas=Use.IF_PRESENT)
     assert not (tmp_path / "out.osm.pbf").exists()
 
@@ -904,7 +904,7 @@ def test_report_of_rows_and_curation_rows_that_do_not_fit(
         "ignoring 'Hoolm' (places.csv line 3)",
         "  ! Q559369 claimed twice: keeping line 2, ignoring places.csv line 3",
         "areas     : off (no frasch:dialect; frasch:local only from the `local` column). "
-        "Build it with `just areas`",
+        "Build it with `just rebuild areas`",
         "curation  : <dir>/curation.csv -> 2 OSM ids (2 with frasch:minzoom, 0 with frasch:maxzoom)",
         "synthetic : 1 polygon(s) to add around nodes",
         "local     : 2 local reference(s) positioned in <dir>/curation.csv",
