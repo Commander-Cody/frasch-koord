@@ -27,9 +27,9 @@ parameter.
     frasch dialects            prints the registry
     frasch dialects --tags     prints `frr-x-mooring,frr-x-wieding,...`
                                (tiles/build.sh feeds it to Planetiler)
-    frasch dialects --export   writes the registry the frontend compiles in
-                               (web/src/generated/dialects.json: every
-                               column but `note`)
+
+and `frasch build dialects` writes the registry the frontend compiles in
+(`export_json`: web/src/generated/dialects.json, every column but `note`).
 """
 
 from __future__ import annotations
@@ -186,7 +186,7 @@ def export_json(reg: Registry, path: str) -> None:
 @cli.command
 def main(argv: Sequence[str] | None = None) -> int:
     ap = cli.parser("dialects", __doc__)
-    cli.add_workspace_options(ap, "dialects", "registry_json")
+    cli.add_workspace_options(ap, "dialects")
     ap.add_argument(
         "--tags",
         action="store_true",
@@ -194,15 +194,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         "(tiles/build.sh feeds them to Planetiler)",
     )
     ap.add_argument("--columns", action="store_true", help="print the places.csv columns instead")
-    ap.add_argument(
-        "--export", action="store_true", help="write the registry as JSON for the frontend"
-    )
     a = ap.parse_args(argv)
     ws = cli.workspace(a)
     reg = read(ws.dialects)
-    if a.export:
-        export_json(reg, ws.registry_json)
-    elif a.tags:
+    if a.tags:
         print(",".join(reg.tags))
     elif a.columns:
         print(",".join(reg.columns))

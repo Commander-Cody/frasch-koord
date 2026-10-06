@@ -858,7 +858,8 @@ def _load_objects(
     if not areas:
         return {}
     objects = read_objects(objects_json)
-    require_located(objects, objects_json, {key: rows[0] for key, rows in by_id.items()})
+    first_rows = {osm: rows[0] for key, rows in by_id.items() if (osm := placelist.as_osm_ref(key))}
+    require_located(objects, objects_json, first_rows)
     print(f"objects   : {objects_json} -> {len(objects.by_ref)} located object(s)")
     return objects.by_ref
 

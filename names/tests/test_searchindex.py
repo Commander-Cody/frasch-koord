@@ -283,5 +283,5 @@ def test_the_command_exports_the_index_of_the_workspace_its_options_name(
     ws = workspace(paths)
     (paths / "places.csv").write_text(places_text([NAIBEL]), encoding="utf-8")
     files = path_options(ws, "names", "dialects", "curation", "areas", "objects", "index")
-    assert main(["index", *files]) == 0
+    assert main(["build", "index", *files]) == 0
     assert capsys.readouterr().out.startswith(f"wrote 1 entries to {ws.index}")

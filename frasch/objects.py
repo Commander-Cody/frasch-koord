@@ -137,7 +137,7 @@ def named(rows: Iterable[PlaceRow], reg: Registry) -> dict[OsmRef, PlaceRow]:
     return found
 
 
-def unlocated(objects: Objects, rows: Mapping[Ref, PlaceRow]) -> list[str]:
+def unlocated(objects: Objects, rows: Mapping[OsmRef, PlaceRow]) -> list[str]:
     """What to do about each reference of `rows` ({reference: the row that
     names it}) the file has no object for, a line each.  One that was asked
     for in vain is the row's to correct; any other has yet to be located."""
@@ -150,7 +150,7 @@ def unlocated(objects: Objects, rows: Mapping[Ref, PlaceRow]) -> list[str]:
     ]
 
 
-def require_located(objects: Objects, path: str, rows: Mapping[Ref, PlaceRow]) -> None:
+def require_located(objects: Objects, path: str, rows: Mapping[OsmRef, PlaceRow]) -> None:
     """Stop when a reference of `rows` (as for `unlocated`) has no object in
     the objects file at `path`."""
     lines = unlocated(objects, rows)

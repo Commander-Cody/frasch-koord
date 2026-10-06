@@ -3,169 +3,62 @@
     frasch check-outputs                         # `just check-outputs`, run in CI
     frasch check-outputs --extracts <pbf> ...    # `just check-full`
 
-Five generated files are committed, because the site and the tile build need
-them and they take an OSM extract (or the whole pipeline) to make.  Each is
-checked the only way it can be where it is checked:
+The generated files of the pipeline's table (frasch.pipeline) are committed,
+all but the candidates, because the site and the tile build need them and
+they take an OSM extract, or the whole pipeline, to make.  Each is checked
+as far as it can be where it is checked:
 
-  web/public/data/names.json      regenerated from the committed files into a
-  web/src/generated/dialects.json temporary directory and compared byte for
-                                  byte -- neither needs an extract
-  names/dialect_areas*.geojson    their `built_from` stamp must name the
-                                  current dialect_areas.csv and dialects.csv
-  names/osm_objects.json          every OSM reference of a row on the map must
-                                  be in it -- the injector's rule
+  its stamp     must name the inputs that are there now; the objects file
+                must be located for the references the rows on the map name
+  a rebuild     into a temporary directory must give the same file, byte for
+                byte -- where it can be rebuilt: the search index and the
+                frontend's registry anywhere, the objects file and the
+                dialect areas with `--extracts`, the matcher's report never
+                (it takes the git-ignored candidates)
 
-With `--extracts`, the extract-derived files are regenerated as well, each
-from the extracts its stamp names (found among the given ones by file name),
-and compared.  Exits 1 on any difference and says which `just` recipe
-rebuilds the file.
+With `--extracts`, a stamp must name those extracts as well.  And a row on
+the map must not name an object that no extract holds: the tile build stops
+on it.  Exits 1 on any of this and says which `just` recipe rebuilds the
+file.
 """
 
 from __future__ import annotations
 
-import filecmp
 import os
 import tempfile
 from collections.abc import Sequence
 
-from frasch import (
-    build_dialect_areas,
-    cli,
-    files,
-    locate,
-    placelist,
-    registry,
-    searchindex,
-)
-from frasch.errors import PipelineError
-from frasch.objects import objects_json, read_objects
-from frasch.paths import Workspace
-from frasch.provenance import Stamp
-from frasch.registry import Registry
+from frasch import cli, pipeline, placelist, registry
+from frasch.objects import named, read_objects, unlocated
+from frasch.pipeline import Extracts, Run
 
 
-def problems(ws: Workspace, reg: Registry, extracts: Sequence[str] = ()) -> list[str]:
-    """What is wrong with the committed outputs of the workspace, one line
-    each.  With `extracts`, the objects file and the dialect areas are
-    rebuilt from them and compared as well."""
-    with tempfile.TemporaryDirectory() as tmp:
-        # the same workspace, with its outputs rebuilt in a temporary directory
-        rebuilt = Workspace.at(tmp)
-        found = unlocated_problems(ws, reg) + regenerated_problems(ws, reg, rebuilt)
-        found += stamp_problems(ws)
-        if extracts:
-            found += extract_problems(ws, reg, extracts, rebuilt)
+def problems(run: Run) -> list[str]:
+    """What is wrong with the committed outputs of the run's workspace, one
+    line each.  With extracts at hand, the outputs built from them are
+    rebuilt and compared as well."""
+    found = unlocated_problems(run)
+    with tempfile.TemporaryDirectory() as scratch:
+        for output in pipeline.OUTPUTS:
+            if output.committed:
+                found += output.problems(run, scratch)
     return found
 
 
-def regenerated_problems(ws: Workspace, reg: Registry, rebuilt: Workspace) -> list[str]:
-    """names.json and dialects.json, rebuilt as the files of `rebuilt` and
-    compared."""
-    found = []
-    try:
-        searchindex.write(searchindex.build(ws, reg), rebuilt.index)
-    except PipelineError as stop:
-        found.append(f"the search index cannot be rebuilt: {stop}")
-    else:
-        found += differs(ws.index, rebuilt.index, "just index")
-    registry.export_json(reg, rebuilt.registry_json)
-    found += differs(ws.registry_json, rebuilt.registry_json, "just dialects")
-    return found
-
-
-def unlocated_problems(ws: Workspace, reg: Registry) -> list[str]:
-    """Every OSM reference of a row on the map that the objects file lacks --
-    the tile build stops on each of them, not only on a row's first one, the
-    only one the search index needs."""
-    rows, _ = placelist.read(ws.names, reg)
-    objects = read_objects(ws.objects).by_ref
-    found = []
-    for row in (r for r in rows if placelist.on_map(r, reg)):
-        missing = [
-            ref
-            for ref in placelist.parse_osm(row["osm"])
-            if ref[0] != placelist.LOCAL_TYPE and ref not in objects
-        ]
-        if missing:
-            found.append(
-                f"{row['id']}: {placelist.format_osm(missing)} not in "
-                f"{ws.objects} -- locate it with `just objects`"
-            )
-    return found
-
-
-def stamp_problems(ws: Workspace) -> list[str]:
-    """The dialect areas, by the inputs their stamp names."""
-    current = build_dialect_areas.stamp(ws, None)
-    found = []
-    for path in (ws.areas, ws.parts):
-        stale = (Stamp.read(path) or Stamp({}, [])).other_than(current)
-        if stale:
-            found.append(
-                f"{path} was built from another {' and '.join(stale)} "
-                f"-- rebuild it with `just areas`"
-            )
-    return found
-
-
-def extract_problems(
-    ws: Workspace, reg: Registry, extracts: Sequence[str], rebuilt: Workspace
-) -> list[str]:
-    """The objects file and the dialect areas, each rebuilt as a file of
-    `rebuilt` from the extracts its own stamp names (the areas need only
-    Schleswig-Holstein), and compared."""
-    try:
-        objects_from = stamped_extracts(ws.objects, extracts)
-        areas_from = stamped_extracts(ws.areas, extracts)
-    except LookupError as missing:
-        return [str(missing)]
-    try:
-        objects = locate.build(ws, reg, objects_from)
-    except PipelineError as stop:
-        return [f"{ws.objects} cannot be rebuilt: {stop}"]
-    try:
-        areas = build_dialect_areas.build(ws, reg, areas_from)
-    except PipelineError as stop:
-        return [f"{ws.areas} cannot be rebuilt: {stop}"]
-    os.makedirs(os.path.dirname(rebuilt.objects), exist_ok=True)
-    files.atomic_write(rebuilt.objects, objects_json(objects))
-    build_dialect_areas.write_geojson(rebuilt.areas, areas.dialects)
-    if areas.parts is not None:
-        build_dialect_areas.write_geojson(rebuilt.parts, areas.parts.fc)
-    return (
-        differs(ws.objects, rebuilt.objects, "just objects")
-        + differs(ws.areas, rebuilt.areas, "just areas")
-        + differs(ws.parts, rebuilt.parts, "just areas")
-    )
-
-
-def stamped_extracts(path: str, given: Sequence[str]) -> list[str]:
-    """The paths among the extracts `given` of those `path` was built from,
-    in the stamp's order; a LookupError names one that was not given."""
-    stamp = Stamp.read(path)
-    by_name = {os.path.basename(p): p for p in given}
-    extracts = stamp.extracts if stamp else None
-    if extracts is None:
-        raise LookupError(f"{path} names no extracts it was built from")
-    names = [e["file"] for e in extracts]
-    absent = [n for n in names if n not in by_name]
-    if absent:
-        raise LookupError(
-            f"{path} was built from {', '.join(absent)}, which --extracts does not name"
-        )
-    return [by_name[n] for n in names]
-
-
-def differs(committed: str, regenerated: str, recipe: str) -> list[str]:
-    if os.path.exists(committed) and filecmp.cmp(committed, regenerated, shallow=False):
+def unlocated_problems(run: Run) -> list[str]:
+    """Every OSM reference of a row on the map that the objects file has no
+    object for -- the tile build stops on each of them, not only on a row's
+    first one, the only one the search index needs."""
+    if not os.path.exists(run.ws.objects):
         return []
-    return [f"{committed} is not what its inputs give -- rebuild it with `{recipe}`"]
+    rows, _ = placelist.read(run.ws.names, run.reg)
+    return unlocated(read_objects(run.ws.objects), named(rows, run.reg))
 
 
-def run(ws: Workspace, reg: Registry, extracts: Sequence[str] = ()) -> int:
-    """Check the workspace's outputs and print what is wrong with them; ->
-    the exit status."""
-    found = problems(ws, reg, extracts)
+def run(run: Run) -> int:
+    """Check the outputs of the run's workspace and print what is wrong with
+    them; -> the exit status."""
+    found = problems(run)
     for p in found:
         print(f"  ! {p}")
     if found:
@@ -186,6 +79,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "areas",
         "parts",
         "objects",
+        "report",
         "index",
         "registry_json",
     )
@@ -197,6 +91,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="also rebuild names/osm_objects.json and the dialect "
         "areas from these extracts and compare them",
     )
+    pipeline.add_area_extract_option(ap)
     a = ap.parse_args(argv)
     ws = cli.workspace(a)
-    return run(ws, registry.read(ws.dialects), a.extracts)
+    return run(Run(ws, registry.read(ws.dialects), Extracts.given(a.extracts, a.area_extract)))

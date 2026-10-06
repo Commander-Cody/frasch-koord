@@ -19,6 +19,7 @@ from frasch import curationlist, placelist
 from frasch.candidates import Candidate, HeaderLine
 from frasch.paths import Workspace
 from frasch.registry import Dialect, Registry
+from osm_fixture import Nodes, ring, write_extract
 
 # the dialects of the tests: (column, label, status, view)
 _DIALECTS = [
@@ -164,3 +165,34 @@ def world(ws: Workspace) -> Path:
     """The names/ directory of `ws`: places.csv, curation.csv, dialects.csv,
     work/."""
     return Path(ws.names).parent
+
+
+# ------------------------------------------- a world to run the pipeline on ---
+AREA_LIST = "dialect,name,osm,note\nfrr-x-mooring,Niebüll,relation/1,\n"
+# a village inside the Mooring area of the extract `write_sh_extract` writes
+TOFTUM_NODE = ((8.83, 54.71), {"name": "Toftum", "place": "village"})
+
+
+def write_sh_extract(
+    world: Path, timestamp: str = "2026-09-20T20:21:02Z", more_nodes: Nodes | None = None
+) -> Path:
+    """Write the extract of `pipeline_world`: the Mooring area of AREA_LIST
+    and Toftum."""
+    area, way = ring(10, (8.7, 54.6), (8.9, 54.6), (8.9, 54.8), (8.7, 54.8))
+    nodes: Nodes = {**area, 240044107: TOFTUM_NODE, **(more_nodes or {})}
+    return write_extract(
+        world / "schleswig-holstein-latest.osm.pbf",
+        nodes,
+        {5: (way, {})},
+        {1: ([("w", 5, "outer")], {"boundary": "administrative"})},
+        timestamp=timestamp,
+    )
+
+
+@pytest.fixture
+def pipeline_world(world: Path) -> Path:
+    """`world` with the rest of the pipeline's inputs: one dialect area, and
+    an extract holding it and one village."""
+    (world / "dialect_areas.csv").write_text(AREA_LIST, encoding="utf-8")
+    write_sh_extract(world)
+    return world

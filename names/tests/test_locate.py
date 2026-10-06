@@ -196,7 +196,7 @@ def test_the_command_locates_the_rows_the_registry_of_its_option_puts_on_the_map
     (world / "places.csv").write_text(f"{header},strand\n{row},Strand\n", encoding="utf-8")
     pbf = write_extract(tmp_path / "in.osm.pbf", nodes={NAIBEL: ((8.8285, 54.7868), {})})
     files = path_options(workspace(world), "names", "objects")
-    assert main(["objects", str(pbf), *files, "--dialects", str(registry)]) == 0
+    assert main(["build", "objects", str(pbf), *files, "--dialects", str(registry)]) == 0
     objects = json.loads((world / "osm_objects.json").read_text(encoding="utf-8"))
     assert objects["objects"] == {f"node/{NAIBEL}": {"lon": 8.8285, "lat": 54.7868}}
 

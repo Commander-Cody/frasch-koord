@@ -5,9 +5,7 @@ therefore on which dialect is spoken there (`frasch:dialect`, `frasch:local`).
 They used to work that out separately -- the injector from the extract it
 tags, the search export from the matcher's cache of vertex averages, days
 apart -- and disagreed on Sylt, Amrum, Stiardebel and more (#24).  Now it is
-worked out once, here, and both read the result:
-
-    frasch objects <in.osm.pbf> [<in.osm.pbf> ...]
+worked out once, here, and both read the result (`frasch build objects`).
 
 What the file records, and why it is committed: frasch.objects.
 """
@@ -17,7 +15,7 @@ from __future__ import annotations
 import os
 from collections.abc import Collection, Iterable, Mapping, Sequence
 
-from frasch import cli, files, osmgeom, osmscan, placelist, registry
+from frasch import files, osmgeom, osmscan, placelist
 from frasch.geo import LonLat
 from frasch.objects import Facts, LocatedObject, Objects, Point, named, objects_json
 from frasch.osmscan import Rings
@@ -204,14 +202,3 @@ def run(ws: Workspace, reg: Registry, pbfs: Sequence[StrPath]) -> None:
             f"{len(objects.not_found)} not in {', '.join(os.path.basename(p) for p in pbfs)}: "
             + ", ".join(placelist.format_osm([ref]) for ref in objects.missing(refs))
         )
-
-
-@cli.command
-def main(argv: Sequence[str] | None = None) -> int:
-    ap = cli.parser("objects", __doc__)
-    ap.add_argument("pbf", nargs="+", help="OSM extract(s) holding the objects")
-    cli.add_workspace_options(ap, "names", "dialects", "objects")
-    a = ap.parse_args(argv)
-    ws = cli.workspace(a)
-    run(ws, registry.read(ws.dialects), a.pbf)
-    return 0

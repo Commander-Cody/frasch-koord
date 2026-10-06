@@ -1,6 +1,6 @@
 """The client-side search index of web/ (web/public/data/names.json): the
 rows of names/places.csv that are on the map, built by `build` and written
-by `write` (`frasch index` runs the two).
+by `write` (`frasch build index` runs the two).
 
 Every dialect name of a place is searchable, not only the one the map
 currently labels with: somebody who knows a Hallig as *Hansweerf* must find it
@@ -43,23 +43,21 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping
 from typing import NotRequired, TypedDict
 
 from frasch import (
-    cli,
     curationlist,
     dialects,
     files,
     placelist,
     provenance,
-    registry,
 )
 from frasch.errors import PipelineError, rebuild
 from frasch.geo import LonLat
 from frasch.objects import LocatedObject, Objects, dialect_at, read_objects, require_located
 from frasch.paths import Workspace
-from frasch.placelist import PlaceRow, Ref, Row
+from frasch.placelist import OsmRef, PlaceRow, Row
 from frasch.registry import Registry
 
 
@@ -112,7 +110,7 @@ def entry_object(
     return objects.by_ref[refs[0]]
 
 
-def entry_refs(rows: Iterable[PlaceRow]) -> dict[Ref, PlaceRow]:
+def entry_refs(rows: Iterable[PlaceRow]) -> dict[OsmRef, PlaceRow]:
     """The reference to an OSM object each row's entry lies at, with its row."""
     return {refs[0]: row for row in rows if (refs := placelist.osm_refs(row["osm"]))}
 
@@ -191,12 +189,3 @@ def run(ws: Workspace, reg: Registry) -> None:
         f"{sum(1 for e in places if 'name_nds' in e)} with a Low Saxon one; "
         f"rows keyed by Wikidata alone (no position) are left out"
     )
-
-
-@cli.command
-def main(argv: Sequence[str] | None = None) -> int:
-    ap = cli.parser("index", __doc__)
-    cli.add_workspace_options(ap, "names", "dialects", "curation", "areas", "objects", "index")
-    ws = cli.workspace(ap.parse_args(argv))
-    run(ws, registry.read(ws.dialects))
-    return 0

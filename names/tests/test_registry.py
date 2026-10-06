@@ -75,7 +75,5 @@ def test_the_frontend_gets_the_registry_without_the_notes(tmp_path: Path) -> Non
 def test_the_export_command_writes_the_file_its_option_names(tmp_path: Path) -> None:
     out = tmp_path / "dialects.json"
     dialects_csv = write(tmp_path, HEADER + MOORING)
-    assert (
-        main(["dialects", "--export", "--dialects", dialects_csv, "--registry-json", str(out)]) == 0
-    )
+    assert main(["build", "dialects", "--dialects", dialects_csv, "--registry-json", str(out)]) == 0
     assert out.exists()
