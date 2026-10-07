@@ -183,6 +183,14 @@ HULM_GUTSKUUCH = row(
 )
 
 
+def test_of_several_rows_the_first_is_the_one_the_place_is_named_by() -> None:
+    assert resolve(OUTSIDE, HULM, HULM_GUTSKUUCH).id == "hulm"
+
+
+def test_of_several_rows_the_first_gives_the_kind() -> None:
+    assert resolve(OUTSIDE, HULM, HULM_GUTSKUUCH).kind == "settlement"
+
+
 def test_of_several_rows_the_first_keeps_its_name() -> None:
     assert resolve(OUTSIDE, HULM, HULM_GUTSKUUCH).names["frr-x-mooring"] == "Hulm"
 

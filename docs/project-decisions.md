@@ -794,8 +794,10 @@ the tile keys was written out again in `check-tiles` and as a literal in
 `tiles/build.sh`. It is now one module, `frasch/placenames.py`: `resolve`
 holds the whole rule, the `name:frr` fallback inside a dialect area included;
 `as_tags` writes its result for the injector, `as_entry` for the index;
-`TILE_KEY` is the table entry field → tile key, and the key strings are
-defined there and nowhere else in the Python code.
+`TILE_KEY` is the table entry field → tile key, and the keys the injector
+writes are defined there and nowhere else in the Python code. What stays
+elsewhere reads OSM's own tags from an extract: the matcher's `name:de` and
+`name:` prefix, and `name:frr`.
 
 - **`check-tiles` compares everything the two share**: every field of
   `TILE_KEY` and the name in every dialect, where it compared the dialect, the
@@ -807,9 +809,10 @@ defined there and nowhere else in the Python code.
   `check-inputs` rejects such a claim, and `check-tiles` now reports what the
   second row filled in.
 - **A curation row that sets `frasch:kind` on a row's own object** (owner's
-  decision) is a disagreement `check-tiles` reports; the fix is the row's
-  `kind`. No such row exists; the overrides in `curation.csv` sit on objects
-  without an entry.
+  decision) is a disagreement `check-tiles` reports when the two differ; the
+  fix is the row's `kind`. None differs today: the curation rows that set
+  `frasch:kind` on an entry's own object (Süderoogsand, Japsand) set the
+  row's own kind, the others sit on objects without an entry.
 - **Planetiler's lists come from the commands**: `tiles/nametags.sh` builds
   `--languages` and `--extra_name_tags` from `frasch dialects --tags` and the
   new `frasch tile-keys`. A test runs it and fails when the injector writes a
