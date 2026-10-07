@@ -36,6 +36,8 @@ source ./fetch.sh
 source ./java.sh
 # shellcheck source=tiles/workspace.sh
 source ./workspace.sh
+# shellcheck source=tiles/nametags.sh
+source ./nametags.sh
 
 # Planetiler pinned to the version the current tiles were built with, and
 # verified by sha256 -- see fetch.sh for why a plain download is not enough.
@@ -94,10 +96,9 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# every dialect of the registry, e.g. frr-x-mooring,frr-x-fering,... -- the
-# list Planetiler has to carry into the tiles
-workspace_options dialects
-TAGS=$("$FRASCH" dialects --tags "${WORKSPACE_OPTIONS[@]}")
+# --languages and --extra_name_tags: the tags Planetiler has to carry into
+# the tiles, a name:<tag> per dialect of the registry and the frasch:* ones
+name_tag_options "$FRASCH"
 
 # a missing jar or source, or one that fails its pin, is downloaded again
 fetch_pinned "$PLANETILER_URL" planetiler.jar "$PLANETILER_SHA256"
@@ -109,18 +110,15 @@ if [ "${REFRESH:-}" = "1" ] || [ ! -f "$SRC" ]; then
   fetch_geofabrik_verified "$SRC_URL" "$SRC"
 fi
 
-echo "== injecting names ($TAGS) + areas + curation into $SRC"
+echo "== injecting names + areas + curation into $SRC"
 workspace_options names dialects areas objects curation
 "$FRASCH" inject "$SRC" "$INJECTED_TMP" "${WORKSPACE_OPTIONS[@]}"
 mv "$INJECTED_TMP" "$INJECTED"
 BUILT_FROM=$("$FRASCH" provenance "${WORKSPACE_OPTIONS[@]}")
 
 echo "== building $OUT"
-# --languages:       which name:* tags end up in the tiles. The dialect tags come
-#                    from names/dialects.csv, so the registry stays the one list.
-# --extra_name_tags: stock Planetiler passes these through verbatim as string
-#                    attributes on the labelled features -- that is how the
-#                    frasch:* tags written by `frasch inject` reach the style.
+# NAME_TAG_OPTIONS:  which name:* and frasch:* tags end up in the tiles
+#                    (nametags.sh).
 # --archive_description: the build's `built_from` stamp; the frontend compares
 #                    it with names.json's (web/src/provenance.ts). Planetiler
 #                    records the extract's replication time by itself.
@@ -130,8 +128,7 @@ echo "== building $OUT"
   --water_polygons_path="$WATER_POLYGONS" \
   --lake_centerlines_path="$LAKE_CENTERLINES" \
   --output="$OUT_TMP" \
-  --languages="de,da,nds,frr,${TAGS}" \
-  --extra_name_tags=frasch:kind,frasch:minzoom,frasch:maxzoom,frasch:dialect,frasch:local,frasch:variety,frasch:ref \
+  "${NAME_TAG_OPTIONS[@]}" \
   --archive_description="$BUILT_FROM" \
   --force "$@"
 mv "$OUT_TMP" "$OUT"
