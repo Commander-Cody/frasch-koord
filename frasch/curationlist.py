@@ -29,10 +29,9 @@ from frasch.errors import Invalid, Problem, ValidationError
 from frasch.geo import LonLat
 from frasch.tables import Table
 from frasch.placelist import LOCAL_TYPE, Ref, format_osm, local_slug, parse_osm
+from frasch.placenames import MAXZOOM_KEY, MINZOOM_KEY
 
 COLUMNS = ["osm", "name", "lat", "lon", "set_tags", "minzoom", "maxzoom", "polygon_km2", "note"]
-MINZOOM_KEY = "frasch:minzoom"
-MAXZOOM_KEY = "frasch:maxzoom"
 MAX_ZOOM = 24  # the deepest zoom a map style knows
 
 # The default `place=` of the node the injector adds for a local reference, by

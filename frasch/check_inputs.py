@@ -18,7 +18,7 @@ import sys
 from collections.abc import Container, Sequence
 from typing import NamedTuple
 
-from frasch import cli, curationlist, dialects, errors, placelist, registry, tables
+from frasch import cli, curationlist, dialects, errors, placelist, placenames, registry, tables
 from frasch.errors import Problem
 from frasch.paths import Workspace
 from frasch.placelist import PlaceRow
@@ -71,13 +71,13 @@ def check_curation(path: str, ids: Container[str]) -> tuple[list[Problem], set[s
     the row a label belongs to."""
     entries, problems = curationlist.rows(path)
     for e in entries:
-        ref = e["tags"].get(placelist.REF_KEY)
+        ref = e["tags"].get(placenames.REF_KEY)
         if ref is not None and ref not in ids:
             problems.append(
                 Problem(
                     path,
                     e["line"],
-                    f"{placelist.REF_KEY}={ref} names no row of the "
+                    f"{placenames.REF_KEY}={ref} names no row of the "
                     f"name list (it takes a row's `id`)",
                 )
             )

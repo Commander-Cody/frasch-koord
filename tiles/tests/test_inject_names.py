@@ -60,97 +60,10 @@ def test_square_is_centred_on_the_node() -> None:
     assert sum(y for _, y in corners) / 4 == pytest.approx(54.487378)
 
 
-# ----------------------------------------------------------------- name_tags ---
+# ---------------------------------------------------------------- load_names ---
 @pytest.fixture(scope="module")
 def reg() -> Registry:
     return REGISTRY
-
-
-def place(line: int = 2, **cells: str) -> placelist.PlaceRow:
-    return placelist.PlaceRow({c: "" for c in placelist.columns(REGISTRY)} | cells, line)
-
-
-BRODERSWARFT = place(
-    id="brouderswarw",
-    kind="warft",
-    mooring="Brouderswärw",
-    local="Brouersweerw (Foortuftinge)",
-    de="Broderswarft",
-    osm="node/1594721085",
-)
-
-
-def test_name_tags_of_a_row_with_a_local_variety(reg: Registry) -> None:
-    assert inject_names.name_tags([BRODERSWARFT], "frr-x-mooring", reg) == {
-        "name:frr-x-mooring": "Brouderswärw",
-        "name:de": "Broderswarft",
-        "frasch:kind": "warft",
-        "frasch:dialect": "frr-x-mooring",
-        "frasch:local": "Brouersweerw",
-        "frasch:variety": "Foortuftinge",
-        "frasch:ref": "brouderswarw",
-    }
-
-
-def test_name_tags_fill_the_areas_dialect_from_local(reg: Registry) -> None:
-    tags = inject_names.name_tags([BRODERSWARFT], "frr-x-nordgoes", reg)
-    assert tags["name:frr-x-nordgoes"] == "Brouersweerw"
-
-
-def test_name_tags_outside_any_area_have_no_dialect(reg: Registry) -> None:
-    hanswarft = place(
-        id="hanswarw",
-        kind="warft",
-        mooring="Hanswärw",
-        hallig="Hansweerf",
-        de="Hanswarft",
-        osm="node/3410324993",
-    )
-    assert inject_names.name_tags([hanswarft], None, reg) == {
-        "name:frr-x-mooring": "Hanswärw",
-        "name:frr-x-hallig": "Hansweerf",
-        "name:de": "Hanswarft",
-        "frasch:kind": "warft",
-        "frasch:ref": "hanswarw",
-    }
-
-
-def test_name_tags_first_row_wins_per_tag(reg: Registry) -> None:
-    # two rows claim one object: the first in file order keeps its names,
-    # the second only fills what the first leaves empty
-    first = place(2, id="hulm", kind="settlement", mooring="Hulm", de="Holm", osm="node/240102263")
-    second = place(
-        9,
-        id="hulm-gutskuuch",
-        kind="koog",
-        mooring="Hulm Gutskuuch",
-        wieding="Hoolm",
-        de="Holmer Gotteskoog",
-        osm="node/240102263",
-    )
-    tags = inject_names.name_tags([first, second], None, reg)
-    assert tags["name:frr-x-mooring"] == "Hulm"
-    assert tags["name:de"] == "Holm"
-    assert tags["name:frr-x-wieding"] == "Hoolm"
-    assert tags["frasch:kind"] == "settlement"
-    assert tags["frasch:ref"] == "hulm"
-
-
-def test_name_tags_carry_the_lists_german_name(reg: Registry) -> None:
-    # the map's name:de step must say what the card's says, which is the
-    # list's `de` (#61) -- its first variant, as names.json's name_de
-    listlai = place(
-        id="listlai", kind="water", solring="Listlai", de="Lister Ley; Ley", osm="way/1273915431"
-    )
-    assert inject_names.name_tags([listlai], None, reg)["name:de"] == "Lister Ley"
-
-
-def test_name_tags_refer_to_the_rows_id(reg: Registry) -> None:
-    # not to the object: the search index names the place by the row (#23)
-    denmark = place(
-        id="daanemark", kind="country", mooring="Däänemark", de="Dänemark", wikidata="Q35"
-    )
-    assert inject_names.name_tags([denmark], None, reg)["frasch:ref"] == "daanemark"
 
 
 # ------------------------------------------------------------- load_curation ---

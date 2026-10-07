@@ -24,6 +24,7 @@ COMMANDS = [
     "check-outputs",
     "curate",
     "inject",
+    "tile-keys",
     "check-tiles",
 ]
 

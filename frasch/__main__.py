@@ -28,6 +28,7 @@ COMMANDS = {
     "check-outputs": ("check_outputs", "prove the committed outputs match their inputs"),
     "curate": ("curate", "export the curation worklist, or apply the view's decisions"),
     "inject": ("inject_names", "copy an OSM extract with the names added as tags"),
+    "tile-keys": ("placenames", "print the attribute keys Planetiler has to pass through"),
     "check-tiles": ("check_tiles", "compare a built tile archive with the search index"),
 }
 

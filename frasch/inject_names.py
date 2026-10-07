@@ -9,7 +9,9 @@ lies) and the curation:
 
 `names/places.csv` (the name list) -- one row per place, one column per
 dialect (the columns come from `names/dialects.csv`, the registry).  Every row
-that is not `skip` tags the object(s) in its `osm` column with
+that is not `skip` tags the object(s) in its `osm` column with what
+frasch.placenames gives the place -- the rule the search index is built by
+too, and the module that defines these keys:
 
     name:<tag>       for every dialect whose name for the row is non-empty
     name:de          the first variant of the row's `de`, in place of OSM's
@@ -53,9 +55,9 @@ and which dialect a place's own `local` column belongs to.  The smallest area
 containing the object wins.  Without the file the injector still runs -- it
 warns and writes `frasch:local` only for rows with an explicit `local` name.
 Where an object lies comes from `names/osm_objects.json` (`frasch build objects`),
-and `objects.dialect_at` turns that into a dialect -- the same file and the same
-function the search index uses (frasch.searchindex), so a map label
-and its search entry cannot disagree (#24).  An object of the name list the
+and placenames.resolve turns that into its dialect and names -- the same file
+and the same function the search index uses (frasch.searchindex), so a map
+label and its search entry cannot disagree (#24).  An object of the name list the
 file does not know stops the build.  Objects matched only through their
 Wikidata QID are not in it: a node is asked at its own location, a way or
 relation gets no dialect.
@@ -92,7 +94,8 @@ mentions.  When two rows claim the same object, the first row in file order
 wins per tag and the rest are reported.
 
 The `frasch:*` tags reach the tiles because tiles/build.sh passes them to
-Planetiler via `--extra_name_tags`; tag values must therefore be strings.
+Planetiler via `--extra_name_tags` (`frasch tile-keys` prints them); tag
+values must therefore be strings.
 
 Used by tiles/build.sh before Planetiler runs.
 """
@@ -116,25 +119,30 @@ from frasch import (
     locate,
     osmscan,
     placelist,
+    placenames,
     registry,
 )
 from frasch.curationlist import LocalPoint, Square, Tuning
 from frasch.errors import PipelineError, rebuild
 from frasch.geo import LonLat
-from frasch.objects import LocatedObject, dialect_at, read_objects, require_located
+from frasch.objects import LocatedObject, local_point, point, read_objects, require_located
 from frasch.paths import Workspace
-from frasch.placelist import OsmRef, PlaceRow, Ref, Row
+from frasch.placelist import OsmRef, PlaceRow, Ref
+from frasch.placenames import (
+    DIALECT_KEY,
+    GERMAN_KEY,
+    KIND_KEY,
+    LANGUAGE_PREFIX,
+    LOCAL_KEY,
+    MAXZOOM_KEY,
+    MINZOOM_KEY,
+    REF_KEY,
+    VARIETY_KEY,
+)
 from frasch.registry import Registry
 
-GERMAN_KEY = "name:de"
+# OSM's own Frisian name, of no stated dialect
 FRISIAN_KEY = "name:frr"
-KIND_KEY = "frasch:kind"
-MINZOOM_KEY = curationlist.MINZOOM_KEY
-MAXZOOM_KEY = curationlist.MAXZOOM_KEY
-DIALECT_KEY = "frasch:dialect"
-LOCAL_KEY = "frasch:local"
-VARIETY_KEY = "frasch:variety"
-REF_KEY = placelist.REF_KEY
 # an object found only through a row's QID is tagged only if it has one of
 # these keys (or is a waterway relation): a shop may carry its town's QID (#55)
 PLACE_LIKE_KEYS = ("place", "boundary", "natural", "water", "waterway")
@@ -155,7 +163,7 @@ class NameList(NamedTuple):
 
     by_id maps ('w', 12) -> [row, ...] in file order (a local reference is
     the key ('l', slug)), by_qid 'Q42' -> [row].  The rows are kept whole
-    because the tags of an object depend on where it lies (see `name_tags`),
+    because the tags of an object depend on where it lies (placenames.resolve),
     which is only known while the file streams past.  `conflicts` and
     `duplicate_qids` are reported, not fatal: the first row wins."""
 
@@ -208,11 +216,7 @@ def _conflicts(key: Ref, rows: Sequence[PlaceRow], reg: Registry) -> list[Confli
     for column in reg.columns + [registry.LOCAL_COLUMN]:
         kept, kept_line = "", 0
         for row in rows:
-            name = (
-                dialects.dialect_name(row, reg.tag_of_column(column), None, reg)
-                if column != registry.LOCAL_COLUMN
-                else placelist.primary(row[column])
-            )
+            name = placelist.primary(row[column])
             if not name:
                 continue
             if not kept:
@@ -222,47 +226,25 @@ def _conflicts(key: Ref, rows: Sequence[PlaceRow], reg: Registry) -> list[Confli
     return out
 
 
-def name_tags(rows: Sequence[Row], area_tag: str | None, reg: Registry) -> dict[str, str]:
-    """The full tag dict for one object: a `name:<tag>` per dialect that has a
-    name for it, `name:de` where the list has a German name, plus the frasch:*
-    attributes.  `rows` are the name-list rows claiming the object, in file
-    order -- the first non-empty value wins."""
-    tags: dict[str, str] = {}
-    for d in reg:
-        tags["name:" + d["tag"]] = _first(
-            dialects.dialect_name(row, d["tag"], area_tag, reg) for row in rows
-        )
-    tags[GERMAN_KEY] = _first(placelist.primary(row["de"]) for row in rows)
-    tags[KIND_KEY] = _first(row["kind"] for row in rows)
-    tags[DIALECT_KEY] = area_tag or ""
-    tags[LOCAL_KEY] = _first(dialects.local_name(row, area_tag, reg) for row in rows)
-    tags[VARIETY_KEY] = _first(dialects.variety(row) for row in rows)
-    tags[REF_KEY] = rows[0]["id"]
-    return {k: v for k, v in tags.items() if v}
-
-
-def _first(values: Iterable[str]) -> str:
-    """The first non-empty value, or `""`."""
-    return next(filter(None, values), "")
-
-
 def point_tags(
     rows: Sequence[PlaceRow],
-    area_tag: str | None,
+    position: LonLat,
+    areas: dialects.AreaIndex | None,
     reg: Registry,
     curation_tags: Mapping[str, str],
     where: str = "",
 ) -> dict[str, str]:
-    """The tag dict of the node added for a local reference: the `place=` its
-    kind defaults to, a `name` (the German one -- the Frisian ones live in
-    `name:<tag>` like everywhere else; without it OpenMapTiles would drop the
-    node), the name tags, and last the curation row's own tags, which win."""
+    """The tag dict of the node added for a local reference at `position`:
+    the `place=` its kind defaults to, a `name` (the German one -- the Frisian
+    ones live in `name:<tag>` like everywhere else; without it OpenMapTiles
+    would drop the node), the name tags, and last the curation row's own
+    tags, which win."""
     row = rows[0]
+    obj = local_point(row, position, reg)
     tags = dict(curationlist.POINT_TAGS.get(row["kind"], {}))
-    name = placelist.point_name(row, reg)
-    if name:
-        tags["name"] = name
-    tags.update(name_tags(rows, area_tag, reg))
+    if "name" in obj:
+        tags["name"] = obj["name"]
+    tags.update(placenames.as_tags(placenames.resolve(rows, obj, areas, reg)))
     tags.update(curation_tags)
     if "place" not in tags:
         raise PipelineError(
@@ -285,13 +267,13 @@ def check_local(
         rows = by_id.get(key)
         if rows is None:
             continue
-        tags = point_tags(rows, None, reg, p["tags"], p["where"])
+        tags = point_tags(rows, (p["lon"], p["lat"]), None, reg, p["tags"], p["where"])
         if p["km2"] is not None and tags["place"] != "island":
             raise PipelineError(
                 f"{p['where']}: polygon_km2 on {placelist.format_osm([key])} "
                 f"needs place=island (got place={tags['place']}; "
                 f"OpenMapTiles labels polygons only as islands) -- "
-                f"put `place=island` in set_tags, keep frasch:kind"
+                f"put `place=island` in set_tags, keep {KIND_KEY}"
             )
 
 
@@ -358,7 +340,7 @@ def scan_waterways(path: str, by_id: Iterable[Ref]) -> dict[OsmRef, tuple[OsmRef
 def scan_osm_local(path: str, areas: dialects.AreaIndex | None) -> dict[OsmRef, str]:
     """OSM's own Frisian name (`name:frr`) of every object of the extract
     that lies in a dialect area -- there it is the local name of an object
-    the name list gives none (dialects.osm_local_name, #81).
+    the name list gives none (placenames.unclaimed_local, #81).
 
     One pass finds the objects that carry the tag, whatever they are (a
     place, a street, a station); frasch.locate then says where each lies,
@@ -368,10 +350,10 @@ def scan_osm_local(path: str, areas: dialects.AreaIndex | None) -> dict[OsmRef, 
     -> {('w', id): the name}"""
     if areas is None:
         return {}
-    names = osmscan.tagged(path, FRISIAN_KEY)
+    named = set(osmscan.tagged(path, FRISIAN_KEY))
     local = {
-        ref: dialects.osm_local_name(names[ref], dialect_at(obj, areas))
-        for ref, obj in locate.locate_in(path, set(names)).items()
+        ref: placenames.unclaimed_local(obj, areas)
+        for ref, obj in locate.locate_in(path, named).items()
     }
     return {ref: name for ref, name in local.items() if name}
 
@@ -462,24 +444,16 @@ class Injector:
         self.seen_cur: set[Ref] = set()
         self.n_objects = 0
 
-    def area_of(self, key: OsmRef, o: _OsmObject) -> str | None:
-        """The dialect spoken where this object lies, or None: from the
-        objects file (`frasch build objects`), which the search index reads too.
-        A node found only through its QID is asked at its own location; a
-        way or relation found that way gets none."""
+    def object_of(self, key: OsmRef, o: _OsmObject) -> LocatedObject | None:
+        """Where this object lies and what OSM says of it: from the objects
+        file (`frasch build objects`), which the search index reads too.  A
+        node found only through its QID is asked itself; a way or relation
+        found that way has no position, and so no dialect."""
         if key in self.objects:
-            return dialect_at(self.objects[key], self.areas)
+            return self.objects[key]
         if isinstance(o, osmium.osm.Node) and o.location.valid():
-            return dialect_at({"lon": o.location.lon, "lat": o.location.lat}, self.areas)
+            return point(o.location.lon, o.location.lat, **locate.object_facts(dict(o.tags)))
         return None
-
-    def name_frr_of(self, key: OsmRef, o: _OsmObject) -> str:
-        """OSM's own Frisian name of this object: from the objects file,
-        like its area (`area_of`).  An object found only through its QID is
-        asked itself."""
-        if key in self.objects:
-            return self.objects[key].get("name_frr", "")
-        return o.tags.get(FRISIAN_KEY) or ""
 
     def flush(self, t: str) -> None:
         """Write the synthetic nodes (t='w': before the first way) or ways
@@ -501,8 +475,7 @@ class Injector:
             if rows is None:
                 continue  # no name-list row uses it (reported in run)
             lon, lat = p["lon"], p["lat"]
-            area_tag = dialect_at({"lon": lon, "lat": lat}, self.areas)
-            tags = point_tags(rows, area_tag, self.reg, p["tags"], p["where"])
+            tags = point_tags(rows, (lon, lat), self.areas, self.reg, p["tags"], p["where"])
             self.seen_keys.add(key)
             self._count_names(tags)
             if p["km2"] is not None:
@@ -567,7 +540,7 @@ class Injector:
     def _count_names(self, tags: Mapping[str, str]) -> None:
         """Count an object's name tags, dialect and local name for the report."""
         for k in tags:
-            if k.startswith("name:"):
+            if k.startswith(LANGUAGE_PREFIX):
                 self.tag_hits[k] += 1
         if DIALECT_KEY in tags:
             self.area_hits[tags[DIALECT_KEY]] += 1
@@ -618,16 +591,12 @@ class Injector:
     def _row_tags(
         self, rows: Sequence[PlaceRow], area_key: OsmRef, o: _OsmObject
     ) -> dict[str, str]:
-        """The tags the rows claiming this object give it (`name_tags`).
-        Where no row has a local name, OSM's own Frisian name is it, inside
-        a dialect area (dialects.osm_local_name)."""
-        area_tag = self.area_of(area_key, o)
-        tags = name_tags(rows, area_tag, self.reg)
-        osm_local = dialects.osm_local_name(self.name_frr_of(area_key, o), area_tag)
-        if LOCAL_KEY not in tags and osm_local:
+        """The tags the rows claiming this object give it (placenames.resolve),
+        where the object of `area_key` lies."""
+        names = placenames.resolve(rows, self.object_of(area_key, o), self.areas, self.reg)
+        if names.local_from_osm:
             self.osm_local_hits["claimed"] += 1
-            tags[LOCAL_KEY] = osm_local
-        return tags
+        return placenames.as_tags(names)
 
     def _note_qid(self, o: _OsmObject) -> None:
         """Remember the row QID this object carries, if any, as present."""
@@ -657,7 +626,7 @@ class Injector:
             return None
         rel_key, rel_name = mem
         own = o.tags.get("name")
-        if not (own and (own == rel_name or o.tags.get("name:de") == rel_name)):
+        if not (own and (own == rel_name or o.tags.get(GERMAN_KEY) == rel_name)):
             return None
         self.member_hits += 1
         # the member inherits the river's area
@@ -693,7 +662,7 @@ def _square_with_names(
         k: v
         for k, v in tags.items()
         if k == "name"
-        or k.startswith("name:")
+        or k.startswith(LANGUAGE_PREFIX)
         or k in (DIALECT_KEY, LOCAL_KEY, VARIETY_KEY, REF_KEY)
     }
     ptags.update(square["tags"])
@@ -935,9 +904,9 @@ def _print_dialects(inj: Injector, reg: Registry, areas: dialects.AreaIndex | No
     """The names written per dialect and the objects per dialect area."""
     print("names written per dialect:")
     for d in reg:
-        n = inj.tag_hits["name:" + d["tag"]]
-        if n:
-            print(f"  name:{d['tag']:<15} {n:>5}  {d['label']}")
+        key = placenames.dialect_key(d["tag"])
+        if n := inj.tag_hits[key]:
+            print(f"  {key:<20} {n:>5}  {d['label']}")
     claimed, unclaimed = inj.osm_local_hits["claimed"], inj.osm_local_hits["unclaimed"]
     print(
         f"  {LOCAL_KEY:<20} {inj.local_hits:>5}  local form"

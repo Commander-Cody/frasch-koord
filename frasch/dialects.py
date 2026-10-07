@@ -1,17 +1,11 @@
-"""The name logic built on the dialect registry (frasch.registry), and
-the dialect areas.
+"""The dialect areas, built on the dialect registry (frasch.registry): the
+one reader of the area list, names/dialect_areas.csv (`area_rows`), and
+which dialect is spoken where (`AreaIndex`, over
+names/dialect_areas.geojson).
 
-One name belongs to a place beyond its dialect columns:
-
-* `local` -- the form the people of the place itself use where it differs from
-  the dialect of the surrounding area (sub-dialects such as Fahretoft's
-  Foortuftinge).  Empty means "same as the area's dialect".  `dialect_name`
-  and `local_name` below implement those two fallbacks; the area a place lies
-  in comes from `AreaIndex` (names/dialect_areas.geojson).  Where the list
-  gives no local name at all, OSM's own Frisian name is it inside a dialect
-  area (`osm_local_name`).
-
-The command that prints and exports the registry is `frasch dialects` (frasch.registry).
+Which names a place gets from the dialect of the area it lies in is
+frasch.placenames' rule.  The command that prints and exports the registry
+is `frasch dialects` (frasch.registry).
 """
 
 from __future__ import annotations
@@ -25,7 +19,7 @@ from shapely.geometry.base import BaseGeometry
 from frasch import placelist, tables
 from frasch.errors import Invalid, PipelineError, Problem
 from frasch.placelist import OsmRef, Row
-from frasch.registry import LOCAL_COLUMN, Registry
+from frasch.registry import Registry
 
 
 class AreaRow(TypedDict):
@@ -101,43 +95,6 @@ def _area_refs(row: Row, known: Collection[str], first_line: Mapping[OsmRef, int
             "", f"{placelist.format_osm(taken[:1])} is already on line {first_line[taken[0]]}"
         )
     return area_refs
-
-
-# --------------------------------------------------------------- names ----
-def dialect_name(row: Row, tag: str, area_tag: str | None, reg: Registry) -> str:
-    """The name of a place in one dialect, with one fallback: the dialect of
-    the place's own area falls back to the `local` column -- a sub-dialect
-    form such as Fahretoft's `Brouersweerw` IS the name in the area's
-    dialect, it is just not the form the rest of the area uses."""
-    name = placelist.primary(row.get(reg.column_of(tag)))
-    if not name and area_tag == tag:
-        name = placelist.primary(row.get(LOCAL_COLUMN))
-    return name
-
-
-def local_name(row: Row, area_tag: str | None, reg: Registry) -> str:
-    """What the people of the place themselves call it: the `local` column,
-    or -- when it is empty -- the name in the dialect of the area the place
-    lies in.  This is what the "local dialect" map view labels with."""
-    name = placelist.primary(row.get(LOCAL_COLUMN))
-    if not name and area_tag:
-        name = dialect_name(row, area_tag, area_tag, reg)
-    return name
-
-
-def osm_local_name(name_frr: str | None, area_tag: str | None) -> str:
-    """OSM's own Frisian name (`name:frr`) as the local name of an object
-    the name list gives none -- inside a dialect area only.  There it is
-    almost always the form the place itself uses; outside it is a Frisian
-    exonym (Pinneberg -> Pinebärj), which the local view must not show (#81)."""
-    return (name_frr or "") if area_tag else ""
-
-
-def variety(row: Row) -> str:
-    """The remark on the primary `local` variant -- the name of the local
-    variety (`Brouersweerw (Foortuftinge)` -> `Foortuftinge`), which the UI
-    can show next to the name.  `""` when there is none."""
-    return placelist.remark(row.get(LOCAL_COLUMN))
 
 
 # --------------------------------------------------------------- areas ----
