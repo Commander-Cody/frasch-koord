@@ -195,6 +195,11 @@ def test_of_several_rows_the_first_keeps_its_name() -> None:
     assert resolve(OUTSIDE, HULM, HULM_GUTSKUUCH).names["frr-x-mooring"] == "Hulm"
 
 
+def test_of_several_rows_the_first_keeps_its_german_name() -> None:
+    holm = HULM | {"de": "Holm"}
+    assert resolve(OUTSIDE, holm, HULM_GUTSKUUCH).name_de == "Holm"
+
+
 def test_a_later_row_gives_the_dialect_name_the_first_has_none_for() -> None:
     assert resolve(OUTSIDE, HULM, HULM_GUTSKUUCH).names["frr-x-wieding"] == "Hoolm"
 
