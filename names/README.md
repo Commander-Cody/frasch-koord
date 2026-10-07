@@ -111,9 +111,11 @@ uv run frasch dialects            # print the registry
 uv run frasch dialects --tags     # frr-x-mooring,frr-x-wieding,...  (tiles/build.sh)
 ```
 
-The shared name logic lives in `frasch/dialects.py`, on top of the
-registry's one reader (`frasch/registry.py`), because injector, exporter and
-frontend must agree on it:
+The shared name logic lives in `frasch/placenames.py` (`resolve`), on top of
+the registry's one reader (`frasch/registry.py`), because injector, exporter
+and frontend must agree on it. The injector writes its result as tags
+(`as_tags`), the exporter as a search entry (`as_entry`); the table
+`TILE_KEY` says which field of an entry is which tile key:
 
 * **the name of a place in dialect T** = its column, else — if T is the
   dialect of the area the place lies in — `local`
@@ -673,6 +675,7 @@ the commands.
 | `provenance` | prints the tiles' `built_from` stamp |
 | `check-outputs` | `just check-outputs`: the committed outputs match their inputs |
 | `inject` | writes the name tags into an OSM extract, before Planetiler (see `tiles/README.md`) |
+| `tile-keys` | prints the `frasch:*` attribute keys, for Planetiler's `--extra_name_tags` |
 | `check-tiles` | `just check-tiles`: the built tiles agree with `names.json` (see `tiles/README.md`) |
 
 One flag names the same file in every command, so the path of a file is
@@ -694,7 +697,7 @@ it as a parameter, and every command reads it from `--dialects`.
 
 Everything is typed and checked by `mypy --strict` in CI (tests included).
 A record with fixed keys is a `TypedDict` in the module that produces it
-(`candidates.Candidate`, `objects.LocatedObject`, `searchindex.SearchEntry`,
+(`candidates.Candidate`, `objects.LocatedObject`, `placenames.SearchEntry`,
 …); a row of `places.csv` is a plain `dict[str, str]` of its cells, and
 `placelist.read` returns them as `PlaceRow`s, which also know their `line`.
 
@@ -708,8 +711,9 @@ A record with fixed keys is a `TypedDict` in the module that produces it
 | `registry` | the one reader of `dialects.csv`, and its export for the frontend |
 | `placelist` | reads/writes/validates `places.csv`: cells, references, ids, the lock |
 | `curationlist` | the one reader of `curation.csv`, and appending to it |
-| `dialects` | the dialect name logic (`dialect_name`, `local_name`, `osm_local_name`), the one reader of `dialect_areas.csv` (`area_rows`) and the area lookup (`AreaIndex`) |
-| `objects` | reads and writes the objects file `osm_objects.json`; `dialect_at`, the one dialect lookup of injector and exporter; the one message for a reference the file has no object for |
+| `dialects` | the one reader of `dialect_areas.csv` (`area_rows`) and the area lookup (`AreaIndex`) |
+| `objects` | reads and writes the objects file `osm_objects.json`; the object a row's entry stands for (`Objects.for_row`); `dialect_at`, the one dialect lookup; the one message for a reference the file has no object for |
+| `placenames` | which names and attributes a place gets (`resolve`), as tile tags (`as_tags`) and as a search entry (`as_entry`); the tile keys and `TILE_KEY`, the table entry field → tile key; `frasch tile-keys` |
 | `geo` | the North Frisia box, its centre, haversine |
 | `osmscan`, `osmgeom` | the id-filtered passes over an extract; ring assembly and polygons |
 | `candidates`, `nameindex`, `hints` | the candidates file, the name index of the matcher and the curation export, location hints |

@@ -785,6 +785,42 @@ was missing), and `REPORT.md` was committed without any check.
   each file from the extracts it is given and no longer picks them by the
   file names in each stamp.
 
+## Decided 2026-10-07: one place-name rule, one table of tile keys (issue #93)
+
+"Which names and attributes does a place get" was composed twice from the
+same primitives: by the injector for the tiles (several rows per object) and
+by the search export (one row), and the mapping between an entry's fields and
+the tile keys was written out again in `check-tiles` and as a literal in
+`tiles/build.sh`. It is now one module, `frasch/placenames.py`: `resolve`
+holds the whole rule, the `name:frr` fallback inside a dialect area included;
+`as_tags` writes its result for the injector, `as_entry` for the index;
+`TILE_KEY` is the table entry field → tile key, and the key strings are
+defined there and nowhere else in the Python code.
+
+- **`check-tiles` compares everything the two share**: every field of
+  `TILE_KEY` and the name in every dialect, where it compared the dialect, the
+  local name and the German name. It reads the registry for that
+  (`--dialects`).
+- **An object two rows claim** (owner's decision): the rule stays "the first
+  non-empty value across the rows, the first row's id". The injector passes
+  every claiming row, the index its own, so tile output is unchanged;
+  `check-inputs` rejects such a claim, and `check-tiles` now reports what the
+  second row filled in.
+- **A curation row that sets `frasch:kind` on a row's own object** (owner's
+  decision) is a disagreement `check-tiles` reports; the fix is the row's
+  `kind`. No such row exists; the overrides in `curation.csv` sit on objects
+  without an entry.
+- **Planetiler's lists come from the commands**: `tiles/nametags.sh` builds
+  `--languages` and `--extra_name_tags` from `frasch dialects --tags` and the
+  new `frasch tile-keys`. A test runs it and fails when the injector writes a
+  key Planetiler is not told to carry.
+- **Objects that are not in the objects file** are built in
+  `frasch/objects.py`: `point`, `local_point` (a local reference's point, with
+  the generic name the injector gives it) and `Objects.for_row` (the object a
+  row's entry stands for). A node found through its QID alone is now read like
+  an object of the file (`locate.object_facts`).
+- The frontend's copy of the table (`web/src/names.ts`) is issue #104.
+
 ## Remaining open questions
 1. Hosting provider for the site (R2 + Pages proposed, nothing set up yet); the tiles are GitHub release assets for now (issue #28).
 2. When to do the planet build (needs the VM; only after the North Frisia build looks right).
