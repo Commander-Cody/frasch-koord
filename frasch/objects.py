@@ -1,7 +1,8 @@
 """The objects file, names/osm_objects.json: where the objects of the name
 list are, as frasch.locate worked it out.  The search index, the injector and
 `frasch check-outputs` read it (and `just update`, to tell whether it is
-stale).
+stale).  An object that is not in it is made here too: `point`, and
+`local_point` for a place OSM does not have.
 
 For every OSM reference in the `osm` column of a row that is on the map, the
 file records
@@ -37,12 +38,13 @@ from __future__ import annotations
 import json
 import os
 from collections.abc import Iterable, Mapping
-from typing import NamedTuple, NotRequired, TypedDict
+from typing import NamedTuple, NotRequired, TypedDict, Unpack
 
 from frasch import placelist
 from frasch.dialects import AreaIndex
 from frasch.errors import PipelineError, rebuild
-from frasch.placelist import OsmRef, PlaceRow, Ref
+from frasch.geo import LonLat
+from frasch.placelist import OsmRef, PlaceRow, Ref, Row
 from frasch.provenance import Stamp, unstamped
 from frasch.registry import Registry
 
@@ -67,6 +69,20 @@ class Point(TypedDict):
 class LocatedObject(Point, Facts):
     """One object of the objects file: where it is (`lon`, `lat`, and for
     an area the `outline` point too) and its `locate.object_facts`."""
+
+
+def point(lon: float, lat: float, **facts: Unpack[Facts]) -> LocatedObject:
+    """An object that is a point, with what is known of it (`Facts`)."""
+    at: Point = {"lon": lon, "lat": lat}
+    return {**at, **facts}
+
+
+def local_point(row: Row, position: LonLat, reg: Registry) -> LocatedObject:
+    """The point the injector adds for a row OSM has no object for (a local
+    reference): at its curation position, with the generic name the point
+    gets (`placelist.point_name`)."""
+    name = placelist.point_name(row, reg)
+    return point(*position, name=name) if name else point(*position)
 
 
 # -------------------------------------------------------------- dialects ----
@@ -113,6 +129,24 @@ class Objects(NamedTuple):
     def asked(self) -> set[OsmRef]:
         """The references the file was located for."""
         return set(self.by_ref) | self.not_found
+
+    def for_row(
+        self, row: PlaceRow, local_points: Mapping[str, LonLat], reg: Registry
+    ) -> LocatedObject | None:
+        """The object a row's search entry stands for: the object of the
+        first reference in its `osm` cell, or for a local reference the point
+        the injector adds (`local_point`; `local_points`: the curation's
+        position of each slug).  None for a row keyed by its QID alone."""
+        slug = placelist.local_ref(row["osm"])
+        if slug:
+            if slug not in local_points:
+                raise PipelineError(
+                    f"{row['id']} (line {row.line}): local/{slug} has no row with "
+                    f"lat/lon in the curation file"
+                )
+            return local_point(row, local_points[slug], reg)
+        refs = placelist.osm_refs(row["osm"])
+        return self.by_ref[refs[0]] if refs else None
 
     def missing(self, refs: Iterable[Ref]) -> list[OsmRef]:
         """The references to OSM objects among `refs` that the file has no
