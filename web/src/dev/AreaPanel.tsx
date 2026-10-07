@@ -11,7 +11,7 @@
  * coverage cannot be missed.
  *
  * Nothing writes back. Edit `names/dialect_areas.csv`, re-run
- * `just areas`, press Reload.
+ * `just rebuild areas`, press Reload.
  *
  * English-only on purpose, like the curation view: this is a tool, not the map.
  */
@@ -416,7 +416,7 @@ export default function AreaPanel({ mapRef }: AreaPanelProps) {
       needs={
         <>
           This view needs the Vite dev server (<code>npm run dev</code>) and the geometry built by{' '}
-          <code>just areas</code>.
+          <code>just rebuild areas</code>.
         </>
       }
       loaded={collection !== null}
@@ -524,7 +524,7 @@ export default function AreaPanel({ mapRef }: AreaPanelProps) {
               <p className="dev-panel-hint">
                 No row claims this municipality, so nothing inside it gets a dialect. To add it,
                 paste this into <code>names/dialect_areas.csv</code>, re-run
-                <code> just areas</code>, then press Reload.
+                <code> just rebuild areas</code>, then press Reload.
               </p>
               <button
                 type="button"

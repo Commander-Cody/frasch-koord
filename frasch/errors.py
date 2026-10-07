@@ -13,6 +13,13 @@ class PipelineError(Exception):
     file someone else is writing -- as opposed to a bug."""
 
 
+def rebuild(output: str) -> str:
+    """How to rebuild a generated file, for a message that says so: the
+    recipe of the output with this name in the pipeline's table
+    (frasch.pipeline)."""
+    return f"`just rebuild {output}`"
+
+
 @dataclass(frozen=True)
 class Problem:
     """One thing wrong with a hand-edited file, and the line it is on (the

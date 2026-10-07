@@ -1,8 +1,9 @@
 """`frasch <command>`: the one entry point of the pipeline.
 
-Each command is a module with a `main(argv)`; this is the table of them, by
-the names the just recipes use.  `frasch <command> --help` explains a
-command and its options.
+Each command is a module with a `main(argv)`; this is the table of them.  A
+just recipe that runs one command has the command's name -- but `rebuild`,
+which runs `frasch build`, since `just build` is the site's.
+`frasch <command> --help` explains a command and its options.
 """
 
 from __future__ import annotations
@@ -19,10 +20,9 @@ COMMANDS = {
     "check-inputs": ("check_inputs", "check the hand-edited name files for damage"),
     "candidates": ("build_candidates", "scan OSM extracts for every object that could be a place"),
     "match": ("match", "fill the empty osm cells of the name list"),
-    "objects": ("locate", "locate the name list's objects in OSM extracts"),
     "areas": ("build_dialect_areas", "build the dialect areas from the area list"),
-    "dialects": ("registry", "print the dialect registry, or export it for the frontend"),
-    "index": ("searchindex", "export the search index"),
+    "dialects": ("registry", "print the dialect registry"),
+    "build": ("pipeline", "build one of the pipeline's generated files"),
     "provenance": ("provenance", "print what the index and the tiles are built from"),
     "update": ("update", "bring every file the name list feeds up to date"),
     "check-outputs": ("check_outputs", "prove the committed outputs match their inputs"),

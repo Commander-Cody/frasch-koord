@@ -1,4 +1,4 @@
-"""`frasch objects`: where each object of the name list is, worked out once
+"""`frasch build objects`: where each object of the name list is, worked out once
 from the extract(s) into names/osm_objects.json -- the one answer the
 injector (tiles) and the search index share (#24)."""
 
@@ -181,8 +181,7 @@ def test_the_file_reads_back_by_reference(
     run_locate([{"kind": "settlement", "mooring": "Naibel", "osm": f"node/{NAIBEL}"}], pbf)
     objects = read_objects(str(world / "osm_objects.json"))
     assert objects.by_ref == {("n", NAIBEL): {"lon": 8.8285, "lat": 54.7868}}
-    extracts = objects.built_from["extracts"]
-    assert isinstance(extracts, list) and extracts[0]["file"] == "in.osm.pbf"
+    assert objects.stamp.extracts == [{"file": "in.osm.pbf", "replication_timestamp": ""}]
 
 
 def test_the_command_locates_the_rows_the_registry_of_its_option_puts_on_the_map(
@@ -197,7 +196,7 @@ def test_the_command_locates_the_rows_the_registry_of_its_option_puts_on_the_map
     (world / "places.csv").write_text(f"{header},strand\n{row},Strand\n", encoding="utf-8")
     pbf = write_extract(tmp_path / "in.osm.pbf", nodes={NAIBEL: ((8.8285, 54.7868), {})})
     files = path_options(workspace(world), "names", "objects")
-    assert main(["objects", str(pbf), *files, "--dialects", str(registry)]) == 0
+    assert main(["build", "objects", str(pbf), *files, "--dialects", str(registry)]) == 0
     objects = json.loads((world / "osm_objects.json").read_text(encoding="utf-8"))
     assert objects["objects"] == {f"node/{NAIBEL}": {"lon": 8.8285, "lat": 54.7868}}
 
@@ -223,3 +222,11 @@ def test_a_relation_whose_label_node_the_extract_lacks_is_at_a_member_it_has(
         [{"kind": "water", "mooring": "Weestsiie", "osm": "relation/9051063"}], pbf
     )
     assert objects["objects"]["relation/9051063"] == {"lon": 8.0, "lat": 54.0}
+
+
+def test_a_reference_no_extract_holds_is_recorded_as_not_found(
+    run_locate: RunLocate, tmp_path: Path
+) -> None:
+    pbf = write_extract(tmp_path / "in.osm.pbf", nodes={NAIBEL: ((8.8285, 54.7868), {})})
+    rows = [{"kind": "settlement", "mooring": "Naibel", "osm": f"node/{NAIBEL}; way/99"}]
+    assert run_locate(rows, pbf)["not_found"] == ["way/99"]

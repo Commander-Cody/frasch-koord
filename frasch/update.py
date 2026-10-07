@@ -3,24 +3,22 @@
     frasch update <in.osm.pbf> [<in.osm.pbf> ...] [--area-extract <pbf>]
 
 After an edit to places.csv, or a session in the curation view (`?curate`),
-this runs the pipeline's commands in their order:
+this runs, in order:
 
   ids and input check `check-inputs --fix`: give new rows an `id`, check the
                       hand-edited files
   curation decisions  `curate apply`, when the view left a patch
-  candidates          `candidates`                   -- only when stale
-  match               fill the empty `osm` cells of places.csv, REPORT.md
-  objects             `objects`, osm_objects.json     -- only when stale
-  areas               `areas`                         -- only when stale
-  dialect registry    web/src/generated/dialects.json
-  search index        web/public/data/names.json
+  the outputs         every generated file of the pipeline's table
+                      (frasch.pipeline), in its order: the candidates, the
+                      matcher with its report, the objects, the dialect
+                      areas, the dialect registry, the search index
   curation worklist   `curate export`: what is left for the view
   output check        `check-outputs`: the committed outputs match their inputs
 
-and ends with the files it changed and the rows left to curate.  The slow
-steps are skipped when their output was built from what is there now (see
-`candidates_stale`, `objects_stale`, `areas_stale`).  A step that fails
-stops the run.  A decision `apply` refuses does not: it stays in the patch,
+and ends with the files it changed and the rows left to curate.  An output
+whose build scans an extract -- the candidates, the objects, the dialect
+areas -- is skipped while it is not stale (`Output.due`); the others are
+built every time.  A step that fails stops the run.  A decision `apply` refuses does not: it stays in the patch,
 the rest of the run goes on, and the run exits 1 at its end.
 
 Every step works on the same workspace, and on the dialect registry as the
@@ -36,28 +34,13 @@ import enum
 import json
 import os
 import sys
-from collections.abc import Callable, Collection, Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 
-from frasch import (
-    build_candidates,
-    build_dialect_areas,
-    candidates,
-    check_inputs,
-    check_outputs,
-    cli,
-    curate,
-    locate,
-    match,
-    provenance,
-    registry,
-    searchindex,
-)
+from frasch import check_inputs, check_outputs, cli, curate, files, pipeline
 from frasch.errors import PipelineError
-from frasch.objects import read_objects
-from frasch.paths import StrPath, Workspace
-from frasch.placelist import OsmRef
-from frasch.provenance import ExtractStamp
+from frasch.paths import Workspace
+from frasch.pipeline import Extracts, Output, Run
 from frasch.registry import Registry
 
 
@@ -98,33 +81,6 @@ def unless(failed: Callable[[], object], otherwise: Outcome) -> Callable[[], Out
     return lambda: otherwise if failed() else Outcome.DONE
 
 
-def candidates_stale(path: StrPath, extracts: list[ExtractStamp]) -> bool:
-    """Are the candidates missing, or built from other extracts than
-    `extracts` (another set, or another download of one)?  The scan takes
-    minutes; a name list edit alone never needs it."""
-    return not os.path.exists(path) or candidates.read_header(path) != extracts
-
-
-def objects_stale(path: StrPath, refs: Collection[OsmRef], extracts: list[ExtractStamp]) -> bool:
-    """Is the objects file missing, or does it hold other references than
-    `refs` (the rows on the map), or come from other extracts?  An object
-    only moves when the extract does."""
-    if not os.path.exists(path):
-        return True
-    objects = read_objects(os.fspath(path))
-    return set(objects.by_ref) != set(refs) or objects.built_from["extracts"] != extracts
-
-
-def areas_stale(ws: Workspace, extracts: list[ExtractStamp]) -> bool:
-    """Is either dialect area file missing, or built from another area list,
-    registry or extract than the workspace's and `extracts`?"""
-    current = build_dialect_areas.stamp(ws, extracts)
-    return any(
-        not os.path.exists(path) or provenance.recorded(path) != current
-        for path in (ws.areas, ws.parts)
-    )
-
-
 @dataclass
 class Inputs:
     """What a run works on: its workspace and extracts, and the dialect
@@ -132,8 +88,7 @@ class Inputs:
     that once, and every later step works on the same registry."""
 
     ws: Workspace
-    extracts: Sequence[str]
-    area_extract: str
+    extracts: Extracts
     checked: Registry | None = None
 
     @property
@@ -141,6 +96,11 @@ class Inputs:
         if self.checked is None:
             raise RuntimeError("the dialect registry is asked for before the input check has run")
         return self.checked
+
+    @property
+    def run(self) -> Run:
+        """What the outputs are built from."""
+        return Run(self.ws, self.reg, self.extracts)
 
     def check(self) -> Outcome:
         """The first step: give new rows an id and check the hand-edited files."""
@@ -150,10 +110,9 @@ class Inputs:
 
 
 def steps(inputs: Inputs) -> list[Step]:
-    """The run's steps, in order."""
-    ws, extracts, area_extract = inputs.ws, inputs.extracts, inputs.area_extract
-    stamps = locate.extract_stamps(extracts)
-    area_stamps = locate.extract_stamps([area_extract])
+    """The run's steps, in order: around the outputs of the pipeline's table,
+    what is no output -- the inputs' check, the curation and the last check."""
+    ws = inputs.ws
     return [
         Step("ids and input check", inputs.check),
         Step(
@@ -162,52 +121,38 @@ def steps(inputs: Inputs) -> list[Step]:
             needed=lambda: os.path.exists(ws.patch),
             skipped="none made",
         ),
-        Step(
-            "candidates",
-            done(lambda: build_candidates.run(ws, extracts)),
-            needed=lambda: candidates_stale(ws.candidates, stamps),
-        ),
-        Step("match", unless(lambda: match.run(ws, inputs.reg), Outcome.FAILED)),
-        Step(
-            "objects",
-            done(lambda: locate.run(ws, inputs.reg, extracts)),
-            needed=lambda: objects_stale(ws.objects, locate.wanted_refs(ws, inputs.reg), stamps),
-        ),
-        Step(
-            "areas",
-            done(lambda: build_dialect_areas.run(ws, inputs.reg, [area_extract])),
-            needed=lambda: areas_stale(ws, area_stamps),
-        ),
-        Step(
-            "dialect registry",
-            done(lambda: registry.export_json(inputs.reg, ws.registry_json)),
-        ),
-        Step("search index", done(lambda: searchindex.run(ws, inputs.reg))),
+        *(build_step(output, inputs) for output in pipeline.OUTPUTS),
         Step("curation worklist", done(lambda: curate.export(ws, inputs.reg))),
-        Step("output check", unless(lambda: check_outputs.run(ws, inputs.reg), Outcome.FAILED)),
+        # without the extracts: with them, the check would scan them again
+        Step(
+            "output check",
+            unless(lambda: check_outputs.run(Run(ws, inputs.reg)), Outcome.FAILED),
+        ),
     ]
 
 
-def outputs(ws: Workspace) -> list[str]:
-    """The files of the repository a run may change."""
-    return [
-        ws.names,
-        ws.curation,
-        ws.report,
-        ws.objects,
-        ws.areas,
-        ws.parts,
-        ws.index,
-        ws.registry_json,
-    ]
+def build_step(output: Output, inputs: Inputs) -> Step:
+    """The step that builds an output, when it is due."""
+    return Step(
+        output.name,
+        done(lambda: output.build(inputs.run)),
+        needed=lambda: output.due(inputs.run),
+    )
 
 
-def contents(files: Sequence[str]) -> dict[str, str | None]:
-    """Each file's blob hash, None when it does not exist."""
-    return {f: provenance.blob_hash(f) if os.path.exists(f) else None for f in files}
+def tracked(ws: Workspace) -> list[str]:
+    """The files of the repository a run may change: the two it edits, and
+    the committed outputs."""
+    built = [path for output in pipeline.OUTPUTS if output.committed for path in output.paths(ws)]
+    return [ws.names, ws.curation, *built]
 
 
-def summary(before: Mapping[str, str | None], worklist: str) -> str:
+def contents(paths: Sequence[str]) -> dict[str, str]:
+    """Each file's fingerprint."""
+    return {path: files.fingerprint(path) for path in paths}
+
+
+def summary(before: Mapping[str, str], worklist: str) -> str:
     """What the run changed (`before`: `contents` at its start) and what is
     left for the curator."""
     changed = [os.path.relpath(f) for f, was in before.items() if contents([f])[f] != was]
@@ -238,13 +183,12 @@ def run(ws: Workspace, extracts: Sequence[str], area_extract: str | None = None)
     in (see the module docstring); -> the exit status.  `area_extract`: the
     extract the dialect areas are built from, the first of `extracts` when
     None."""
-    area_extract = area_extract or extracts[0]
-    missing = [p for p in dict.fromkeys([*extracts, area_extract]) if not os.path.exists(p)]
-    if missing:
-        raise PipelineError(f"{', '.join(missing)} not found -- download it with `just extracts`")
-    before = contents(outputs(ws))
+    given = Extracts.given(extracts, area_extract)
+    if given is None:
+        raise PipelineError("no OSM extract to bring the name files up to date from")
+    before = contents(tracked(ws))
     warned = []
-    for step in steps(Inputs(ws, extracts, area_extract)):
+    for step in steps(Inputs(ws, given)):
         if not step.needed():
             print(f"== {step.name}: {step.skipped}")
             continue
@@ -269,11 +213,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument(
         "extracts", nargs="+", metavar="PBF", help="the OSM extracts the name list's objects are in"
     )
-    ap.add_argument(
-        "--area-extract",
-        metavar="PBF",
-        help="the extract the dialect areas are built from (default: the first of the extracts)",
-    )
+    pipeline.add_area_extract_option(ap)
     cli.add_workspace_options(ap, *cli.WORKSPACE_FILES, cli.WORK)
     a = ap.parse_args(argv)
     return run(cli.workspace(a), a.extracts, a.area_extract)

@@ -14,6 +14,7 @@ from frasch import candidates
 from frasch.__main__ import main
 from frasch.build_candidates import WayCentroids
 from frasch.paths import Workspace
+from frasch.provenance import Stamp
 from conftest import cand, write_candidates
 from osm_fixture import write_extract
 
@@ -63,7 +64,8 @@ def build(tmp_path: Path, *pbfs: Path) -> Path:
 
 def test_header_names_every_extract_with_its_timestamp(tmp_path: Path) -> None:
     out = build(tmp_path, *extracts(tmp_path))
-    assert candidates.read_header(out) == [
+    header = Stamp.read(out)
+    assert header is not None and header.extracts == [
         {
             "file": "schleswig-holstein-latest.osm.pbf",
             "replication_timestamp": "2026-09-20T20:21:02Z",
@@ -82,7 +84,7 @@ def test_a_file_from_before_the_header_has_none_and_all_records(tmp_path: Path) 
     legacy = write_candidates(
         tmp_path / "candidates.jsonl", cand("n", 1, 8.83, 54.71, name="Toftum", place="village")
     )
-    assert candidates.read_header(legacy) is None
+    assert Stamp.read(legacy) is None
     assert [r["id"] for r in candidates.read_records(legacy)] == [1]
 
 

@@ -18,10 +18,13 @@ What gets written where
                           ambiguous rows.  Git-ignored.
   names/REPORT.md         the hand-review worklist.  Depends on the inputs
                           alone (no date), so an unchanged run leaves it as is.
-  names/work/match-extracts.json
-                          the extracts the candidates came from (the header of
-                          candidates.jsonl) -- the next run warns when that set
-                          changed.  Git-ignored; lives next to the candidates.
+                          Its last line is the stamp of what it was written
+                          from (frasch.provenance): the name list as the run
+                          left it, the dialect registry and the extracts the
+                          candidates came from (the header of candidates.jsonl).
+                          `frasch check-outputs` fails on a report from another
+                          name list, and the next run warns when the set of
+                          extracts changed.
   With --dry-run only work/matches.csv is written.
 
 Ranking / decision
@@ -44,8 +47,8 @@ Changed extracts
   A row the matcher filled from an object of one extract alone loses it when
   the candidates are rebuilt without that extract -- the Danish places (Fanø,
   Hoyer, Ripen, Röm, ...) exist only in the Denmark extract.  So every run
-  compares the extract files of candidates.jsonl with those of the last real
-  run, and warns on stderr when one was added or dropped.  A newer download of
+  compares the extract files of candidates.jsonl with those the report of the
+  last real run names, and warns on stderr when one was added or dropped.  A newer download of
   the same extract (only its replication timestamp differs) is no warning.
 
 places.csv is written in one step (never half), and not at all if it changed
@@ -68,7 +71,7 @@ from typing import TYPE_CHECKING, NamedTuple, TypedDict
 
 from frasch import candidates, cli, files, placelist, registry
 from frasch.candidates import ISLAND_PLACES, Candidate, decisive_tags, osm_key
-from frasch.errors import PipelineError
+from frasch.errors import PipelineError, rebuild
 from frasch.geo import NF_CENTRE, haversine, in_north_frisia
 from frasch.hints import Circle, HintResolver
 from frasch.nameindex import NameIndex, norm
@@ -87,7 +90,7 @@ from frasch.placelist import (
     primary,
     variants,
 )
-from frasch.provenance import ExtractStamp
+from frasch.provenance import ExtractStamp, Stamp
 from frasch.registry import Registry
 
 if TYPE_CHECKING:
@@ -930,20 +933,11 @@ def find_duplicates(rows: Iterable[PlaceRow]) -> dict[Ref, list[PlaceRow]]:
 
 
 # --------------------------------------------------------------- extracts ----
-def read_used_extracts(path: str) -> list[ExtractStamp] | None:
-    """The extracts the last real run matched against, as the candidates
-    header lists them; None before the first such run."""
-    if not os.path.exists(path):
-        return None
-    with open(path, encoding="utf-8") as fh:
-        extracts: list[ExtractStamp] = json.load(fh)["extracts"]
-    return extracts
-
-
-def record_used_extracts(path: str, extracts: Sequence[ExtractStamp]) -> None:
-    files.atomic_write(
-        path, json.dumps({"extracts": extracts}, ensure_ascii=False, indent=1) + "\n"
-    )
+def stamp(ws: Workspace, extracts: Sequence[ExtractStamp] | None) -> Stamp:
+    """What the report is written from: the name list as the run leaves it,
+    the dialect registry, and the extracts behind the candidates (None: not
+    at hand, see `Stamp`)."""
+    return Stamp.of({"places.csv": ws.names, "dialects.csv": ws.dialects}, extracts)
 
 
 def extract_set_warning(
@@ -967,19 +961,23 @@ def extract_set_warning(
         "warning: the candidates come from other extracts than the last "
         "`frasch match`; "
         + "; ".join(parts)
-        + ". Rebuild them with `just candidates` from every extract "
+        + f". Rebuild them with {rebuild('candidates')} from every extract "
         "unless that is intended."
     )
 
 
-def check_extracts(candidates_path: str, state_path: str) -> list[ExtractStamp] | None:
-    """Print the extracts behind the candidates, warn about a changed set, and
-    return them (None for a file from before the header)."""
-    extracts = candidates.read_header(candidates_path)
+def check_extracts(candidates_path: str, report_path: str) -> Sequence[ExtractStamp] | None:
+    """Print the extracts behind the candidates, warn when the report of the
+    last real run names another set, and return them (None for a file from
+    before the header).  Stops when there are no candidates."""
+    if not os.path.exists(candidates_path):
+        raise PipelineError(f"{candidates_path} not found -- build it with {rebuild('candidates')}")
+    header = Stamp.read(candidates_path)
+    extracts = header.extracts if header else None
     if extracts is None:
         print(
             f"warning: {candidates_path} names no extracts (written before "
-            f"it had a header) -- rebuild it with `just candidates`",
+            f"it had a header) -- rebuild it with {rebuild('candidates')}",
             file=sys.stderr,
         )
         return None
@@ -989,9 +987,9 @@ def check_extracts(candidates_path: str, state_path: str) -> list[ExtractStamp] 
             f"{e['file']} ({e['replication_timestamp'] or 'no timestamp'})" for e in extracts
         )
     )
-    previous = read_used_extracts(state_path)
-    if previous is not None:
-        warning = extract_set_warning(previous, extracts)
+    previous = Stamp.read(report_path)
+    if previous and previous.extracts:
+        warning = extract_set_warning(previous.extracts, extracts)
         if warning:
             print(warning, file=sys.stderr)
     return extracts
@@ -1012,17 +1010,23 @@ REPORT_STATES = [
 
 
 def write_report(
-    rows: Sequence[PlaceRow], results: Mapping[str, MatchResult], path: str, reg: Registry
+    rows: Sequence[PlaceRow],
+    results: Mapping[str, MatchResult],
+    path: str,
+    reg: Registry,
+    built_from: Stamp,
 ) -> None:
     """`results` maps a row's id to its match_row() output (only for the rows
     the matcher owns).  The report depends on these alone -- no date, no run
-    time -- so a run on unchanged inputs leaves the tracked file as it was."""
+    time -- so a run on unchanged inputs leaves the tracked file as it was.
+    Its last line is the stamp of what it was written from, `built_from`."""
     lines = (
         _report_intro(rows)
         + _counts_section(rows, results, reg)
         + _ambiguous_section(rows, results, reg)
         + _duplicates_section(rows, reg)
         + _not_found_section(rows, results, reg)
+        + [built_from.as_comment(), ""]
     )
     with open(path, "w", encoding="utf-8") as fh:
         fh.write("\n".join(lines))
@@ -1233,7 +1237,7 @@ def _run(ws: Workspace, reg: Registry, offline: bool, dry_run: bool) -> int:
     rows, fields = placelist.read(ws.names, reg)
     print(f"loaded {len(rows)} rows from {ws.names}")
 
-    extracts = check_extracts(ws.candidates, ws.extracts_state)
+    extracts = check_extracts(ws.candidates, ws.report)
     index = NameIndex(candidates.read_records(ws.candidates))
     print(
         f"indexed {len(index.recs):,} candidates / "
@@ -1273,9 +1277,7 @@ def _run(ws: Workspace, reg: Registry, offline: bool, dry_run: bool) -> int:
     write_matches(rows, results, index, ws.matches, reg)
     if not dry_run:
         placelist.write(rows, ws.names, fields)
-        write_report(rows, results, ws.report, reg)
-        if extracts is not None:
-            record_used_extracts(ws.extracts_state, extracts)
+        write_report(rows, results, ws.report, reg, stamp(ws, extracts or []))
 
     cnt = collections.Counter(o["status"] for o in results.values())
     print(
@@ -1311,7 +1313,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         "candidates",
         "matches",
         "wikidata_cache",
-        "extracts_state",
         "work",
     )
     ap.add_argument(

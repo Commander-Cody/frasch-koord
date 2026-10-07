@@ -89,3 +89,20 @@ def test_a_node_without_a_valid_location_is_left_out(tmp_path: Path) -> None:
         )
     )
     assert set(osmscan.nodes(path, {1, 2})) == {1}
+
+
+def test_an_extract_is_named_by_its_file_and_replication_timestamp(tmp_path: Path) -> None:
+    pbf = write_extract(
+        tmp_path / "denmark-latest.osm.pbf",
+        nodes={1: ((8.5, 55.0), {})},
+        timestamp="2026-09-22T20:22:59Z",
+    )
+    assert osmscan.extract_stamp(pbf) == {
+        "file": "denmark-latest.osm.pbf",
+        "replication_timestamp": "2026-09-22T20:22:59Z",
+    }
+
+
+def test_an_extract_without_a_timestamp_says_so(tmp_path: Path) -> None:
+    pbf = write_extract(tmp_path / "x.osm.pbf", nodes={1: ((8.5, 55.0), {})})
+    assert osmscan.extract_stamp(pbf)["replication_timestamp"] == ""

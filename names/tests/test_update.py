@@ -5,51 +5,27 @@ from __future__ import annotations
 
 import csv
 import json
-from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
 
-from frasch import build_dialect_areas, placelist, provenance, registry, update
+from frasch import placelist, registry, update
 from frasch.__main__ import main
 from frasch.errors import PipelineError, Problem
-from frasch.objects import Objects, objects_json
-from frasch.provenance import ExtractStamp
-from conftest import REGISTRY_CSV, cand, path_options, places_text, write_candidates
+from conftest import AREA_LIST, REGISTRY_CSV, TOFTUM_NODE, path_options, places_text
 from conftest import workspace as workspace_of
-from osm_fixture import Nodes, ring, write_extract
+from conftest import write_sh_extract
 
-AREA_LIST = "dialect,name,osm,note\nfrr-x-mooring,Niebüll,relation/1,\n"
 # a dialect the registry of the tests does not have
 STRAND = "frr-x-strand,strand,Strander,extinct,no,\n"
-# a village inside the Mooring area of the fixture extract
-TOFTUM_NODE = ((8.83, 54.71), {"name": "Toftum", "place": "village"})
-# a row the matcher finds in it, and one it does not
+# a row the matcher finds in the extract, and one it does not
 TOFTEM = {"id": "toftem", "kind": "settlement", "mooring": "Toftem", "de": "Toftum"}
 HESBEL = {"id": "hesbel", "kind": "settlement", "mooring": "Hesbel", "de": "Hesbüll"}
 
 
 @pytest.fixture
-def workspace(world: Path) -> Path:
-    """`world` with the rest of the pipeline's inputs: one dialect area, and
-    an extract holding it and one village."""
-    (world / "dialect_areas.csv").write_text(AREA_LIST, encoding="utf-8")
-    write_sh_extract(world)
-    return world
-
-
-def write_sh_extract(
-    world: Path, timestamp: str = "2026-09-20T20:21:02Z", more_nodes: Nodes | None = None
-) -> Path:
-    area, way = ring(10, (8.7, 54.6), (8.9, 54.6), (8.9, 54.8), (8.7, 54.8))
-    nodes: Nodes = {**area, 240044107: TOFTUM_NODE, **(more_nodes or {})}
-    return write_extract(
-        world / "schleswig-holstein-latest.osm.pbf",
-        nodes,
-        {5: (way, {})},
-        {1: ([("w", 5, "outer")], {"boundary": "administrative"})},
-        timestamp=timestamp,
-    )
+def workspace(pipeline_world: Path) -> Path:
+    return pipeline_world
 
 
 def run(world: Path, area_extract: Path | None = None) -> int:
@@ -181,6 +157,11 @@ def test_a_missing_extract_stops_the_run_with_how_to_get_it(workspace: Path) -> 
     assert not index_file(workspace).exists()
 
 
+def test_a_run_without_an_extract_stops(workspace: Path) -> None:
+    with pytest.raises(PipelineError, match="no OSM extract"):
+        update.run(workspace_of(workspace), [])
+
+
 def test_a_second_run_on_the_same_extracts_skips_the_slow_steps(
     workspace: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -192,6 +173,17 @@ def test_a_second_run_on_the_same_extracts_skips_the_slow_steps(
     assert "== candidates: up to date" in out
     assert "== objects: up to date" in out
     assert "== areas: up to date" in out
+
+
+def test_a_second_run_runs_the_matcher_again(
+    workspace: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # it depends on Wikidata's answers too, which no stamp of its report covers
+    write_places(workspace, TOFTEM)
+    assert run(workspace) == 0
+    capsys.readouterr()
+    assert run(workspace) == 0
+    assert "== report\n" in capsys.readouterr().out
 
 
 def test_a_new_download_of_an_extract_rebuilds_the_candidates(
@@ -243,107 +235,6 @@ def test_a_run_reads_the_dialect_registry_once(
     monkeypatch.setattr(registry, "rows", counted)
     assert run(workspace) == 0
     assert reads == [workspace_of(workspace).dialects]
-
-
-# -------------------------------------------------------------- skip rules ---
-SH: ExtractStamp = {
-    "file": "schleswig-holstein-latest.osm.pbf",
-    "replication_timestamp": "2026-09-20T20:21:02Z",
-}
-DK: ExtractStamp = {
-    "file": "denmark-latest.osm.pbf",
-    "replication_timestamp": "2026-09-20T20:20:00Z",
-}
-DK_REFRESHED: ExtractStamp = {
-    "file": "denmark-latest.osm.pbf",
-    "replication_timestamp": "2026-09-30T20:20:00Z",
-}
-
-
-def test_candidates_are_stale_until_built_from_the_current_extracts(tmp_path: Path) -> None:
-    path = tmp_path / "candidates.jsonl"
-    assert update.candidates_stale(path, [SH, DK])
-    write_candidates(path, {"header": {"extracts": [SH, DK]}})
-    assert not update.candidates_stale(path, [SH, DK])
-    assert update.candidates_stale(path, [SH])
-    assert update.candidates_stale(path, [SH, DK_REFRESHED])
-
-
-def test_candidates_without_a_header_are_stale(tmp_path: Path) -> None:
-    path = write_candidates(
-        tmp_path / "candidates.jsonl", cand("n", 1, 8.83, 54.71, name="Toftum", place="village")
-    )
-    assert update.candidates_stale(path, [SH])
-
-
-def test_objects_are_stale_until_located_for_the_current_references_and_extracts(
-    tmp_path: Path,
-) -> None:
-    path = tmp_path / "osm_objects.json"
-    assert update.objects_stale(path, {("n", 1)}, [SH])
-    path.write_text(
-        objects_json(Objects({("n", 1): {"lon": 8.83, "lat": 54.71}}, {"extracts": [SH]})),
-        encoding="utf-8",
-    )
-    assert not update.objects_stale(path, {("n", 1)}, [SH])
-    assert update.objects_stale(path, {("n", 1), ("w", 2)}, [SH])  # a new reference
-    assert update.objects_stale(path, set(), [SH])  # a row went
-    assert update.objects_stale(path, {("n", 1)}, [SH, DK])
-
-
-def write_area_files(
-    paths: Sequence[Path], area_list: Path, registry: Path, extract: ExtractStamp
-) -> None:
-    """Dialect area files (no features) stamped as built from these inputs."""
-    stamp = {
-        "dialect_areas.csv": provenance.blob_hash(area_list),
-        "dialects.csv": provenance.blob_hash(registry),
-        "extracts": [extract],
-    }
-    for path in paths:
-        path.write_text(
-            json.dumps(
-                {"type": "FeatureCollection", "features": [], "properties": {"built_from": stamp}}
-            ),
-            encoding="utf-8",
-        )
-
-
-def test_dialect_areas_are_stale_until_built_from_the_current_inputs(workspace: Path) -> None:
-    ws = workspace_of(workspace)
-    area_list, outputs = Path(ws.area_list), [Path(ws.areas), Path(ws.parts)]
-    assert update.areas_stale(ws, [SH])
-    write_area_files(outputs, area_list, Path(ws.dialects), SH)
-    assert not update.areas_stale(ws, [SH])
-    assert update.areas_stale(ws, [DK])
-    area_list.write_text(AREA_LIST + "frr-x-fering,Wyk,relation/2,\n", encoding="utf-8")
-    assert update.areas_stale(ws, [SH])
-
-
-def test_dialect_areas_are_stale_after_a_registry_edit(workspace: Path) -> None:
-    ws = workspace_of(workspace)
-    extract = workspace / "schleswig-holstein-latest.osm.pbf"
-    build_dialect_areas.run(ws, registry.read(ws.dialects), [extract])
-    assert not update.areas_stale(ws, [SH])
-    dialects_csv = Path(ws.dialects)
-    text = dialects_csv.read_text(encoding="utf-8")
-    dialects_csv.write_text(text.replace(",Mooring,", ",Mooring (edited),", 1), encoding="utf-8")
-    assert update.areas_stale(ws, [SH])
-
-
-def test_dialect_areas_are_stale_when_one_of_the_two_files_is(workspace: Path) -> None:
-    ws = workspace_of(workspace)
-    write_area_files([Path(ws.areas)], Path(ws.area_list), Path(ws.dialects), SH)
-    assert update.areas_stale(ws, [SH])
-
-
-def test_dialect_areas_without_a_stamp_are_stale(workspace: Path) -> None:
-    ws = workspace_of(workspace)
-    for path in (ws.areas, ws.parts):
-        Path(path).write_text(
-            json.dumps({"type": "FeatureCollection", "features": []}), encoding="utf-8"
-        )
-    assert update.areas_stale(ws, [SH])
 
 
 # ------------------------------------------------------------- the command ---

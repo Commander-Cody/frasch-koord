@@ -9,11 +9,14 @@ from pathlib import Path
 
 import pytest
 
-from frasch import build_dialect_areas, check_outputs, locate, provenance, registry, searchindex
+from frasch import build_dialect_areas, check_outputs, locate, match, registry
+from frasch import searchindex
 from frasch.__main__ import main
 from frasch.objects import Objects, objects_json
 from frasch.paths import Workspace
-from conftest import REGISTRY_CSV, path_options, places_text
+from frasch.pipeline import Extracts, Run
+from frasch.provenance import Stamp
+from conftest import AREA_LIST, REGISTRY_CSV, path_options, places_text
 from osm_fixture import Relations, RingNodes, ring, write_extract
 
 NAIBEL = {
@@ -24,7 +27,7 @@ NAIBEL = {
     "osm": "node/240042766",
     "status": "ok",
 }
-AREA_LIST = "dialect,name,osm,note\nfrr-x-mooring,Niebüll,relation/1,\n"
+NAIBEL_NODE = ("n", 240042766)
 
 # the `extract` fixture: the workspace, its extract, and the extract's nodes,
 # ring way and relations
@@ -36,11 +39,7 @@ def repo(ws: Workspace, world: Path) -> Workspace:
     """A workspace whose outputs are all up to date."""
     (world / "places.csv").write_text(places_text([NAIBEL]), encoding="utf-8")
     (world / "dialect_areas.csv").write_text(AREA_LIST, encoding="utf-8")
-    stamp = {
-        "dialect_areas.csv": provenance.blob_hash(world / "dialect_areas.csv"),
-        "dialects.csv": provenance.blob_hash(world / "dialects.csv"),
-        "extracts": [],
-    }
+    stamp = build_dialect_areas.stamp(ws, []).as_json()
     for name in ("dialect_areas.geojson", "dialect_areas_parts.geojson"):
         (world / name).write_text(
             json.dumps(
@@ -48,12 +47,21 @@ def repo(ws: Workspace, world: Path) -> Workspace:
             ),
             encoding="utf-8",
         )
-    (world / "osm_objects.json").write_text(
-        objects_json(Objects({("n", 240042766): {"lon": 8.83, "lat": 54.79}}, {"extracts": []})),
-        encoding="utf-8",
-    )
+    write_objects(ws, Objects({NAIBEL_NODE: {"lon": 8.83, "lat": 54.79}}, Stamp({}, [])))
+    write_report(ws)
     export(ws)
     return ws
+
+
+def write_objects(ws: Workspace, objects: Objects) -> None:
+    Path(ws.objects).write_text(objects_json(objects), encoding="utf-8")
+
+
+def write_report(ws: Workspace) -> None:
+    """Write a report stamped as the matcher would stamp it now."""
+    Path(ws.report).write_text(
+        f"# Name matching report\n\n{match.stamp(ws, []).as_comment()}\n", encoding="utf-8"
+    )
 
 
 def export(ws: Workspace) -> None:
@@ -66,48 +74,66 @@ def export(ws: Workspace) -> None:
 
 def problems(ws: Workspace, *extracts: Path) -> str:
     """What the check finds wrong with `ws`, a line each."""
-    found = check_outputs.problems(ws, registry.read(ws.dialects), [str(p) for p in extracts])
-    return "\n".join(found)
+    given = Extracts.given([str(p) for p in extracts])
+    return "\n".join(check_outputs.problems(Run(ws, registry.read(ws.dialects), given)))
 
 
 def test_up_to_date_outputs_pass(repo: Workspace) -> None:
     assert problems(repo) == ""
 
 
-def test_an_index_built_from_another_name_list_fails(repo: Workspace, world: Path) -> None:
+def test_an_output_a_rebuild_gives_another_file_for_fails(repo: Workspace, world: Path) -> None:
+    # the frontend's registry carries no stamp: only the rebuild can tell
+    dialects = world / "dialects.csv"
+    text = dialects.read_text(encoding="utf-8")
+    dialects.write_text(text.replace(",Mooring,", ",Mooring (edited),", 1), encoding="utf-8")
+    assert (
+        f"{repo.registry_json} is not what its inputs give -- rebuild it with "
+        "`just rebuild dialects`"
+    ) in problems(repo)
+
+
+def test_a_report_written_from_another_name_list_fails(repo: Workspace, world: Path) -> None:
     (world / "places.csv").write_text(
-        places_text([NAIBEL | {"mooring": "Naibel;Niebel"}]), encoding="utf-8"
+        places_text([NAIBEL | {"de": "Niebüll; Naibel"}]), encoding="utf-8"
     )
-    assert "names.json" in problems(repo)
-
-
-def test_a_registry_edit_without_an_export_fails(repo: Workspace, world: Path) -> None:
-    registry = world / "dialects.csv"
-    text = registry.read_text(encoding="utf-8")
-    registry.write_text(text.replace(",Mooring,", ",Mooring (edited),", 1), encoding="utf-8")
-    assert "dialects.json" in problems(repo)
-
-
-def test_dialect_areas_built_from_another_area_list_fail(repo: Workspace, world: Path) -> None:
-    (world / "dialect_areas.csv").write_text(
-        AREA_LIST + "frr-x-fering,Wyk,relation/2,\n", encoding="utf-8"
+    export(repo)
+    assert problems(repo) == (
+        f"{repo.report} was not built from the current places.csv "
+        "-- rebuild it with `just rebuild report`"
     )
-    out = problems(repo)
-    assert "dialect_areas.geojson" in out and "dialect_areas_parts.geojson" in out
-    assert "just areas" in out
 
 
-def test_dialect_areas_without_a_stamp_fail(repo: Workspace, world: Path) -> None:
-    (world / "dialect_areas_parts.geojson").write_text(
-        json.dumps({"type": "FeatureCollection", "features": []}), encoding="utf-8"
+def test_a_missing_output_fails(repo: Workspace) -> None:
+    Path(repo.objects).unlink()
+    assert f"{repo.objects} is not there -- rebuild it with `just rebuild objects`" in problems(
+        repo
     )
-    out = problems(repo)
-    assert "dialect_areas_parts.geojson" in out and "just areas" in out
+
+
+def test_a_missing_output_that_another_is_built_from_fails(repo: Workspace) -> None:
+    # the search index is stamped with the dialect areas' hash
+    Path(repo.areas).unlink()
+    assert f"{repo.areas} is not there -- rebuild it with `just rebuild areas`" in problems(repo)
 
 
 def test_a_row_whose_object_was_never_located_fails(repo: Workspace, world: Path) -> None:
     (world / "places.csv").write_text(places_text([NAIBEL | {"osm": "node/99"}]), encoding="utf-8")
-    assert "node/99" in problems(repo)
+    assert "naibel (line 2): node/99 is not located yet" in problems(repo)
+
+
+def test_a_reference_no_extract_holds_fails_with_what_helps(repo: Workspace, world: Path) -> None:
+    # the search entry lies at the first object, but the tile build needs both
+    (world / "places.csv").write_text(
+        places_text([NAIBEL | {"osm": "node/240042766; node/99"}]), encoding="utf-8"
+    )
+    in_vain = frozenset({("n", 99)})
+    write_objects(repo, Objects({NAIBEL_NODE: {"lon": 8.83, "lat": 54.79}}, Stamp({}, []), in_vain))
+    write_report(repo)
+    export(repo)
+    assert problems(repo) == (
+        "naibel (line 2): node/99 is in none of the extracts -- correct the `osm` cell of its row"
+    )
 
 
 # -------------------------------------------------------- --extracts (full) ---
@@ -128,6 +154,7 @@ def build_from_extract(ws: Workspace, pbf: Path) -> None:
     reg = registry.read(ws.dialects)
     locate.run(ws, reg, [pbf])
     build_dialect_areas.run(ws, reg, [pbf])
+    write_report(ws)
     export(ws)
 
 
@@ -153,9 +180,9 @@ def test_an_object_that_moved_in_the_extract_fails(extract: Extract, world: Path
     ws, pbf, (nodes, way, relations) = extract
     nodes[240042766] = ((8.84, 54.79), {})
     write_extract(pbf, nodes, {5: (way, {})}, relations)
-    out = problems(ws, pbf)
-    assert "osm_objects.json" in out and "just objects" in out
-    assert "dialect_areas.geojson" not in out
+    assert problems(ws, pbf) == (
+        f"{ws.objects} is not what its inputs give -- rebuild it with `just rebuild objects`"
+    )
 
 
 def test_an_area_that_moved_in_the_extract_fails(extract: Extract, world: Path) -> None:
@@ -166,63 +193,47 @@ def test_an_area_that_moved_in_the_extract_fails(extract: Extract, world: Path) 
 
 
 def test_a_rebuild_that_cannot_run_says_why(extract: Extract, world: Path) -> None:
-    ws, pbf, _ = extract
-    (world / "dialect_areas.csv").write_text(
-        AREA_LIST + "frr-x-mooring,Nowhere,way/999,\n", encoding="utf-8"
-    )
-    assert (
-        f"{ws.areas} cannot be rebuilt: 1 object(s) not found in the extract(s):\n"
-        "  way/999  Nowhere (frr-x-mooring)"
-    ) in problems(ws, pbf)
+    # the extract lost the relation the area list names
+    ws, pbf, (nodes, way, _relations) = extract
+    write_extract(pbf, nodes, {5: (way, {})})
+    assert f"{ws.areas} cannot be rebuilt: no geometry found" in problems(ws, pbf)
 
 
-def test_each_file_is_rebuilt_from_the_extracts_its_stamp_names(
+def test_the_dialect_areas_are_rebuilt_from_the_first_extract_alone(
     extract: Extract, world: Path
 ) -> None:
     # the dialect areas come from the SH extract alone, the objects from SH + DK
     ws, pbf, _ = extract
     dk = write_extract(world / "denmark-latest.osm.pbf", nodes={7: ((8.4, 55.4), {})})
     locate.run(ws, registry.read(ws.dialects), [pbf, dk])
+    write_report(ws)
     export(ws)
     assert problems(ws, pbf, dk) == ""
 
 
-def test_an_extract_a_stamp_names_must_be_given(extract: Extract) -> None:
-    ws, _pbf, _ = extract
-    assert "in.osm.pbf" in problems(ws, Path("other.osm.pbf"))
-
-
-def test_an_unstamped_file_names_no_extracts_to_rebuild_it_from(
+def test_outputs_built_from_other_extracts_than_the_given_ones_fail(
     extract: Extract, world: Path
 ) -> None:
-    ws, pbf, _ = extract
-    (world / "dialect_areas.geojson").write_text(
-        json.dumps({"type": "FeatureCollection", "features": []}), encoding="utf-8"
-    )
-    assert "dialect_areas.geojson names no extracts" in problems(ws, pbf)
+    ws, _pbf, _ = extract
+    other = write_extract(world / "other.osm.pbf", nodes={7: ((8.4, 55.4), {})})
+    assert f"{ws.objects} was not built from the current extracts" in problems(ws, other)
 
 
-def test_a_rows_second_object_never_located_fails(repo: Workspace, world: Path) -> None:
-    # the search entry lies at the first object, but the tile build needs both
-    (world / "places.csv").write_text(
-        places_text([NAIBEL | {"osm": "node/240042766; node/99"}]), encoding="utf-8"
-    )
-    out = problems(repo)
-    assert "naibel" in out and "node/99" in out and "just objects" in out
+# the path options that point the command at a workspace of the tests
+FILES = ["names", "dialects", "curation", "area_list", "areas", "parts", "objects"]
+FILES += ["report", "index", "registry_json", "work"]
 
 
 def test_the_command_fails_and_prints_what_is_wrong_with_the_files_its_options_name(
     repo: Workspace, world: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     (world / "places.csv").write_text(places_text([NAIBEL | {"osm": "node/99"}]), encoding="utf-8")
-    files = ["names", "dialects", "curation", "area_list", "areas", "parts", "objects"]
-    assert main(["check-outputs", *path_options(repo, *files, "index", "registry_json")]) == 1
-    assert "  ! naibel: node/99 not in" in capsys.readouterr().out
+    assert main(["check-outputs", *path_options(repo, *FILES)]) == 1
+    assert "  ! naibel (line 2): node/99 is not located yet" in capsys.readouterr().out
 
 
 def test_the_command_passes_up_to_date_outputs(
     repo: Workspace, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    files = ["names", "dialects", "curation", "area_list", "areas", "parts", "objects"]
-    assert main(["check-outputs", *path_options(repo, *files, "index", "registry_json")]) == 0
+    assert main(["check-outputs", *path_options(repo, *FILES)]) == 0
     assert capsys.readouterr().out == "the committed build outputs match their inputs\n"

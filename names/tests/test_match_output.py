@@ -13,6 +13,7 @@ import pytest
 
 from frasch import match, placelist
 from frasch.__main__ import main
+from frasch.provenance import Stamp
 from conftest import REGISTRY, cand, path_options, places_text, workspace, write_candidates
 
 TOFTUM = cand("n", 240044107, 8.83, 54.71, place="village", name="Toftum")
@@ -213,8 +214,12 @@ kind=settlement | `"""
 def test_the_report_has_a_section_for_every_state(world: Path) -> None:
     (world / "places.csv").write_text(places_text(EVERY_STATE), encoding="utf-8")
     rows, _fields = placelist.read(str(world / "places.csv"), REGISTRY)
-    match.write_report(rows, EVERY_STATE_RESULTS, str(world / "REPORT.md"), REGISTRY)
-    assert (world / "REPORT.md").read_text(encoding="utf-8") == EVERY_STATE_REPORT
+    stamp = Stamp({"places.csv": "ce013625030ba8dba906f756967f9e9ca394464a"}, [])
+    match.write_report(rows, EVERY_STATE_RESULTS, str(world / "REPORT.md"), REGISTRY, stamp)
+    assert (world / "REPORT.md").read_text(encoding="utf-8") == EVERY_STATE_REPORT + (
+        '\n<!-- built_from: {"places.csv":"ce013625030ba8dba906f756967f9e9ca394464a",'
+        '"extracts":[]} -->\n'
+    )
 
 
 HOLM = cand("n", 240102263, 8.866668, 54.833305, place="village", name="Holm", wikidata="Q559369")

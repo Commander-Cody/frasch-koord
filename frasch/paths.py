@@ -39,7 +39,6 @@ class Workspace:
     candidates: str
     matches: str
     wikidata_cache: str
-    extracts_state: str  # the extracts the last match used
     worklist: str
     patch: str
     lock: str  # held while a command rewrites the name list
@@ -64,7 +63,6 @@ class Workspace:
             candidates=os.path.join(work, "candidates.jsonl"),
             matches=os.path.join(work, "matches.csv"),
             wikidata_cache=os.path.join(work, "wikidata-countries.json"),
-            extracts_state=os.path.join(work, "match-extracts.json"),
             worklist=os.path.join(work, "curate.json"),
             patch=os.path.join(work, "curate-patch.jsonl"),
             lock=os.path.join(work, ".lock"),
@@ -88,7 +86,6 @@ SCRATCH = (
     "candidates",
     "matches",
     "wikidata_cache",
-    "extracts_state",
     "worklist",
     "patch",
     "lock",

@@ -45,7 +45,7 @@ from typing import IO
 
 import osmium
 
-from frasch import candidates, cli, files, geo
+from frasch import candidates, cli, files, geo, osmscan
 from frasch.geo import LonLat
 from frasch.paths import Workspace
 
@@ -334,7 +334,9 @@ def run(ws: Workspace, pbfs: Sequence[str], index: str = "flex_mem") -> None:
     counts: collections.Counter[str] = collections.Counter()
     t0 = time.time()
     with files.replacing(ws.candidates, text=True) as fh:
-        fh.write(json.dumps(candidates.header(pbfs), ensure_ascii=False) + "\n")
+        fh.write(
+            json.dumps(candidates.header(osmscan.extract_stamps(pbfs)), ensure_ascii=False) + "\n"
+        )
         for p in pbfs:
             src = os.path.basename(p).split("-latest")[0].split(".")[0]
             print(f"scanning {p} ...", file=sys.stderr)

@@ -5,9 +5,7 @@ therefore on which dialect is spoken there (`frasch:dialect`, `frasch:local`).
 They used to work that out separately -- the injector from the extract it
 tags, the search export from the matcher's cache of vertex averages, days
 apart -- and disagreed on Sylt, Amrum, Stiardebel and more (#24).  Now it is
-worked out once, here, and both read the result:
-
-    frasch objects <in.osm.pbf> [<in.osm.pbf> ...]
+worked out once, here, and both read the result (`frasch build objects`).
 
 What the file records, and why it is committed: frasch.objects.
 """
@@ -17,20 +15,14 @@ from __future__ import annotations
 import os
 from collections.abc import Collection, Iterable, Mapping, Sequence
 
-from frasch import cli, files, osmgeom, osmscan, placelist, provenance, registry
+from frasch import files, osmgeom, osmscan, placelist
 from frasch.geo import LonLat
-from frasch.objects import Facts, LocatedObject, Objects, Point, objects_json
+from frasch.objects import Facts, LocatedObject, Objects, Point, named, objects_json
 from frasch.osmscan import Rings
 from frasch.paths import StrPath, Workspace
-from frasch.placelist import OsmRef, Row
+from frasch.placelist import OsmRef
+from frasch.provenance import Stamp
 from frasch.registry import Registry
-
-
-def mapped_refs(rows: Iterable[Row], reg: Registry) -> set[OsmRef]:
-    """The OSM references (not the local ones) of the rows on the map."""
-    return {
-        ref for row in rows if placelist.on_map(row, reg) for ref in placelist.osm_refs(row["osm"])
-    }
 
 
 def locate(pbfs: Iterable[StrPath], refs: Collection[OsmRef]) -> dict[OsmRef, LocatedObject]:
@@ -179,24 +171,18 @@ def _outline_point(
     return locs.get(first[0]) if first else None
 
 
-def build(ws: Workspace, reg: Registry, pbfs: Sequence[StrPath]) -> Objects:
-    """The objects of the rows on the map, located in the extracts `pbfs`."""
-    return located(wanted_refs(ws, reg), pbfs)
-
-
 def wanted_refs(ws: Workspace, reg: Registry) -> set[OsmRef]:
     """The OSM references of the rows on the map, as the name list has them now."""
     rows, _ = placelist.read(ws.names, reg)
-    return mapped_refs(rows, reg)
+    return set(named(rows, reg))
 
 
 def located(refs: Collection[OsmRef], pbfs: Sequence[StrPath]) -> Objects:
-    """The objects `refs` found in the extracts `pbfs`, stamped with them."""
-    return Objects(locate(pbfs, refs), {"extracts": extract_stamps(pbfs)})
-
-
-def extract_stamps(pbfs: Iterable[StrPath]) -> list[provenance.ExtractStamp]:
-    return [provenance.extract_stamp(p) for p in pbfs]
+    """The objects `refs` found in the extracts `pbfs`, stamped with them,
+    and the references none of them holds."""
+    found = locate(pbfs, refs)
+    not_found = frozenset(refs) - set(found)
+    return Objects(found, Stamp.of({}, osmscan.extract_stamps(pbfs)), not_found)
 
 
 def run(ws: Workspace, reg: Registry, pbfs: Sequence[StrPath]) -> None:
@@ -205,21 +191,9 @@ def run(ws: Workspace, reg: Registry, pbfs: Sequence[StrPath]) -> None:
     objects = located(refs, pbfs)
     files.atomic_write(ws.objects, objects_json(objects))
     print(f"wrote {ws.objects}: {len(objects.by_ref)} of {len(refs)} objects located")
-    missing = sorted(refs - set(objects.by_ref), key=lambda ref: ("nwr".index(ref[0]), ref[1]))
-    if missing:
+    if objects.not_found:
         # the search export and the injector stop on these; fix the rows
         print(
-            f"{len(missing)} not in {', '.join(os.path.basename(p) for p in pbfs)}: "
-            + ", ".join(placelist.format_osm([ref]) for ref in missing)
+            f"{len(objects.not_found)} not in {', '.join(os.path.basename(p) for p in pbfs)}: "
+            + ", ".join(placelist.format_osm([ref]) for ref in objects.missing(refs))
         )
-
-
-@cli.command
-def main(argv: Sequence[str] | None = None) -> int:
-    ap = cli.parser("objects", __doc__)
-    ap.add_argument("pbf", nargs="+", help="OSM extract(s) holding the objects")
-    cli.add_workspace_options(ap, "names", "dialects", "objects")
-    a = ap.parse_args(argv)
-    ws = cli.workspace(a)
-    run(ws, registry.read(ws.dialects), a.pbf)
-    return 0

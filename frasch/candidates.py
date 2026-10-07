@@ -3,7 +3,8 @@ as frasch.build_candidates writes it and frasch.match and the curation
 export (frasch.curate) read it.
 
   first line  {"header": {"extracts": [{"file", "replication_timestamp"}, ...]}}
-              -- the extracts it was built from (`read_header`)
+              -- the stamp of the extracts it was built from
+              (`provenance.Stamp.read` reads it)
   then        {"src","t","id","lon","lat","cls","tags":{...}}  per candidate
               (`read_records`)
 """
@@ -11,12 +12,12 @@ export (frasch.curate) read it.
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterator, Sequence
 from typing import TypedDict
 
 from frasch.paths import StrPath
 from frasch.placelist import OsmRef
-from frasch.provenance import ExtractStamp, extract_stamp
+from frasch.provenance import BuiltFrom, ExtractStamp, Stamp
 
 # the `place` / `natural` values of an island
 ISLAND_PLACES = {"island", "islet", "archipelago"}
@@ -36,31 +37,13 @@ class Candidate(TypedDict):
     tags: dict[str, str]
 
 
-class Header(TypedDict):
-    extracts: list[ExtractStamp]
-
-
 class HeaderLine(TypedDict):
-    header: Header
+    header: BuiltFrom
 
 
-def header(pbfs: Iterable[StrPath]) -> HeaderLine:
+def header(extracts: Sequence[ExtractStamp]) -> HeaderLine:
     """The first line of candidates.jsonl: the extracts, in the order read."""
-    return {"header": {"extracts": [extract_stamp(p) for p in pbfs]}}
-
-
-def read_header(path: StrPath) -> list[ExtractStamp] | None:
-    """The extracts a candidates.jsonl was built from, as `extract_stamp`
-    gives them; None for a file written before it had a header."""
-    with open(path, encoding="utf-8") as fh:
-        first = fh.readline()
-    if not first.strip():
-        return None
-    line = json.loads(first)
-    if "header" not in line:
-        return None
-    extracts: list[ExtractStamp] = line["header"]["extracts"]
-    return extracts
+    return {"header": Stamp.of({}, extracts).as_json()}
 
 
 def read_records(path: StrPath) -> Iterator[Candidate]:

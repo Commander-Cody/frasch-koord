@@ -81,7 +81,6 @@ from frasch import (
     osmgeom,
     osmscan,
     placelist,
-    provenance,
     registry,
 )
 from frasch.dialects import AreaRow
@@ -90,7 +89,7 @@ from frasch.geo import LonLat
 from frasch.osmscan import Rings
 from frasch.placelist import OsmRef
 from frasch.paths import StrPath, Workspace
-from frasch.provenance import BuiltFrom, ExtractStamp
+from frasch.provenance import BuiltFrom, ExtractStamp, Stamp
 from frasch.registry import Dialect, Registry
 
 SIMPLIFY_DEG = 0.0005  # ~50 m
@@ -228,16 +227,10 @@ def round_geojson(obj: object, nd: int = ROUND) -> object:
     return obj
 
 
-def stamp_inputs(ws: Workspace) -> dict[str, StrPath]:
-    """The committed files the dialect areas are built from, by the label
-    their stamp gives them."""
-    return {"dialect_areas.csv": ws.area_list, "dialects.csv": ws.dialects}
-
-
-def stamp(ws: Workspace, extracts: list[ExtractStamp]) -> BuiltFrom:
+def stamp(ws: Workspace, extracts: Sequence[ExtractStamp] | None) -> Stamp:
     """What the dialect areas are built from: the area list, the dialect
-    registry and the extracts."""
-    return provenance.built_from(stamp_inputs(ws), extracts)
+    registry and the extracts (None: not at hand, see `Stamp`)."""
+    return Stamp.of({"dialect_areas.csv": ws.area_list, "dialects.csv": ws.dialects}, extracts)
 
 
 @dataclass(frozen=True)
@@ -297,7 +290,7 @@ def build(ws: Workspace, reg: Registry, pbfs: Sequence[StrPath], options: Option
     if missing:
         _report_missing(missing, by_ref, labels, options.allow_missing)
 
-    built_from = stamp(ws, [provenance.extract_stamp(p) for p in pbfs])
+    built_from = stamp(ws, osmscan.extract_stamps(pbfs)).as_json()
     source = os.path.basename(ws.area_list)
     parts = build_parts(source, options, reg, rows, scan, built_from) if options.parts else None
     return Areas(_dialect_fc(source, options.simplify, features, built_from), total, parts)

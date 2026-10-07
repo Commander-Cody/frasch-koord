@@ -35,7 +35,6 @@ WORKSPACE_FILES = {
     "candidates": "every object of the extracts that could be a place",
     "matches": "the details of the last match",
     "wikidata_cache": "the country lookups already made",
-    "extracts_state": "the extracts the last match used",
     "worklist": "the rows left for the curation view",
     "patch": "the decisions made in the curation view",
 }

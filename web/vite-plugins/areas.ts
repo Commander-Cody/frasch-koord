@@ -23,7 +23,7 @@ import type { Plugin } from 'vite';
 const BASE = '/__areas/';
 
 /** Told to the user when the file is not there yet; the only way to make one. */
-const BUILD_HINT = 'run `just areas`';
+const BUILD_HINT = 'run `just rebuild areas`';
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.statusCode = status;

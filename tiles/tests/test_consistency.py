@@ -1,6 +1,6 @@
 """The map and the search index agree (#24): one tiny extract is located
-(`frasch objects`), injected (`frasch inject`) and exported
-(`frasch index`), and every feature that carries a `frasch:ref`
+(`frasch build objects`), injected (`frasch inject`) and exported
+(`frasch build index`), and every feature that carries a `frasch:ref`
 must say what that row's search entry says -- the same dialect, the same
 local name, the same German name and, for a node, the same position (a way
 or relation has no label point before Planetiler places one).  Planetiler

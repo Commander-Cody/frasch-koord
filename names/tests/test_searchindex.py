@@ -18,7 +18,7 @@ from frasch.errors import PipelineError
 from frasch.paths import StrPath
 from frasch.objects import LocatedObject, Objects, objects_json
 from frasch.placelist import OsmRef
-from frasch.provenance import ExtractStamp
+from frasch.provenance import ExtractStamp, Stamp
 from frasch.searchindex import SearchEntry, SearchIndex
 from conftest import REGISTRY, curation_file, path_options, places_text, workspace
 
@@ -130,7 +130,7 @@ AREAS = {
 def paths(world: Path) -> Path:
     """The export's input files in `world`; `run(rows)` exports them."""
     (world / "osm_objects.json").write_text(
-        objects_json(Objects(OBJECTS, {"extracts": EXTRACTS})), encoding="utf-8"
+        objects_json(Objects(OBJECTS, Stamp({}, EXTRACTS))), encoding="utf-8"
     )
     (world / "dialect_areas.geojson").write_text(json.dumps(AREAS), encoding="utf-8")
     return world
@@ -235,6 +235,18 @@ def test_a_row_whose_object_was_never_located_stops_the_export(paths: Path) -> N
     assert not Path(workspace(paths).index).exists()
 
 
+def test_an_object_that_was_never_asked_for_is_to_be_located(paths: Path) -> None:
+    with pytest.raises(PipelineError, match="node/99 is not located yet .* `just rebuild objects`"):
+        export_into(paths, [NAIBEL | {"osm": "node/99"}])
+
+
+def test_an_object_no_extract_holds_is_a_matter_of_its_row(paths: Path) -> None:
+    asked_in_vain = Objects(OBJECTS, Stamp({}, EXTRACTS), frozenset({("n", 99)}))
+    (paths / "osm_objects.json").write_text(objects_json(asked_in_vain), encoding="utf-8")
+    with pytest.raises(PipelineError, match="node/99 is in none of the extracts .* `osm` cell"):
+        export_into(paths, [NAIBEL | {"osm": "node/99"}])
+
+
 def test_a_row_keyed_by_wikidata_alone_is_left_out(export: Export) -> None:
     denmark = {
         "id": "danemark",
@@ -271,5 +283,5 @@ def test_the_command_exports_the_index_of_the_workspace_its_options_name(
     ws = workspace(paths)
     (paths / "places.csv").write_text(places_text([NAIBEL]), encoding="utf-8")
     files = path_options(ws, "names", "dialects", "curation", "areas", "objects", "index")
-    assert main(["index", *files]) == 0
+    assert main(["build", "index", *files]) == 0
     assert capsys.readouterr().out.startswith(f"wrote 1 entries to {ws.index}")
