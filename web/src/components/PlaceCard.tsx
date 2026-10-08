@@ -77,7 +77,7 @@ export default function PlaceCard({
   // The local form is named after the area's dialect only when it IS that
   // dialect's name. Where the place has a form of its own (Woiguurd, while
   // Mooring says Waiguurd), calling both "Mooring" would contradict itself.
-  const localIsAreaName = area !== undefined && entry.names?.[area.tag] === entry.local;
+  const localIsAreaName = area !== undefined && entry.names[area.tag] === entry.local;
   const localLabel = localIsAreaName
     ? `${t('card.local')} · ${dialectLabel(area)}`
     : t('card.local');
@@ -88,7 +88,7 @@ export default function PlaceCard({
   const lines = useMemo<Line[]>(() => {
     const out: Line[] = [];
     for (const d of DIALECTS) {
-      const name = entry.names?.[d.tag];
+      const name = entry.names[d.tag];
       if (!name) continue;
       // The headline already shows this one.
       if (d.tag === shownAs) continue;

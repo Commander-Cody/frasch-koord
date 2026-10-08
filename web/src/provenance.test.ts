@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { provenanceWarning, parseBuiltFrom, type BuiltFrom } from './provenance';
+import indexSchema from '../../names/search-index.schema.json';
+import { provenanceWarning, parseBuiltFrom, type BuiltFrom, type ExtractStamp } from './provenance';
+import { pinnedFields, schemaFields, type Pin } from './testing/schemaPin';
 
 const INDEX: BuiltFrom = {
   'places.csv': 'aaa',
@@ -41,5 +43,17 @@ describe('parseBuiltFrom', () => {
 
   it('has nothing to say about the stock OpenMapTiles description', () => {
     expect(parseBuiltFrom('A tileset showcasing all layers in OpenMapTiles.')).toBeUndefined();
+  });
+});
+
+// ExtractStamp is written by hand; this pins it to the stamp of names.json,
+// names/search-index.schema.json (see testing/schemaPin.ts).
+describe('ExtractStamp', () => {
+  it('has the fields of an extract of the search index schema', () => {
+    const pin: Pin<ExtractStamp> = {
+      file: { string: true },
+      replication_timestamp: { string: true },
+    };
+    expect(pinnedFields(pin)).toEqual(schemaFields(indexSchema.$defs.extract, indexSchema));
   });
 });
