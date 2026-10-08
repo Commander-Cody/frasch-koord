@@ -9,10 +9,11 @@ from pathlib import Path
 
 import pytest
 
-from frasch import dialects
+from frasch import dialects, placelist
 from frasch.errors import PipelineError
-from frasch.objects import LocatedObject, Objects, dialect_at, objects_json, read_objects
+from frasch.objects import LocatedObject, Objects, dialect_at, objects_json, point, read_objects
 from frasch.provenance import Stamp
+from conftest import REGISTRY
 
 
 # --------------------------------------------------------------- dialect_at ---
@@ -108,3 +109,54 @@ def test_a_file_without_a_stamp_stops_the_reader_with_how_to_rebuild_it(tmp_path
         PipelineError, match="was built from -- build it with `just rebuild objects`"
     ):
         read_objects(str(path))
+
+
+# -------------------------------------------------- the object of a row ---
+def test_a_point_is_an_object_at_its_position_with_the_facts_given() -> None:
+    assert point(8.83, 54.79, name_frr="Naibel") == {
+        "lon": 8.83,
+        "lat": 54.79,
+        "name_frr": "Naibel",
+    }
+
+
+def place(**cells: str) -> placelist.PlaceRow:
+    return placelist.PlaceRow({c: "" for c in placelist.columns(REGISTRY)} | cells, 2)
+
+
+NORDWARW = place(id="nordwarw", kind="warft", mooring="Nordwärw", osm="way/7; node/1")
+OCKHOLM: LocatedObject = {"lon": 8.84, "lat": 54.67}
+LOCATED = Objects({("n", 1): NAIBEL, ("w", 7): OCKHOLM}, NO_EXTRACTS)
+
+
+def test_the_object_of_a_row_is_that_of_its_first_reference() -> None:
+    assert LOCATED.for_row(NORDWARW, {}, REGISTRY) == OCKHOLM
+
+
+WAASTERHIAS = place(
+    id="waasterhias",
+    kind="settlement",
+    oomrang="Waasterhias",
+    de="Westerheide",
+    osm="local/westerheide-amrum",
+)
+
+
+def test_the_object_of_a_place_osm_does_not_have_is_the_point_the_injector_adds() -> None:
+    # at its curation position, with the generic name the point gets: the German one
+    positions = {"westerheide-amrum": (8.34019, 54.65097)}
+    assert LOCATED.for_row(WAASTERHIAS, positions, REGISTRY) == {
+        "lon": 8.34019,
+        "lat": 54.65097,
+        "name": "Westerheide",
+    }
+
+
+def test_a_place_osm_does_not_have_needs_a_position_in_the_curation() -> None:
+    with pytest.raises(PipelineError, match=r"waasterhias \(line 2\): local/westerheide-amrum"):
+        LOCATED.for_row(WAASTERHIAS, {}, REGISTRY)
+
+
+def test_a_row_keyed_by_its_wikidata_id_alone_has_no_object() -> None:
+    denmark = place(id="daanemark", kind="country", mooring="Däänemark", wikidata="Q35")
+    assert LOCATED.for_row(denmark, {}, REGISTRY) is None

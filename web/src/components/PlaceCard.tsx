@@ -93,7 +93,7 @@ export default function PlaceCard({
       // The headline already shows this one.
       if (d.tag === shownAs) continue;
       // The area's own dialect falls back to the `local` column in
-      // frasch/dialects.py, so its name can be the very same string as the
+      // frasch/placenames.py, so its name can be the very same string as the
       // local form. Show it once, on the local line, which names the dialect.
       if (d.tag === entry.dialect && name === entry.local) continue;
       out.push({ key: d.tag, label: dialectLabel(d), extinct: d.status === 'extinct', name });

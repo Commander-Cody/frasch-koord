@@ -87,7 +87,7 @@ def object_facts(tags: Mapping[str, str]) -> Facts:
                  of the border it is the Danish name, not the list's German
     name_frr     its Frisian name of no stated dialect: inside a dialect area
                  it is the local name of a place the list gives none
-                 (`dialects.osm_local_name`)"""
+                 (frasch.placenames)"""
     facts: Facts = {}
     level = tags.get("admin_level", "")
     if tags.get("boundary") == "administrative" and level.isdigit():

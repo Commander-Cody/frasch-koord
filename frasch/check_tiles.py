@@ -4,20 +4,27 @@ and compare every labelled feature with its entry in names.json.
     frasch check-tiles <archive.pmtiles> [--zoom 14]
 
 A feature that carries a `frasch:ref` must say what that row's search entry
-says: the same `frasch:dialect`, the same `frasch:local`, the same `name:de`
-where the list has a German name (the place card's German step reads the
-list's, the label the tile's, #61) and -- for a node -- the same position (a
-polygon's label point is Planetiler's own choice).  Only the feature of
+says: every field of the table of tile keys (placenames.TILE_KEY) -- the same
+`frasch:kind`, `frasch:dialect`, `frasch:local` and `frasch:variety`, the
+same `name:de` where the list has a German name (the place card's German
+step reads the list's, the label the tile's, #61) -- the same name in every
+dialect of the registry and, for a node, the same position (a polygon's
+label point is Planetiler's own choice).  Only the feature of
 the entry's own object is held to that (the first reference of the row's
 `osm` cell, or its local reference): a row's other objects lie elsewhere and
 may lie in another dialect area, and objects found through a Wikidata QID
 have no entry to compare with.
 
 Both sides are built from the same files (names/osm_objects.json,
-names/dialect_areas.geojson, names/places.csv), so a disagreement means the
-archive and the index were built from different states of them -- compare
-their `built_from` stamps -- or a bug (#24).  The tile build does not run in
-CI; run this (`just check-tiles`) after building tiles.
+names/dialect_areas.geojson, names/places.csv) by the same rule
+(frasch.placenames), so a disagreement means the archive and the index were
+built from different states of them -- compare their `built_from` stamps --
+or one of two things the injector does to a feature beyond that rule: a
+second row that claims the entry's object fills what the first leaves empty
+(`frasch check-inputs` rejects such a claim), and a curation row may set a
+tag of its own on it, `frasch:kind` among them.  Anything else is a bug
+(#24).  The tile build does not run in CI; run this (`just check-tiles`)
+after building tiles.
 """
 
 from __future__ import annotations
@@ -26,15 +33,16 @@ import gzip
 import json
 import math
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from typing import Literal, NotRequired, TypedDict
 
 import mapbox_vector_tile
 from pmtiles.reader import MmapSource, Reader
 
-from frasch import cli
+from frasch import cli, registry
 from frasch.geo import LonLat
-from frasch.searchindex import SearchEntry
+from frasch.placenames import GERMAN_KEY, REF_KEY, TILE_KEY, SearchEntry, dialect_key
+from frasch.registry import Registry
 
 # OpenMapTiles feature ids: the OSM id times ten plus the type
 # (web/src/names.ts's osmRefFromFeatureId)
@@ -55,23 +63,23 @@ class Label(TypedDict):
     lat: NotRequired[float]
 
 
-def compare(entries: Mapping[str, SearchEntry], features: Sequence[Label]) -> list[str]:
+def compare(
+    entries: Mapping[str, SearchEntry], features: Sequence[Label], reg: Registry
+) -> list[str]:
     """The disagreements between the search entries (`{id: entry}`) and the
     labelled features (`{"osm": "node/1" or None, "props": {...}}`, with
     `lon`/`lat` for a point feature), as readable lines."""
     problems = []
     for f in features:
-        ref = f["props"].get("frasch:ref")
+        ref = f["props"].get(REF_KEY)
         entry = entries.get(ref) if isinstance(ref, str) else None
         if entry is None or not _is_entry_object(entry, f):
             continue
         where = f"{ref} ({f['osm'] or 'added by the injector'})"
-        for key, prop in _repeated_fields(entry):
-            if entry.get(key) != f["props"].get(prop):
-                problems.append(
-                    f"{where}: tiles {prop}={f['props'].get(prop)!r}, "
-                    f"names.json {key}={entry.get(key)!r}"
-                )
+        for field, key, said in _repeated(entry, reg):
+            shown = f["props"].get(key)
+            if said != shown:
+                problems.append(f"{where}: tiles {key}={shown!r}, names.json {field}={said!r}")
         if (
             _is_point_object(f)
             and math.dist((f["lon"], f["lat"]), (entry["lon"], entry["lat"])) > TOLERANCE_DEG
@@ -83,14 +91,16 @@ def compare(entries: Mapping[str, SearchEntry], features: Sequence[Label]) -> li
     return problems
 
 
-def _repeated_fields(entry: SearchEntry) -> list[tuple[str, str]]:
-    """The entry's fields its feature must repeat, each with the tile property
-    it is in: the dialect, the local name and -- where the list has one -- the
-    German name.  Where the list has none the tiles keep OSM's (#61)."""
-    fields = [("dialect", "frasch:dialect"), ("local", "frasch:local")]
-    if entry["name_de"]:
-        fields.append(("name_de", "name:de"))
-    return fields
+def _repeated(entry: SearchEntry, reg: Registry) -> Iterator[tuple[str, str, object]]:
+    """What the entry's feature must repeat, as (the entry's field, the tile
+    property it is in, the entry's value -- None for none): every field of
+    placenames.TILE_KEY and its name in every dialect.  Only the German name
+    may differ, where the list has none: there the tiles keep OSM's (#61)."""
+    for field, key in TILE_KEY.items():
+        if key != GERMAN_KEY or entry["name_de"]:
+            yield field, key, entry.get(field) or None
+    for tag in reg.tags:
+        yield f"names[{tag}]", dialect_key(tag), entry["names"].get(tag)
 
 
 def checked_entries(entries: Mapping[str, SearchEntry], features: Sequence[Label]) -> set[str]:
@@ -99,7 +109,7 @@ def checked_entries(entries: Mapping[str, SearchEntry], features: Sequence[Label
     return {
         ref
         for f in features
-        if isinstance(ref := f["props"].get("frasch:ref"), str)
+        if isinstance(ref := f["props"].get(REF_KEY), str)
         and ref in entries
         and _is_entry_object(entries[ref], f)
     }
@@ -170,14 +180,14 @@ def osm_ref(feature_id: int | None) -> str | None:
 
 
 def tile_features(data: bytes, zoom: int, x: int, y: int) -> list[Label]:
-    """The features of one (gzip-compressed) tile that carry a frasch:ref."""
+    """The features of one (gzip-compressed) tile that carry a row's id."""
     layers: dict[str, _TileLayer] = mapbox_vector_tile.decode(
         gzip.decompress(data), default_options={"y_coord_down": True}
     )
     out: list[Label] = []
     for layer in layers.values():
         for f in layer["features"]:
-            if "frasch:ref" not in f["properties"]:
+            if REF_KEY not in f["properties"]:
                 continue
             feature: Label = {"osm": osm_ref(f.get("id")), "props": f["properties"]}
             geom = f["geometry"]
@@ -198,7 +208,7 @@ def archive_features(path: str, entries: Mapping[str, SearchEntry], zoom: int) -
         for x, y in sorted({tile_of(e["lon"], e["lat"], zoom) for e in entries.values()}):
             data: bytes | None = reader.get(zoom, x, y)
             for f in tile_features(data, zoom, x, y) if data else []:
-                key = (f["osm"], f["props"]["frasch:ref"], f.get("lon"), f.get("lat"))
+                key = (f["osm"], f["props"][REF_KEY], f.get("lon"), f.get("lat"))
                 if key not in seen:
                     seen.add(key)
                     out.append(f)
@@ -209,14 +219,15 @@ def archive_features(path: str, entries: Mapping[str, SearchEntry], zoom: int) -
 def main(argv: Sequence[str] | None = None) -> int:
     ap = cli.parser("check-tiles", __doc__)
     ap.add_argument("archive")
-    cli.add_workspace_options(ap, "index")
+    cli.add_workspace_options(ap, "index", "dialects")
     ap.add_argument("--zoom", type=int, default=14)
     a = ap.parse_args(argv)
-    index = cli.workspace(a).index
+    ws = cli.workspace(a)
+    index = ws.index
     with open(index, encoding="utf-8") as fh:
         entries: dict[str, SearchEntry] = {e["id"]: e for e in json.load(fh)["places"]}
     features = archive_features(a.archive, entries, a.zoom)
-    problems = compare(entries, features)
+    problems = compare(entries, features, registry.read(ws.dialects))
     print(
         f"{len(features)} labelled features in the z{a.zoom} tiles of "
         f"{len(entries)} entries; {len(checked_entries(entries, features))} "

@@ -30,7 +30,7 @@ from frasch import locate
 from frasch import searchindex
 from frasch.check_tiles import Label
 from frasch.geo import LonLat
-from frasch.searchindex import SearchEntry
+from frasch.placenames import SearchEntry
 from conftest import REGISTRY, flat_workspace, places_text
 from osm_fixture import ring, write_extract
 
@@ -172,7 +172,7 @@ def built(tmp_path_factory: pytest.TempPathFactory) -> Built:
 
 def test_tiles_and_search_index_agree_on_every_ref(built: Built) -> None:
     entries, features = built
-    assert check_tiles.compare(entries, features) == []
+    assert check_tiles.compare(entries, features, REGISTRY) == []
 
 
 def test_every_row_on_the_map_is_checked(built: Built) -> None:

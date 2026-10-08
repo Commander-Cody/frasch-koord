@@ -1,5 +1,5 @@
-"""dialects.py: the two name fallbacks (README "The shared name logic") and
-the "smallest area containing a point wins" rule of the area lookup."""
+"""dialects.py: the "smallest area containing a point wins" rule of the area
+lookup, and the rules of the area list."""
 
 from __future__ import annotations
 
@@ -10,7 +10,6 @@ from shapely.geometry import box
 from shapely.geometry.base import BaseGeometry
 
 from frasch import dialects, registry, tables
-from frasch import placelist
 from frasch.errors import Problem
 from conftest import REGISTRY
 
@@ -18,80 +17,6 @@ from conftest import REGISTRY
 @pytest.fixture(scope="module")
 def reg() -> registry.Registry:
     return REGISTRY
-
-
-def row(**cells: str) -> dict[str, str]:
-    r = {c: "" for c in placelist.columns(REGISTRY)}
-    r.update(cells)
-    return r
-
-
-# Hanswarft on Hooge: the Mooring name is the foreign form, the Hallig one is
-# what the people there say (README "Dialect areas")
-HANSWARFT = row(kind="warft", mooring="Hanswärw", hallig="Hansweerf", de="Hanswarft")
-# Broderswarft, Fahretoft: a sub-dialect form in `local` with its variety
-BRODERSWARFT = row(
-    kind="warft", mooring="Brouderswärw", local="Brouersweerw (Foortuftinge)", de="Broderswarft"
-)
-
-
-# ---------------------------------------------------------- dialect_name ---
-def test_dialect_name_is_the_dialects_column(reg: registry.Registry) -> None:
-    assert dialects.dialect_name(HANSWARFT, "frr-x-hallig", None, reg) == "Hansweerf"
-    assert dialects.dialect_name(HANSWARFT, "frr-x-mooring", None, reg) == "Hanswärw"
-
-
-def test_dialect_name_is_the_primary_variant(reg: registry.Registry) -> None:
-    r = row(kind="hallig", hallig="Schorkeweerw; Nees-Schorkeweerw")
-    assert dialects.dialect_name(r, "frr-x-hallig", None, reg) == "Schorkeweerw"
-
-
-def test_dialect_name_falls_back_to_local_in_the_areas_own_dialect(reg: registry.Registry) -> None:
-    # the Foortuftinge form IS the name in the dialect spoken at Fahretoft
-    assert (
-        dialects.dialect_name(BRODERSWARFT, "frr-x-nordgoes", "frr-x-nordgoes", reg)
-        == "Brouersweerw"
-    )
-
-
-def test_dialect_name_does_not_fall_back_to_local_for_another_dialect(
-    reg: registry.Registry,
-) -> None:
-    assert dialects.dialect_name(BRODERSWARFT, "frr-x-wieding", "frr-x-nordgoes", reg) == ""
-
-
-def test_dialect_name_does_not_fall_back_outside_any_area(reg: registry.Registry) -> None:
-    assert dialects.dialect_name(BRODERSWARFT, "frr-x-nordgoes", None, reg) == ""
-
-
-def test_dialect_name_keeps_its_column_over_local(reg: registry.Registry) -> None:
-    # the column wins even in the area's own dialect
-    assert (
-        dialects.dialect_name(BRODERSWARFT, "frr-x-mooring", "frr-x-mooring", reg) == "Brouderswärw"
-    )
-
-
-# ------------------------------------------------------------ local_name ---
-def test_local_name_is_the_local_column_first(reg: registry.Registry) -> None:
-    assert dialects.local_name(BRODERSWARFT, "frr-x-mooring", reg) == "Brouersweerw"
-
-
-def test_local_name_is_the_local_column_also_outside_any_area(reg: registry.Registry) -> None:
-    assert dialects.local_name(BRODERSWARFT, None, reg) == "Brouersweerw"
-
-
-def test_local_name_falls_back_to_the_areas_dialect(reg: registry.Registry) -> None:
-    assert dialects.local_name(HANSWARFT, "frr-x-hallig", reg) == "Hansweerf"
-
-
-def test_local_name_is_empty_outside_any_area_without_local(reg: registry.Registry) -> None:
-    assert dialects.local_name(HANSWARFT, None, reg) == ""
-
-
-def test_local_name_is_empty_when_the_area_dialect_has_no_name(reg: registry.Registry) -> None:
-    # a Mooring-only row on Sylt: no Sölring form known, nothing local to say
-    r = row(kind="settlement", mooring="Muasem", de="Morsum")
-    assert dialects.local_name(r, "frr-x-solring", reg) == ""
 
 
 # ------------------------------------------------------------- AreaIndex ---

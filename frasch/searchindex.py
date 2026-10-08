@@ -6,13 +6,15 @@ Every dialect name of a place is searchable, not only the one the map
 currently labels with: somebody who knows a Hallig as *Hansweerf* must find it
 while the map shows Mooring.
 
-Where a place is, and so which dialect is the *local* one there, comes from
+Which names an entry has is frasch.placenames' rule (`resolve`, written as
+an entry by `as_entry`), the one the injector tags the tiles by.  Where a
+place is, and so which dialect is the *local* one there, comes from
 names/osm_objects.json (`frasch build objects`) and names/dialect_areas.geojson --
-the same files, read through the same `objects.dialect_at`, as the injector
-uses for the tiles, so a search result and the map label agree.  An entry
-lies where the first object of its row's `osm` cell lies.  A row for a place
-OSM does not have (`osm` = `local/<slug>`) takes its position from the
-curation row with the same reference (names/curation.csv).  The Low Saxon
+the same files as the injector uses for the tiles, so a search result and
+the map label agree.  An entry lies where the first object of its row's
+`osm` cell lies (`Objects.for_row`).  A row for a place OSM does not have
+(`osm` = `local/<slug>`) takes its position from the curation row with the
+same reference (names/curation.csv).  The Low Saxon
 name (`name_nds`) is the object's OSM `name:nds`: the name list has no Low
 Saxon column, but the map labels with it before German, and the card and
 search results have to agree with it.  The generic name (`name_osm`) is the
@@ -20,8 +22,8 @@ object's OSM `name`, for the same reason: it is the chain's generic step
 near its end, and north of the border it is the Danish name, not the list's
 German one.  A local reference gets the `name` the injector gives its point.
 The local name (`local`) of a row that has none is the object's OSM
-`name:frr` inside a dialect area (`dialects.osm_local_name`), as the injector
-writes it into `frasch:local` (#81).
+`name:frr` inside a dialect area, as the injector writes it into
+`frasch:local` (#81).
 
 A row whose entry lies at an object the objects file has none for stops the
 export -- it is on the map, and would be missing from search
@@ -43,42 +45,23 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Iterable, Mapping
-from typing import NotRequired, TypedDict
+from collections.abc import Iterable
+from typing import TypedDict
 
 from frasch import (
     curationlist,
     dialects,
     files,
     placelist,
+    placenames,
     provenance,
 )
 from frasch.errors import PipelineError, rebuild
-from frasch.geo import LonLat
-from frasch.objects import LocatedObject, Objects, dialect_at, read_objects, require_located
+from frasch.objects import read_objects, require_located
 from frasch.paths import Workspace
-from frasch.placelist import OsmRef, PlaceRow, Row
+from frasch.placelist import OsmRef, PlaceRow
+from frasch.placenames import SearchEntry
 from frasch.registry import Registry
-
-
-class SearchEntry(TypedDict):
-    """One place of the index (web/src/names.ts reads it); the optional
-    fields are left out when empty."""
-
-    id: str
-    names: dict[str, str]  # dialect tag -> name
-    name_de: str
-    lon: float
-    lat: float
-    kind: str
-    local: NotRequired[str]
-    dialect: NotRequired[str]
-    variety: NotRequired[str]
-    name_nds: NotRequired[str]
-    name_osm: NotRequired[str]
-    name_da: NotRequired[str]
-    osm: NotRequired[str]
-    wikidata: NotRequired[str]
 
 
 class SearchIndex(TypedDict):
@@ -86,70 +69,9 @@ class SearchIndex(TypedDict):
     places: list[SearchEntry]
 
 
-def entry_object(
-    row: Row, objects: Objects, local_points: Mapping[str, LonLat], reg: Registry, where: str
-) -> LocatedObject | None:
-    """The object a row's entry stands for: the object of the first reference
-    in its `osm` cell, or for a local reference the point the injector adds --
-    at its curation position, with the name the injector gives it.  None for
-    a row keyed by its QID alone."""
-    slug = placelist.local_ref(row["osm"])
-    if slug:
-        if slug not in local_points:
-            raise PipelineError(
-                f"{where}: local/{slug} has no row with lat/lon in the curation file"
-            )
-        lon, lat = local_points[slug]
-        point: LocatedObject = {"lon": lon, "lat": lat}
-        if name := placelist.point_name(row, reg):
-            point["name"] = name
-        return point
-    refs = placelist.osm_refs(row["osm"], where)
-    if not refs:
-        return None
-    return objects.by_ref[refs[0]]
-
-
 def entry_refs(rows: Iterable[PlaceRow]) -> dict[OsmRef, PlaceRow]:
     """The reference to an OSM object each row's entry lies at, with its row."""
     return {refs[0]: row for row in rows if (refs := placelist.osm_refs(row["osm"]))}
-
-
-def entry(row: Row, obj: LocatedObject, areas: dialects.AreaIndex, reg: Registry) -> SearchEntry:
-    """The search-index entry of one row whose object is `obj`."""
-    area_tag = dialect_at(obj, areas)
-    names: dict[str, str] = {}
-    for d in reg:
-        name = dialects.dialect_name(row, d["tag"], area_tag, reg)
-        if name:
-            names[d["tag"]] = name
-    out: SearchEntry = {
-        "id": row["id"],
-        "names": names,
-        "name_de": placelist.primary(row["de"]),
-        "lon": round(float(obj["lon"]), 5),
-        "lat": round(float(obj["lat"]), 5),
-        "kind": row["kind"],
-    }
-    if local := dialects.local_name(row, area_tag, reg) or dialects.osm_local_name(
-        obj.get("name_frr"), area_tag
-    ):
-        out["local"] = local
-    if area_tag:
-        out["dialect"] = area_tag
-    if variety := dialects.variety(row):
-        out["variety"] = variety
-    if name_nds := obj.get("name_nds"):
-        out["name_nds"] = name_nds
-    if name_osm := obj.get("name"):
-        out["name_osm"] = name_osm
-    if name_da := placelist.primary(row["da"]):
-        out["name_da"] = name_da
-    if row["osm"]:
-        out["osm"] = row["osm"]
-    if row["wikidata"]:
-        out["wikidata"] = row["wikidata"]
-    return out
 
 
 def build(ws: Workspace, reg: Registry) -> SearchIndex:
@@ -165,9 +87,9 @@ def build(ws: Workspace, reg: Registry) -> SearchIndex:
     require_located(objects, ws.objects, entry_refs(on_map))
     places: list[SearchEntry] = []
     for r in on_map:
-        obj = entry_object(r, objects, local_points, reg, f"{ws.names}:{r.line}")
+        obj = objects.for_row(r, local_points, reg)
         if obj is not None:
-            places.append(entry(r, obj, areas, reg))
+            places.append(placenames.as_entry(placenames.resolve([r], obj, areas, reg), obj, r))
     return {"built_from": provenance.stamp(ws).as_json(), "places": places}
 
 
