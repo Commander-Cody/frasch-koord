@@ -302,8 +302,7 @@ object only one extract has — the Danish places (Fanø, Hoyer, Ripen, Röm, �
 are only in `denmark-latest` — loses its match when that extract is left out.
 So `frasch match` stamps `REPORT.md` with the extracts it used and warns when
 a later run gets candidates from another set of extract files than the
-report names (a newer download of the same extract is fine). It also warns
-about a `candidates.jsonl` from before the header: rebuild it.
+report names (a newer download of the same extract is fine).
 
 `frasch match --dry-run` shows what a run would do and writes only the
 git-ignored `work/matches.csv` — neither `places.csv` nor `REPORT.md`.

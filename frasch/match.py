@@ -90,7 +90,7 @@ from frasch.placelist import (
     primary,
     variants,
 )
-from frasch.provenance import ExtractStamp, Stamp
+from frasch.provenance import ExtractStamp, Stamp, unstamped
 from frasch.registry import Registry
 
 if TYPE_CHECKING:
@@ -966,21 +966,16 @@ def extract_set_warning(
     )
 
 
-def check_extracts(candidates_path: str, report_path: str) -> Sequence[ExtractStamp] | None:
+def check_extracts(candidates_path: str, report_path: str) -> Sequence[ExtractStamp]:
     """Print the extracts behind the candidates, warn when the report of the
-    last real run names another set, and return them (None for a file from
-    before the header).  Stops when there are no candidates."""
+    last real run names another set, and return them.  Stops when there are
+    no candidates, or they do not name their extracts."""
     if not os.path.exists(candidates_path):
         raise PipelineError(f"{candidates_path} not found -- build it with {rebuild('candidates')}")
     header = Stamp.read(candidates_path)
-    extracts = header.extracts if header else None
-    if extracts is None:
-        print(
-            f"warning: {candidates_path} names no extracts (written before "
-            f"it had a header) -- rebuild it with {rebuild('candidates')}",
-            file=sys.stderr,
-        )
-        return None
+    if header is None:
+        raise unstamped(candidates_path, "candidates")
+    extracts = header.extracts or []
     print(
         "candidates from "
         + ", ".join(
@@ -1277,7 +1272,7 @@ def _run(ws: Workspace, reg: Registry, offline: bool, dry_run: bool) -> int:
     write_matches(rows, results, index, ws.matches, reg)
     if not dry_run:
         placelist.write(rows, ws.names, fields)
-        write_report(rows, results, ws.report, reg, stamp(ws, extracts or []))
+        write_report(rows, results, ws.report, reg, stamp(ws, extracts))
 
     cnt = collections.Counter(o["status"] for o in results.values())
     print(

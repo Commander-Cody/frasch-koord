@@ -14,7 +14,7 @@ from frasch import match
 from frasch import placelist
 from frasch.errors import PipelineError
 from frasch.nameindex import NameIndex
-from frasch.candidates import HeaderLine, read_records
+from frasch.candidates import read_records
 from frasch.provenance import ExtractStamp, Stamp, blob_hash
 from conftest import REGISTRY, cand, places_text, workspace, write_candidates
 
@@ -26,7 +26,6 @@ DK: ExtractStamp = {
     "file": "denmark-latest.osm.pbf",
     "replication_timestamp": "2026-09-21T20:20:00Z",
 }
-HEADER: HeaderLine = {"header": {"extracts": [SH]}}
 TOFTUM = cand("n", 240044107, 8.83, 54.71, place="village", name="Toftum")
 HOYER = cand(
     "n",
@@ -46,23 +45,24 @@ ROWS = [
 
 
 def test_the_index_skips_the_header(tmp_path: Path) -> None:
-    index = NameIndex(read_records(str(write_candidates(tmp_path / "c.jsonl", HEADER, TOFTUM))))
+    index = NameIndex(
+        read_records(str(write_candidates(tmp_path / "c.jsonl", TOFTUM, extracts=[SH])))
+    )
     assert [r["id"] for r in index.recs] == [240044107]
 
 
 def test_the_curation_export_skips_the_header(tmp_path: Path) -> None:
-    path = write_candidates(tmp_path / "c.jsonl", HEADER, TOFTUM)
+    path = write_candidates(tmp_path / "c.jsonl", TOFTUM, extracts=[SH])
     kept = curate.stream_records(str(path), {("n", 240044107)}, set())
     assert [r["id"] for r in kept] == [240044107]
 
 
 # ------------------------------------------------------------ extract set ---
-def run_match(world: Path, extracts: list[ExtractStamp] | None, dry_run: bool = False) -> None:
-    """The matcher on ROWS against candidates built from `extracts` (None: a file
-    from before the header); the extracts of HOYER's are DK's only."""
-    recs = [TOFTUM] + ([HOYER] if extracts and DK["file"] in {e["file"] for e in extracts} else [])
-    header: list[HeaderLine] = [{"header": {"extracts": extracts}}] if extracts is not None else []
-    write_candidates(world / "work" / "candidates.jsonl", *header, *recs)
+def run_match(world: Path, extracts: list[ExtractStamp], dry_run: bool = False) -> None:
+    """The matcher on ROWS against candidates built from `extracts`; the
+    extracts of HOYER's are DK's only."""
+    recs = [TOFTUM] + ([HOYER] if DK["file"] in {e["file"] for e in extracts} else [])
+    write_candidates(world / "work" / "candidates.jsonl", *recs, extracts=extracts)
     places = world / "places.csv"
     if not places.exists():
         places.write_text(places_text(ROWS), encoding="utf-8")
@@ -122,17 +122,22 @@ def test_a_refreshed_extract_is_no_warning(world: Path, capsys: pytest.CaptureFi
     assert capsys.readouterr().err == ""
 
 
-def test_candidates_without_a_header_are_to_be_rebuilt(
-    world: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    run_match(world, None)
-    assert "rebuild it with `just rebuild candidates`" in capsys.readouterr().err
+def test_candidates_that_name_no_extracts_stop_the_match(world: Path) -> None:
+    (world / "places.csv").write_text(places_text(ROWS), encoding="utf-8")
+    candidates = world / "work" / "candidates.jsonl"
+    candidates.write_text("", encoding="utf-8")
+    with pytest.raises(PipelineError) as stop:
+        match.run(workspace(world), REGISTRY, offline=True)
+    assert str(stop.value) == (
+        f"{candidates} does not say what it was built from -- "
+        "build it with `just rebuild candidates`"
+    )
 
 
 def test_a_report_that_names_no_extracts_is_not_compared_with(
     world: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    run_match(world, None)
+    run_match(world, [])
     capsys.readouterr()
     run_match(world, [SH, DK])
     assert capsys.readouterr().err == ""

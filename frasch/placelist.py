@@ -283,11 +283,6 @@ def claimed_refs(row: Row) -> list[Ref]:
 
 def header_problem(fields: Sequence[str], reg: Registry) -> str | None:
     """What is wrong with the header of the name list, or None."""
-    if "lat" in fields or "lon" in fields:
-        return (
-            "`lat`/`lon` moved to names/curation.csv (2026-09-18): reference "
-            "the place as local/<slug> in `osm` and delete the two columns"
-        )
     if what := tables.unreadable_header(fields):
         return what
     what = tables.missing_columns(fields, columns(reg))

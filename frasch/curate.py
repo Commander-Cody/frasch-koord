@@ -267,13 +267,7 @@ def _read_work(ws: Workspace, reg: Registry) -> _Work:
 
     work = _Work([])
     with open(matches, encoding="utf-8", newline="") as fh:
-        reader = csv.DictReader(fh)
-        if "id" not in (reader.fieldnames or []):
-            raise PipelineError(
-                f"{matches} has no `id` column (written before "
-                f"places.csv had ids) -- re-run `frasch match`"
-            )
-        for m in reader:
+        for m in csv.DictReader(fh):
             if m["result"] not in RESULTS:
                 continue
             row = by_id.get(m["id"])
@@ -479,9 +473,8 @@ def read_patch(path: StrPath) -> list[PatchLine]:
 
     A line that breaks the patch schema counts like any other: apply
     refuses and keeps it, and as the newest line about its row it holds
-    back the row's earlier decision.  A line without a usable id (a patch
-    from before the row ids) is a decision of its own, never swallowed by a
-    later one."""
+    back the row's earlier decision.  A line without a usable id is a
+    decision of its own, never swallowed by a later one."""
 
     def not_json(n: int, exc: ValueError) -> None:
         print(f"{path}:{n}: not JSON ({exc}) -- ignored", file=sys.stderr)
@@ -551,16 +544,6 @@ def schema_problem(entry: object) -> str | None:
         return None
     where = "/".join(map(str, error.absolute_path))
     return f"{where + ': ' if where else ''}{error.message} (curate-patch.schema.json)"
-
-
-def line_problem(line: RefusedLine) -> str:
-    """Why apply refuses a line that is no valid entry."""
-    if isinstance(line.value, dict) and "id" not in line.value:
-        return (
-            "no `id` (a patch from before the row ids -- "
-            "re-run `frasch curate export` and decide it again)"
-        )
-    return line.problem
 
 
 def owner_problem(row: PlaceRow, names: str) -> str | None:
@@ -787,7 +770,7 @@ class _Decisions:
 def _decide_entry(line: PatchLine, lists: _Lists, decisions: _Decisions) -> None:
     """Write one entry of the patch into its row, or refuse it."""
     if isinstance(line, RefusedLine):
-        decisions.refuse(line, line_problem(line))
+        decisions.refuse(line, line.problem)
         return
     e = line.entry
     if e["action"] == "clear":

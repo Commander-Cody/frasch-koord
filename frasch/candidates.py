@@ -50,10 +50,9 @@ def read_records(path: StrPath) -> Iterator[Candidate]:
     """The candidate records of a candidates.jsonl, one at a time (the file
     is tens of megabytes), without its header."""
     with open(path, encoding="utf-8") as fh:
+        next(fh, None)  # the header
         for line in fh:
-            rec = json.loads(line)
-            if "header" not in rec:
-                yield rec
+            yield json.loads(line)
 
 
 def osm_key(rec: Candidate) -> OsmRef:

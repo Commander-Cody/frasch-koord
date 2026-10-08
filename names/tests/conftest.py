@@ -10,16 +10,17 @@ import dataclasses
 import io
 import json
 import os
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
 import jsonschema
 import pytest
 
-from frasch import curationlist, paths, placelist
-from frasch.candidates import Candidate, HeaderLine
+from frasch import candidates, curationlist, paths, placelist
+from frasch.candidates import Candidate
 from frasch.paths import Workspace
+from frasch.provenance import ExtractStamp
 from frasch.registry import Dialect, Registry
 from osm_fixture import Nodes, ring, write_extract
 
@@ -109,10 +110,12 @@ def cand(
     return {"src": src, "t": t, "id": id, "lon": lon, "lat": lat, "cls": cls, "tags": tags}
 
 
-def write_candidates(path: Path, *recs: Candidate | HeaderLine) -> Path:
-    """Write `recs` as a candidates.jsonl to `path` and return it."""
+def write_candidates(path: Path, *recs: Candidate, extracts: Sequence[ExtractStamp] = ()) -> Path:
+    """Write `recs` as a candidates.jsonl to `path`, under the header of a
+    scan of `extracts`, and return it."""
+    lines = [candidates.header(extracts), *recs]
     path.write_text(
-        "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in recs), encoding="utf-8"
+        "".join(json.dumps(line, ensure_ascii=False) + "\n" for line in lines), encoding="utf-8"
     )
     return path
 
