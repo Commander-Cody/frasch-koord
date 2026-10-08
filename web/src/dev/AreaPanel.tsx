@@ -35,7 +35,7 @@ import {
   fidFilter,
   layerSpecs,
 } from './areaLayers';
-import { DIALECTS } from '../config';
+import { DIALECTS, dialect } from '../config';
 import { replaceQueryParams } from '../queryParams';
 import DevPanel from './DevPanel';
 import { FIT_PADDING } from './panelLayout';
@@ -45,15 +45,18 @@ import './AreaPanel.css';
 
 /* ------------------------------------------------------------------ data */
 
-/** One municipality, as frasch/build_dialect_areas.py writes it. */
+/**
+ * One municipality, as frasch/build_dialect_areas.py writes it. The contract
+ * itself is names/dialect-area-parts.schema.json; AreaPanel.test.ts pins
+ * AreaProps to it.
+ */
 export interface AreaProps {
   /** Stable within one build; the selection key. */
   fid: number;
   /** false = a Kreis Nordfriesland municipality no CSV row claims. */
   assigned: boolean;
-  /** Dialect tag; absent on unassigned features (see the build script). */
+  /** Dialect tag — the registry has its label; absent on unassigned features (see the build script). */
   dialect?: string;
-  label?: string;
   name: string;
   /** The research note of the CSV row, verbatim. */
   note?: string;
@@ -111,6 +114,11 @@ function bboxOf(geometry: { coordinates: unknown }): Bounds | null {
 }
 
 /* ------------------------------------------------------------------ misc */
+
+/** A dialect's name as the registry has it. */
+function dialectLabel(tag: string): string {
+  return dialect(tag)?.label ?? tag;
+}
 
 /** "relation/1420394; way/123" -> ["relation/1420394", "way/123"]: one link each, and the deep-link keys. */
 function osmRefs(osm: string): string[] {
@@ -187,11 +195,11 @@ export default function AreaPanel({ mapRef }: AreaPanelProps) {
       const key = feature.properties.assigned ? (feature.properties.dialect ?? '?') : 'unassigned';
       counts.set(key, (counts.get(key) ?? 0) + 1);
     }
-    const rows = DIALECTS.map((dialect) => ({
-      key: dialect.tag,
-      label: dialect.label,
-      color: DIALECT_COLORS[dialect.tag] ?? COLOR_UNKNOWN,
-      count: counts.get(dialect.tag) ?? 0,
+    const rows = DIALECTS.map((d) => ({
+      key: d.tag,
+      label: d.label,
+      color: DIALECT_COLORS[d.tag] ?? COLOR_UNKNOWN,
+      count: counts.get(d.tag) ?? 0,
     })).filter((row) => row.count > 0);
     const loose = counts.get('unassigned') ?? 0;
     if (loose > 0) {
@@ -232,7 +240,7 @@ export default function AreaPanel({ mapRef }: AreaPanelProps) {
       .sort((a, b) => (order.get(a[0]) ?? 99) - (order.get(b[0]) ?? 99))
       .map(([key, items]) => ({
         key,
-        label: key === 'unassigned' ? 'not assigned' : (items[0].properties.label ?? key),
+        label: key === 'unassigned' ? 'not assigned' : dialectLabel(key),
         color: key === 'unassigned' ? COLOR_UNASSIGNED : (DIALECT_COLORS[key] ?? COLOR_UNKNOWN),
         items: [...items].sort((a, b) => a.properties.name.localeCompare(b.properties.name, 'de')),
       }));
@@ -474,7 +482,7 @@ export default function AreaPanel({ mapRef }: AreaPanelProps) {
                           DIALECT_COLORS[selected.properties.dialect ?? ''] ?? COLOR_UNKNOWN,
                       }}
                     />{' '}
-                    {selected.properties.label}{' '}
+                    {dialectLabel(selected.properties.dialect ?? '')}{' '}
                     <span className="dev-panel-mono">{selected.properties.dialect}</span>
                   </>
                 ) : (
