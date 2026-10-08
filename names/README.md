@@ -95,7 +95,9 @@ One line per dialect, and the **only** place the project lists them. The
 columns of `places.csv`, the `name:*` tags the injector writes, Planetiler's
 `--languages`, the search index and the frontend's language selector all
 derive from it, so adding a dialect is one line here plus a column in
-`places.csv` — no code change.
+`places.csv`. The one thing to add in the code is the dialect's colour in the
+dialect-area review view (`DIALECT_COLORS` in `web/src/dev/areaLayers.ts`); a
+test holds that table to the registry's tags, so it cannot be forgotten.
 
 | column | meaning |
 |---|---|
