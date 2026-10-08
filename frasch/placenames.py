@@ -178,8 +178,9 @@ def as_tags(names: PlaceNames) -> dict[str, str]:
 
 # ----------------------------------------------------------- as entry ----
 class SearchEntry(TypedDict):
-    """One place of the search index (web/src/names.ts reads it); the
-    optional fields are left out when empty."""
+    """One place of the search index, as names/search-index.schema.json
+    defines it (web/src/names.ts reads it); the optional fields are left out
+    when empty."""
 
     id: str
     names: dict[str, str]  # dialect tag -> name

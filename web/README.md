@@ -417,27 +417,13 @@ single Warft (which in any case doesn't render before `place-warft`'s
 `public/data/names.json`, which `App` fetches once at startup (`useNames` in
 `src/names.ts`) and shares with the place card. It is an object:
 `{"built_from": {...}, "places": [entry, ...]}`. `built_from` records what the
-file was built from (see "Build provenance" below). Schema of an entry (one
-per place):
-
-```jsonc
-{
-  "id": "string", // the name-list row's id, e.g. "naibel"
-  "osm": "string", // omitted: the row's OSM reference(s), e.g. "node/240042766"
-  "names": { "frr-x-mooring": "Naibel" }, // by registry tag; only non-empty ones
-  "local": "string", // omitted when unknown: the place's own name (as the tiles' `frasch:local`)
-  "dialect": "frr-x-fering", // omitted outside the Frisian dialect areas
-  "variety": "Foortuftinge", // omitted: sub-dialect of the local name
-  "name_nds": "string", // omitted: OSM's Low Saxon name of the place's object
-  "name_osm": "string", // omitted: OSM's generic `name` of the place's object
-  "name_de": "string", // German name, shown alongside as a hint
-  "name_da": "string", // omitted: Danish name, where the list has one
-  "wikidata": "Q3127", // omitted: QID of the place, where the row has one
-  "lon": 0,
-  "lat": 0,
-  "kind": "string", // e.g. "settlement", "island", "hallig"
-}
-```
+file was built from (see "Build provenance" below). The file's contract is
+[`names/search-index.schema.json`](../names/search-index.schema.json): every
+field of an entry with what it means, and which ones are left out when empty.
+`frasch build index` writes the file by it, and `NameEntry` in `src/names.ts`
+is pinned to it by a test. `parseNames` is the one place that looks at the
+fetched file: it stops on what is no name list and drops an entry without an
+id or with a repeated one. From there on the app trusts the type.
 
 `id` is the row's `id` in `names/places.csv`, and the tiles carry the same
 string as `frasch:ref`. That is the whole link between a label on the map and
@@ -548,6 +534,7 @@ or missing name" link is issue #8.
 `src/dev/CuratePanel.tsx`: the rows `frasch match` left `ambiguous`
 or `not_found`, each with its candidates as numbered pins on the map. Export
 the worklist first — `frasch curate export` writes `names/work/curate.json`
+(its contract: [`names/curate-worklist.schema.json`](../names/curate-worklist.schema.json))
 — and run it under `npm run dev`; the endpoints live in a Vite plugin with
 `apply: 'serve'` (`vite-plugins/curate.ts`, `GET /__curate/worklist`,
 `GET`/`POST /__curate/patch`), and `src/main.tsx` only loads the view under

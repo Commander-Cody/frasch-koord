@@ -348,7 +348,8 @@ uv run frasch curate apply
 ```
 
 `export` writes every ambiguous and not-found row the matcher still owns, with
-its candidates' positions and its location hint, to `work/curate.json`; rows
+its candidates' positions and its location hint, to `work/curate.json`
+(`curate-worklist.schema.json` says what is in it); rows
 deleted from `places.csv` since the match run are dropped with a note (re-run
 `frasch match`). In the browser you pick a candidate, drop a point of your own, or
 `skip` the row; every decision is appended as one line to
@@ -650,6 +651,9 @@ references: coordinates and tag fixes belong in `curation.csv` and the build.
 | `work/` | git-ignored caches (candidates, matches, Wikidata lookups) and the curation view's `curate.json` / `curate-patch.jsonl` |
 | `bootstrap/` | the original sheet export (`sheet-export.csv`) |
 | `curate-patch.schema.json` | the JSON Schema of one line of `work/curate-patch.jsonl`: the contract between the curation view, the Vite dev server and `frasch curate apply` |
+| `curate-worklist.schema.json` | the JSON Schema of `work/curate.json`: the contract between `frasch curate export` and the curation view |
+| `search-index.schema.json` | the JSON Schema of `web/public/data/names.json`: the contract between `frasch build index` and the web app |
+| `dialect-area-parts.schema.json` | the JSON Schema of `dialect_areas_parts.geojson`: the contract between `frasch build areas` and the `?areas` review view |
 
 ## Code
 

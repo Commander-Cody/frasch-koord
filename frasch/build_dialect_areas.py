@@ -119,8 +119,9 @@ class DialectProperties(TypedDict):
 
 
 class PartProperties(TypedDict):
-    """A feature of --parts: one municipality; one that no row assigns
-    (`assigned` false) has no dialect and no row."""
+    """A feature of --parts, as names/dialect-area-parts.schema.json defines
+    it: one municipality; one that no row assigns (`assigned` false) has no
+    dialect and no row."""
 
     fid: int
     assigned: bool

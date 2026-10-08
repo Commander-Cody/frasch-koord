@@ -269,7 +269,8 @@ the research `note`.
 
 So `build_dialect_areas.py` gained a **second output**,
 `names/dialect_areas_parts.geojson`: one Feature per municipality
-(`fid`, `assigned`, `dialect`, `label`, `name`, `note`, `osm`, `line`, `km2`),
+(`fid`, `assigned`, `dialect`, `label`, `name`, `note`, `osm`, `line`, `km2`;
+*since 2026-10-08 (#96) without `label`, see `names/dialect-area-parts.schema.json`*),
 written from the same in-memory geometry in the same run, so the two files
 cannot disagree. It also carries the Kreis Nordfriesland municipalities that
 **no row claims**, marked `assigned: false` — a hole in the coverage is a bug
@@ -823,6 +824,43 @@ elsewhere reads OSM's own tags from an extract: the matcher's `name:de` and
   row's entry stands for). A node found through its QID alone is now read like
   an object of the file (`locate.object_facts`).
 - The frontend's copy of the table (`web/src/names.ts`) is issue #104.
+
+
+## Decided 2026-10-08: a schema for every file that crosses to the web app (issue #96)
+
+Four files are written by Python and read by TypeScript. The curation patch
+had a JSON Schema; the worklist (`names/work/curate.json`), the search index
+(`web/public/data/names.json`) and the area parts
+(`names/dialect_areas_parts.geojson`) were typed by hand on both sides, and
+had drifted: `km` could be `null` in Python and not in TypeScript, fields
+that are always written were optional in the browser.
+
+- **One schema per file**, next to the patch's: `curate-worklist`,
+  `search-index` and `dialect-area-parts` (`names/*.schema.json`). It holds
+  what each field means; the README's copy of the search entry is gone.
+- **Each side is held to it by a test.** A Python test validates what the
+  writer produces. A TypeScript test pins the hand-written type: its field
+  names, which fields may be left out, and the JSON type of each (owner's
+  choice over names and enums alone, as the patch's pin did, and over
+  generating the types, which would have added a dependency and a generated
+  file). The pin is an object literal that only compiles while it says what
+  the type says, compared with the schema at run time
+  (`web/src/testing/schemaPin.ts`). Neither side validates at run time.
+- **The worklist carries the rules, not the cells to apply them to.** A row
+  has its primary German and Danish names (`name_de`, `name_da`, named as in
+  names.json; `de` and `da` stay the raw cells for display, owner's choice),
+  the file names the kinds a local reference can be a polygon for and the
+  results. The browser's copy of `placelist.primary` is gone. names.json's
+  `osm` stays the row's reference string, which the web app still splits
+  (owner's choice).
+- **names.json is checked once, where it is loaded** (`parseNames`), and
+  trusted after that.
+- **The area labels come from the registry alone**, and a test holds the
+  review view's colour table to the registry's tags.
+- **No tolerance for files no version of the code writes**: candidates
+  without a header (the match now stops, as on any unstamped file), a
+  `matches.csv` or a patch line without `id`, a worklist without `in_sh`, a
+  name list with `lat`/`lon` columns, a names.json without `names`.
 
 ## Remaining open questions
 1. Hosting provider for the site (R2 + Pages proposed, nothing set up yet); the tiles are GitHub release assets for now (issue #28).

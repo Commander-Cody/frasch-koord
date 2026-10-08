@@ -65,6 +65,8 @@ from frasch.registry import Registry
 
 
 class SearchIndex(TypedDict):
+    """The file as a whole, as names/search-index.schema.json defines it."""
+
     built_from: provenance.BuiltFrom
     places: list[SearchEntry]
 
