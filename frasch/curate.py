@@ -102,12 +102,19 @@ KIND_ORDER = [
 # means for the curation view.  An object near the border can come from both.
 SH_SRC = "schleswig-holstein"
 
+# The results of a match that leave a row for a human.
 RESULTS = ("ambiguous", "not_found")
 
-# ------------------------------------------------------------- the worklist ---
-# curate.json, as web/src/dev/curateWorklist.ts reads it
+# The kinds whose local reference can be a square of an area (`polygon_km2`,
+# see `decide_local`) instead of a node: the ones that are an area.
+POLYGON_KINDS = ["koog", "harde", "landscape", "island", "hallig", "sand"]
 
-# a candidate as the matcher's `candidates` cell names it (`class` is a keyword)
+# ------------------------------------------------------------- the worklist ---
+# curate.json, as names/curate-worklist.schema.json defines it and
+# web/src/dev/curateWorklist.ts reads it
+
+# a candidate as the matcher's `candidates` cell names it (`class` is a
+# keyword); `km` is its distance from the centre of North Frisia
 _Listed = TypedDict("_Listed", {"ref": str, "name": str, "class": str, "km": int | None})
 
 
@@ -130,6 +137,8 @@ class WorkRow(TypedDict):
     result: str
     name: str
     names: dict[str, str]
+    name_de: str
+    name_da: str
     de: str
     da: str
     hint: str
@@ -140,9 +149,10 @@ class WorkRow(TypedDict):
 
 
 class Worklist(TypedDict):
-    generated: str
     bbox: list[float]
     kind_order: list[str]
+    polygon_kinds: list[str]
+    results: list[str]
     rows: list[WorkRow]
 
 
@@ -354,6 +364,8 @@ def _work_row(
         "result": m["result"],
         "name": placelist.any_name(row, reg),
         "names": {c: row[c] for c in placelist.name_columns(reg) if row[c]},
+        "name_de": placelist.primary(row["de"]),
+        "name_da": placelist.primary(row["da"]),
         "de": row["de"],
         "da": row["da"],
         "hint": row["hint"],
@@ -367,9 +379,10 @@ def _work_row(
 def _write_worklist(path: str, rows: list[WorkRow]) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     worklist: Worklist = {
-        "generated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "bbox": list(geo.NF_BBOX),
         "kind_order": KIND_ORDER,
+        "polygon_kinds": POLYGON_KINDS,
+        "results": list(RESULTS),
         "rows": rows,
     }
     with open(path, "w", encoding="utf-8") as fh:

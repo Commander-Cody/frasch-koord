@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Commander-Cody/frasch-koord/names/search-index.schema.json",
+  "title": "Search index",
+  "description": "web/public/data/names.json: the rows of names/places.csv that are on the map, each with its names and where it lies. `frasch build index` writes it (frasch/searchindex.py, an entry in frasch/placenames.py), the web app fetches it once for the search and the place card (web/src/names.ts). A value that would be empty is left out, except `name_de`.",
+  "type": "object",
+  "required": ["built_from", "places"],
+  "additionalProperties": false,
+  "properties": {
+    "built_from": { "$ref": "#/$defs/built_from" },
+    "places": {
+      "description": "One entry per place, in places.csv order.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/place" }
+    }
+  },
+  "$defs": {
+    "built_from": {
+      "description": "What the file was built from (frasch/provenance.py): each input file by a fixed label and its git blob hash, and the OSM extracts. The tiles carry the same stamp, and the web app warns when the two differ.",
+      "type": "object",
+      "required": ["extracts"],
+      "properties": {
+        "extracts": {
+          "description": "The extracts the places were located in, in the order read.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/extract" }
+        }
+      },
+      "additionalProperties": {
+        "description": "An input file, e.g. `places.csv`: its git blob hash.",
+        "type": "string",
+        "pattern": "^[0-9a-f]{40}$"
+      }
+    },
+    "extract": {
+      "description": "An OSM extract, as a stamp records it.",
+      "type": "object",
+      "required": ["file", "replication_timestamp"],
+      "additionalProperties": false,
+      "properties": {
+        "file": { "description": "Its file name.", "type": "string" },
+        "replication_timestamp": {
+          "description": "How current its data is: the `osmosis_replication_timestamp` of its header. Empty for an extract without one.",
+          "type": "string"
+        }
+      }
+    },
+    "place": {
+      "description": "One place: a row of the name list, at the first OSM object of its `osm` cell.",
+      "type": "object",
+      "required": ["id", "names", "name_de", "lon", "lat", "kind"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "The row's `id`, e.g. `naibel`: stable across edits to the list and to OSM alike. The tiles carry it as `frasch:ref`.",
+          "type": "string",
+          "minLength": 1
+        },
+        "osm": {
+          "description": "The row's `osm` cell: its OSM references, `node/240042766` or `way/1; node/2`, or `local/<slug>` for a place OSM does not have.",
+          "type": "string",
+          "minLength": 1
+        },
+        "names": {
+          "description": "The dialect names by registry tag, `{\"frr-x-mooring\": \"Naibel\"}`: only the dialects that have one.",
+          "type": "object",
+          "additionalProperties": { "type": "string", "minLength": 1 }
+        },
+        "local": {
+          "description": "The name the people of the place itself use (the tiles' `frasch:local`): the name list's, else OSM's `name:frr` where the place lies in a dialect area.",
+          "type": "string",
+          "minLength": 1
+        },
+        "dialect": {
+          "description": "The registry tag of the dialect area the place lies in, e.g. `frr-x-fering`; left out outside the areas.",
+          "type": "string",
+          "minLength": 1
+        },
+        "variety": {
+          "description": "The sub-dialect remark on the local name, e.g. `Foortuftinge`.",
+          "type": "string",
+          "minLength": 1
+        },
+        "name_nds": {
+          "description": "The Low Saxon name: OSM's `name:nds` of the place's object. The label chain falls back to it before German.",
+          "type": "string",
+          "minLength": 1
+        },
+        "name_de": {
+          "description": "The German name: the primary name of the row's `de` cell, which the tiles carry as `name:de`. Empty for the few rows without one.",
+          "type": "string"
+        },
+        "name_osm": {
+          "description": "The generic name: OSM's plain `name` of the place's object, the label chain's step near its end. Usually the German name, north of the border the Danish one.",
+          "type": "string",
+          "minLength": 1
+        },
+        "name_da": {
+          "description": "The Danish name: the primary name of the row's `da` cell.",
+          "type": "string",
+          "minLength": 1
+        },
+        "wikidata": {
+          "description": "The row's Wikidata QID.",
+          "type": "string",
+          "pattern": "^Q[0-9]+$"
+        },
+        "lon": { "description": "Longitude, to 5 decimals.", "type": "number" },
+        "lat": { "description": "Latitude, to 5 decimals.", "type": "number" },
+        "kind": {
+          "description": "The row's kind, e.g. `settlement`, `island`, `hallig`.",
+          "type": "string"
+        }
+      }
+    }
+  }
+}

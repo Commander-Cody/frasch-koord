@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Commander-Cody/frasch-koord/names/curate-worklist.schema.json",
+  "title": "Curation worklist",
+  "description": "names/work/curate.json: the rows of names/places.csv the last `frasch match` left for a human, with their candidates. `frasch curate export` writes it (frasch/curate.py), the curation view (web `?curate`, web/src/dev/curateWorklist.ts) reads it through the Vite dev server. It carries every rule of the name list the view needs, so that the browser reads no cell of places.csv itself.",
+  "type": "object",
+  "required": ["bbox", "kind_order", "polygon_kinds", "results", "rows"],
+  "additionalProperties": false,
+  "properties": {
+    "bbox": {
+      "description": "North Frisia, which the view's lookups search in: lon_min, lat_min, lon_max, lat_max.",
+      "type": "array",
+      "items": { "type": "number" },
+      "minItems": 4,
+      "maxItems": 4
+    },
+    "kind_order": {
+      "description": "The kinds in the order the view offers them and the rows come in: those a human decides quickly first.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "polygon_kinds": {
+      "description": "The kinds whose local reference can be labelled with a square of an area (`polygon_km2`) instead of a node.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "results": {
+      "description": "The results a row can have, for the view's filter.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/result" }
+    },
+    "rows": {
+      "description": "By kind in `kind_order`, each kind in places.csv order.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/row" }
+    }
+  },
+  "$defs": {
+    "result": {
+      "description": "What the matcher made of a row it left for review: several plausible OSM objects, or none.",
+      "enum": ["ambiguous", "not_found"]
+    },
+    "row": {
+      "description": "One row of places.csv, what the matcher said about it, its candidates and where its hint points.",
+      "type": "object",
+      "required": [
+        "id",
+        "line",
+        "kind",
+        "result",
+        "name",
+        "names",
+        "name_de",
+        "name_da",
+        "de",
+        "da",
+        "hint",
+        "note",
+        "why",
+        "hint_point",
+        "candidates"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "The places.csv row's `id`: what the decisions are keyed on.",
+          "type": "string",
+          "minLength": 1
+        },
+        "line": {
+          "description": "Its line in places.csv at export time (header = 1); shown, never used to find the row.",
+          "type": "integer"
+        },
+        "kind": { "description": "The row's kind.", "type": "string" },
+        "result": { "$ref": "#/$defs/result" },
+        "name": {
+          "description": "The Frisian name `frasch match` worked with: the primary name of the first name column that has one.",
+          "type": "string"
+        },
+        "names": {
+          "description": "Every non-empty Frisian name column, raw cell text, keyed by column name.",
+          "type": "object",
+          "additionalProperties": { "type": "string", "minLength": 1 }
+        },
+        "name_de": {
+          "description": "The primary German name: the first variant of `de`, its remarks stripped. Empty when the row has none.",
+          "type": "string"
+        },
+        "name_da": {
+          "description": "The primary Danish name, read from `da` like `name_de`.",
+          "type": "string"
+        },
+        "de": { "description": "The German cell, raw: every variant with its remarks.", "type": "string" },
+        "da": { "description": "The Danish cell, raw.", "type": "string" },
+        "hint": { "description": "The row's location hint, raw.", "type": "string" },
+        "note": { "description": "The row's note.", "type": "string" },
+        "why": {
+          "description": "Why the matcher gave up (the `note` of work/matches.csv).",
+          "type": "string"
+        },
+        "hint_point": {
+          "description": "Where the first place of the hint lies: lon, lat, radius in km. null for a row without a hint, or with one nothing resolves.",
+          "type": ["array", "null"],
+          "items": { "type": "number" },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "candidates": {
+          "description": "The OSM objects the matcher considered, best first.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/candidate" }
+        }
+      }
+    },
+    "candidate": {
+      "description": "One OSM object the matcher considered for a row.",
+      "type": "object",
+      "required": ["ref", "name", "class", "km", "lon", "lat", "tags", "in_sh"],
+      "additionalProperties": false,
+      "properties": {
+        "ref": {
+          "description": "The object: `node/123`, `way/123` or `relation/123`.",
+          "type": "string",
+          "pattern": "^(node|way|relation)/[0-9]+$"
+        },
+        "name": { "description": "Its OSM name, cut to 40 characters.", "type": "string" },
+        "class": {
+          "description": "What it is, in one word: the value of its `place` tag, else of the next tag that says (`natural`, `boundary`, ...), else `-`.",
+          "type": "string"
+        },
+        "km": {
+          "description": "Its distance from the centre of North Frisia in km, as `frasch match` computed it. null for an object without a position.",
+          "type": ["integer", "null"]
+        },
+        "lon": {
+          "description": "null when work/candidates.jsonl no longer has the object (rebuilt since the match), or has no position for it.",
+          "type": ["number", "null"]
+        },
+        "lat": { "description": "As `lon`.", "type": ["number", "null"] },
+        "tags": {
+          "description": "The tags that say what kind of thing it is, `place=hamlet;boundary=administrative`. Empty when work/candidates.jsonl no longer has the object.",
+          "type": "string"
+        },
+        "in_sh": {
+          "description": "Whether it is in the Schleswig-Holstein extract the tiles are built from: only such an object can carry an injected name.",
+          "type": "boolean"
+        },
+        "wikidata": {
+          "description": "The object's `wikidata` tag, raw (OSM sometimes lists several ids); left out when it has none.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

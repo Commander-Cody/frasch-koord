@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Commander-Cody/frasch-koord/names/dialect-area-parts.schema.json",
+  "title": "Dialect area parts",
+  "description": "names/dialect_areas_parts.geojson: one Feature per municipality of names/dialect_areas.csv, and one per municipality of Kreis Nordfriesland no row claims. `frasch build areas` writes it (frasch/build_dialect_areas.py) for the dialect-area review view alone (web `?areas`, web/src/dev/AreaPanel.tsx); nothing in the Python pipeline reads it.",
+  "type": "object",
+  "required": ["type", "properties", "features"],
+  "additionalProperties": false,
+  "properties": {
+    "type": { "const": "FeatureCollection" },
+    "properties": {
+      "description": "The file's own properties: what it was built from, and how.",
+      "type": "object",
+      "required": ["source", "simplify_deg", "unit", "unassigned_ags", "built_from"],
+      "additionalProperties": false,
+      "properties": {
+        "source": { "description": "The file name of the area list.", "type": "string" },
+        "simplify_deg": {
+          "description": "The tolerance the geometry was simplified to, in degrees.",
+          "type": "number"
+        },
+        "unit": { "description": "What one feature is.", "type": "string" },
+        "unassigned_ags": {
+          "description": "The municipality-key prefix of the district whose unclaimed municipalities are in the file; empty when there are none.",
+          "type": "string"
+        },
+        "built_from": {
+          "description": "What the file was built from, as `$defs/built_from` of names/search-index.schema.json defines a stamp: the area list, the dialect registry and the extract.",
+          "type": "object"
+        }
+      }
+    },
+    "features": {
+      "description": "The municipalities of the area list in its order, then the unclaimed ones by name.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type", "properties", "geometry"],
+        "additionalProperties": false,
+        "properties": {
+          "type": { "const": "Feature" },
+          "properties": { "$ref": "#/$defs/part" },
+          "geometry": {
+            "type": "object",
+            "required": ["type", "coordinates"],
+            "additionalProperties": false,
+            "properties": {
+              "type": { "enum": ["Polygon", "MultiPolygon"] },
+              "coordinates": { "type": "array" }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "part": {
+      "description": "One municipality. One that a row of the area list assigns has that row's dialect, note and line; one that no row claims has none of them -- above all no `dialect`, which is what keeps the dialect lookup from ever loading this file.",
+      "type": "object",
+      "required": ["fid", "assigned", "name", "osm", "km2"],
+      "additionalProperties": false,
+      "properties": {
+        "fid": {
+          "description": "The feature's number, stable within one build: the view's selection key.",
+          "type": "integer"
+        },
+        "assigned": {
+          "description": "Whether a row of the area list claims the municipality.",
+          "type": "boolean"
+        },
+        "dialect": {
+          "description": "The registry tag of the dialect the row assigns it to; the registry has its label.",
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "description": "The row's `name`; of an unclaimed municipality its OSM name, empty when it has none.",
+          "type": "string"
+        },
+        "note": { "description": "The row's research note, verbatim.", "type": "string" },
+        "osm": {
+          "description": "The row's `osm` cell, `relation/1; relation/2`; of an unclaimed municipality its relation. A reference is on one row only, so the first is the view's deep-link key.",
+          "type": "string",
+          "minLength": 1
+        },
+        "line": {
+          "description": "The row's line in names/dialect_areas.csv (header = 1), for display.",
+          "type": "integer"
+        },
+        "km2": { "description": "Its area in km², to one decimal.", "type": "number" }
+      },
+      "if": { "properties": { "assigned": { "const": true } } },
+      "then": { "required": ["dialect", "note", "line"] },
+      "else": {
+        "properties": { "dialect": false, "note": false, "line": false }
+      }
+    }
+  }
+}
