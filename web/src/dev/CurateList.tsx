@@ -5,7 +5,6 @@
  */
 import { useEffect, useRef } from 'react';
 
-import { primary } from '../names';
 import type { PatchEntry } from './curatePatch';
 import type { CurateRow } from './curateWorklist';
 
@@ -40,7 +39,7 @@ export default function CurateList({ rows, doneById, selectedId, onSelect }: Cur
             <button type="button" onClick={() => onSelect(row.id)}>
               <span className="curate-item-head">
                 <span className="curate-item-name">{row.name}</span>
-                <span className="curate-item-de">{primary(row.de) || primary(row.da)}</span>
+                <span className="curate-item-de">{row.name_de || row.name_da}</span>
                 <span className={`curate-badge curate-badge-${row.result}`}>{row.kind}</span>
               </span>
               {row.hint && <span className="curate-item-hint">{row.hint}</span>}

@@ -1,17 +1,25 @@
 /**
  * The curation view's counts and list filter, in the panel's sticky header.
  */
-import type { ResultFilter, RowFilter } from './curateWorklist';
+import type { CurateRow, ResultFilter, RowFilter } from './curateWorklist';
 
 export interface CurateFiltersProps {
   filter: RowFilter;
   onChange: (filter: RowFilter) => void;
   /** The kinds to offer, in the exporter's order. */
   kinds: string[];
+  /** The results to offer, as the worklist names them. */
+  results: CurateRow['result'][];
   counts: { open: number; done: number; shown: number };
 }
 
-export default function CurateFilters({ filter, onChange, kinds, counts }: CurateFiltersProps) {
+export default function CurateFilters({
+  filter,
+  onChange,
+  kinds,
+  results,
+  counts,
+}: CurateFiltersProps) {
   const set = (change: Partial<RowFilter>) => onChange({ ...filter, ...change });
   return (
     <>
@@ -46,8 +54,11 @@ export default function CurateFilters({ filter, onChange, kinds, counts }: Curat
           onChange={(event) => set({ result: event.target.value as ResultFilter })}
         >
           <option value="all">all results</option>
-          <option value="ambiguous">ambiguous</option>
-          <option value="not_found">not found</option>
+          {results.map((result) => (
+            <option key={result} value={result}>
+              {result.replaceAll('_', ' ')}
+            </option>
+          ))}
         </select>
       </div>
       <label className="curate-check">

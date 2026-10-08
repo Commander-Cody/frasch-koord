@@ -10,7 +10,6 @@ import { useCallback, useState } from 'react';
 import type { RefObject } from 'react';
 
 import type { MapViewHandle } from '../components/Map';
-import { primary } from '../names';
 import {
   candidateColor,
   hasPoint,
@@ -33,15 +32,14 @@ import RefItem from './RefItem';
 /** How many ticked refs the selection summary spells out ("select all" can tick hundreds). */
 const MAX_LISTED_REFS = 12;
 
-/** Kinds whose curation row can carry an area instead of a bare point. */
-const POLYGON_KINDS = new Set(['koog', 'harde', 'landscape', 'island', 'hallig', 'sand']);
-
 export interface CurateDetailProps {
   row: CurateRow;
   /** The row's current decision, if it has one. */
   done: PatchEntry | null;
   /** The worklist's bbox, which the lookups search in. */
   bbox: Bbox;
+  /** Whether a local reference of the row's kind can carry an area instead of a bare point. */
+  canBePolygon: boolean;
   mapRef: RefObject<MapViewHandle | null>;
   /** Stores a decision; rejects with a message fit for the panel. */
   onSave: (row: CurateRow, decision: Decision) => Promise<void>;
@@ -97,9 +95,15 @@ function useCheckedRefs() {
   return { checked, toggle, checkAll, clear };
 }
 
-export default function CurateDetail({ row, done, bbox, mapRef, onSave }: CurateDetailProps) {
-  const de = primary(row.de);
-  const lookup = useOsmLookup(bbox, de || primary(row.da) || row.name);
+export default function CurateDetail({
+  row,
+  done,
+  bbox,
+  canBePolygon,
+  mapRef,
+  onSave,
+}: CurateDetailProps) {
+  const lookup = useOsmLookup(bbox, row.name_de || row.name_da || row.name);
   const { checked, toggle, checkAll, clear } = useCheckedRefs();
   const [activeRef, setActiveRef] = useState<string | null>(null);
   const [note, setNote] = useState('');
@@ -170,7 +174,12 @@ export default function CurateDetail({ row, done, bbox, mapRef, onSave }: Curate
         />
         {checked.length > 0 && <CheckedPick checked={checked} onClear={clear} decide={decide} />}
         <ManualRef decide={decide} />
-        <LocalRef row={row} initialSlug={slugify(de || row.name)} mapRef={mapRef} decide={decide} />
+        <LocalRef
+          initialSlug={slugify(row.name_de || row.name)}
+          canBePolygon={canBePolygon}
+          mapRef={mapRef}
+          decide={decide}
+        />
 
         <h3 className="dev-panel-section">Note / skip</h3>
         <input
@@ -199,7 +208,7 @@ export default function CurateDetail({ row, done, bbox, mapRef, onSave }: Curate
 /** What the worklist knows about the row. */
 function RowFacts({ row }: { row: CurateRow }) {
   const facts: [string, string][] = [
-    ...Object.entries(row.names ?? {}),
+    ...Object.entries(row.names),
     ['de', row.de],
     ['da', row.da],
     ['hint', row.hint],
@@ -242,7 +251,6 @@ function Candidates({
   onPick,
 }: CandidatesProps) {
   const inSh = candidates.filter((candidate) => candidate.in_sh);
-  const hasInShFlag = candidates.some((candidate) => candidate.in_sh !== undefined);
   return (
     <>
       <h3 className="dev-panel-section">Candidates ({candidates.length})</h3>
@@ -254,16 +262,7 @@ function Candidates({
           <button type="button" onClick={() => onCheckAll(candidates)}>
             select all
           </button>
-          <button
-            type="button"
-            disabled={inSh.length === 0}
-            title={
-              hasInShFlag
-                ? undefined
-                : 'curate.json predates the in_sh flag — re-run frasch curate export'
-            }
-            onClick={() => onCheckAll(inSh)}
-          >
+          <button type="button" disabled={inSh.length === 0} onClick={() => onCheckAll(inSh)}>
             select all in Schleswig-Holstein ({inSh.length})
           </button>
         </div>
@@ -294,7 +293,7 @@ function candidateMeta(candidate: CurateCandidate): string {
   const wikidata = singleWikidataId(candidate.wikidata);
   return [
     candidate.class,
-    typeof candidate.km === 'number' ? ` · ${candidate.km} km` : '',
+    candidate.km !== null ? ` · ${candidate.km} km` : '',
     candidate.tags ? ` · ${candidate.tags}` : '',
     wikidata ? ` · ${wikidata}` : '',
   ].join('');
@@ -364,28 +363,27 @@ function ManualRef({ decide }: { decide: (decision: Decision) => void }) {
 }
 
 interface LocalRefProps {
-  row: CurateRow;
   initialSlug: string;
+  canBePolygon: boolean;
   mapRef: RefObject<MapViewHandle | null>;
   decide: (decision: Decision) => void;
 }
 
 /** A place OSM does not have: a slug and a position set on the map. */
-function LocalRef({ row, initialSlug, mapRef, decide }: LocalRefProps) {
+function LocalRef({ initialSlug, canBePolygon, mapRef, decide }: LocalRefProps) {
   const [slug, setSlug] = useState(initialSlug);
   const [position, setPosition] = useState<Position | null>(null);
   const [picking, setPicking] = useState(false);
   const [polygonKm2, setPolygonKm2] = useState('');
   usePositionPin({ mapRef, position, setPosition, picking, setPicking });
 
-  const polygonRelevant = POLYGON_KINDS.has(row.kind);
   const save = (at: Position) =>
     decide({
       action: 'local',
       slug,
       lat: Number(at.lat.toFixed(6)),
       lon: Number(at.lon.toFixed(6)),
-      ...(polygonRelevant && polygonKm2.trim() ? { polygon_km2: Number(polygonKm2) } : {}),
+      ...(canBePolygon && polygonKm2.trim() ? { polygon_km2: Number(polygonKm2) } : {}),
     });
 
   return (
@@ -412,7 +410,7 @@ function LocalRef({ row, initialSlug, mapRef, decide }: LocalRefProps) {
           {position ? `${position.lat.toFixed(6)}, ${position.lon.toFixed(6)}` : 'no position'}
         </span>
       </div>
-      {polygonRelevant && (
+      {canBePolygon && (
         <input
           className="dev-panel-input"
           type="number"

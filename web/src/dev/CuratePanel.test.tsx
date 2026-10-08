@@ -3,7 +3,28 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 
 import CuratePanel from './CuratePanel';
 import type { PatchEntry } from './curatePatch';
-import type { CurateRow, CurateWorklist } from './curateWorklist';
+import type { CurateCandidate, CurateRow, CurateWorklist } from './curateWorklist';
+
+/** A candidate 1 km out, without a position. */
+function candidate(
+  ref: string,
+  name: string,
+  placeClass: string,
+  wikidata?: string,
+): CurateCandidate {
+  const tagged = wikidata ? { wikidata } : {};
+  return {
+    ref,
+    name,
+    class: placeClass,
+    km: 1,
+    lon: null,
+    lat: null,
+    tags: '',
+    in_sh: false,
+    ...tagged,
+  };
+}
 
 function curateRow(id: string, name: string, de: string): CurateRow {
   return {
@@ -13,39 +34,43 @@ function curateRow(id: string, name: string, de: string): CurateRow {
     result: 'ambiguous',
     name,
     names: {},
+    name_de: de,
+    name_da: '',
     de,
     da: '',
     hint: '',
     note: '',
     why: '',
     hint_point: null,
-    candidates: [{ ref: `node/${id.length}`, name: de, class: 'village', km: 1 }],
+    candidates: [candidate(`node/${id.length}`, de, 'village')],
   };
 }
 
 const WORKLIST: CurateWorklist = {
-  generated: '2026-09-30',
   bbox: [8, 54, 9, 55],
   kind_order: ['settlement'],
+  polygon_kinds: ['koog'],
+  results: ['ambiguous', 'not_found'],
   rows: [
     curateRow('naibel', 'Naibel', 'Niebüll'),
     curateRow('rischsbel', 'Rischsbel', 'Risum'),
     curateRow('deesbel', 'Deesbel', 'Dagebüll'),
     {
       ...curateRow('taning', 'Taning', 'Tönning'),
-      candidates: [
-        { ref: 'node/7', name: 'Tönning', class: 'town', km: 1, wikidata: 'Q1717813;Q20729612' },
-      ],
+      candidates: [candidate('node/7', 'Tönning', 'town', 'Q1717813;Q20729612')],
     },
     {
       ...curateRow('hoosem', 'Hoosem', 'Husum'),
       candidates: [
-        { ref: 'node/9', name: 'Husum', class: 'town', km: 1, wikidata: 'Q21159' },
-        { ref: 'way/10', name: 'Husum', class: 'boundary', km: 1, wikidata: 'Q21159;Q20729612' },
+        candidate('node/9', 'Husum', 'town', 'Q21159'),
+        candidate('way/10', 'Husum', 'boundary', 'Q21159;Q20729612'),
       ],
     },
   ],
 };
+
+/** The worklist the dev server hands out; a test may put another in its place. */
+let worklist: CurateWorklist;
 
 /** A reply the test settles by hand. */
 function deferred() {
@@ -82,12 +107,13 @@ beforeEach(() => {
   window.history.replaceState(null, '', '/');
   // jsdom lays nothing out; CurateList keeps the selected row in view.
   Element.prototype.scrollIntoView = () => {};
+  worklist = WORKLIST;
   posts = [];
   lookups = [];
   vi.stubGlobal(
     'fetch',
     vi.fn((input: string, init?: RequestInit) => {
-      if (input === '/__curate/worklist') return Promise.resolve(json(WORKLIST));
+      if (input === '/__curate/worklist') return Promise.resolve(json(worklist));
       if (input === '/__curate/patch' && init?.method === 'POST') {
         const reply = deferred();
         posts.push({ entry: JSON.parse(String(init.body)) as PatchEntry, reply });
@@ -149,6 +175,73 @@ function selectedHeading(): string {
 }
 
 describe('CuratePanel', () => {
+  it('lists a row under its primary German name, not the cell with its variants', async () => {
+    const row = { ...curateRow('naibel', 'Naibel', 'Niebüll; Nibüll (alt)'), name_de: 'Niebüll' };
+    worklist = { ...WORKLIST, rows: [row] };
+
+    await renderPanel();
+
+    expect(document.querySelector('.curate-item-de')?.textContent).toBe('Niebüll');
+  });
+
+  it('lists a row without a German name under its primary Danish one', async () => {
+    const row = { ...curateRow('ripen', 'Ripen', ''), da: 'Ribe?', name_da: 'Ribe' };
+    worklist = { ...WORKLIST, rows: [row] };
+
+    render(<CuratePanel mapRef={{ current: null }} />);
+    await screen.findByText('Ripen');
+
+    expect(document.querySelector('.curate-item-de')?.textContent).toBe('Ribe');
+  });
+
+  it('saves a decision with the primary German name of its row', async () => {
+    const row = { ...curateRow('naibel', 'Naibel', 'Niebüll; Nibüll (alt)'), name_de: 'Niebüll' };
+    worklist = { ...WORKLIST, rows: [row] };
+    await renderPanel();
+    await openRow('Naibel');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
+
+    expect(posts[0].entry.de).toBe('Niebüll');
+  });
+
+  it('offers the area of a local reference for a kind the worklist says can be a polygon', async () => {
+    worklist = { ...WORKLIST, polygon_kinds: ['settlement'] };
+    await renderPanel();
+
+    await openRow('Naibel');
+
+    expect(screen.queryByLabelText('polygon_km2')).not.toBeNull();
+  });
+
+  it('offers no area of a local reference for any other kind', async () => {
+    await renderPanel();
+
+    await openRow('Naibel');
+
+    expect(screen.queryByLabelText('polygon_km2')).toBeNull();
+  });
+
+  it('offers the results the worklist names in the filter', async () => {
+    worklist = { ...WORKLIST, results: ['not_found'] };
+
+    await renderPanel();
+
+    const options = within(screen.getByLabelText('result')).getAllByRole('option');
+    expect(options.map((option) => option.textContent)).toEqual(['all results', 'not found']);
+  });
+
+  it('names no distance for a candidate without one', async () => {
+    const row = curateRow('naibel', 'Naibel', 'Niebüll');
+    row.candidates = [{ ...candidate('way/5', 'Niebüll', 'residential'), km: null }];
+    worklist = { ...WORKLIST, rows: [row] };
+    await renderPanel();
+
+    await openRow('Naibel');
+
+    expect((await listedItem('way/5')).textContent).not.toContain('km');
+  });
+
   it('saves a double-clicked pick once', async () => {
     await renderPanel();
     await openRow('Naibel');
