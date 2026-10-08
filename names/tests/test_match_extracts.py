@@ -4,6 +4,7 @@ one -- dropping the Denmark extract clears every `auto` row only it has."""
 
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -125,7 +126,8 @@ def test_a_refreshed_extract_is_no_warning(world: Path, capsys: pytest.CaptureFi
 def test_candidates_that_name_no_extracts_stop_the_match(world: Path) -> None:
     (world / "places.csv").write_text(places_text(ROWS), encoding="utf-8")
     candidates = world / "work" / "candidates.jsonl"
-    candidates.write_text("", encoding="utf-8")
+    # a record where the header belongs: nothing says which extracts it is from
+    candidates.write_text(json.dumps(TOFTUM) + "\n", encoding="utf-8")
     with pytest.raises(PipelineError) as stop:
         match.run(workspace(world), REGISTRY, offline=True)
     assert str(stop.value) == (
