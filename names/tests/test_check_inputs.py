@@ -330,7 +330,7 @@ def test_a_dialect_registered_twice_is_reported(names: CheckNames) -> None:
 
 
 def test_a_registry_without_dialects_is_reported_not_a_crash(names: CheckNames) -> None:
-    # as registry.read refuses it: without a dialect no name column exists
+    # as dialects.read refuses it: without a dialect no name column exists
     problems = names(places_text([TOFTUM]), dialects=REGISTRY_HEADER + "\n")
     assert [(os.path.basename(p.path), p.line, p.message) for p in problems] == [
         ("dialects.csv", 1, "no dialects")

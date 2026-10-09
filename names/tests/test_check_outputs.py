@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from frasch import build_dialect_areas, check_outputs, locate, match, registry
+from frasch import build_dialect_areas, check_outputs, dialects, locate, match
 from frasch import searchindex
 from frasch.__main__ import main
 from frasch.objects import Objects, objects_json
@@ -67,15 +67,15 @@ def write_report(ws: Workspace) -> None:
 def export(ws: Workspace) -> None:
     """Write the search index and the frontend's registry of `ws`, as the
     recipes would."""
-    reg = registry.read(ws.dialects)
+    reg = dialects.read(ws.dialects)
     searchindex.write(searchindex.build(ws, reg), ws.index)
-    registry.export_json(reg, ws.registry_json)
+    dialects.export_json(reg, ws.registry_json)
 
 
 def problems(ws: Workspace, *extracts: Path) -> str:
     """What the check finds wrong with `ws`, a line each."""
     given = Extracts.given([str(p) for p in extracts])
-    return "\n".join(check_outputs.problems(Run(ws, registry.read(ws.dialects), given)))
+    return "\n".join(check_outputs.problems(Run(ws, dialects.read(ws.dialects), given)))
 
 
 def test_up_to_date_outputs_pass(repo: Workspace) -> None:
@@ -151,7 +151,7 @@ def extract(world: Path, repo: Workspace) -> Extract:
 
 def build_from_extract(ws: Workspace, pbf: Path) -> None:
     """Rebuild every output of `ws` from `pbf`, as the recipes would."""
-    reg = registry.read(ws.dialects)
+    reg = dialects.read(ws.dialects)
     locate.run(ws, reg, [pbf])
     build_dialect_areas.run(ws, reg, [pbf])
     write_report(ws)
@@ -205,7 +205,7 @@ def test_the_dialect_areas_are_rebuilt_from_the_first_extract_alone(
     # the dialect areas come from the SH extract alone, the objects from SH + DK
     ws, pbf, _ = extract
     dk = write_extract(world / "denmark-latest.osm.pbf", nodes={7: ((8.4, 55.4), {})})
-    locate.run(ws, registry.read(ws.dialects), [pbf, dk])
+    locate.run(ws, dialects.read(ws.dialects), [pbf, dk])
     write_report(ws)
     export(ws)
     assert problems(ws, pbf, dk) == ""

@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from frasch import cli, registry
+from frasch import cli, dialects
 from frasch.errors import ValidationError
 from frasch.paths import Workspace
 
@@ -56,7 +56,7 @@ def test_a_broken_input_stops_the_library_with_a_validation_error(tmp_path: Path
         REGISTRY_HEADER + "frr-y-mooring,mooring,Mooring,living,yes,\n", encoding="utf-8"
     )
     with pytest.raises(ValidationError, match="dialects.csv:2: bad tag"):
-        registry.read(str(path))
+        dialects.read(str(path))
 
 
 def test_the_command_reports_it_and_exits_1(
@@ -66,5 +66,5 @@ def test_the_command_reports_it_and_exits_1(
     path.write_text(
         REGISTRY_HEADER + "frr-y-mooring,mooring,Mooring,living,yes,\n", encoding="utf-8"
     )
-    assert registry.main(["--dialects", str(path)]) == 1
+    assert dialects.main(["--dialects", str(path)]) == 1
     assert "dialects.csv:2: bad tag" in capsys.readouterr().err

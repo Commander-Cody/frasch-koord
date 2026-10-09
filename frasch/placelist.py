@@ -9,7 +9,7 @@ map.  Its conventions (see names/README.md):
 * `(...)` after a variant is a remark about it (local variety, source), never
   part of the name
 * one column per dialect (`mooring`, `wieding`, ... -- the list comes from
-  the dialect registry, frasch.registry), plus `local` (the form the people of
+  the dialect registry, frasch.dialects), plus `local` (the form the people of
   the place itself use when it differs from the dialect of the area, e.g.
   Fahretoft)
 * `osm` holds one or more OSM references: `node/123`, `way/1; way/2` -- or
@@ -22,7 +22,7 @@ map.  Its conventions (see names/README.md):
 Everything here is deliberately small and free of OSM libraries so that the
 matcher, the injector and the checks can all share it.  The column layout
 depends on the dialect registry: the functions that need it take a
-`Registry` (frasch.registry).  The dialect-aware name logic (the fallbacks)
+`Registry` (frasch.dialects).  The dialect-aware name logic (the fallbacks)
 lives one layer up in frasch.dialects.
 """
 
@@ -35,9 +35,11 @@ import re
 import unicodedata
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 
-from frasch import files, tables
+from frasch import files, refs, tables
+from frasch.dialects import LOCAL_COLUMN, Registry
 from frasch.errors import Invalid, PipelineError, Problem, ValidationError
-from frasch.registry import LOCAL_COLUMN, Registry
+from frasch.namecell import primary
+from frasch.refs import SLUG, Ref
 from frasch.tables import Table
 
 
@@ -75,25 +77,11 @@ KINDS = {
 }
 STATUSES = {"", "auto", "ok", "skip"}
 
-OSM_TYPES = {"node": "n", "way": "w", "relation": "r"}
-# `local/<slug>`: not an OSM object but a place of our own, positioned in
-# names/curation.csv.  Keyed like the others, with the slug as its id.
-LOCAL_TYPE = "l"
-TYPE_NAME = {v: k for k, v in OSM_TYPES.items()} | {LOCAL_TYPE: "local"}
-# the shape of a row id and of a local reference's slug
-SLUG = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 WIKIDATA_ID = re.compile(r"Q\d+")
-
-_REMARK = re.compile(r"\(([^()]*)\)")
 
 # A row's cells, column -> stripped text: what the functions that only read a
 # row take, so that a row built by hand (a test, a patch) will do as well.
 Row = Mapping[str, str]
-# One reference of an `osm` cell as `parse_osm` returns it: `("w", 12)` for
-# an OSM object, `("l", "westerheide-amrum")` for a local one.
-Ref = tuple[str, int | str]
-# one that names an OSM object: a node, way or relation id
-OsmRef = tuple[str, int]
 
 
 class PlaceRow(dict[str, str]):
@@ -104,66 +92,6 @@ class PlaceRow(dict[str, str]):
     def __init__(self, cells: Mapping[str, str], line: int):
         super().__init__(cells)
         self.line = line
-
-
-def split_variants(cell: str | None) -> list[str]:
-    """Split a name cell on `;` -- but not inside brackets, because a remark
-    may itself list several dialects: `Huađer; Huuger (Sölring; Wisinge)` is
-    two variants, not three."""
-    out: list[str] = []
-    buf: list[str] = []
-    depth = 0
-    for ch in cell or "":
-        if ch == "(":
-            depth += 1
-        elif ch == ")":
-            depth = max(0, depth - 1)
-        if ch == ";" and depth == 0:
-            out.append("".join(buf))
-            buf = []
-        else:
-            buf.append(ch)
-    out.append("".join(buf))
-    return out
-
-
-def parts(cell: str | None) -> list[tuple[str, str]]:
-    """`"Rübel; Rübbel (wisinge)"` -> `[("Rübel", ""), ("Rübbel", "wisinge")]`.
-
-    The remark comes back without its brackets; several brackets on one
-    variant are joined with `; `.  Variants without a name are dropped."""
-    out: list[tuple[str, str]] = []
-    for part in split_variants(cell):
-        remarks = [m.group(1).strip() for m in _REMARK.finditer(part)]
-        name = _REMARK.sub("", part).strip().rstrip("?").strip()
-        if name:
-            out.append((name, "; ".join(r for r in remarks if r)))
-    return out
-
-
-def variants(cell: str | None) -> list[str]:
-    """`"Rübel; Rübbel (wisinge)"` -> `["Rübel", "Rübbel"]` (remarks stripped)."""
-    out: list[str] = []
-    for name, _ in parts(cell):
-        if name not in out:
-            out.append(name)
-    return out
-
-
-def primary(cell: str | None) -> str:
-    v = variants(cell)
-    return v[0] if v else ""
-
-
-def remark(cell: str | None) -> str:
-    """The remark of the PRIMARY variant of a cell (`""` when it has none)."""
-    p = parts(cell)
-    return p[0][1] if p else ""
-
-
-def label(row: Row, column: str = "mooring") -> str:
-    """The map label of a row for one dialect column (its primary variant)."""
-    return primary(row.get(column))
 
 
 def any_name(row: Row, reg: Registry) -> str:
@@ -197,7 +125,7 @@ def owned_by_matcher(row: Row) -> bool:
     wikidata / status?  Not a row a human decided -- `ok`/`skip`, a
     hand-filled reference, a local reference, `not_a_place` -- only one it
     filled itself (`auto`) or one with nothing in it yet."""
-    if local_ref(row["osm"]):
+    if refs.local_of(refs.parse(row["osm"])):
         return False  # a local reference: OSM has no object for it
     if row["kind"] == "not_a_place" or row["status"] in ("ok", "skip"):
         return False
@@ -206,79 +134,13 @@ def owned_by_matcher(row: Row) -> bool:
     return not row["osm"] and not row["wikidata"]
 
 
-def parse_osm(cell: str | None, where: str = "") -> list[Ref]:
-    """`"way/12; way/13"` -> `[("w", 12), ("w", 13)]`;
-    `"local/westerheide-amrum"` -> `[("l", "westerheide-amrum")]`.
-
-    A local reference stands alone: it is the whole cell, never one of
-    several."""
-    out: list[Ref] = []
-    for ref in (cell or "").split(";"):
-        ref = ref.strip()
-        if not ref:
-            continue
-        m = re.fullmatch(rf"(node|way|relation)/(\d+)|(local)/({SLUG.pattern})", ref)
-        if not m:
-            raise Invalid(
-                where,
-                f"bad reference {ref!r} (expected node/ID, "
-                f"way/ID, relation/ID or local/slug with a slug "
-                f"of lowercase letters, digits and hyphens)",
-            )
-        if m.group(3):
-            out.append((LOCAL_TYPE, m.group(4)))
-        else:
-            out.append((OSM_TYPES[m.group(1)], int(m.group(2))))
-    if len(out) > 1 and any(t == LOCAL_TYPE for t, _ in out):
-        raise Invalid(
-            where,
-            f"a local reference stands alone, it cannot be "
-            f"combined with other references: {cell!r}",
-        )
-    return out
-
-
-def as_osm_ref(ref: Ref) -> OsmRef | None:
-    """The reference as one to an OSM object; None for a local one."""
-    t, i = ref
-    return (t, i) if isinstance(i, int) else None
-
-
-def local_slug(ref: Ref) -> str | None:
-    """The slug of a local reference; None for one to an OSM object."""
-    _, i = ref
-    return i if isinstance(i, str) else None
-
-
-def osm_refs(cell: str | None, where: str = "") -> list[OsmRef]:
-    """The references to OSM objects of an `osm` cell -- none for a local
-    reference."""
-    return [osm for ref in parse_osm(cell, where) if (osm := as_osm_ref(ref))]
-
-
-def format_osm(refs: Iterable[Ref]) -> str:
-    return "; ".join(f"{TYPE_NAME[t]}/{i}" for t, i in refs)
-
-
-def local_ref(cell: str | None) -> str | None:
-    """The slug when the cell is a local reference (`local/<slug>`), else None.
-
-    Places OSM does not have (Harden, most Köge, vanished Halligen, a Warft
-    nobody has mapped) get a reference of our own; names/curation.csv
-    positions it and says how the map treats it, the injector adds the object,
-    the search index takes the position from there, and the matcher leaves the
-    row alone."""
-    refs = parse_osm(cell)
-    return local_slug(refs[0]) if refs else None
-
-
 def claimed_refs(row: Row) -> list[Ref]:
     """The objects a row puts on the map: the references in its `osm` cell,
     none for a `skip` row, which never reaches the map.  Only one row per
     object can: the injector labels an object once."""
     if row["status"] == "skip":
         return []
-    return parse_osm(row.get("osm"))
+    return refs.parse(row.get("osm"))
 
 
 def header_problem(fields: Sequence[str], reg: Registry) -> str | None:
@@ -302,7 +164,7 @@ def row_problems(row: Row) -> list[str]:
     if row["status"] not in STATUSES:
         out.append(f"unknown status {row['status']!r} (auto / ok / skip / empty)")
     try:
-        local = local_ref(row["osm"])
+        local = refs.local_of(refs.parse(row["osm"]))
     except Invalid as exc:
         out.append(exc.reason)
         local = None

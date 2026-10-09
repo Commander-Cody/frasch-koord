@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from frasch import placelist, registry, update
+from frasch import dialects, placelist, update
 from frasch.__main__ import main
 from frasch.errors import PipelineError, Problem
 from conftest import AREA_LIST, REGISTRY_CSV, TOFTUM_NODE, path_options, places_text
@@ -225,14 +225,14 @@ def test_a_run_reads_the_dialect_registry_once(
     workspace: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     write_places(workspace, TOFTEM)
-    read_rows = registry.rows
+    read_rows = dialects.rows
     reads = []
 
-    def counted(path: str) -> tuple[list[registry.Dialect], list[Problem]]:
+    def counted(path: str) -> tuple[list[dialects.Dialect], list[Problem]]:
         reads.append(path)
         return read_rows(path)
 
-    monkeypatch.setattr(registry, "rows", counted)
+    monkeypatch.setattr(dialects, "rows", counted)
     assert run(workspace) == 0
     assert reads == [workspace_of(workspace).dialects]
 

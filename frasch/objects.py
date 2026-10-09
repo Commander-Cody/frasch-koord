@@ -1,8 +1,8 @@
 """The objects file, names/osm_objects.json: where the objects of the name
 list are, as frasch.locate worked it out.  The search index, the injector and
 `frasch check-outputs` read it (and `just update`, to tell whether it is
-stale).  An object that is not in it is made here too: `point`, and
-`local_point` for a place OSM does not have.
+stale).  Which objects the rows of the name list need, and what to do about
+one the file lacks, is frasch.placeobjects'.
 
 For every OSM reference in the `osm` column of a row that is on the map, the
 file records
@@ -13,7 +13,8 @@ file records
                where its coastline starts, and a vertex average can lie in the
                sea; for anything else, the relation's `label` / `admin_centre`
                member, else the first vertex
-  outline      the second point for the dialect lookup, see `dialect_at`
+  outline      the second point for the dialect lookup, see
+               `dialect_areas.dialect_at`
   admin_level  of an administrative boundary (see `locate.object_facts`)
   name_nds     OSM's Low Saxon name (see `locate.object_facts`)
   name         OSM's generic name (see `locate.object_facts`)
@@ -29,24 +30,21 @@ The file is **committed**, like names/dialect_areas.geojson: it is small, and
 the search index can then be rebuilt -- and checked in CI -- without an
 extract.  Rebuild it (`just rebuild objects`) when a row gets a new `osm`
 reference; the search export and the injector stop on a reference it has no
-object for, and say what helps (`unlocated`): locating it, or -- when no
-extract holds it -- correcting the row.
+object for, and say what helps (`placeobjects.unlocated`): locating it, or
+-- when no extract holds it -- correcting the row.
 """
 
 from __future__ import annotations
 
 import json
 import os
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable
 from typing import NamedTuple, NotRequired, TypedDict, Unpack
 
-from frasch import placelist
-from frasch.dialects import AreaIndex
+from frasch import refs
 from frasch.errors import PipelineError, rebuild
-from frasch.geo import LonLat
-from frasch.placelist import OsmRef, PlaceRow, Ref, Row
 from frasch.provenance import Stamp, unstamped
-from frasch.registry import Registry
+from frasch.refs import OsmRef, Ref
 
 ROUND = 6
 
@@ -77,46 +75,6 @@ def point(lon: float, lat: float, **facts: Unpack[Facts]) -> LocatedObject:
     return {**at, **facts}
 
 
-def local_point(row: Row, position: LonLat, reg: Registry) -> LocatedObject:
-    """The point the injector adds for a row OSM has no object for (a local
-    reference): at its curation position, with the generic name the point
-    gets (`placelist.point_name`)."""
-    name = placelist.point_name(row, reg)
-    return point(*position, name=name) if name else point(*position)
-
-
-# -------------------------------------------------------------- dialects ----
-# OSM's admin_level of a German municipality; anything lower is a Kreis or an
-# Amt, which spans several dialects
-MUNICIPALITY_LEVEL = 8
-
-
-def dialect_at(obj: LocatedObject, areas: AreaIndex | None) -> str | None:
-    """The dialect spoken where an object of the objects file lies, or None:
-    the area around its point, else the area around its outline point.
-
-    The two points miss in opposite directions: an island's coastline runs
-    outside the municipality boundaries the areas are cut from (Amrum), while
-    an area may cover only part of an island (the Langeneß municipality holds
-    only the south-west third of Oland), so the point inside the island falls
-    outside it and a vertex still lands in it.  The first point that is in an
-    area at all wins, so nothing that had a dialect can lose it.
-
-    An administrative area above municipality level gets none: Kreis
-    Nordfriesland would otherwise be "Nordergoesharde" because its interior
-    point happens to lie there."""
-    if areas is None or obj.get("admin_level", MUNICIPALITY_LEVEL) < MUNICIPALITY_LEVEL:
-        return None
-    points = [(obj["lon"], obj["lat"])]
-    if "outline" in obj:
-        points.append((obj["outline"][0], obj["outline"][1]))
-    for lon, lat in points:
-        tag = areas.lookup(lon, lat)
-        if tag:
-            return tag
-    return None
-
-
 class Objects(NamedTuple):
     """The objects file, read back: `by_ref` maps ('w', 12) to its object."""
 
@@ -130,29 +88,12 @@ class Objects(NamedTuple):
         """The references the file was located for."""
         return set(self.by_ref) | self.not_found
 
-    def for_row(
-        self, row: PlaceRow, local_points: Mapping[str, LonLat], reg: Registry
-    ) -> LocatedObject | None:
-        """The object a row's search entry stands for: the object of the
-        first reference in its `osm` cell, or for a local reference the point
-        the injector adds (`local_point`; `local_points`: the curation's
-        position of each slug).  None for a row keyed by its QID alone."""
-        slug = placelist.local_ref(row["osm"])
-        if slug:
-            if slug not in local_points:
-                raise PipelineError(
-                    f"{row['id']} (line {row.line}): local/{slug} has no row with "
-                    f"lat/lon in the curation file"
-                )
-            return local_point(row, local_points[slug], reg)
-        refs = placelist.osm_refs(row["osm"])
-        return self.by_ref[refs[0]] if refs else None
-
-    def missing(self, refs: Iterable[Ref]) -> list[OsmRef]:
-        """The references to OSM objects among `refs` that the file has no
+    def missing(self, wanted: Iterable[Ref]) -> list[OsmRef]:
+        """The references to OSM objects among `wanted` that the file has no
         object for, in the file's order."""
-        osm_refs = (osm for ref in refs if (osm := placelist.as_osm_ref(ref)))
-        return sorted((ref for ref in osm_refs if ref not in self.by_ref), key=ref_order)
+        return sorted(
+            (ref for ref in refs.osm_only(wanted) if ref not in self.by_ref), key=ref_order
+        )
 
 
 def read_objects(path: str) -> Objects:
@@ -162,55 +103,25 @@ def read_objects(path: str) -> Objects:
         data = json.load(fh)
     if "built_from" not in data:
         raise unstamped(path, "objects")
-    by_ref = {placelist.osm_refs(ref)[0]: obj for ref, obj in data["objects"].items()}
-    not_found = placelist.osm_refs("; ".join(data.get("not_found", [])))
-    return Objects(by_ref, Stamp.from_json(data["built_from"]), frozenset(not_found))
+    by_ref = {_ref(key): obj for key, obj in data["objects"].items()}
+    not_found = frozenset(map(_ref, data.get("not_found", [])))
+    return Objects(by_ref, Stamp.from_json(data["built_from"]), not_found)
 
 
-def named(rows: Iterable[PlaceRow], reg: Registry) -> dict[OsmRef, PlaceRow]:
-    """The references the file is located for -- those to OSM objects (not
-    the local ones) of the rows on the map -- each with the first row that
-    names it."""
-    found: dict[OsmRef, PlaceRow] = {}
-    for row in rows:
-        if placelist.on_map(row, reg):
-            for ref in placelist.osm_refs(row["osm"]):
-                found.setdefault(ref, row)
-    return found
-
-
-def unlocated(objects: Objects, rows: Mapping[OsmRef, PlaceRow]) -> list[str]:
-    """What to do about each reference of `rows` ({reference: the row that
-    names it}) the file has no object for, a line each.  One that was asked
-    for in vain is the row's to correct; any other has yet to be located."""
-    not_located = f"is not located yet -- locate it with {rebuild('objects')}"
-    in_no_extract = "is in none of the extracts -- correct the `osm` cell of its row"
-    return [
-        f"{rows[ref]['id']} (line {rows[ref].line}): {placelist.format_osm([ref])} "
-        + (in_no_extract if ref in objects.not_found else not_located)
-        for ref in objects.missing(rows)
-    ]
-
-
-def require_located(objects: Objects, path: str, rows: Mapping[OsmRef, PlaceRow]) -> None:
-    """Stop when a reference of `rows` (as for `unlocated`) has no object in
-    the objects file at `path`."""
-    lines = unlocated(objects, rows)
-    if lines:
-        raise PipelineError(
-            f"{len(lines)} object(s) of the name list are not in {path}:\n"
-            + "\n".join(f"  {line}" for line in lines)
-        )
+def _ref(spelled: str) -> OsmRef:
+    """A reference as the file spells it: always one to an OSM object."""
+    (ref,) = refs.osm_only(refs.parse(spelled))
+    return ref
 
 
 def objects_json(objects: Objects) -> str:
     """The file's text: one object per line, in reference order, so a re-run
     on a moved object is a one-line diff."""
     lines = [
-        f"{json.dumps(placelist.format_osm([ref]))}:{_compact(_rounded(obj))}"
+        f"{json.dumps(refs.format([ref]))}:{_compact(_rounded(obj))}"
         for ref, obj in sorted(objects.by_ref.items(), key=lambda item: ref_order(item[0]))
     ]
-    not_found = [placelist.format_osm([ref]) for ref in sorted(objects.not_found, key=ref_order)]
+    not_found = [refs.format([ref]) for ref in sorted(objects.not_found, key=ref_order)]
     return (
         f'{{"built_from":{_compact(objects.stamp.as_json())},\n'
         + (f'"not_found":{_compact(not_found)},\n' if not_found else "")

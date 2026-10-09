@@ -18,11 +18,22 @@ import sys
 from collections.abc import Container, Sequence
 from typing import NamedTuple
 
-from frasch import cli, curationlist, dialects, errors, placelist, placenames, registry, tables
+from frasch import (
+    cli,
+    curationlist,
+    dialect_areas,
+    dialects,
+    errors,
+    namecell,
+    placelist,
+    placenames,
+    refs,
+    tables,
+)
+from frasch.dialects import Registry
 from frasch.errors import Problem
 from frasch.paths import Workspace
 from frasch.placelist import PlaceRow
-from frasch.registry import Registry
 from frasch.tables import Table
 
 
@@ -34,7 +45,7 @@ _BAD_SEPARATOR = re.compile(r"\s;|;(?! \S)")
 
 def cell_problem(cell: str) -> str | None:
     """What is wrong with the syntax of one name cell (see the conventions in
-    names/README.md), or None.  `placelist.parts` reads a damaged cell
+    names/README.md), or None.  `namecell.parts` reads a damaged cell
     anyway, just differently from what the editor meant."""
     depth = 0
     for ch in cell:
@@ -45,7 +56,7 @@ def cell_problem(cell: str) -> str | None:
         return "unbalanced brackets"
     if _BAD_SEPARATOR.search(cell):
         return "variants are separated by `; ` (no space before, one after)"
-    for variant in placelist.split_variants(cell):
+    for variant in namecell.split_variants(cell):
         m = _VARIANT.fullmatch(variant.strip())
         if not m:
             return f"text after a remark in {variant.strip()!r}"
@@ -56,7 +67,7 @@ def cell_problem(cell: str) -> str | None:
             return f"stray spaces in {name!r}"
         if "?" in name:
             return f"`?` in {name!r} -- say `uncertain` in `note` instead"
-    names = [name for name, _ in placelist.parts(cell)]
+    names = [name for name, _ in namecell.parts(cell)]
     twice = [name for i, name in enumerate(names) if name in names[:i]]
     if twice:
         return f"{', '.join(twice)} twice"
@@ -88,14 +99,14 @@ def check_curation(path: str, ids: Container[str]) -> tuple[list[Problem], set[s
 def check_dialects(path: str) -> tuple[Registry | None, list[Problem]]:
     """-> (the sound rows of the dialect registry, names/dialects.csv -- None
     when there are none --, the problems in it)."""
-    found, problems = registry.rows(path)
+    found, problems = dialects.rows(path)
     return (Registry(found) if found else None, problems)
 
 
 def check_dialect_areas(path: str, reg: Registry) -> list[Problem]:
     """The problems in the dialect area list, names/dialect_areas.csv, by the
-    rules the area build enforces (`dialects.area_rows`)."""
-    _rows, problems = dialects.area_rows(path, reg)
+    rules the area build enforces (`dialect_areas.area_rows`)."""
+    _rows, problems = dialect_areas.area_rows(path, reg)
     return problems
 
 
@@ -134,14 +145,14 @@ def _claim_problems(
     `curation` has no position for, an object or Wikidata item a row above
     it claimed already (`claimed`, which takes this row's)."""
     try:
-        slug = placelist.local_ref(row["osm"])
-        refs = placelist.claimed_refs(row)
+        slug = refs.local_of(refs.parse(row["osm"]))
+        claimed_refs = placelist.claimed_refs(row)
     except errors.Invalid:
-        slug, refs = None, []  # `placelist.rows` reported it
+        slug, claimed_refs = None, []  # `placelist.rows` reported it
     found: list[str] = []
     if slug and slug not in positioned:
         found.append(f"local/{slug} has no row with `lat`/`lon` in {curation}")
-    keys = [placelist.format_osm([ref]) for ref in refs]
+    keys = [refs.format([ref]) for ref in claimed_refs]
     if row["wikidata"] and row["status"] != "skip":
         keys.append(row["wikidata"])
     for key in keys:

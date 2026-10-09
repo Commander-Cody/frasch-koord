@@ -24,12 +24,12 @@ import os
 from collections.abc import Iterable, Mapping, Sequence
 from typing import NamedTuple, TypedDict
 
-from frasch import tables
+from frasch import refs, tables
 from frasch.errors import Invalid, Problem, ValidationError
 from frasch.geo import LonLat
-from frasch.tables import Table
-from frasch.placelist import LOCAL_TYPE, Ref, format_osm, local_slug, parse_osm
 from frasch.placenames import MAXZOOM_KEY, MINZOOM_KEY
+from frasch.refs import LOCAL_TYPE, Ref
+from frasch.tables import Table
 
 COLUMNS = ["osm", "name", "lat", "lon", "set_tags", "minzoom", "maxzoom", "polygon_km2", "note"]
 MAX_ZOOM = 24  # the deepest zoom a map style knows
@@ -134,15 +134,15 @@ class _Seen:
         self.squares: set[Ref] = set()
         self.tuned: dict[Ref, int] = {}  # -> the line of its row
 
-    def tune(self, n: int, refs: Sequence[Ref]) -> list[str]:
-        """Claim `refs` for the tuning row on line `n`; -> the objects an
+    def tune(self, n: int, objects: Sequence[Ref]) -> list[str]:
+        """Claim `objects` for the tuning row on line `n`; -> the objects an
         earlier tuning row claimed already."""
         found = [
-            f"second row for {format_osm([ref])} (line {self.tuned[ref]})"
-            for ref in refs
+            f"second row for {refs.format([ref])} (line {self.tuned[ref]})"
+            for ref in objects
             if ref in self.tuned
         ]
-        for ref in refs:
+        for ref in objects:
             self.tuned.setdefault(ref, n)
         return found
 
@@ -165,14 +165,14 @@ def _entry(n: int, row: Mapping[str, str], seen: _Seen) -> tuple[Entry | None, l
     """-> (the entry of one row, what is wrong with it); no entry for a row
     without a reference (a spacer) or with a problem."""
     try:
-        refs = parse_osm(row["osm"])
+        objects = refs.parse(row["osm"])
         pos = parse_point(row["lat"], row["lon"])
     except Invalid as exc:
         return None, [exc.reason]
-    if not refs:
+    if not objects:
         return None, []
     found: list[str] = []
-    local = local_slug(refs[0])
+    local = refs.local_of(objects)
     if pos and not local:
         found.append(
             f"lat/lon only go with a local reference (local/<slug>), not with {row['osm']!r}"
@@ -188,20 +188,20 @@ def _entry(n: int, row: Mapping[str, str], seen: _Seen) -> tuple[Entry | None, l
     minzoom, maxzoom = _zooms(row, found)
     km2 = _km2(row, found)
     if km2 is not None:
-        if len(refs) != 1 or refs[0][0] not in ("n", LOCAL_TYPE):
+        if len(objects) != 1 or objects[0][0] not in ("n", LOCAL_TYPE):
             found.append("polygon_km2 needs exactly one node (or local reference) in `osm`")
-        elif not local and refs[0] in seen.squares:
-            found.append(f"second polygon_km2 row for {format_osm(refs)}")
-        seen.squares.add(refs[0])
+        elif not local and objects[0] in seen.squares:
+            found.append(f"second polygon_km2 row for {refs.format(objects)}")
+        seen.squares.add(objects[0])
     elif not local:
-        found += seen.tune(n, refs)
+        found += seen.tune(n, objects)
     if local:
         seen.positioned.add(local)
     if found:
         return None, found
     return {
         "line": n,
-        "refs": refs,
+        "refs": objects,
         "local": local,
         "pos": pos,
         "tags": tags,

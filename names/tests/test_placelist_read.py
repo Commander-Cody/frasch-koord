@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from frasch import placelist, registry, tables
+from frasch import dialects, placelist, tables
 from frasch.errors import PipelineError, Problem, ValidationError
 from conftest import REGISTRY, TOFTUM, places_text
 
@@ -116,7 +116,7 @@ def test_the_registry_passed_in_sets_the_name_columns(tmp_path: Path) -> None:
         "frr-x-fering,fering,Fering,living,no,\n",
         encoding="utf-8",
     )
-    reg = registry.read(str(dialects_csv))
+    reg = dialects.read(str(dialects_csv))
     path = tmp_path / "places.csv"
     path.write_text(
         "kind,solring,local,fering,de,hint,da,osm,wikidata,status,note,id\n"

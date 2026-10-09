@@ -16,8 +16,8 @@ from collections.abc import Iterator, Sequence
 from typing import TypedDict
 
 from frasch.paths import StrPath
-from frasch.placelist import OsmRef
 from frasch.provenance import BuiltFrom, ExtractStamp, Stamp
+from frasch.refs import OsmRef
 
 # the `place` / `natural` values of an island
 ISLAND_PLACES = {"island", "islet", "archipelago"}
@@ -56,7 +56,7 @@ def read_records(path: StrPath) -> Iterator[Candidate]:
 
 
 def osm_key(rec: Candidate) -> OsmRef:
-    """A candidate record's (type, id), as `placelist.parse_osm` spells a
+    """A candidate record's (type, id), as `refs.parse` spells a
     reference: `("w", 28330569)`."""
     return rec["t"], rec["id"]
 

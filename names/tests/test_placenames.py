@@ -10,7 +10,7 @@ from shapely.geometry import box
 
 from frasch import placelist, placenames
 from frasch.__main__ import main
-from frasch.dialects import AreaIndex
+from frasch.dialect_areas import AreaIndex
 from frasch.objects import LocatedObject
 from conftest import REGISTRY
 

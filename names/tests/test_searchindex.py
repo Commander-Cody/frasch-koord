@@ -17,7 +17,7 @@ from frasch.__main__ import main
 from frasch.errors import PipelineError
 from frasch.paths import StrPath
 from frasch.objects import LocatedObject, Objects, objects_json
-from frasch.placelist import OsmRef
+from frasch.refs import OsmRef
 from frasch.provenance import ExtractStamp, Stamp
 from frasch.placenames import SearchEntry
 from frasch.searchindex import SearchIndex

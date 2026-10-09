@@ -69,29 +69,23 @@ import time
 from collections.abc import Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, NamedTuple, TypedDict
 
-from frasch import candidates, cli, files, placelist, registry
+from frasch import candidates, cli, dialects, files, placelist, refs
 from frasch.candidates import ISLAND_PLACES, Candidate, decisive_tags, osm_key
+from frasch.dialects import Registry
 from frasch.errors import PipelineError, rebuild
 from frasch.geo import NF_CENTRE, haversine, in_north_frisia
 from frasch.hints import Circle, HintResolver
+from frasch.namecell import primary, variants
 from frasch.nameindex import NameIndex, norm
 from frasch.paths import Workspace
 from frasch.placelist import (
-    OsmRef,
     PlaceRow,
-    Ref,
     Row,
     any_name,
-    format_osm,
-    local_ref,
-    osm_refs,
     owned_by_matcher,
-    parse_osm,
-    primary,
-    variants,
 )
 from frasch.provenance import ExtractStamp, Stamp, unstamped
-from frasch.registry import Registry
+from frasch.refs import OsmRef, Ref
 
 if TYPE_CHECKING:
     import requests
@@ -821,7 +815,7 @@ def _matched_cells(
     members = winner["members"]
     best = _best_member(kind, members)
     return {
-        "osm_type": placelist.TYPE_NAME[best["t"]],
+        "osm_type": refs.TYPE_NAME[best["t"]],
         "osm_id": ";".join(_member_ids(best, members)),
         "match_name": best["tags"].get("name") or best["tags"].get("name:de", ""),
         "match_tags": decisive_tags(best),
@@ -904,7 +898,7 @@ def report_cands(cell: str, limit: int = 20) -> str:
 def taken_note(recs: Iterable[Candidate], claimed: Mapping[Ref, int]) -> str:
     """`way/1 is taken by line 7; ...` for the candidates other rows hold."""
     return "; ".join(
-        f"{format_osm([osm_key(c)])} is taken by line {claimed[osm_key(c)]}" for c in recs
+        f"{refs.format([osm_key(c)])} is taken by line {claimed[osm_key(c)]}" for c in recs
     )
 
 
@@ -1035,7 +1029,7 @@ def _report_state(r: Row, results: Mapping[str, MatchResult], reg: Registry) -> 
         return "skip"
     if not any_name(r, reg):
         return "no Frisian name"
-    if local_ref(r["osm"]):
+    if refs.local_of(refs.parse(r["osm"])):
         return "own point"
     if r["osm"] or r["wikidata"]:
         return "auto" if r["status"] == "auto" else "by hand"
@@ -1129,7 +1123,7 @@ def _duplicates_section(rows: Sequence[PlaceRow], reg: Registry) -> list[str]:
     lines.append("|---|---|---|---|")
     for key, g in sorted(dups.items(), key=lambda kv: kv[1][0].line):
         lines.append(
-            f"| `{format_osm([key])}` | "
+            f"| `{refs.format([key])}` | "
             + ", ".join(f"{x['id']} ({x.line})" for x in g)
             + " | "
             + ", ".join(any_name(x, reg) for x in g)
@@ -1175,8 +1169,8 @@ def write_matches(
         w.writeheader()
         for r in rows:
             res = results.get(r["id"])
-            refs = osm_refs(r["osm"])
-            hit = index.by_key.get(refs[0]) if refs else None
+            osm = refs.osm_only(refs.parse(r["osm"]))
+            hit = index.by_key.get(osm[0]) if osm else None
             rec = {
                 "id": r["id"],
                 "line": str(r.line),
@@ -1204,7 +1198,7 @@ def write_matches(
                     else "not a place"
                     if r["kind"] == "not_a_place"
                     else "own point"
-                    if local_ref(r["osm"])
+                    if refs.local_of(refs.parse(r["osm"]))
                     else "by hand"
                     if (r["osm"] or r["wikidata"] or r["status"] == "ok")
                     else ""
@@ -1320,7 +1314,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     a = ap.parse_args(argv)
     ws = cli.workspace(a)
-    return run(ws, registry.read(ws.dialects), offline=a.offline, dry_run=a.dry_run)
+    return run(ws, dialects.read(ws.dialects), offline=a.offline, dry_run=a.dry_run)
 
 
 def _lookup_failed(r: PlaceRow) -> MatchResult:
@@ -1356,8 +1350,8 @@ def _reference(r: PlaceRow) -> tuple[str, str, str]:
 def _write_back(r: PlaceRow, o: MatchResult) -> None:
     """Put a match into the row as `status=auto`; clear the row otherwise."""
     if o["status"] == "matched":
-        r["osm"] = format_osm(
-            parse_osm("; ".join(f"{o['osm_type']}/{i}" for i in o["osm_id"].split(";") if i))
+        r["osm"] = refs.format(
+            refs.parse("; ".join(f"{o['osm_type']}/{i}" for i in o["osm_id"].split(";") if i))
         )
         r["wikidata"] = o["wikidata"]
         r["status"] = "auto"

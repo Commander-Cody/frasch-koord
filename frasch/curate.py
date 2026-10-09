@@ -64,20 +64,23 @@ from frasch import (
     candidates,
     cli,
     curationlist,
+    dialects,
     errors,
     files,
     geo,
+    namecell,
     nameindex,
     paths,
     placelist,
-    registry,
+    refs,
 )
 from frasch.candidates import Candidate
+from frasch.dialects import Registry
 from frasch.errors import PipelineError
 from frasch.hints import HINT_FALLBACK, Circle, HintResolver
 from frasch.paths import StrPath, Workspace
-from frasch.placelist import OsmRef, PlaceRow, Row
-from frasch.registry import Registry
+from frasch.placelist import PlaceRow, Row
+from frasch.refs import OsmRef
 
 # The order the browser walks the worklist in: the kinds a human can decide
 # quickly first (a village is either there or it is not), the vague ones last.
@@ -175,13 +178,13 @@ def parse_candidates(cell: str | None) -> list[ListedCandidate]:
         head, _, cls = head.rpartition(":")
         ref, _, name = head.partition(":")
         t, _, ident = ref.partition("/")
-        if t not in placelist.TYPE_NAME or not ident.isdigit():
+        if t not in refs.TYPE_NAME or not ident.isdigit():
             print(f"  ignoring unreadable candidate {part!r}", file=sys.stderr)
             continue
         out.append(
             {
                 "key": (t, int(ident)),
-                "ref": f"{placelist.TYPE_NAME[t]}/{ident}",
+                "ref": f"{refs.TYPE_NAME[t]}/{ident}",
                 "name": name,
                 "class": cls,
                 "km": int(km) if km.isdigit() else None,
@@ -358,8 +361,8 @@ def _work_row(
         "result": m["result"],
         "name": placelist.any_name(row, reg),
         "names": {c: row[c] for c in placelist.name_columns(reg) if row[c]},
-        "name_de": placelist.primary(row["de"]),
-        "name_da": placelist.primary(row["da"]),
+        "name_de": namecell.primary(row["de"]),
+        "name_da": namecell.primary(row["da"]),
         "de": row["de"],
         "da": row["da"],
         "hint": row["hint"],
@@ -563,14 +566,14 @@ def decide(entry: PatchEntry, row: dict[str, str]) -> str | None:
         row["status"] = "skip"
         return None
     try:
-        refs = placelist.parse_osm(entry.get("osm"))
+        chosen = refs.parse(entry.get("osm"))
     except errors.Invalid as exc:
         return str(exc)
-    if not refs:
+    if not chosen:
         return "action=osm without an `osm` reference"
-    if any(t == placelist.LOCAL_TYPE for t, _ in refs):
+    if any(t == refs.LOCAL_TYPE for t, _ in chosen):
         return "a local reference is action=local, not action=osm"
-    row["osm"] = placelist.format_osm(refs)
+    row["osm"] = refs.format(chosen)
     row["wikidata"] = entry.get("wikidata") or row["wikidata"]
     row["status"] = "ok"
     return None
@@ -693,8 +696,8 @@ def _apply(ws: Workspace, reg: Registry, dry_run: bool, keep: bool) -> int:
             placelist.write(lists.rows, names, lists.fields)
     except BaseException:
         if cur_written:
-            refs = [c["osm"] for c in decisions.new_curation]
-            unwrite_curation(curation, lists.cur_data, cur_written, refs)
+            added = [c["osm"] for c in decisions.new_curation]
+            unwrite_curation(curation, lists.cur_data, cur_written, added)
         if snapshot:
             restore_patch(snapshot, patch)
             print(f"nothing applied -- {patch} restored", file=sys.stderr)
@@ -734,7 +737,7 @@ def _read_lists(names: str, curation: str, reg: Registry) -> _Lists:
     cur_data, cur_fields = curationlist.read_bytes(curation)
     cur_digest = files.digest(cur_data) if cur_data is not None else files.MISSING
     for r in rows:
-        slug = placelist.local_ref(r["osm"])
+        slug = refs.local_of(refs.parse(r["osm"]))
         if slug:
             used_slugs.add(slug)
     return _Lists(names, curation, reg, rows, fields, used_slugs, cur_data, cur_fields, cur_digest)
@@ -875,7 +878,7 @@ def restore_patch(snapshot: str, path: str) -> None:
         os.unlink(newer)
 
 
-def unwrite_curation(path: str, old: bytes | None, written: str, refs: Sequence[str]) -> None:
+def unwrite_curation(path: str, old: bytes | None, written: str, added: Sequence[str]) -> None:
     """Undo apply's curation.csv write after the places.csv write failed: put
     back `old` (its bytes before; None = there was no file), unless someone
     changed the file after apply wrote it (`written`, its digest) -- then say
@@ -890,7 +893,7 @@ def unwrite_curation(path: str, old: bytes | None, written: str, refs: Sequence[
     except (OSError, errors.PipelineError) as exc:
         print(
             f"error: could not take the new rows out of {path} again ({exc}) "
-            f"-- delete the rows for {', '.join(refs)} by hand before the next "
+            f"-- delete the rows for {', '.join(added)} by hand before the next "
             f"apply",
             file=sys.stderr,
         )
@@ -906,7 +909,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         with_subcommand(sys.argv[1:] if argv is None else argv, argparser, apply_only)
     )
     ws = cli.workspace(args)
-    reg = registry.read(ws.dialects)
+    reg = dialects.read(ws.dialects)
     if args.cmd == "apply":
         return 1 if apply(ws, reg, dry_run=args.dry_run, keep=args.keep) else 0
     export(ws, reg)

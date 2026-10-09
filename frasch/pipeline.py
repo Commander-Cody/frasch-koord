@@ -30,18 +30,18 @@ from frasch import (
     build_candidates,
     build_dialect_areas,
     cli,
+    dialects,
     locate,
     match,
     osmscan,
     provenance,
-    registry,
     searchindex,
 )
+from frasch.dialects import Registry
 from frasch.errors import PipelineError, rebuild
 from frasch.objects import read_objects
 from frasch.paths import Workspace
 from frasch.provenance import ExtractStamp, Stamp
-from frasch.registry import Registry
 
 
 class From(enum.Enum):
@@ -277,7 +277,7 @@ OUTPUTS = (
         "the dialect registry as the frontend compiles it in",
         files=("registry_json",),
         source=From.FILES,
-        make=lambda run, _: registry.export_json(run.reg, run.ws.registry_json),
+        make=lambda run, _: dialects.export_json(run.reg, run.ws.registry_json),
     ),
     Output(
         "index",
@@ -337,5 +337,5 @@ def main(argv: Sequence[str] | None = None) -> int:
     ws = cli.workspace(a)
     # an output that scans no extract is built whether or not they are there
     extracts = Extracts.given(a.extracts, a.area_extract) if found.scans else None
-    found.build(Run(ws, registry.read(ws.dialects), extracts))
+    found.build(Run(ws, dialects.read(ws.dialects), extracts))
     return 0

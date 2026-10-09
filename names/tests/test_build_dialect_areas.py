@@ -12,7 +12,7 @@ import pytest
 from frasch import build_dialect_areas as bda
 from frasch.__main__ import main
 from frasch.errors import PipelineError, ValidationError
-from frasch import dialects
+from frasch import dialect_areas
 from frasch import provenance
 from frasch.paths import Workspace
 from conftest import REGISTRY, path_options, schema_problems
@@ -93,7 +93,7 @@ def test_output_is_stamped_with_its_inputs(ws: Workspace) -> None:
     parts_fc = json.loads(parts_out.read_text())
     assert parts_fc["properties"]["built_from"] == expected
     # AreaIndex.from_geojson must keep working with the stamped file
-    idx = dialects.AreaIndex.from_geojson(str(out))
+    idx = dialect_areas.AreaIndex.from_geojson(str(out))
     assert len(idx) == 1
 
 

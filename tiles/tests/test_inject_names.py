@@ -27,12 +27,13 @@ from frasch.errors import PipelineError
 from frasch import inject_names
 from frasch import locate
 from frasch import placelist
+from frasch import refs
 from frasch.__main__ import main
 from frasch.geo import LonLat
 from frasch.inject_names import Use
 from frasch.objects import Objects, objects_json
 from frasch.provenance import Stamp
-from frasch.registry import Registry
+from frasch.dialects import Registry
 from conftest import REGISTRY, curation_file, flat_workspace, path_options
 from osm_fixture import Nodes, write_extract as write_osm
 
@@ -937,7 +938,7 @@ def test_the_member_ways_of_a_matched_waterway_relation_are_found(tmp_path: Path
             21: ([("w", 12, "")], {"type": "route"}),
         },
     )
-    by_id: dict[placelist.Ref, list[placelist.Row]] = {("r", 20): [{}], ("r", 21): [{}]}
+    by_id: dict[refs.Ref, list[placelist.Row]] = {("r", 20): [{}], ("r", 21): [{}]}
     assert inject_names.scan_waterways(str(path), by_id) == {
         ("w", 10): (("r", 20), "Arlau"),
         ("w", 11): (("r", 20), "Arlau"),

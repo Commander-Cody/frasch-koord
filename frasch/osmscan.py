@@ -20,8 +20,8 @@ from osmium.osm.types import OSMEntity
 
 from frasch.geo import LonLat
 from frasch.paths import StrPath
-from frasch.placelist import OsmRef
 from frasch.provenance import ExtractStamp
+from frasch.refs import OsmRef
 
 
 class Rings(TypedDict):

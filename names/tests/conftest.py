@@ -21,7 +21,7 @@ from frasch import candidates, curationlist, paths, placelist
 from frasch.candidates import Candidate
 from frasch.paths import Workspace
 from frasch.provenance import ExtractStamp
-from frasch.registry import Dialect, Registry
+from frasch.dialects import Dialect, Registry
 from osm_fixture import Nodes, ring, write_extract
 
 # the dialects of the tests: (column, label, status, view)
