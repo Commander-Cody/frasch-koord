@@ -693,7 +693,7 @@ def _local_keys(by_id: Iterable[Ref]) -> list[Ref]:
 
 
 def _print_names(names: NameList, names_csv: str, dialects_csv: str, reg: Registry) -> None:
-    """What the name list holds, and which rows claim an object or a QID twice."""
+    """What the name list holds."""
     local_keys = _local_keys(names.by_id)
     print(f"name list : {names_csv}")
     print(f"dialects  : {dialects_csv} -> {len(reg)} columns ({', '.join(reg.tags)})")

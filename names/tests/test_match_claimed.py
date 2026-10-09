@@ -173,6 +173,44 @@ def test_of_two_country_rows_for_one_item_the_second_is_left_unmatched(world: Pa
     assert (second["wikidata"], second["status"]) == ("", "")
 
 
+# A country row Wikidata gave no answer for is left as it is (`--offline`,
+# and its name is not in the cache), so it still holds its item.
+UNANSWERED = {
+    "kind": "country",
+    "mooring": "Däänemark",
+    "de": "Dänemark",
+    "wikidata": "Q35",
+    "status": "auto",
+}
+
+
+def rows_after_a_failed_lookup(
+    world: Path, rows: Iterable[Mapping[str, str]], candidates: Iterable[Candidate]
+) -> list[placelist.PlaceRow]:
+    """The name list after a run that could not look `UNANSWERED` up."""
+    places = world / "places.csv"
+    places.write_text(places_text(rows), encoding="utf-8")
+    write_candidates(world / "work" / "candidates.jsonl", *candidates)
+    cache = world / "work" / "wikidata-countries.json"
+    cache.write_text(json.dumps({"Danmark": "Q35"}), encoding="utf-8")
+    assert match.run(workspace(world), REGISTRY, offline=True) == 1
+    return placelist.read(str(places), REGISTRY).rows
+
+
+def test_the_item_of_a_country_row_left_unanswered_goes_to_no_later_row(world: Path) -> None:
+    danish = {"kind": "country", "mooring": "Dånmark", "de": "Danmark"}
+    _, second = rows_after_a_failed_lookup(world, [UNANSWERED, danish], [])
+    assert (second["wikidata"], second["status"]) == ("", "")
+
+
+def test_the_item_of_a_country_row_left_unanswered_goes_to_no_earlier_row(world: Path) -> None:
+    # the island's object carries the item; its row stands above the country's
+    jutland = cand("r", 1, 9.2, 55.6, place="island", name="Jütland", wikidata="Q35")
+    island = {"kind": "island", "mooring": "Jütlönj", "de": "Jütland"}
+    first, _ = rows_after_a_failed_lookup(world, [island, UNANSWERED], [jutland])
+    assert (first["osm"], first["wikidata"]) == ("relation/1", "")
+
+
 def test_a_row_whose_object_carries_another_rows_item_keeps_the_object_without_it(
     world: Path,
 ) -> None:

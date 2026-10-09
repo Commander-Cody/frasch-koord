@@ -1243,24 +1243,21 @@ def _run(ws: Workspace, reg: Registry, offline: bool, dry_run: bool) -> int:
     )
     hints = HintResolver(index)
 
-    todo = [r for r in rows if owned_by_matcher(r) and any_name(r, reg)]
-    rematched = {r["id"] for r in todo}
-    claimed = Claimed.of(r for r in rows if r["id"] not in rematched)
-    country_rows = [r for r in todo if r["kind"] == "country"]
+    owned = [r for r in rows if owned_by_matcher(r) and any_name(r, reg)]
+    country_rows = [r for r in owned if r["kind"] == "country"]
     qids, wd_failed = wikidata_countries(
         [primary(r["de"]) for r in country_rows], ws.wikidata_cache, offline
     )
-    unresolved: list[PlaceRow] = []
+    # no answer is not "no country": such a row is left as it is
+    unresolved = [r for r in country_rows if primary(r["de"]) in wd_failed]
+    results = {r["id"]: _lookup_failed(r) for r in unresolved}
+    todo = [r for r in owned if r["id"] not in results]
+    rematched = {r["id"] for r in todo}
+    claimed = Claimed.of(r for r in rows if r["id"] not in rematched)
 
-    results: dict[str, MatchResult] = {}
     changed: collections.Counter[str] = collections.Counter()
     for r in todo:
         before = _reference(r)
-        if r["kind"] == "country" and primary(r["de"]) in wd_failed:
-            # no answer is not "no country": leave the row as it is
-            unresolved.append(r)
-            results[r["id"]] = _lookup_failed(r)
-            continue
         if r["kind"] == "country":
             o = _country_result(r, qids)
         else:
@@ -1279,9 +1276,9 @@ def _run(ws: Workspace, reg: Registry, offline: bool, dry_run: bool) -> int:
         names.write()
         write_report(rows, results, ws.report, reg, stamp(ws, extracts))
 
-    cnt = collections.Counter(o["status"] for o in results.values())
+    cnt = collections.Counter(results[r["id"]]["status"] for r in owned)
     print(
-        f"matcher owns {len(todo)} of {len(rows)} rows: "
+        f"matcher owns {len(owned)} of {len(rows)} rows: "
         + ", ".join(f"{v} {k}" for k, v in cnt.most_common())
     )
     print(

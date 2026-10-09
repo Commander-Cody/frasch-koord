@@ -903,8 +903,8 @@ def test_the_member_ways_of_a_matched_waterway_relation_are_found(tmp_path: Path
             21: ([("w", 12, "")], {"type": "route"}),
         },
     )
-    by_id: dict[refs.Ref, list[placelist.Row]] = {("r", 20): [{}], ("r", 21): [{}]}
-    assert inject_names.scan_waterways(str(path), by_id) == {
+    claimed: list[refs.Ref] = [("r", 20), ("r", 21)]
+    assert inject_names.scan_waterways(str(path), claimed) == {
         ("w", 10): (("r", 20), "Arlau"),
         ("w", 11): (("r", 20), "Arlau"),
     }
