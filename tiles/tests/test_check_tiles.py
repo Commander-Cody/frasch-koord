@@ -88,7 +88,7 @@ def test_a_dialect_name_missing_from_the_map_is_reported() -> None:
 
 
 def test_a_dialect_name_only_the_map_has_is_reported() -> None:
-    # a second row on the object filled it in: the entry is the first row's alone
+    # tiles built from another state of the list: its row has no such name now
     merged = with_props(AGREEING, **{"name:frr-x-wieding": "Stäirdebel"})
     (problem,) = compare(STIARDEBEL, merged)
     assert "'Stäirdebel'" in problem and "names[frr-x-wieding]=None" in problem

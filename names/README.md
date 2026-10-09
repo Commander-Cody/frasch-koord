@@ -85,9 +85,9 @@ missing or repeated `id`, a hand-set `frasch:ref` in `curation.csv` that names
 no row, one OSM object on two `dialect_areas.csv` rows. Without `--fix` it
 only reports; CI runs it that way on every push. The other commands refuse a
 `places.csv` with a row without an `id`, and one in which two rows claim the
-same OSM object or Wikidata item: only one name can go on the map. A row
-claims the references of its `osm` cell and its `wikidata` item unless it is
-`skip`.
+same OSM object or Wikidata item, or one row names an object twice: only one
+name can go on the map. A row claims the references of its `osm` cell and its
+`wikidata` item unless it is `skip`.
 
 The rows are in the order of the original sheet (by section, then the owner's
 geographic order); new rows can go anywhere.

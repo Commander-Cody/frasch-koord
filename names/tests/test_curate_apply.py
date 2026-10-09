@@ -526,6 +526,14 @@ def test_of_two_decisions_for_one_object_the_first_is_applied(w: World) -> None:
     }
 
 
+def test_a_decision_that_names_one_object_twice_is_refused(
+    w: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    append(w.patch, entry(2, action="osm", osm="node/1; node/1"))
+    assert w.apply() == 1
+    assert "node/1 twice in `osm`" in capsys.readouterr().out
+
+
 def test_a_row_may_be_given_the_object_it_holds_already(w: World) -> None:
     matched = ROWS[0] | {"osm": "node/1", "status": "auto"}
     w.places.write_text(places_text([matched] + ROWS[1:]), encoding="utf-8")

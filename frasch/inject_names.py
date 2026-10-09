@@ -64,7 +64,7 @@ relation gets no dialect.
 
 Inside a dialect area OSM's own `name:frr` is almost always the local form,
 outside it is a Frisian exonym (Pinneberg -> Pinebärj).  So an object in an
-area whose rows give it no local name gets its `name:frr` as `frasch:local`
+area whose row gives it no local name gets its `name:frr` as `frasch:local`
 (#81), from names/osm_objects.json like its position.  And so does every
 object there *no row claims* -- a Warft, a street, a station -- and nothing
 else from this rule: a pre-pass finds the objects of the extract that carry

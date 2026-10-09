@@ -311,13 +311,16 @@ def ids(names: Table) -> set[str]:
 
 
 def claim_problems(held: Sequence[str], claimed: Mapping[str, int]) -> list[str]:
-    """Which of a row's claims (`held`, as `Claims.keys` spells them) a row
-    above it holds already (`claimed`: claim -> line)."""
-    return [
+    """What is wrong with a row's claims (`held`, as `Claims.keys` spells
+    them): one a row above it holds already (`claimed`: claim -> line), and
+    an object the row itself names twice."""
+    taken = [
         f"{key} is already claimed by line {claimed[key]} -- only one name can go on the map"
         for key in held
         if key in claimed
     ]
+    twice = [f"{key} twice in `osm`" for key in dict.fromkeys(held) if held.count(key) > 1]
+    return taken + twice
 
 
 def _claim_keys(row: Row) -> list[str]:
@@ -334,7 +337,7 @@ def rows(names: Table, reg: Registry) -> tuple[list[PlaceRow], list[Problem]]:
     whose cells line up with the header -- identified by its `id`, knowing
     its `line` -- and what is wrong with the file by the rules `read`
     enforces: those of a row's cells, and across the rows a unique id and
-    one row per object or Wikidata item (`claims`).  A row that breaks one
+    one row per object or Wikidata item (`claims`, each object once).  A row that breaks one
     is among the rows all the same: frasch.check_inputs has more to say
     about it.  Without its columns the list has no rows."""
     if what := header_problem(names.header, reg):

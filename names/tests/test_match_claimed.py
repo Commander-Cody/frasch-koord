@@ -211,6 +211,27 @@ def test_the_item_of_a_country_row_left_unanswered_goes_to_no_earlier_row(world:
     assert (first["osm"], first["wikidata"]) == ("relation/1", "")
 
 
+def test_the_second_country_row_for_an_item_says_which_row_took_it(world: Path) -> None:
+    cache = world / "work" / "wikidata-countries.json"
+    cache.write_text(json.dumps({"Dänemark": "Q35"}), encoding="utf-8")
+    denmark = {"kind": "country", "mooring": "Däänemark", "de": "Dänemark"}
+    run_match(world, [denmark, denmark | {"mooring": "Dånmark"}], [])
+    matches = (world / "work" / "matches.csv").read_text(encoding="utf-8")
+    assert "Q35 is taken by line 2" in matches
+
+
+def test_a_row_written_without_another_rows_item_says_which_row_holds_it(world: Path) -> None:
+    pellworm = [
+        cand("r", 1, 8.64, 54.52, place="island", name="Pellworm", wikidata="Q21044"),
+        cand("n", 2, 8.65, 54.53, place="village", name="Pellworm", wikidata="Q21044"),
+    ]
+    island = {"kind": "island", "mooring": "Pälweerm", "de": "Pellworm"}
+    village = {"kind": "settlement", "mooring": "Pälweerm", "de": "Pellworm"}
+    run_match(world, [island, village], pellworm)
+    matches = (world / "work" / "matches.csv").read_text(encoding="utf-8")
+    assert "Q21044 is taken by line 2" in matches
+
+
 def test_a_row_whose_object_carries_another_rows_item_keeps_the_object_without_it(
     world: Path,
 ) -> None:

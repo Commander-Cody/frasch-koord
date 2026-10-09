@@ -131,6 +131,14 @@ def test_refuses_an_object_two_rows_claim(tmp_path: Path) -> None:
     ]
 
 
+def test_refuses_a_row_that_names_one_object_twice(tmp_path: Path) -> None:
+    path = tmp_path / "places.csv"
+    path.write_text(places_text([{**TOFTUM, "osm": "node/1; node/1"}]), encoding="utf-8")
+    with pytest.raises(ValidationError) as exc:
+        placelist.read(str(path), REGISTRY)
+    assert exc.value.problems == [Problem(str(path), 2, "node/1 twice in `osm`")]
+
+
 def test_the_registry_passed_in_sets_the_name_columns(tmp_path: Path) -> None:
     # `--dialects` of the commands: a registry with other dialects reads a
     # list with other columns, and names a row by them.
