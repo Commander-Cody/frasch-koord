@@ -1,19 +1,21 @@
 """Writing any file safely.
 
 The outputs -- the name list above all, which holds uncommitted hand edits --
-must never be left half-written, and a file someone else saved in the
-meantime must not be overwritten."""
+must never be left half-written, a file someone else saved in the meantime
+must not be overwritten, and two runs that read, change and write the name
+list must not overlap (`lock`)."""
 
 from __future__ import annotations
 
 import contextlib
+import errno
 import hashlib
 import os
 import tempfile
 from collections.abc import Iterator
 from typing import IO, Literal, overload
 
-from frasch.errors import Conflict
+from frasch.errors import Conflict, PipelineError
 
 
 MISSING = "missing"  # `expect` for a file that must not exist
@@ -110,3 +112,29 @@ def _sync_directory(directory: str) -> None:
             os.fsync(dfd)
         finally:
             os.close(dfd)
+
+
+@contextlib.contextmanager
+def lock(lock_path: str) -> Iterator[None]:
+    """Hold the workspace's lock file for the duration of a read-modify-write
+    run, so that `frasch match` and `frasch curate apply` never run at the
+    same time.  Advisory (`flock`): a spreadsheet does not take it -- that is
+    what the check in `atomic_write` is for."""
+    import fcntl  # POSIX only; the pipeline runs in WSL
+
+    os.makedirs(os.path.dirname(os.path.abspath(lock_path)), exist_ok=True)
+    with open(lock_path, "a") as fh:
+        try:
+            fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as exc:
+            if exc.errno not in (errno.EWOULDBLOCK, errno.EAGAIN, errno.EACCES):
+                raise
+            raise PipelineError(
+                f"{lock_path} is held: another `frasch match` or "
+                f"`frasch curate apply` is running -- wait for it to "
+                f"finish"
+            ) from None
+        try:
+            yield
+        finally:
+            fcntl.flock(fh, fcntl.LOCK_UN)

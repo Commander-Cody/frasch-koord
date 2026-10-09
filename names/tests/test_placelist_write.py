@@ -10,8 +10,6 @@ from pathlib import Path
 import pytest
 
 from frasch import errors, placelist
-from frasch.errors import PipelineError
-from frasch.paths import Workspace
 from conftest import REGISTRY, places_text
 
 ROWS = [{"kind": "settlement", "mooring": f"Taarep {i}", "de": f"Dorf {i}"} for i in range(20)]
@@ -26,8 +24,7 @@ def places(world: Path) -> Path:
 
 def test_round_trip_is_byte_identical(places: Path) -> None:
     before = places.read_bytes()
-    rows, fields = placelist.read(str(places), REGISTRY)
-    placelist.write(rows, str(places), fields)
+    placelist.read(str(places), REGISTRY).write()
     assert places.read_bytes() == before
 
 
@@ -35,8 +32,8 @@ def test_interrupted_write_leaves_the_file_alone(
     places: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     before = places.read_bytes()
-    rows, fields = placelist.read(str(places), REGISTRY)
-    rows[0]["mooring"] = "changed"
+    names = placelist.read(str(places), REGISTRY)
+    names.rows[0]["mooring"] = "changed"
 
     class Crashing(csv.DictWriter[str]):
         written = 0
@@ -49,7 +46,7 @@ def test_interrupted_write_leaves_the_file_alone(
 
     monkeypatch.setattr("frasch.tables.csv.DictWriter", Crashing)
     with pytest.raises(KeyboardInterrupt):
-        placelist.write(rows, str(places), fields)
+        names.write()
     assert places.read_bytes() == before
     assert sorted(os.listdir(places.parent)) == [
         "curation.csv",
@@ -64,15 +61,15 @@ def test_crash_while_flushing_leaves_the_file_alone(
     places: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     before = places.read_bytes()
-    rows, fields = placelist.read(str(places), REGISTRY)
-    rows[0]["mooring"] = "changed"
+    names = placelist.read(str(places), REGISTRY)
+    names.rows[0]["mooring"] = "changed"
 
     def boom(fd: int) -> None:
         raise OSError("disk full")
 
-    monkeypatch.setattr("frasch.placelist.os.fsync", boom)
+    monkeypatch.setattr(os, "fsync", boom)
     with pytest.raises(OSError):
-        placelist.write(rows, str(places), fields)
+        names.write()
     assert places.read_bytes() == before
     assert sorted(os.listdir(places.parent)) == [
         "curation.csv",
@@ -84,43 +81,36 @@ def test_crash_while_flushing_leaves_the_file_alone(
 
 
 def test_refuses_to_overwrite_a_concurrent_change(places: Path) -> None:
-    rows, fields = placelist.read(str(places), REGISTRY)
-    rows[0]["mooring"] = "mine"
+    names = placelist.read(str(places), REGISTRY)
+    names.rows[0]["mooring"] = "mine"
     # a spreadsheet saves the file while the script is busy
     theirs = places_text(ROWS + [{"kind": "settlement", "mooring": "Nai", "de": "Neu"}])
     places.write_text(theirs, encoding="utf-8")
     with pytest.raises(errors.Conflict):
-        placelist.write(rows, str(places), fields)
+        names.write()
     assert places.read_text(encoding="utf-8") == theirs
 
 
-def test_write_without_read_is_an_error(world: Path) -> None:
-    path = world / "never-read.csv"
-    with pytest.raises(RuntimeError):
-        placelist.write([], str(path), placelist.columns(REGISTRY))
-    assert not path.exists()
+def test_a_list_read_before_another_run_wrote_does_not_overwrite_it(places: Path) -> None:
+    mine = placelist.read(str(places), REGISTRY)
+    theirs = placelist.read(str(places), REGISTRY)
+    theirs.rows[0]["mooring"] = "theirs"
+    theirs.write()
+    mine.rows[1]["mooring"] = "mine"
+    with pytest.raises(errors.Conflict):
+        mine.write()
 
 
 def test_write_keeps_the_file_mode(places: Path) -> None:
     os.chmod(places, 0o640)
-    rows, fields = placelist.read(str(places), REGISTRY)
-    placelist.write(rows, str(places), fields)
+    placelist.read(str(places), REGISTRY).write()
     assert os.stat(places).st_mode & 0o777 == 0o640
 
 
 def test_second_write_in_one_run_is_allowed(places: Path) -> None:
-    rows, fields = placelist.read(str(places), REGISTRY)
-    rows[0]["mooring"] = "one"
-    placelist.write(rows, str(places), fields)
-    rows[0]["mooring"] = "two"
-    placelist.write(rows, str(places), fields)
-    assert placelist.read(str(places), REGISTRY)[0][0]["mooring"] == "two"
-
-
-def test_lock_is_exclusive(ws: Workspace) -> None:
-    with placelist.lock(ws.lock):
-        with pytest.raises(PipelineError, match="another `frasch match`"):
-            with placelist.lock(ws.lock):
-                pass
-    with placelist.lock(ws.lock):  # released again
-        pass
+    names = placelist.read(str(places), REGISTRY)
+    names.rows[0]["mooring"] = "one"
+    names.write()
+    names.rows[0]["mooring"] = "two"
+    names.write()
+    assert placelist.read(str(places), REGISTRY).rows[0]["mooring"] == "two"

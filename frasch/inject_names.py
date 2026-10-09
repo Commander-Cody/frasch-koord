@@ -184,7 +184,7 @@ def load_names(path: str, reg: Registry) -> NameList:
     conflicts: list[Conflict] = []
     duplicate_qids: list[DuplicateQid] = []
     used = 0
-    rows, _ = placelist.read(path, reg)
+    rows = placelist.read(path, reg).rows
     for row in rows:
         if not placelist.on_map(row, reg):
             continue

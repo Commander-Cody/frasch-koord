@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from frasch import dialects, placelist, update
+from frasch import dialects, files, update
 from frasch.__main__ import main
 from frasch.errors import PipelineError, Problem
 from conftest import AREA_LIST, REGISTRY_CSV, TOFTUM_NODE, path_options, places_text
@@ -142,7 +142,7 @@ def test_a_curation_apply_that_cannot_run_stops_the_run(
     (workspace / "work" / "curate-patch.jsonl").write_text(
         json.dumps({"id": "toftem", "action": "skip"}) + "\n", encoding="utf-8"
     )
-    with placelist.lock(workspace_of(workspace).lock):  # the matcher is running
+    with files.lock(workspace_of(workspace).lock):  # the matcher is running
         assert run(workspace) == 1
     out = capsys.readouterr().out
     assert "update stopped: curation decisions failed" in out

@@ -28,12 +28,11 @@ lives one layer up in frasch.dialects.
 
 from __future__ import annotations
 
-import contextlib
-import errno
 import os
 import re
 import unicodedata
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 
 from frasch import files, refs, tables
 from frasch.dialects import LOCAL_COLUMN, Registry
@@ -241,7 +240,7 @@ def fill_ids(path: str, reg: Registry) -> int:
     fields = header if "id" in header else header + ["id"]
     if what := header_problem(fields, reg):
         raise ValidationError([Problem(path, 1, what)])
-    rows = [dict(zip(header, cells, strict=True)) for _, cells in found.rows]
+    rows = [PlaceRow(dict(zip(header, cells, strict=True)), n) for n, cells in found.rows]
     taken = {r["id"].strip() for r in rows if r.get("id", "").strip()}
     given = 0
     for r in rows:
@@ -250,7 +249,7 @@ def fill_ids(path: str, reg: Registry) -> int:
             taken.add(r["id"])
             given += 1
     if given or fields is not header:
-        write(rows, path, fields)
+        PlaceList(path, reg, fields, rows, found.digest).write()
     return given
 
 
@@ -258,11 +257,7 @@ def table(path: str) -> Table:
     """The name list as it is on disk -- the one place that opens it."""
     if not os.path.exists(path):
         raise PipelineError(f"name list not found: {path}")
-    found = tables.read_table(path)
-    # remembered so that `write` can tell whether someone else (the matcher,
-    # the curation, a spreadsheet) wrote the file in the meantime
-    _read_digests[os.path.abspath(path)] = found.digest
-    return found
+    return tables.read_table(path)
 
 
 def ids(names: Table) -> set[str]:
@@ -293,63 +288,40 @@ def rows(names: Table, reg: Registry) -> tuple[list[PlaceRow], list[Problem]]:
     return found, tables.by_line(problems)
 
 
-def read(path: str, reg: Registry) -> tuple[list[PlaceRow], list[str]]:
-    """-> (rows, fieldnames).  A row is identified by its `id` and knows its
-    `line`.  A ValidationError lists everything that breaks the rules."""
+@dataclass
+class PlaceList:
+    """The name list at `path` as `read` found it: its `rows`, under the
+    columns `fields` (those of the registry `reg`, and any of the editor's
+    own), and the `digest` of the file they were read from."""
+
+    path: str
+    reg: Registry
+    fields: list[str]
+    rows: list[PlaceRow]
+    digest: str
+
+    def write(self) -> None:
+        """Write the rows back -- atomically, and only if nobody else changed
+        the file since it was read.
+
+        The file is the source of truth and holds uncommitted hand edits, so
+        a crash or Ctrl-C half-way must not leave it truncated (the rows go
+        to a temporary file that then replaces the original in one step), and
+        a run must not overwrite what a spreadsheet or another script saved
+        while it was busy (it stops instead with `Conflict`; re-run it)."""
+        data = tables.write_rows(self.fields, self.rows)
+        files.atomic_write(self.path, data, expect=self.digest)
+        self.digest = files.digest(data)
+
+
+def read(path: str, reg: Registry) -> PlaceList:
+    """The name list.  A row is identified by its `id` and knows its `line`.
+    A ValidationError lists everything that breaks the rules."""
     found = table(path)
     place_rows, problems = rows(found, reg)
     if problems:
         raise ValidationError(problems)
-    return place_rows, found.header
-
-
-def write(rows: Iterable[Row], path: str, fields: Sequence[str]) -> None:
-    """Write the name list -- atomically, and only if nobody else changed the
-    file since this process `read` it.
-
-    The file is the source of truth and holds uncommitted hand edits, so a
-    crash or Ctrl-C half-way must not leave it truncated (the rows go to a
-    temporary file that then replaces the original in one step), and a run
-    must not overwrite what a spreadsheet or another script saved while it
-    was busy (it stops instead with `Conflict`; re-run it)."""
-    expect = _read_digests.get(os.path.abspath(path))
-    if expect is None:
-        raise RuntimeError(
-            f"placelist.write({path!r}) without a placelist.read "
-            f"of it first -- nothing to check for changes against"
-        )
-    data = tables.write_rows(fields, rows)
-    files.atomic_write(path, data, expect=expect)
-    _read_digests[os.path.abspath(path)] = files.digest(data)
-
-
-_read_digests: dict[str, str] = {}  # abspath -> sha256 of what `read` saw
-
-
-@contextlib.contextmanager
-def lock(lock_path: str) -> Iterator[None]:
-    """Hold the workspace's lock file for the duration of a read-modify-write
-    run, so that `frasch match` and `frasch curate apply` never run at the
-    same time.  Advisory (`flock`): a spreadsheet does not take it -- that is
-    what the check in `write` is for."""
-    import fcntl  # POSIX only; the pipeline runs in WSL
-
-    os.makedirs(os.path.dirname(os.path.abspath(lock_path)), exist_ok=True)
-    with open(lock_path, "a") as fh:
-        try:
-            fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError as exc:
-            if exc.errno not in (errno.EWOULDBLOCK, errno.EAGAIN, errno.EACCES):
-                raise
-            raise PipelineError(
-                f"{lock_path} is held: another `frasch match` or "
-                f"`frasch curate apply` is running -- wait for it to "
-                f"finish"
-            ) from None
-        try:
-            yield
-        finally:
-            fcntl.flock(fh, fcntl.LOCK_UN)
+    return PlaceList(path, reg, found.header, place_rows, found.digest)
 
 
 def describe(row: Row, reg: Registry) -> str:

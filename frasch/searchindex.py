@@ -86,7 +86,7 @@ def build(ws: Workspace, reg: Registry) -> SearchIndex:
     areas = dialect_areas.AreaIndex.from_geojson(ws.areas)
     objects = read_objects(ws.objects)
     local_points = curationlist.local_points(ws.curation)
-    rows, _ = placelist.read(ws.names, reg)
+    rows = placelist.read(ws.names, reg).rows
 
     on_map = [r for r in rows if placelist.on_map(r, reg)]
     placeobjects.require_located(objects, ws.objects, entry_refs(on_map))

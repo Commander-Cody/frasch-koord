@@ -53,7 +53,7 @@ def unlocated_problems(run: Run) -> list[str]:
     first one, the only one the search index needs."""
     if not os.path.exists(run.ws.objects):
         return []
-    rows, _ = placelist.read(run.ws.names, run.reg)
+    rows = placelist.read(run.ws.names, run.reg).rows
     return placeobjects.unlocated(read_objects(run.ws.objects), placeobjects.named(rows, run.reg))
 
 

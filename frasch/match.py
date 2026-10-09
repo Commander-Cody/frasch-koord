@@ -1217,13 +1217,14 @@ def run(ws: Workspace, reg: Registry, *, offline: bool = False, dry_run: bool = 
     """Match the rows the matcher owns and write the result (see the module
     docstring); -> the exit status.  `offline`: no call to the Wikidata API,
     the cache only.  `dry_run`: only matches.csv is written."""
-    with placelist.lock(ws.lock):
+    with files.lock(ws.lock):
         return _run(ws, reg, offline, dry_run)
 
 
 def _run(ws: Workspace, reg: Registry, offline: bool, dry_run: bool) -> int:
     t0 = time.time()
-    rows, fields = placelist.read(ws.names, reg)
+    names = placelist.read(ws.names, reg)
+    rows = names.rows
     print(f"loaded {len(rows)} rows from {ws.names}")
 
     extracts = check_extracts(ws.candidates, ws.report)
@@ -1265,7 +1266,7 @@ def _run(ws: Workspace, reg: Registry, offline: bool, dry_run: bool) -> int:
     # matches.csv first: a run that cannot write it leaves places.csv as it was
     write_matches(rows, results, index, ws.matches, reg)
     if not dry_run:
-        placelist.write(rows, ws.names, fields)
+        names.write()
         write_report(rows, results, ws.report, reg, stamp(ws, extracts))
 
     cnt = collections.Counter(o["status"] for o in results.values())

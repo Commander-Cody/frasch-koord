@@ -229,7 +229,7 @@ def test_curation_csv_edited_during_rollback_is_left_alone(
         w.curation.write_text(theirs, encoding="utf-8")  # a hand edit lands
         raise OSError("disk full")
 
-    monkeypatch.setattr(placelist, "write", failing_write)
+    monkeypatch.setattr(placelist.PlaceList, "write", failing_write)
     with pytest.raises(OSError):
         w.apply()
     assert w.curation.read_text(encoding="utf-8") == theirs
@@ -258,7 +258,7 @@ def test_dry_run_and_keep_leave_the_patch_in_place(w: World) -> None:
 
 # ------------------------------------------------------------ row ids (#23) ---
 def rows_by_id(w: World) -> dict[str, placelist.PlaceRow]:
-    return {r["id"]: r for r in placelist.read(str(w.places), REGISTRY)[0]}
+    return {r["id"]: r for r in placelist.read(str(w.places), REGISTRY).rows}
 
 
 def test_a_withdrawn_decision_stays_withdrawn_whatever_line_it_was_sent_with(w: World) -> None:

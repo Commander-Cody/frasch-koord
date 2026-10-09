@@ -44,8 +44,7 @@ def test_real_name_list_round_trips_byte_identical(tmp_path: Path) -> None:
     shutil.copyfile(Workspace.default().names, copy)
     before = copy.read_bytes()
     header = before.decode("utf-8").splitlines()[0]
-    rows, fields = placelist.read(str(copy), registry_of(header))
-    placelist.write(rows, str(copy), fields)
+    placelist.read(str(copy), registry_of(header)).write()
     assert copy.read_bytes() == before
 
 

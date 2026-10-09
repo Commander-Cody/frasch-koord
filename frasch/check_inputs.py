@@ -24,6 +24,7 @@ from frasch import (
     dialect_areas,
     dialects,
     errors,
+    files,
     namecell,
     placelist,
     placenames,
@@ -195,7 +196,7 @@ def fill_ids(ws: Workspace, reg: Registry) -> None:
     got one -- or why none did: the report `check` gives lists that problem
     and every other one."""
     try:
-        with placelist.lock(ws.lock):
+        with files.lock(ws.lock):
             print(f"gave {placelist.fill_ids(ws.names, reg)} row(s) an id", file=sys.stderr)
     except errors.PipelineError as exc:
         print(f"no id given: {exc}", file=sys.stderr)

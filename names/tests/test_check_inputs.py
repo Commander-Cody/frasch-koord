@@ -445,7 +445,7 @@ def test_fix_gives_each_new_row_an_id_from_its_frisian_name(ws: Workspace, world
         encoding="utf-8",
     )
     assert fix(ws) == []
-    rows, _ = placelist.read(str(places), REGISTRY)
+    rows = placelist.read(str(places), REGISTRY).rows
     assert [r["id"] for r in rows] == [
         "naibel",
         "schorkewarw",
@@ -481,9 +481,9 @@ def test_fix_adds_the_id_column_to_a_list_that_has_none(ws: Workspace, world: Pa
     )
     places.write_text(without, encoding="utf-8")
     assert fix(ws) == []
-    rows, fields = placelist.read(str(places), REGISTRY)
-    assert fields[-1] == "id"
-    assert [r["id"] for r in rows] == ["toftem", "naibel"]
+    names = placelist.read(str(places), REGISTRY)
+    assert names.fields[-1] == "id"
+    assert [r["id"] for r in names.rows] == ["toftem", "naibel"]
 
 
 def test_fix_run_twice_changes_nothing(ws: Workspace, world: Path) -> None:

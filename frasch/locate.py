@@ -173,7 +173,7 @@ def _outline_point(
 
 def wanted_refs(ws: Workspace, reg: Registry) -> set[OsmRef]:
     """The OSM references of the rows on the map, as the name list has them now."""
-    rows, _ = placelist.read(ws.names, reg)
+    rows = placelist.read(ws.names, reg).rows
     return set(placeobjects.named(rows, reg))
 
 

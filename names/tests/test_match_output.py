@@ -213,7 +213,7 @@ kind=settlement | `"""
 
 def test_the_report_has_a_section_for_every_state(world: Path) -> None:
     (world / "places.csv").write_text(places_text(EVERY_STATE), encoding="utf-8")
-    rows, _fields = placelist.read(str(world / "places.csv"), REGISTRY)
+    rows = placelist.read(str(world / "places.csv"), REGISTRY).rows
     stamp = Stamp({"places.csv": "ce013625030ba8dba906f756967f9e9ca394464a"}, [])
     match.write_report(rows, EVERY_STATE_RESULTS, str(world / "REPORT.md"), REGISTRY, stamp)
     assert (world / "REPORT.md").read_text(encoding="utf-8") == EVERY_STATE_REPORT + (
@@ -265,7 +265,7 @@ def test_a_run_writes_the_new_references_into_places_csv(world: Path) -> None:
     (world / "places.csv").write_text(places_text(REMATCHED), encoding="utf-8")
     write_candidates(world / "work" / "candidates.jsonl", TOFTUM, *UPHUSUM, HOLM)
     match_main(world)
-    rows, _fields = placelist.read(str(world / "places.csv"), REGISTRY)
+    rows = placelist.read(str(world / "places.csv"), REGISTRY).rows
     assert [(r["id"], r["osm"], r["wikidata"], r["status"]) for r in rows] == [
         ("toftem", "node/240044107", "", "auto"),
         ("aphusem", "", "", ""),

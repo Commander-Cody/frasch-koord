@@ -25,7 +25,7 @@ def run_match(
     places.write_text(places_text(rows), encoding="utf-8")
     write_candidates(world / "work" / "candidates.jsonl", *candidates)
     assert match.run(workspace(world), REGISTRY, offline=True) == 0
-    return placelist.read(str(places), REGISTRY)[0]
+    return placelist.read(str(places), REGISTRY).rows
 
 
 def test_an_unclaimed_object_is_matched(world: Path) -> None:

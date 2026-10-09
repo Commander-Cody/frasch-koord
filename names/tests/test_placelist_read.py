@@ -15,9 +15,9 @@ def test_reads_a_list_saved_with_a_byte_order_mark(tmp_path: Path) -> None:
     # Excel's "CSV UTF-8" starts the file with one.
     path = tmp_path / "places.csv"
     path.write_bytes(b"\xef\xbb\xbf" + places_text([TOFTUM]).encode("utf-8"))
-    rows, fields = placelist.read(str(path), REGISTRY)
-    assert fields[0] == "kind"
-    assert rows[0]["mooring"] == "Toftem"
+    names = placelist.read(str(path), REGISTRY)
+    assert names.fields[0] == "kind"
+    assert names.rows[0]["mooring"] == "Toftem"
 
 
 def test_a_missing_list_is_a_pipeline_error_not_a_traceback(tmp_path: Path) -> None:
@@ -51,7 +51,7 @@ def test_line_numbers_are_those_of_the_file_after_a_blank_line(tmp_path: Path) -
     head, first, second, _ = places_text([TOFTUM, {**TOFTUM, "mooring": "Taftem"}]).split("\n")
     path = tmp_path / "places.csv"
     path.write_text("\n".join([head, first, "", second]) + "\n", encoding="utf-8")
-    rows, _ = placelist.read(str(path), REGISTRY)
+    rows = placelist.read(str(path), REGISTRY).rows
     assert [r.line for r in rows] == [2, 4]
 
 
@@ -77,7 +77,7 @@ def test_refuses_a_row_without_a_unique_well_formed_id(
 def test_every_row_carries_its_id(tmp_path: Path) -> None:
     path = tmp_path / "places.csv"
     path.write_text(places_text([{**TOFTUM, "id": "toftem"}]), encoding="utf-8")
-    rows, _ = placelist.read(str(path), REGISTRY)
+    rows = placelist.read(str(path), REGISTRY).rows
     assert rows[0]["id"] == "toftem"
 
 
@@ -123,5 +123,5 @@ def test_the_registry_passed_in_sets_the_name_columns(tmp_path: Path) -> None:
         "settlement,,,Olersem,Oldsum,,,,,,,oldsum\n",
         encoding="utf-8",
     )
-    rows, _ = placelist.read(str(path), reg)
+    rows = placelist.read(str(path), reg).rows
     assert placelist.any_name(rows[0], reg) == "Olersem"

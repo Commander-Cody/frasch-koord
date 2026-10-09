@@ -79,7 +79,7 @@ from frasch.dialects import Registry
 from frasch.errors import PipelineError
 from frasch.hints import HINT_FALLBACK, Circle, HintResolver
 from frasch.paths import StrPath, Workspace
-from frasch.placelist import PlaceRow, Row
+from frasch.placelist import PlaceList, PlaceRow, Row
 from frasch.refs import OsmRef
 
 # The order the browser walks the worklist in: the kinds a human can decide
@@ -263,7 +263,7 @@ def _read_work(ws: Workspace, reg: Registry) -> _Work:
     """The `ambiguous` and `not_found` rows of the last match the matcher
     still owns, each with its places.csv row."""
     matches = ws.matches
-    rows, _fields = placelist.read(ws.names, reg)
+    rows = placelist.read(ws.names, reg).rows
     by_id = {r["id"]: r for r in rows}
     if not os.path.exists(matches):
         raise PipelineError(f"{matches} not found -- run `frasch match` first")
@@ -649,7 +649,7 @@ def apply(ws: Workspace, reg: Registry, *, dry_run: bool = False, keep: bool = F
     in the patch; a problem that stops the whole apply raises.  `dry_run`:
     say what would change and write nothing.  `keep`: leave the patch file
     where it is."""
-    with placelist.lock(ws.lock):
+    with files.lock(ws.lock):
         return _apply(ws, reg, dry_run, keep)
 
 
@@ -693,7 +693,7 @@ def _apply(ws: Workspace, reg: Registry, dry_run: bool, keep: bool) -> int:
                 )
                 files.atomic_write(curation, cur_text, expect=lists.cur_digest)
                 cur_written = files.digest(cur_text)
-            placelist.write(lists.rows, names, lists.fields)
+            lists.places.write()
     except BaseException:
         if cur_written:
             added = [c["osm"] for c in decisions.new_curation]
@@ -716,11 +716,8 @@ def _apply(ws: Workspace, reg: Registry, dry_run: bool, keep: bool) -> int:
 class _Lists:
     """The name list and curation.csv, as apply checked them."""
 
-    names: str
+    places: PlaceList
     curation: str
-    reg: Registry
-    rows: list[PlaceRow]
-    fields: list[str]
     used_slugs: set[str]  # local/<slug> references curation.csv or a row has
     cur_data: bytes | None  # None = there is no curation.csv
     cur_fields: list[str]
@@ -728,19 +725,19 @@ class _Lists:
 
     @functools.cached_property
     def by_id(self) -> dict[str, PlaceRow]:
-        return {r["id"]: r for r in self.rows}
+        return {r["id"]: r for r in self.places.rows}
 
 
 def _read_lists(names: str, curation: str, reg: Registry) -> _Lists:
-    rows, fields = placelist.read(names, reg)
+    places = placelist.read(names, reg)
     used_slugs = set(curationlist.local_points(curation))
     cur_data, cur_fields = curationlist.read_bytes(curation)
     cur_digest = files.digest(cur_data) if cur_data is not None else files.MISSING
-    for r in rows:
+    for r in places.rows:
         slug = refs.local_of(refs.parse(r["osm"]))
         if slug:
             used_slugs.add(slug)
-    return _Lists(names, curation, reg, rows, fields, used_slugs, cur_data, cur_fields, cur_digest)
+    return _Lists(places, curation, used_slugs, cur_data, cur_fields, cur_digest)
 
 
 def _take_snapshot(patch: str) -> str:
@@ -781,17 +778,17 @@ def _decide_entry(line: PatchLine, lists: _Lists, decisions: _Decisions) -> None
     row = lists.by_id.get(e["id"])
     if row is None:
         decisions.refuse(
-            line, f"no row with id {e['id']!r} in {lists.names} (deleted since the export?)"
+            line, f"no row with id {e['id']!r} in {lists.places.path} (deleted since the export?)"
         )
         return
-    why = owner_problem(row, lists.names)
+    why = owner_problem(row, lists.places.path)
     if why is None:
         why = _decide_row(e, row, lists, decisions.new_curation)
     if why:
         decisions.refuse(line, why)
         return
     print(
-        f"  {lists.names}:{row.line} {placelist.describe(row, lists.reg)}: "
+        f"  {lists.places.path}:{row.line} {placelist.describe(row, lists.places.reg)}: "
         f"{decision_text(e, row, lists.curation)}"
     )
     decisions.applied += 1
@@ -806,7 +803,7 @@ def _decide_row(
         return decide(entry, row)
     why, cur = decide_local(entry, row, lists.used_slugs)
     if cur:
-        cur["name"] = curation_name(row, lists.reg)
+        cur["name"] = curation_name(row, lists.places.reg)
         new_curation.append(cur)
     return why
 
