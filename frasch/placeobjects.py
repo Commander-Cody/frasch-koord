@@ -25,7 +25,7 @@ def named(rows: Iterable[PlaceRow], reg: Registry) -> dict[OsmRef, PlaceRow]:
     found: dict[OsmRef, PlaceRow] = {}
     for row in rows:
         if placelist.on_map(row, reg):
-            for ref in refs.osm_only(refs.parse(row["osm"])):
+            for ref in row.osm_refs:
                 found.setdefault(ref, row)
     return found
 
@@ -62,8 +62,7 @@ def for_row(
     reference in its `osm` cell, or for a local reference the point the
     injector adds (`local_point`; `local_points`: the curation's position of
     each slug).  None for a row keyed by its QID alone."""
-    named_by_row = refs.parse(row["osm"])
-    slug = refs.local_of(named_by_row)
+    slug = row.local
     if slug:
         if slug not in local_points:
             raise PipelineError(
@@ -71,8 +70,7 @@ def for_row(
                 f"lat/lon in the curation file"
             )
         return local_point(row, local_points[slug], reg)
-    osm = refs.osm_only(named_by_row)
-    return objects.by_ref[osm[0]] if osm else None
+    return objects.by_ref[row.osm_refs[0]] if row.osm_refs else None
 
 
 def local_point(row: Row, position: LonLat, reg: Registry) -> LocatedObject:

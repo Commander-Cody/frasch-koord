@@ -56,7 +56,6 @@ from frasch import (
     placenames,
     placeobjects,
     provenance,
-    refs,
 )
 from frasch.dialects import Registry
 from frasch.errors import PipelineError, rebuild
@@ -76,7 +75,7 @@ class SearchIndex(TypedDict):
 
 def entry_refs(rows: Iterable[PlaceRow]) -> dict[OsmRef, PlaceRow]:
     """The reference to an OSM object each row's entry lies at, with its row."""
-    return {osm[0]: row for row in rows if (osm := refs.osm_only(refs.parse(row["osm"])))}
+    return {row.osm_refs[0]: row for row in rows if row.osm_refs}
 
 
 def build(ws: Workspace, reg: Registry) -> SearchIndex:
@@ -94,7 +93,7 @@ def build(ws: Workspace, reg: Registry) -> SearchIndex:
     for r in on_map:
         obj = placeobjects.for_row(objects, r, local_points, reg)
         if obj is not None:
-            places.append(placenames.as_entry(placenames.resolve([r], obj, areas, reg), obj, r))
+            places.append(placenames.as_entry(placenames.resolve(r, obj, areas, reg), obj, r))
     return {"built_from": provenance.stamp(ws).as_json(), "places": places}
 
 

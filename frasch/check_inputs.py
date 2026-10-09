@@ -28,7 +28,6 @@ from frasch import (
     namecell,
     placelist,
     placenames,
-    refs,
     tables,
 )
 from frasch.dialects import Registry
@@ -115,13 +114,12 @@ def check_places(
     names: Table, curation: str, positioned: Container[str], reg: Registry
 ) -> list[Problem]:
     """The problems in the name list (`names`), whose columns `reg` says:
-    those `placelist.read` refuses it for, and the stricter rules of its name
-    cells and of what its rows claim.  `positioned` are the local references
-    `curation` has a position for."""
+    those `placelist.read` refuses it for, the stricter rules of its name
+    cells, and a local reference `curation` has no position for
+    (`positioned`: those it has one for)."""
     rows, problems = placelist.rows(names, reg)
-    claimed: dict[str, int] = {}  # `way/1` or `Q1` -> line of the first row
     for row in rows:
-        whats = _cell_problems(row, reg) + _claim_problems(row, curation, positioned, claimed)
+        whats = _cell_problems(row, reg) + _position_problems(row, curation, positioned)
         problems += [Problem(names.path, row.line, what) for what in whats]
     return tables.by_line(problems)
 
@@ -139,31 +137,15 @@ def _cell_problems(row: PlaceRow, reg: Registry) -> list[str]:
     return found
 
 
-def _claim_problems(
-    row: PlaceRow, curation: str, positioned: Container[str], claimed: dict[str, int]
-) -> list[str]:
-    """What is wrong with what a row puts on the map: a local reference
-    `curation` has no position for, an object or Wikidata item a row above
-    it claimed already (`claimed`, which takes this row's)."""
+def _position_problems(row: PlaceRow, curation: str, positioned: Container[str]) -> list[str]:
+    """A row's local reference that `curation` has no position for."""
     try:
-        slug = refs.local_of(refs.parse(row["osm"]))
-        claimed_refs = placelist.claimed_refs(row)
+        slug = row.local
     except errors.Invalid:
-        slug, claimed_refs = None, []  # `placelist.rows` reported it
-    found: list[str] = []
+        return []  # `placelist.rows` reported it
     if slug and slug not in positioned:
-        found.append(f"local/{slug} has no row with `lat`/`lon` in {curation}")
-    keys = [refs.format([ref]) for ref in claimed_refs]
-    if row["wikidata"] and row["status"] != "skip":
-        keys.append(row["wikidata"])
-    for key in keys:
-        if key in claimed:
-            found.append(
-                f"{key} is already claimed by line {claimed[key]} "
-                f"-- only one name can go on the map"
-            )
-        claimed.setdefault(key, row.line)
-    return found
+        return [f"local/{slug} has no row with `lat`/`lon` in {curation}"]
+    return []
 
 
 def variant_columns(reg: Registry) -> list[str]:

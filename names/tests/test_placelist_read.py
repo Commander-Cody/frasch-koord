@@ -48,7 +48,7 @@ def test_refuses_a_row_with_a_comma_too_few_as_such(tmp_path: Path) -> None:
 
 def test_line_numbers_are_those_of_the_file_after_a_blank_line(tmp_path: Path) -> None:
     # REPORT.md, the curation and the input check all point editors at a row's `line`.
-    head, first, second, _ = places_text([TOFTUM, {**TOFTUM, "mooring": "Taftem"}]).split("\n")
+    head, first, second, _ = places_text([TOFTUM, {**TOFTUM, "osm": "node/2"}]).split("\n")
     path = tmp_path / "places.csv"
     path.write_text("\n".join([head, first, "", second]) + "\n", encoding="utf-8")
     rows = placelist.read(str(path), REGISTRY).rows
@@ -84,7 +84,13 @@ def test_every_row_carries_its_id(tmp_path: Path) -> None:
 def test_every_broken_row_is_reported_at_once(tmp_path: Path) -> None:
     path = tmp_path / "places.csv"
     path.write_text(
-        places_text([{**TOFTUM, "kind": "town"}, TOFTUM, {**TOFTUM, "status": "done"}]),
+        places_text(
+            [
+                {**TOFTUM, "kind": "town"},
+                {**TOFTUM, "osm": "node/2"},
+                {**TOFTUM, "osm": "node/3", "status": "done"},
+            ]
+        ),
         encoding="utf-8",
     )
     with pytest.raises(ValidationError) as exc:
@@ -103,6 +109,25 @@ def test_every_problem_of_a_row_is_reported_not_only_its_first(tmp_path: Path) -
     assert exc.value.problems == [
         Problem(str(path), 2, "unknown kind 'town'"),
         Problem(str(path), 2, "unknown status 'done' (auto / ok / skip / empty)"),
+    ]
+
+
+def test_refuses_an_object_two_rows_claim(tmp_path: Path) -> None:
+    # only one of the two names can go on the map (#94)
+    path = tmp_path / "places.csv"
+    rows = [
+        {"kind": "warft", "mooring": "Lungendik", "osm": "way/28330569"},
+        {"kind": "warft", "mooring": "Lungedik", "osm": "way/1; way/28330569"},
+    ]
+    path.write_text(places_text(rows), encoding="utf-8")
+    with pytest.raises(ValidationError) as exc:
+        placelist.read(str(path), REGISTRY)
+    assert exc.value.problems == [
+        Problem(
+            str(path),
+            3,
+            "way/28330569 is already claimed by line 2 -- only one name can go on the map",
+        )
     ]
 
 

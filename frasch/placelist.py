@@ -33,12 +33,13 @@ import re
 import unicodedata
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from typing import NamedTuple
 
 from frasch import files, refs, tables
 from frasch.dialects import LOCAL_COLUMN, Registry
 from frasch.errors import Invalid, PipelineError, Problem, ValidationError
 from frasch.namecell import primary
-from frasch.refs import SLUG, Ref
+from frasch.refs import SLUG, OsmRef, Ref
 from frasch.tables import Table
 
 
@@ -84,13 +85,34 @@ Row = Mapping[str, str]
 
 
 class PlaceRow(dict[str, str]):
-    """A row of the name list as `read` returns it: its cells, and `line`,
-    its physical line number in the file (header = 1) -- for the messages
-    that point an editor at it."""
+    """A row of the name list as `read` returns it: its cells, `line`, its
+    physical line number in the file (header = 1) -- for the messages that
+    point an editor at it --, and the references of its `osm` cell, parsed
+    (`refs`)."""
 
     def __init__(self, cells: Mapping[str, str], line: int):
         super().__init__(cells)
         self.line = line
+        self._parsed: tuple[str, list[Ref]] | None = None  # (the cell, its references)
+
+    @property
+    def refs(self) -> list[Ref]:
+        """The references of the row's `osm` cell, as the cell is now: the
+        matcher and `curate apply` rewrite it."""
+        cell = self["osm"]
+        if self._parsed is None or self._parsed[0] != cell:
+            self._parsed = (cell, refs.parse(cell))
+        return self._parsed[1]
+
+    @property
+    def osm_refs(self) -> list[OsmRef]:
+        """Those of its references that name an OSM object."""
+        return refs.osm_only(self.refs)
+
+    @property
+    def local(self) -> str | None:
+        """The slug of its local reference, for a place OSM does not have."""
+        return refs.local_of(self.refs)
 
 
 def any_name(row: Row, reg: Registry) -> str:
@@ -112,19 +134,12 @@ def point_name(row: Row, reg: Registry) -> str:
     return primary(row.get("de")) or primary(row.get("da")) or any_name(row, reg)
 
 
-def on_map(row: Row, reg: Registry) -> bool:
-    """Whether a row puts names on the map: it has a Frisian name and is
-    neither `skip` nor `not_a_place`.  The injector labels these rows'
-    objects, and the search index lists them."""
-    return row["status"] != "skip" and row["kind"] != "not_a_place" and bool(any_name(row, reg))
-
-
 def owned_by_matcher(row: Row) -> bool:
     """May the matcher (and `frasch curate apply`) (re)write this row's osm /
     wikidata / status?  Not a row a human decided -- `ok`/`skip`, a
     hand-filled reference, a local reference, `not_a_place` -- only one it
     filled itself (`auto`) or one with nothing in it yet."""
-    if refs.local_of(refs.parse(row["osm"])):
+    if refs.local_of(_refs(row)):
         return False  # a local reference: OSM has no object for it
     if row["kind"] == "not_a_place" or row["status"] in ("ok", "skip"):
         return False
@@ -133,13 +148,43 @@ def owned_by_matcher(row: Row) -> bool:
     return not row["osm"] and not row["wikidata"]
 
 
-def claimed_refs(row: Row) -> list[Ref]:
-    """The objects a row puts on the map: the references in its `osm` cell,
-    none for a `skip` row, which never reaches the map.  Only one row per
-    object can: the injector labels an object once."""
+class Claims(NamedTuple):
+    """What a row holds for itself, see `claims`: the objects its `osm` cell
+    names (`refs`) and its Wikidata item (`qid`, `""` for none)."""
+
+    refs: list[Ref]
+    qid: str
+
+    @property
+    def keys(self) -> list[str]:
+        """Each claim as the list spells it: `way/1`, `Q35`."""
+        return [refs.format([ref]) for ref in self.refs] + ([self.qid] if self.qid else [])
+
+
+def claims(row: Row) -> Claims:
+    """What a row holds for itself: the objects of its `osm` cell and its
+    Wikidata item -- nothing for a `skip` row, which never reaches the map.
+    It holds them also while it is `not_a_place` or has no Frisian name yet
+    (`on_map` is the narrower question).  Only one row can hold an object or
+    an item: the injector labels it once, so a second claim is a problem of
+    the list (`rows`)."""
     if row["status"] == "skip":
-        return []
-    return refs.parse(row.get("osm"))
+        return Claims([], "")
+    return Claims(_refs(row), row["wikidata"])
+
+
+def _refs(row: Row) -> list[Ref]:
+    """The references of a row's `osm` cell: parsed already for a row of the
+    list, now for one built by hand."""
+    return row.refs if isinstance(row, PlaceRow) else refs.parse(row.get("osm"))
+
+
+def on_map(row: Row, reg: Registry) -> bool:
+    """Whether a row puts names on the map: it claims an object or an item,
+    is a place (not `not_a_place`) and has a Frisian name.  The injector
+    labels these rows' objects, and the search index lists them."""
+    held = claims(row)
+    return bool(held.refs or held.qid) and row["kind"] != "not_a_place" and bool(any_name(row, reg))
 
 
 def header_problem(fields: Sequence[str], reg: Registry) -> str | None:
@@ -269,22 +314,45 @@ def ids(names: Table) -> set[str]:
     return {row["id"] for _, row in names.records()}
 
 
+def claim_problems(held: Sequence[str], claimed: Mapping[str, int]) -> list[str]:
+    """Which of a row's claims (`held`, as `Claims.keys` spells them) a row
+    above it holds already (`claimed`: claim -> line)."""
+    return [
+        f"{key} is already claimed by line {claimed[key]} -- only one name can go on the map"
+        for key in held
+        if key in claimed
+    ]
+
+
+def _claim_keys(row: Row) -> list[str]:
+    """What a row claims, as `Claims.keys` spells it -- of an unreadable
+    `osm` cell (`row_problems` says so) nothing."""
+    try:
+        return claims(row).keys
+    except Invalid:
+        return claims({**row, "osm": ""}).keys
+
+
 def rows(names: Table, reg: Registry) -> tuple[list[PlaceRow], list[Problem]]:
     """-> (rows, problems): every row of the name list (`names`, see `table`)
     whose cells line up with the header -- identified by its `id`, knowing
     its `line` -- and what is wrong with the file by the rules `read`
-    enforces.  A row that breaks one is among the rows all the same:
-    frasch.check_inputs has more to say about it.  Without its columns the
-    list has no rows."""
+    enforces: those of a row's cells, and across the rows a unique id and
+    one row per object or Wikidata item (`claims`).  A row that breaks one
+    is among the rows all the same: frasch.check_inputs has more to say
+    about it.  Without its columns the list has no rows."""
     if what := header_problem(names.header, reg):
         return [], [Problem(names.path, 1, what)]
     found = [PlaceRow(cells, n) for n, cells in names.records()]
     problems = list(names.problems)
-    seen: dict[str, int] = {}
+    seen: dict[str, int] = {}  # id -> the line of its row
+    claimed: dict[str, int] = {}  # `way/1` or `Q35` -> the line of the row that holds it
     for row in found:
-        whats = [*row_problems(row), id_problem(row, seen)]
+        held = _claim_keys(row)
+        whats = [*row_problems(row), id_problem(row, seen), *claim_problems(held, claimed)]
         problems += [Problem(names.path, row.line, what) for what in whats if what]
         seen.setdefault(row["id"], row.line)
+        claimed.update((key, row.line) for key in held if key not in claimed)
     return found, tables.by_line(problems)
 
 

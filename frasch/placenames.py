@@ -26,7 +26,7 @@ tile key, and `frasch check-tiles` compares the two by it.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Sequence
 from typing import NamedTuple, NotRequired, TypedDict
 
 from frasch import cli, namecell
@@ -91,29 +91,23 @@ class PlaceNames(NamedTuple):
 
 
 def resolve(
-    rows: Sequence[Row], obj: LocatedObject | None, areas: AreaIndex | None, reg: Registry
+    row: Row, obj: LocatedObject | None, areas: AreaIndex | None, reg: Registry
 ) -> PlaceNames:
-    """The names of the place `rows` give an object: the name-list rows that
-    claim it, in file order -- the first non-empty value wins, and the first
-    row is the one the place is named by.  `obj` is where the object lies and
-    what OSM says of it; None for one of unknown position, which is in no
-    dialect area."""
+    """The names `row`, the name-list row that claims an object, gives it.
+    `obj` is where the object lies and what OSM says of it; None for one of
+    unknown position, which is in no dialect area."""
     area_tag = dialect_at(obj, areas) if obj else None
-    names = {
-        d["tag"]: name
-        for d in reg
-        if (name := _first(_dialect_name(row, d["tag"], area_tag, reg) for row in rows))
-    }
-    listed_local = _first(_local_name(row, area_tag, reg) for row in rows)
+    names = {d["tag"]: name for d in reg if (name := _dialect_name(row, d["tag"], area_tag, reg))}
+    listed_local = _local_name(row, area_tag, reg)
     osm_local = _osm_local_name(obj, area_tag)
     return PlaceNames(
-        id=rows[0]["id"],
-        kind=_first(row["kind"] for row in rows),
+        id=row["id"],
+        kind=row["kind"],
         names=names,
-        name_de=_first(namecell.primary(row["de"]) for row in rows),
+        name_de=namecell.primary(row["de"]),
         dialect=area_tag or "",
         local=listed_local or osm_local,
-        variety=_first(_variety(row) for row in rows),
+        variety=_variety(row),
         local_from_osm=bool(osm_local) and not listed_local,
     )
 
@@ -122,11 +116,6 @@ def unclaimed_local(obj: LocatedObject, areas: AreaIndex | None) -> str:
     """The local name of an object no row of the name list claims -- a Warft,
     a street, a station: OSM's own Frisian name, inside a dialect area."""
     return _osm_local_name(obj, dialect_at(obj, areas))
-
-
-def _first(values: Iterable[str]) -> str:
-    """The first non-empty value, or `""`."""
-    return next(filter(None, values), "")
 
 
 def _dialect_name(row: Row, tag: str, area_tag: str | None, reg: Registry) -> str:

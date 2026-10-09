@@ -910,20 +910,9 @@ def claimed_objects(rows: Iterable[PlaceRow]) -> dict[Ref, int]:
     for r in rows:
         if owned_by_matcher(r):
             continue
-        for key in placelist.claimed_refs(r):
+        for key in placelist.claims(r).refs:
             out.setdefault(key, r.line)
     return out
-
-
-def find_duplicates(rows: Iterable[PlaceRow]) -> dict[Ref, list[PlaceRow]]:
-    """Two rows pointing at one OSM object -- usually the list has a place
-    twice (two spellings, or two rows from different sheet sections).  Only one of the names can end
-    up on the map."""
-    by_obj: collections.defaultdict[Ref, list[PlaceRow]] = collections.defaultdict(list)
-    for r in rows:
-        for key in placelist.claimed_refs(r):
-            by_obj[key].append(r)
-    return {k: g for k, g in by_obj.items() if len(g) > 1}
 
 
 # --------------------------------------------------------------- extracts ----
@@ -1013,7 +1002,6 @@ def write_report(
         _report_intro(rows)
         + _counts_section(rows, results, reg)
         + _ambiguous_section(rows, results, reg)
-        + _duplicates_section(rows, reg)
         + _not_found_section(rows, results, reg)
         + [built_from.as_comment(), ""]
     )
@@ -1021,7 +1009,7 @@ def write_report(
         fh.write("\n".join(lines))
 
 
-def _report_state(r: Row, results: Mapping[str, MatchResult], reg: Registry) -> str:
+def _report_state(r: PlaceRow, results: Mapping[str, MatchResult], reg: Registry) -> str:
     """Which of the REPORT_STATES the row is in."""
     if r["kind"] == "not_a_place":
         return "not a place"
@@ -1029,7 +1017,7 @@ def _report_state(r: Row, results: Mapping[str, MatchResult], reg: Registry) -> 
         return "skip"
     if not any_name(r, reg):
         return "no Frisian name"
-    if refs.local_of(refs.parse(r["osm"])):
+    if r.local:
         return "own point"
     if r["osm"] or r["wikidata"]:
         return "auto" if r["status"] == "auto" else "by hand"
@@ -1111,28 +1099,6 @@ def _ambiguous_section(
     return lines
 
 
-def _duplicates_section(rows: Sequence[PlaceRow], reg: Registry) -> list[str]:
-    dups = find_duplicates(rows)
-    lines = [f"## Rows sharing one OSM object ({len(dups)})\n"]
-    lines.append(
-        "The list has these places twice (two spellings, or rows from two "
-        "sheet sections). Only one name can be injected -- the first row wins; "
-        "decide which, and `skip` the other.\n"
-    )
-    lines.append("| OSM object | rows (line) | Frisian names | German |")
-    lines.append("|---|---|---|---|")
-    for key, g in sorted(dups.items(), key=lambda kv: kv[1][0].line):
-        lines.append(
-            f"| `{refs.format([key])}` | "
-            + ", ".join(f"{x['id']} ({x.line})" for x in g)
-            + " | "
-            + ", ".join(any_name(x, reg) for x in g)
-            + f" | {primary(g[0]['de'])} |"
-        )
-    lines.append("")
-    return lines
-
-
 def _not_found_section(
     rows: Sequence[PlaceRow], results: Mapping[str, MatchResult], reg: Registry
 ) -> list[str]:
@@ -1169,8 +1135,7 @@ def write_matches(
         w.writeheader()
         for r in rows:
             res = results.get(r["id"])
-            osm = refs.osm_only(refs.parse(r["osm"]))
-            hit = index.by_key.get(osm[0]) if osm else None
+            hit = index.by_key.get(r.osm_refs[0]) if r.osm_refs else None
             rec = {
                 "id": r["id"],
                 "line": str(r.line),
@@ -1198,7 +1163,7 @@ def write_matches(
                     else "not a place"
                     if r["kind"] == "not_a_place"
                     else "own point"
-                    if refs.local_of(refs.parse(r["osm"]))
+                    if r.local
                     else "by hand"
                     if (r["osm"] or r["wikidata"] or r["status"] == "ok")
                     else ""

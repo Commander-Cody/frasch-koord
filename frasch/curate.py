@@ -733,10 +733,7 @@ def _read_lists(names: str, curation: str, reg: Registry) -> _Lists:
     used_slugs = set(curationlist.local_points(curation))
     cur_data, cur_fields = curationlist.read_bytes(curation)
     cur_digest = files.digest(cur_data) if cur_data is not None else files.MISSING
-    for r in places.rows:
-        slug = refs.local_of(refs.parse(r["osm"]))
-        if slug:
-            used_slugs.add(slug)
+    used_slugs.update(r.local for r in places.rows if r.local)
     return _Lists(places, curation, used_slugs, cur_data, cur_fields, cur_digest)
 
 

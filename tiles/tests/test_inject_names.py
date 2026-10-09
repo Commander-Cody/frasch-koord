@@ -33,7 +33,6 @@ from frasch.geo import LonLat
 from frasch.inject_names import Use
 from frasch.objects import Objects, objects_json
 from frasch.provenance import Stamp
-from frasch.dialects import Registry
 from conftest import REGISTRY, curation_file, flat_workspace, path_options
 from osm_fixture import Nodes, write_extract as write_osm
 
@@ -61,30 +60,8 @@ def test_square_is_centred_on_the_node() -> None:
     assert sum(y for _, y in corners) / 4 == pytest.approx(54.487378)
 
 
-# ---------------------------------------------------------------- load_names ---
-@pytest.fixture(scope="module")
-def reg() -> Registry:
-    return REGISTRY
-
-
 # ------------------------------------------------------------- load_curation ---
 # (the file's rules are frasch.curationlist's, see names/tests/test_curationlist.py)
-def test_a_second_row_with_the_same_qid_is_reported(tmp_path: Path, reg: Registry) -> None:
-    path = tmp_path / "places.csv"
-    path.write_text(
-        places_csv(
-            [
-                {"id": "daanemark", "kind": "country", "mooring": "Däänemark", "wikidata": "Q35"},
-                {"id": "daanemoark", "kind": "country", "mooring": "Däänemoark", "wikidata": "Q35"},
-            ]
-        ),
-        encoding="utf-8",
-    )
-    names = inject_names.load_names(str(path), reg)
-    assert [r["id"] for r in names.by_qid["Q35"]] == ["daanemark"]
-    assert names.duplicate_qids == [("Q35", 2, 3)]
-
-
 def test_missing_curation_file_is_nothing_curated(tmp_path: Path) -> None:
     assert inject_names.load_curation(str(tmp_path / "absent.csv")) == ({}, {}, {})
 
@@ -730,15 +707,6 @@ REPORT_PLACES = [
         wikidata="Q559369",
         status="ok",
     ),
-    dict(
-        id="hoolm",
-        kind="settlement",
-        mooring="Hoolm",
-        de="Holm",
-        osm="node/1",
-        wikidata="Q559369",
-        status="ok",
-    ),
     dict(id="nordsiie", kind="water", mooring="Nordsiie", de="Nordsee", wikidata="Q1693"),
     dict(id="arlau", kind="water", mooring="Arlau", de="Arlau", osm="relation/20"),
     dict(id="braist", kind="settlement", mooring="Bräist", de="Bredstedt", osm="node/99"),
@@ -813,10 +781,7 @@ def test_report_of_rows_and_curation_rows_that_do_not_fit(
     assert lines[1].startswith("dialects  : <dir>/dialects.csv -> ")
     assert lines[:1] + lines[2:] == [
         "name list : <dir>/places.csv",
-        "usable    : 6 rows -> 3 OSM ids + 2 wikidata QIDs + 1 local reference(s)",
-        "  ! node/1 claimed twice in `mooring`: keeping 'Hulm' (line 2), "
-        "ignoring 'Hoolm' (places.csv line 3)",
-        "  ! Q559369 claimed twice: keeping line 2, ignoring places.csv line 3",
+        "usable    : 5 rows -> 3 OSM ids + 2 wikidata QIDs + 1 local reference(s)",
         "areas     : off (no frasch:dialect; frasch:local only from the `local` column). "
         "Build it with `just rebuild areas`",
         "curation  : <dir>/curation.csv -> 2 OSM ids (2 with frasch:minzoom, 0 with frasch:maxzoom)",
@@ -857,7 +822,7 @@ def test_report_names_a_curation_file_without_osm_ids(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     # only the Sophien-Koog's label square
-    report_run(tmp_path, REPORT_PLACES[5:], REPORT_CURATION[3:4])
+    report_run(tmp_path, REPORT_PLACES[4:], REPORT_CURATION[3:4])
     lines = normalized(capsys.readouterr().out, tmp_path).splitlines()
     assert (
         "curation  : <dir>/curation.csv -> 0 OSM ids (0 with frasch:minzoom, 0 with frasch:maxzoom)"
@@ -875,7 +840,7 @@ def test_a_local_reference_without_a_position_stops_the_build(tmp_path: Path) ->
     assert normalized(str(exc.value), tmp_path) == (
         "1 local reference(s) in <dir>/places.csv have no row with lat/lon in "
         "<dir>/curation.csv:\n"
-        "  local/sophien-koog  Sofiinkuuch (Sophien-Koog) (places.csv line 7)"
+        "  local/sophien-koog  Sofiinkuuch (Sophien-Koog) (places.csv line 6)"
     )
 
 
@@ -908,7 +873,7 @@ def test_report_when_no_object_lies_in_a_dialect_area(
         objects_json(Objects({}, Stamp({}, []))), encoding="utf-8"
     )
     # only the North Sea, found through its QID, far out of every area
-    report_run(tmp_path, REPORT_PLACES[2:3], [], areas=Use.IF_PRESENT)
+    report_run(tmp_path, REPORT_PLACES[1:2], [], areas=Use.IF_PRESENT)
     out = capsys.readouterr().out
     assert out.endswith(
         "objects per dialect area:\n"

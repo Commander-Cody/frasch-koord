@@ -34,8 +34,8 @@ def row(**cells: str) -> dict[str, str]:
     return {c: "" for c in placelist.columns(REGISTRY)} | cells
 
 
-def resolve(obj: LocatedObject | None, *rows: Mapping[str, str]) -> placenames.PlaceNames:
-    return placenames.resolve(rows, obj, AREAS, REGISTRY)
+def resolve(obj: LocatedObject | None, place: Mapping[str, str]) -> placenames.PlaceNames:
+    return placenames.resolve(place, obj, AREAS, REGISTRY)
 
 
 # Hanswarft on Hooge: the Mooring name is the foreign form, the Hallig one is
@@ -167,49 +167,6 @@ def test_a_place_is_named_by_the_id_of_its_row() -> None:
 
 def test_a_place_has_the_kind_of_its_row() -> None:
     assert resolve(OUTSIDE, HANSWARFT).kind == "warft"
-
-
-# ------------------------------------------- several rows on one object ---
-# two rows claim one node: the first in file order keeps what it says, a
-# later one only fills what the first leaves empty
-HULM = row(id="hulm", kind="settlement", mooring="Hulm")
-HULM_GUTSKUUCH = row(
-    id="hulm-gutskuuch",
-    kind="koog",
-    mooring="Hulm Gutskuuch",
-    wieding="Hoolm",
-    local="Hoolm (Wiringhiirder)",
-    de="Holmer Gotteskoog",
-)
-
-
-def test_of_several_rows_the_first_is_the_one_the_place_is_named_by() -> None:
-    assert resolve(OUTSIDE, HULM, HULM_GUTSKUUCH).id == "hulm"
-
-
-def test_of_several_rows_the_first_gives_the_kind() -> None:
-    assert resolve(OUTSIDE, HULM, HULM_GUTSKUUCH).kind == "settlement"
-
-
-def test_of_several_rows_the_first_keeps_its_name() -> None:
-    assert resolve(OUTSIDE, HULM, HULM_GUTSKUUCH).names["frr-x-mooring"] == "Hulm"
-
-
-def test_of_several_rows_the_first_keeps_its_german_name() -> None:
-    holm = HULM | {"de": "Holm"}
-    assert resolve(OUTSIDE, holm, HULM_GUTSKUUCH).name_de == "Holm"
-
-
-def test_a_later_row_gives_the_dialect_name_the_first_has_none_for() -> None:
-    assert resolve(OUTSIDE, HULM, HULM_GUTSKUUCH).names["frr-x-wieding"] == "Hoolm"
-
-
-@pytest.mark.parametrize(
-    "field, value",
-    [("name_de", "Holmer Gotteskoog"), ("local", "Hoolm"), ("variety", "Wiringhiirder")],
-)
-def test_a_later_row_gives_what_the_first_leaves_empty(field: str, value: str) -> None:
-    assert getattr(resolve(OUTSIDE, HULM, HULM_GUTSKUUCH), field) == value
 
 
 # ----------------------------------------------------- as tags of a tile ---
