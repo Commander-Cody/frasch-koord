@@ -862,6 +862,63 @@ that are always written were optional in the browser.
   `matches.csv` or a patch line without `id`, a worklist without `in_sh`, a
   name list with `lat`/`lon` columns, a names.json without `names`.
 
+## Decided 2026-10-09: modules by concept; a double claim is an error of the list (issue #94)
+
+`placelist.py` held seven concerns, and `registry.py`, `dialects.py` and
+`objects.py` held other things than their names said, so modules that only
+needed a reference type imported the `places.csv` module. Each concept now
+has its module (see `names/README.md#code`); earlier entries of this log keep
+the names they were written with:
+
+| was | is |
+|---|---|
+| `placelist`: `parse_osm`, `format_osm`, `Ref`, `OsmRef`, `LOCAL_TYPE`, `SLUG` | `frasch/refs.py`: `parse`, `format`, … |
+| `placelist`: `parts`, `variants`, `primary`, `remark` | `frasch/namecell.py` |
+| `placelist.lock` | `files.lock` |
+| `registry.py` | `dialects.py` (the registry, its export, `frasch dialects`) |
+| `dialects.py` (`area_rows`, `AreaIndex`) and `objects.dialect_at` | `dialect_areas.py` |
+| `objects`: `named`, `unlocated`, `require_located`, `Objects.for_row`, `local_point` | `frasch/placeobjects.py` |
+
+- **`placelist.read` returns a `PlaceList`** (`rows`, `fields`, `reg`, `path`,
+  the digest of the file it was read from) that writes itself. The module
+  global that remembered a digest per path is gone, and with it "a write
+  needs a read in this process": a list only exists once it was read. Two
+  lists read from one file no longer share that memory, so the one written
+  second stops with a `Conflict`.
+- **A `PlaceRow` knows its references**: `refs`, `osm_refs` and `local`,
+  parsed once and following the `osm` cell when the matcher or `curate apply`
+  rewrites it. Nothing outside `placelist` parses the cell of a row again.
+- **One `claims(row)`** (owner's decision): a row holds the objects of its
+  `osm` cell and its Wikidata item unless it is `skip` — also while it is
+  `not_a_place` or has no Frisian name yet. `on_map(row)` is defined on top:
+  it claims something, is a place and has a Frisian name. No row of the list
+  was in the gap between the two.
+- **A double claim is an error of the list itself** (owner's decision). It was
+  detected three times with three severities: an error in `check-inputs`, a
+  section of `REPORT.md`, a "claimed twice" notice of the injector. It is now
+  a rule of `placelist.rows`, next to the unique `id`: `check-inputs` lists
+  it and `placelist.read` refuses the list, so every command stops with file
+  and line. This supersedes the 2026-10-07 decision "an object two rows
+  claim: the first non-empty value across the rows": `placenames.resolve`
+  takes the one row that claims an object, the injector keeps one row per
+  object, and its conflict report and the report's "Rows sharing one OSM
+  object" section are gone.
+- **Nothing writes a double claim.** `frasch curate apply` refuses a decision
+  for an object or item another row holds. The matcher (owner's decision)
+  counts what it gives out in a run as claimed for the rows after it, and
+  starts from every row it leaves as it is: of two rows for one place the
+  first gets the object, the second stays unmatched with "… is taken by line
+  N" and so shows up in the worklist. What the matcher gave out in the run
+  holds only that object; "another row holds part of this very feature"
+  stays the word of a row a human decided (the dyke Deezbüll Deich carries
+  `alt_name=Deezbülleck` and lies at the hamlet of that name: its row takes
+  the dyke, not the place). A row whose object carries a Wikidata
+  item another row holds keeps the object without the item (OSM tags an
+  island and its village with one item); a country, which is matched by its
+  item alone, is then not found.
+- The registry's `Dialect` is built from one field list (`FIELDS`, the keys
+  of the `TypedDict`).
+
 ## Remaining open questions
 1. Hosting provider for the site (R2 + Pages proposed, nothing set up yet); the tiles are GitHub release assets for now (issue #28).
 2. When to do the planet build (needs the VM; only after the North Frisia build looks right).

@@ -20,14 +20,9 @@ from frasch.refs import OsmRef
 
 def named(rows: Iterable[PlaceRow], reg: Registry) -> dict[OsmRef, PlaceRow]:
     """The references the objects file is located for -- those to OSM objects
-    (not the local ones) of the rows on the map -- each with the first row
-    that names it."""
-    found: dict[OsmRef, PlaceRow] = {}
-    for row in rows:
-        if placelist.on_map(row, reg):
-            for ref in row.osm_refs:
-                found.setdefault(ref, row)
-    return found
+    (not the local ones) of the rows on the map -- each with the row that
+    names it."""
+    return {ref: row for row in rows if placelist.on_map(row, reg) for ref in row.osm_refs}
 
 
 def unlocated(objects: Objects, rows: Mapping[OsmRef, PlaceRow]) -> list[str]:

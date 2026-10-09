@@ -19,11 +19,9 @@ Both sides are built from the same files (names/osm_objects.json,
 names/dialect_areas.geojson, names/places.csv) by the same rule
 (frasch.placenames), so a disagreement means the archive and the index were
 built from different states of them -- compare their `built_from` stamps --
-or one of two things the injector does to a feature beyond that rule: a
-second row that claims the entry's object fills what the first leaves empty
-(`frasch check-inputs` rejects such a claim), and a curation row may set a
-tag of its own on it, `frasch:kind` among them.  Anything else is a bug
-(#24).  The tile build does not run in CI; run this (`just check-tiles`)
+or the one thing the injector does to a feature beyond that rule: a
+curation row may set a tag of its own on it, `frasch:kind` among them.
+Anything else is a bug (#24).  The tile build does not run in CI; run this (`just check-tiles`)
 after building tiles.
 """
 

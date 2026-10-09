@@ -40,13 +40,11 @@ import json
 import os
 import re
 from collections.abc import Collection, Iterator, Mapping, Sequence
-from typing import Literal, TypedDict
+from typing import Literal, TypedDict, cast
 
 from frasch import cli, files, tables
 from frasch.errors import PipelineError, Problem, ValidationError
 
-FIELDS = ["tag", "column", "label", "status", "view", "note"]
-EXPORT_FIELDS = FIELDS[:-1]  # what the frontend gets: all but `note`
 STATUSES = {"living", "extinct"}
 VIEWS = {"yes", "no"}
 
@@ -58,7 +56,7 @@ _TAG = re.compile(r"frr-x-[a-z0-9]{1,8}(-[a-z0-9]{1,8})*$")
 
 
 class Dialect(TypedDict):
-    """One row of the registry: the FIELDS."""
+    """One row of the registry: a cell per column of the file."""
 
     tag: str
     column: str
@@ -66,6 +64,10 @@ class Dialect(TypedDict):
     status: str
     view: str
     note: str
+
+
+FIELDS = list(Dialect.__annotations__)  # the columns of the file, in its order
+EXPORT_FIELDS = FIELDS[:-1]  # what the frontend gets: all but `note`
 
 
 class Registry:
@@ -153,14 +155,7 @@ def rows(path: str) -> tuple[list[Dialect], list[Problem]]:
 
 
 def _dialect(row: Mapping[str, str]) -> Dialect:
-    return Dialect(
-        tag=row["tag"],
-        column=row["column"],
-        label=row["label"],
-        status=row["status"],
-        view=row["view"],
-        note=row["note"],
-    )
+    return cast(Dialect, {field: row[field] for field in FIELDS})
 
 
 def read(path: str) -> Registry:

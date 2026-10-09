@@ -1,29 +1,25 @@
-"""Read / write names/places.csv -- the hand-edited name list.
+"""The name list, names/places.csv: its columns, its rows and what they
+hold, and reading and writing the file.
 
 The file is the single source of truth for every North Frisian label on the
 map.  Its conventions (see names/README.md):
 
-* a name cell may hold several variants separated by `;` -- the first one is
-  the primary name (the map label).  A `;` inside a remark does not separate
-  variants (`Huađer; Huuger (Sölring; Wisinge)` is two names)
-* `(...)` after a variant is a remark about it (local variety, source), never
-  part of the name
 * one column per dialect (`mooring`, `wieding`, ... -- the list comes from
   the dialect registry, frasch.dialects), plus `local` (the form the people of
   the place itself use when it differs from the dialect of the area, e.g.
-  Fahretoft)
-* `osm` holds one or more OSM references: `node/123`, `way/1; way/2` -- or
-  ONE local reference `local/<slug>` for a place OSM does not have.  The
-  slug keys a row of names/curation.csv that carries the position (`lat` /
-  `lon`); the injector adds a node (or a label polygon) of its own for it
+  Fahretoft); a name cell reads as frasch.namecell says
+* `osm` holds the references of the row (frasch.refs): one or more OSM
+  objects, or ONE local reference for a place OSM does not have, which
+  names/curation.csv positions
 * `status` is `auto` (written by the matcher, recomputed on every run), `ok`
   (checked by a human), `skip` (never put on the map) or empty
+* `id` is the row's own key, which every other file names it by
 
-Everything here is deliberately small and free of OSM libraries so that the
-matcher, the injector and the checks can all share it.  The column layout
-depends on the dialect registry: the functions that need it take a
-`Registry` (frasch.dialects).  The dialect-aware name logic (the fallbacks)
-lives one layer up in frasch.dialects.
+`read` gives the list as a `PlaceList`, which also writes it back.  It
+refuses a list that breaks the rules of `rows` -- among them that only one
+row holds an object or a Wikidata item (`claims`).  The column layout depends
+on the dialect registry: the functions that need it take a `Registry`.
+Which names a place gets from its row is frasch.placenames' rule.
 """
 
 from __future__ import annotations

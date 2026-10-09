@@ -19,7 +19,9 @@ What gets written where
                            rows the matcher owns -- the same cells it
                            writes itself, and never a row a human has already decided
                            (status ok/skip, a hand-filled reference, a local
-                           reference, `not_a_place`).  Review with `git diff`.
+                           reference, `not_a_place`), and never an object or
+                           Wikidata item another row holds: the name list
+                           would be refused.  Review with `git diff`.
   names/curation.csv       apply: one appended row per `local` decision (a
                            place OSM does not have -- it needs a position).
   names/work/curate-patch.jsonl

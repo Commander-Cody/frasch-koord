@@ -13,6 +13,12 @@ What gets written where
                           A row a human has filled in (any `osm`/`wikidata`
                           with a status other than `auto`) or marked `skip`
                           is never touched.  Review the result with `git diff`.
+                          Only one row holds an object or a Wikidata item
+                          (`placelist.claims`): the matcher gives a row
+                          neither what a row it leaves alone holds nor what
+                          it gave a row further up in this run -- of two rows
+                          for one place the second stays unmatched, with
+                          "... is taken by line N".
   names/work/matches.csv  per-row details of the run: what was matched, the
                           decisive tags, lon/lat, the candidate list of
                           ambiguous rows.  Git-ignored.
@@ -67,7 +73,7 @@ import os
 import sys
 import time
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, NamedTuple, TypedDict
 
 from frasch import candidates, cli, dialects, files, placelist, refs
@@ -832,11 +838,10 @@ def match_row(
     index: NameIndex,
     hints: HintResolver,
     reg: Registry,
-    claimed: Mapping[Ref, int] | None = None,
+    claimed: Claimed | None = None,
 ) -> MatchResult:
-    """`claimed`: {(type, id): line} of the objects other rows hold that
-    are not the matcher's to give away (see `Claimed`)."""
-    claimed = claimed or {}
+    """`claimed`: what other rows hold, which is not this row's to get."""
+    claimed = claimed or Claimed()
     kind = row["kind"]
     out = _unfilled(row)
     if not any_name(row, reg):
@@ -847,10 +852,10 @@ def match_row(
         return _unmatched(out, "not_found", "no German/Danish name to match on")
 
     found = _ranked_candidates(index, queries)
-    taken = [c for c in found if osm_key(c) in claimed]
-    cands = [c for c in found if osm_key(c) not in claimed]
+    taken = [c for c in found if osm_key(c) in claimed.objects]
+    cands = [c for c in found if osm_key(c) not in claimed.objects]
     if not cands:
-        note = taken_note(taken, claimed) if taken else "no name match in OSM"
+        note = taken_note(taken, claimed.objects) if taken else "no name match in OSM"
         return _unmatched(out, "not_found", note)
 
     plaus_all = [c for c in cands if kind_ok(kind, c["tags"])]
@@ -873,12 +878,13 @@ def match_row(
         note = _ambiguous_reason(row, winner, hint_pt, decision.clusters)
         return _unmatched(out, "ambiguous", note, fmt_cands(plaus_all))
 
-    held = _held(kind, taken, winner)
+    held = _held(kind, [c for c in taken if osm_key(c) in claimed.features], winner)
     if held:
         # another row holds part of this very feature (a piece of the same
         # river, or the relation that is the whole river): the rest is not
         # free for a second name
-        return _unmatched(out, "not_found", taken_note(held, claimed), fmt_cands(plaus_all))
+        note = taken_note(held, claimed.objects)
+        return _unmatched(out, "not_found", note, fmt_cands(plaus_all))
 
     out.update(_matched_cells(kind, winner, boundaries))
     if len(winner["members"]) > 1 or len(decision.clusters) > 1:
@@ -908,18 +914,25 @@ class Claimed:
     """What the matcher must not give to a row, because another one holds it
     and only one name per object or Wikidata item can reach the map
     (`placelist.claims`): `objects` maps (type, id) and `items` a QID to the
-    line of the row that holds it.  A run starts with what the rows it leaves
-    as they are hold (`of`) and adds each row it has matched (`add`), so of
-    two rows for one place the first in the list gets it."""
+    line of the row that holds it.
 
-    objects: dict[Ref, int]
-    items: dict[str, int]
+    A run starts with what the rows it leaves as they are hold (`of`).  Such
+    a row names its whole feature (`features`): a row that holds one piece of
+    a river leaves the others to no second name.  Each row the run matches is
+    added (`add`), so of two rows for one place the first in the list gets
+    the object -- only the object: what the matcher gave is not a human's
+    word on where the feature ends."""
+
+    objects: dict[Ref, int] = field(default_factory=dict)
+    items: dict[str, int] = field(default_factory=dict)
+    features: set[Ref] = field(default_factory=set)
 
     @classmethod
     def of(cls, rows: Iterable[PlaceRow]) -> Claimed:
-        claimed = cls({}, {})
+        claimed = cls()
         for row in rows:
             claimed.add(row)
+        claimed.features = set(claimed.objects)
         return claimed
 
     def add(self, row: PlaceRow) -> None:
@@ -1251,7 +1264,7 @@ def _run(ws: Workspace, reg: Registry, offline: bool, dry_run: bool) -> int:
         if r["kind"] == "country":
             o = _country_result(r, qids)
         else:
-            o = match_row(r, index, hints, reg, claimed.objects)
+            o = match_row(r, index, hints, reg, claimed)
         o = without_taken_item(o, r, claimed.items)
         results[r["id"]] = o
         _write_back(r, o)

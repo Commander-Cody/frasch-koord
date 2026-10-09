@@ -137,6 +137,27 @@ def test_the_second_row_for_a_place_says_which_row_took_its_object(world: Path) 
     assert "way/28330569 is taken by line 2" in matches
 
 
+def test_a_row_keeps_its_object_next_to_one_the_matcher_gave_another_row(world: Path) -> None:
+    # the dyke lies at the hamlet and carries its name as `alt_name`: the row
+    # of the dyke takes the dyke, not the whole place
+    dyke = cand(
+        "w",
+        55824588,
+        8.806919,
+        54.762135,
+        man_made="dyke",
+        name="Deezbüll Deich",
+        alt_name="Deezbülleck",
+    )
+    hamlet = cand("n", 10158150149, 8.800352, 54.763511, place="hamlet", name="Deezbülleck")
+    rows = [
+        {"kind": "warft", "mooring": "Deesbeldik", "de": "Deezbüll Deich"},
+        {"kind": "warft", "mooring": "Deesbeljarn", "de": "Deezbülleck"},
+    ]
+    _, second = run_match(world, rows, [dyke, hamlet])
+    assert (second["osm"], second["status"]) == ("node/10158150149", "auto")
+
+
 def test_a_matched_row_that_lost_its_frisian_name_keeps_its_object(world: Path) -> None:
     # the matcher leaves such a row as it is, so its object is not free
     nameless = {"kind": "warft", "de": "Langedeich", "osm": "way/28330569", "status": "auto"}

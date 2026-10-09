@@ -50,13 +50,6 @@ Hand-review worklist: for every **ambiguous** row below pick the right object an
 | schorkwai | 912 | road | Schörkwäi | Karkenweg |  | 4 plausible candidates | `w/27527579:Karkenweg:residential:8;w/111312901:Karkenweg:residential:8;w/17240112:Karkenweg:residential:14;w/87454163:Karkenweg:residential:52;w/381559775:Karkenweg:unclassified:57;w/26334817:Karkenweg:unclassified:57;w/441979759:Karkenweg:residential:57;w/1205903205:Karkenweg:residential:57;w/26312550:Karkenweg:residential:57` |
 | uule-loonstraat | 914 | road | Uule Loonstraat | Alte Landstraße |  | 8 plausible candidates | `w/110942243:Alte Landstraße:tertiary:17;w/1135808840:Alte Landstraße:tertiary:17;w/110942242:Alte Landstraße:tertiary:17;w/18303155:Alte Landstraße:tertiary:17;w/205730139:Alte Landstraße:residential:22;w/440734728:Alte Landstraße:residential:22;w/205490658:Alte Landstraße:unclassified:22;w/205490654:Alte Landstraße:unclassified:22;w/27775501:Alte Landstraße:unclassified:24;w/27775500:Alte Landstraße:unclassified:24;w/131703225:Alte Landstraße:secondary:30;w/1023905698:Alte Landstraße:secondary:30;w/27807641:Alte Landstraße:secondary:32;w/18589682:Alte Landstraße:secondary:32;w/143192654:Alte Landstraße:service:41;w/1149356082:Alte Landstraße:unclassified:41;w/1149356081:Alte Landstraße:unclassified:41;w/28248754:Alte Landstraße:unclassified:42;w/1191915355:Alte Landstraße:unclassified:48;w/53797291:Alte Landstraße:unclassified:48;... (+9 more)` |
 
-## Rows sharing one OSM object (0)
-
-The list has these places twice (two spellings, or rows from two sheet sections). Only one name can be injected -- the first row wins; decide which, and `skip` the other.
-
-| OSM object | rows (line) | Frisian names | German |
-|---|---|---|---|
-
 ## Not found (208)
 
 Either the feature is not in OSM at all, or OSM spells it differently. `near misses` lists objects that do carry the German name but are the wrong kind of thing (a street, a bus stop, a building) -- occasionally one of them is still the right answer.

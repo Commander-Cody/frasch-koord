@@ -90,8 +90,8 @@ z12 it gives `place=island` nodes.
 Objects are matched by id (or QID) only -- no name matching happens here, so the
 hand-reviewed decisions in the CSVs are the single source of truth.  All other
 tags are preserved (`o.replace(tags=...)`), as are all objects neither file
-mentions.  When two rows claim the same object, the first row in file order
-wins per tag and the rest are reported.
+mentions.  An object is claimed by one row: the name list is refused when
+two rows hold the same one (`placelist.rows`).
 
 The `frasch:*` tags reach the tiles because tiles/build.sh passes them to
 Planetiler via `--extra_name_tags` (`frasch tile-keys` prints them); tag
