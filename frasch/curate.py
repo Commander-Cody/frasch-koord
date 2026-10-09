@@ -560,8 +560,10 @@ def owner_problem(row: PlaceRow, names: str) -> str | None:
     return None
 
 
-def decide(entry: PatchEntry, row: dict[str, str]) -> str | None:
-    """Write an `osm` or `skip` decision into `row`; -> why not, or None."""
+def decide(entry: PatchEntry, row: dict[str, str], claimed: Mapping[str, int]) -> str | None:
+    """Write an `osm` or `skip` decision into `row`; -> why not, or None.
+    `claimed` is what the other rows of the list hold (claim -> line): a row
+    cannot be given what one of them claims."""
     if entry["action"] == "skip":
         row["status"] = "skip"
         return None
@@ -573,8 +575,12 @@ def decide(entry: PatchEntry, row: dict[str, str]) -> str | None:
         return "action=osm without an `osm` reference"
     if any(t == refs.LOCAL_TYPE for t, _ in chosen):
         return "a local reference is action=local, not action=osm"
+    wikidata = entry.get("wikidata") or row["wikidata"]
+    taken = placelist.claim_problems(placelist.Claims(chosen, wikidata).keys, claimed)
+    if taken:
+        return "; ".join(taken)
     row["osm"] = refs.format(chosen)
-    row["wikidata"] = entry.get("wikidata") or row["wikidata"]
+    row["wikidata"] = wikidata
     row["status"] = "ok"
     return None
 
@@ -727,6 +733,16 @@ class _Lists:
     def by_id(self) -> dict[str, PlaceRow]:
         return {r["id"]: r for r in self.places.rows}
 
+    def claimed_by_others(self, row: PlaceRow) -> dict[str, int]:
+        """What the rows of the list but `row` hold, as it stands now with
+        the decisions applied so far: claim -> the line of its row."""
+        return {
+            key: other.line
+            for other in self.places.rows
+            if other is not row
+            for key in placelist.claims(other).keys
+        }
+
 
 def _read_lists(names: str, curation: str, reg: Registry) -> _Lists:
     places = placelist.read(names, reg)
@@ -797,7 +813,7 @@ def _decide_row(
     """Write a decision into the matcher's `row`, a `local` one's curation
     row into `new_curation`; -> why not, or None."""
     if entry["action"] != "local":
-        return decide(entry, row)
+        return decide(entry, row, lists.claimed_by_others(row))
     why, cur = decide_local(entry, row, lists.used_slugs)
     if cur:
         cur["name"] = curation_name(row, lists.places.reg)

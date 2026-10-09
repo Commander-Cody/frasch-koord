@@ -67,6 +67,7 @@ import os
 import sys
 import time
 from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, NamedTuple, TypedDict
 
 from frasch import candidates, cli, dialects, files, placelist, refs
@@ -834,7 +835,7 @@ def match_row(
     claimed: Mapping[Ref, int] | None = None,
 ) -> MatchResult:
     """`claimed`: {(type, id): line} of the objects other rows hold that
-    are not the matcher's to give away (see `claimed_objects`)."""
+    are not the matcher's to give away (see `Claimed`)."""
     claimed = claimed or {}
     kind = row["kind"]
     out = _unfilled(row)
@@ -902,17 +903,45 @@ def taken_note(recs: Iterable[Candidate], claimed: Mapping[Ref, int]) -> str:
     )
 
 
-def claimed_objects(rows: Iterable[PlaceRow]) -> dict[Ref, int]:
-    """{(type, id): line} of the OSM objects that rows the matcher does not
-    own hold (checked or hand-filled).  It never gives them to another row:
-    only one name per object can reach the map."""
-    out: dict[Ref, int] = {}
-    for r in rows:
-        if owned_by_matcher(r):
-            continue
-        for key in placelist.claims(r).refs:
-            out.setdefault(key, r.line)
-    return out
+@dataclass
+class Claimed:
+    """What the matcher must not give to a row, because another one holds it
+    and only one name per object or Wikidata item can reach the map
+    (`placelist.claims`): `objects` maps (type, id) and `items` a QID to the
+    line of the row that holds it.  A run starts with what the rows it leaves
+    as they are hold (`of`) and adds each row it has matched (`add`), so of
+    two rows for one place the first in the list gets it."""
+
+    objects: dict[Ref, int]
+    items: dict[str, int]
+
+    @classmethod
+    def of(cls, rows: Iterable[PlaceRow]) -> Claimed:
+        claimed = cls({}, {})
+        for row in rows:
+            claimed.add(row)
+        return claimed
+
+    def add(self, row: PlaceRow) -> None:
+        held = placelist.claims(row)
+        for ref in held.refs:
+            self.objects.setdefault(ref, row.line)
+        if held.qid:
+            self.items.setdefault(held.qid, row.line)
+
+
+def without_taken_item(o: MatchResult, row: Row, items: Mapping[str, int]) -> MatchResult:
+    """`o`, the match of `row`, without a Wikidata item another row holds
+    (`items`: QID -> line).  A row matched by its item alone -- a country --
+    is then not found; any other keeps its object, which is what it claims
+    first (OSM tags an island and its village with one item)."""
+    qid = o.get("wikidata", "")
+    if o["status"] != "matched" or qid not in items:
+        return o
+    note = f"{qid} is taken by line {items[qid]}"
+    if not o["osm_id"]:
+        return _unmatched(_unfilled(row), "not_found", note)
+    return dict(o, wikidata="", note="; ".join(filter(None, [o.get("note", ""), note])))
 
 
 # --------------------------------------------------------------- extracts ----
@@ -1202,7 +1231,8 @@ def _run(ws: Workspace, reg: Registry, offline: bool, dry_run: bool) -> int:
     hints = HintResolver(index)
 
     todo = [r for r in rows if owned_by_matcher(r) and any_name(r, reg)]
-    claimed = claimed_objects(rows)
+    rematched = {r["id"] for r in todo}
+    claimed = Claimed.of(r for r in rows if r["id"] not in rematched)
     country_rows = [r for r in todo if r["kind"] == "country"]
     qids, wd_failed = wikidata_countries(
         [primary(r["de"]) for r in country_rows], ws.wikidata_cache, offline
@@ -1221,9 +1251,11 @@ def _run(ws: Workspace, reg: Registry, offline: bool, dry_run: bool) -> int:
         if r["kind"] == "country":
             o = _country_result(r, qids)
         else:
-            o = match_row(r, index, hints, reg, claimed)
+            o = match_row(r, index, hints, reg, claimed.objects)
+        o = without_taken_item(o, r, claimed.items)
         results[r["id"]] = o
         _write_back(r, o)
+        claimed.add(r)
         change = _change(before, _reference(r))
         if change:
             changed[change] += 1
