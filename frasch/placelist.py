@@ -204,7 +204,7 @@ def row_problems(row: Row) -> list[str]:
     if row["status"] not in STATUSES:
         out.append(f"unknown status {row['status']!r} (auto / ok / skip / empty)")
     try:
-        local = refs.local_of(refs.parse(row["osm"]))
+        local = refs.local_of(_refs(row))
     except Invalid as exc:
         out.append(exc.reason)
         local = None
