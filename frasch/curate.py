@@ -102,12 +102,19 @@ KIND_ORDER = [
 # means for the curation view.  An object near the border can come from both.
 SH_SRC = "schleswig-holstein"
 
+# The results of a match that leave a row for a human.
 RESULTS = ("ambiguous", "not_found")
 
-# ------------------------------------------------------------- the worklist ---
-# curate.json, as web/src/dev/curateWorklist.ts reads it
+# The kinds whose local reference can be a square of an area (`polygon_km2`,
+# see `decide_local`) instead of a node: the ones that are an area.
+POLYGON_KINDS = ["koog", "harde", "landscape", "island", "hallig", "sand"]
 
-# a candidate as the matcher's `candidates` cell names it (`class` is a keyword)
+# ------------------------------------------------------------- the worklist ---
+# curate.json, as names/curate-worklist.schema.json defines it and
+# web/src/dev/curateWorklist.ts reads it
+
+# a candidate as the matcher's `candidates` cell names it (`class` is a
+# keyword); `km` is its distance from the centre of North Frisia
 _Listed = TypedDict("_Listed", {"ref": str, "name": str, "class": str, "km": int | None})
 
 
@@ -130,6 +137,8 @@ class WorkRow(TypedDict):
     result: str
     name: str
     names: dict[str, str]
+    name_de: str
+    name_da: str
     de: str
     da: str
     hint: str
@@ -140,9 +149,10 @@ class WorkRow(TypedDict):
 
 
 class Worklist(TypedDict):
-    generated: str
     bbox: list[float]
     kind_order: list[str]
+    polygon_kinds: list[str]
+    results: list[str]
     rows: list[WorkRow]
 
 
@@ -257,13 +267,7 @@ def _read_work(ws: Workspace, reg: Registry) -> _Work:
 
     work = _Work([])
     with open(matches, encoding="utf-8", newline="") as fh:
-        reader = csv.DictReader(fh)
-        if "id" not in (reader.fieldnames or []):
-            raise PipelineError(
-                f"{matches} has no `id` column (written before "
-                f"places.csv had ids) -- re-run `frasch match`"
-            )
-        for m in reader:
+        for m in csv.DictReader(fh):
             if m["result"] not in RESULTS:
                 continue
             row = by_id.get(m["id"])
@@ -354,6 +358,8 @@ def _work_row(
         "result": m["result"],
         "name": placelist.any_name(row, reg),
         "names": {c: row[c] for c in placelist.name_columns(reg) if row[c]},
+        "name_de": placelist.primary(row["de"]),
+        "name_da": placelist.primary(row["da"]),
         "de": row["de"],
         "da": row["da"],
         "hint": row["hint"],
@@ -367,9 +373,10 @@ def _work_row(
 def _write_worklist(path: str, rows: list[WorkRow]) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     worklist: Worklist = {
-        "generated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "bbox": list(geo.NF_BBOX),
         "kind_order": KIND_ORDER,
+        "polygon_kinds": POLYGON_KINDS,
+        "results": list(RESULTS),
         "rows": rows,
     }
     with open(path, "w", encoding="utf-8") as fh:
@@ -466,9 +473,8 @@ def read_patch(path: StrPath) -> list[PatchLine]:
 
     A line that breaks the patch schema counts like any other: apply
     refuses and keeps it, and as the newest line about its row it holds
-    back the row's earlier decision.  A line without a usable id (a patch
-    from before the row ids) is a decision of its own, never swallowed by a
-    later one."""
+    back the row's earlier decision.  A line without a usable id is a
+    decision of its own, never swallowed by a later one."""
 
     def not_json(n: int, exc: ValueError) -> None:
         print(f"{path}:{n}: not JSON ({exc}) -- ignored", file=sys.stderr)
@@ -538,16 +544,6 @@ def schema_problem(entry: object) -> str | None:
         return None
     where = "/".join(map(str, error.absolute_path))
     return f"{where + ': ' if where else ''}{error.message} (curate-patch.schema.json)"
-
-
-def line_problem(line: RefusedLine) -> str:
-    """Why apply refuses a line that is no valid entry."""
-    if isinstance(line.value, dict) and "id" not in line.value:
-        return (
-            "no `id` (a patch from before the row ids -- "
-            "re-run `frasch curate export` and decide it again)"
-        )
-    return line.problem
 
 
 def owner_problem(row: PlaceRow, names: str) -> str | None:
@@ -774,7 +770,7 @@ class _Decisions:
 def _decide_entry(line: PatchLine, lists: _Lists, decisions: _Decisions) -> None:
     """Write one entry of the patch into its row, or refuse it."""
     if isinstance(line, RefusedLine):
-        decisions.refuse(line, line_problem(line))
+        decisions.refuse(line, line.problem)
         return
     e = line.entry
     if e["action"] == "clear":

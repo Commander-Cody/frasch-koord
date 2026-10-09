@@ -15,7 +15,7 @@ from frasch.errors import PipelineError, ValidationError
 from frasch import dialects
 from frasch import provenance
 from frasch.paths import Workspace
-from conftest import REGISTRY, path_options
+from conftest import REGISTRY, path_options, schema_problems
 from osm_fixture import RingNodes, ring, write_extract
 
 
@@ -165,6 +165,13 @@ def _printed(capsys: pytest.CaptureFixture[str]) -> tuple[str, str]:
     return re.sub(r"\(\d+s\)", "(Ns)", out), err
 
 
+def test_the_parts_keep_their_schema(ws: Workspace) -> None:
+    # municipalities a row claims and ones no row does
+    bda.run(ws, REGISTRY, _write_district(ws))
+    parts = json.loads(Path(ws.parts).read_text(encoding="utf-8"))
+    assert schema_problems(parts, "dialect-area-parts") == []
+
+
 def test_a_full_build_reports_every_step(ws: Workspace, capsys: pytest.CaptureFixture[str]) -> None:
     first, second = _write_district(ws)
     areas, out, parts_out = ws.area_list, Path(ws.areas), Path(ws.parts)
@@ -207,7 +214,6 @@ def test_a_full_build_reports_every_step(ws: Workspace, capsys: pytest.CaptureFi
             "fid": 1,
             "assigned": True,
             "dialect": "frr-x-mooring",
-            "label": "Mooring",
             "name": "Existing",
             "note": "a way",
             "osm": "way/1",
@@ -218,7 +224,6 @@ def test_a_full_build_reports_every_step(ws: Workspace, capsys: pytest.CaptureFi
             "fid": 2,
             "assigned": True,
             "dialect": "frr-x-solring",
-            "label": "Sölring",
             "name": "Claimedtown",
             "note": "a municipality",
             "osm": "relation/100",
@@ -229,7 +234,6 @@ def test_a_full_build_reports_every_step(ws: Workspace, capsys: pytest.CaptureFi
             "fid": 3,
             "assigned": True,
             "dialect": "frr-x-solring",
-            "label": "Sölring",
             "name": "Second",
             "note": "only in the second extract",
             "osm": "way/8",

@@ -119,8 +119,9 @@ class DialectProperties(TypedDict):
 
 
 class PartProperties(TypedDict):
-    """A feature of --parts: one municipality; one that no row assigns
-    (`assigned` false) has no dialect and no row."""
+    """A feature of --parts, as names/dialect-area-parts.schema.json defines
+    it: one municipality; one that no row assigns (`assigned` false) has no
+    dialect and no row."""
 
     fid: int
     assigned: bool
@@ -128,7 +129,6 @@ class PartProperties(TypedDict):
     osm: str
     km2: float
     dialect: NotRequired[str]
-    label: NotRequired[str]
     note: NotRequired[str]
     line: NotRequired[int]
 
@@ -292,7 +292,7 @@ def build(ws: Workspace, reg: Registry, pbfs: Sequence[StrPath], options: Option
 
     built_from = stamp(ws, osmscan.extract_stamps(pbfs)).as_json()
     source = os.path.basename(ws.area_list)
-    parts = build_parts(source, options, reg, rows, scan, built_from) if options.parts else None
+    parts = build_parts(source, options, rows, scan, built_from) if options.parts else None
     return Areas(_dialect_fc(source, options.simplify, features, built_from), total, parts)
 
 
@@ -572,7 +572,6 @@ def simplified(geom: BaseGeometry, tol: float) -> BaseGeometry:
 def build_parts(
     source: str,
     options: Options,
-    reg: Registry,
     rows: Sequence[AreaRow],
     scan: _Scan,
     built_from: BuiltFrom,
@@ -586,7 +585,6 @@ def build_parts(
     from shapely.geometry import mapping
     from shapely.ops import unary_union
 
-    labels_by_tag = {d["tag"]: d["label"] for d in reg}
     features: list[Feature[PartProperties]] = []
     skipped, fid = 0, 0
 
@@ -604,7 +602,6 @@ def build_parts(
                     "fid": fid,
                     "assigned": True,
                     "dialect": row["dialect"],
-                    "label": labels_by_tag[row["dialect"]],
                     "name": row["name"],
                     "note": row["note"],
                     "osm": row["osm"],

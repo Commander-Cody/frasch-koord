@@ -20,7 +20,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 
 import type { MapViewHandle } from '../components/Map';
-import { primary } from '../names';
 import { replaceQueryParams } from '../queryParams';
 import CurateDetail from './CurateDetail';
 import CurateFilters from './CurateFilters';
@@ -128,7 +127,7 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
   const save = useCallback(
     async (row: CurateRow, decision: Decision) => {
       const { id, line, kind, name } = row;
-      const entry: PatchEntry = { id, line, kind, name, de: primary(row.de), ...decision };
+      const entry: PatchEntry = { id, line, kind, name, de: row.name_de, ...decision };
       const stored = await postPatchEntry(entry);
       // Mirror the appended line locally so the list turns "done" at once.
       setEntries((prev) => [...prev, stored]);
@@ -159,6 +158,7 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
           filter={filter}
           onChange={setFilter}
           kinds={kinds}
+          results={worklist?.results ?? []}
           counts={{ open: rows.length - doneCount, done: doneCount, shown: visible.length }}
         />
       }
@@ -171,6 +171,7 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
           row={selected}
           done={doneById.get(selected.id) ?? null}
           bbox={worklist.bbox}
+          canBePolygon={worklist.polygon_kinds.includes(selected.kind)}
           mapRef={mapRef}
           onSave={save}
         />

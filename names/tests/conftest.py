@@ -10,14 +10,17 @@ import dataclasses
 import io
 import json
 import os
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
+from typing import Any
 
+import jsonschema
 import pytest
 
-from frasch import curationlist, placelist
-from frasch.candidates import Candidate, HeaderLine
+from frasch import candidates, curationlist, paths, placelist
+from frasch.candidates import Candidate
 from frasch.paths import Workspace
+from frasch.provenance import ExtractStamp
 from frasch.registry import Dialect, Registry
 from osm_fixture import Nodes, ring, write_extract
 
@@ -44,6 +47,22 @@ REGISTRY = Registry(
 REGISTRY_CSV = "tag,column,label,status,view,note\n" + "".join(
     f"{d['tag']},{d['column']},{d['label']},{d['status']},{d['view']},\n" for d in REGISTRY
 )
+
+
+def read_schema(name: str) -> dict[str, Any]:
+    """names/<name>.schema.json, the contract of a file both Python and the
+    web app handle."""
+    with open(os.path.join(paths.ROOT, "names", f"{name}.schema.json"), encoding="utf-8") as fh:
+        schema: dict[str, Any] = json.load(fh)
+    jsonschema.Draft202012Validator.check_schema(schema)
+    return schema
+
+
+def schema_problems(value: object, schema: str) -> list[str]:
+    """What breaks names/<schema>.schema.json in `value`, a file as its
+    writer builds it: one line per problem, none for a value that keeps it."""
+    errors = jsonschema.Draft202012Validator(read_schema(schema)).iter_errors(value)
+    return sorted(f"{'/'.join(map(str, e.absolute_path))}: {e.message}" for e in errors)
 
 
 def places_text(rows: Iterable[Mapping[str, str]]) -> str:
@@ -91,10 +110,12 @@ def cand(
     return {"src": src, "t": t, "id": id, "lon": lon, "lat": lat, "cls": cls, "tags": tags}
 
 
-def write_candidates(path: Path, *recs: Candidate | HeaderLine) -> Path:
-    """Write `recs` as a candidates.jsonl to `path` and return it."""
+def write_candidates(path: Path, *recs: Candidate, extracts: Sequence[ExtractStamp] = ()) -> Path:
+    """Write `recs` as a candidates.jsonl to `path`, under the header of a
+    scan of `extracts`, and return it."""
+    lines = [candidates.header(extracts), *recs]
     path.write_text(
-        "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in recs), encoding="utf-8"
+        "".join(json.dumps(line, ensure_ascii=False) + "\n" for line in lines), encoding="utf-8"
     )
     return path
 

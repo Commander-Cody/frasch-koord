@@ -21,7 +21,14 @@ from frasch.placelist import OsmRef
 from frasch.provenance import ExtractStamp, Stamp
 from frasch.placenames import SearchEntry
 from frasch.searchindex import SearchIndex
-from conftest import REGISTRY, curation_file, path_options, places_text, workspace
+from conftest import (
+    REGISTRY,
+    curation_file,
+    path_options,
+    places_text,
+    schema_problems,
+    workspace,
+)
 
 Rows = Iterable[Mapping[str, str]]
 # the `export` fixture: `rows` exported -> {id: entry}
@@ -154,6 +161,14 @@ def export(paths: Path) -> Export:
         return {e["id"]: e for e in export_into(paths, rows)["places"]}
 
     return run
+
+
+def test_the_index_keeps_its_schema(paths: Path) -> None:
+    # between them the rows have every field an entry can: a Low Saxon name
+    # and a QID, a Danish and a generic name, a local name with its variety
+    hali = HAMBORJER_HALI | {"local": "Hamborjer Hali (Foortuftinge)"}
+    index = export_into(paths, [NAIBEL, RIPEN, hali])
+    assert schema_problems(index, "search-index") == []
 
 
 def test_an_entry_is_named_by_its_rows_id_and_keeps_its_osm_reference(export: Export) -> None:

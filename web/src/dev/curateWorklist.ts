@@ -1,25 +1,27 @@
 // The browser's side of the curation worklist (names/work/curate.json, which
 // `frasch curate export` writes): its shape, loading it together with the
-// patch, the list's filter, and the text helpers of the decision forms.
+// patch, the list's filter, and the text helpers of the decision forms. The
+// contract itself is names/curate-worklist.schema.json; curateWorklist.test.ts
+// pins the types below to it.
 
 import type { PatchEntry } from './curatePatch';
 
-/** One candidate of a worklist row (see the shared contract, `candidates[]`). */
+/** One candidate of a worklist row. */
 export interface CurateCandidate {
   /** "node/123" | "way/123" | "relation/123". */
   ref: string;
   name: string;
   class: string;
-  /** Distance to the hint point in km, as computed by `frasch match`. */
-  km: number;
-  /** Absent/null when candidates.jsonl had no position for the object. */
-  lon?: number | null;
-  lat?: number | null;
-  /** Decisive tags as one string, e.g. "place=hamlet". */
-  tags?: string;
+  /** Distance from the centre of North Frisia in km, as `frasch match` computed it; null without a position. */
+  km: number | null;
+  /** null when candidates.jsonl had no position for the object. */
+  lon: number | null;
+  lat: number | null;
+  /** Decisive tags as one string, e.g. "place=hamlet"; empty when candidates.jsonl no longer has the object. */
+  tags: string;
+  /** In the Schleswig-Holstein extract the tiles are built from. */
+  in_sh: boolean;
   wikidata?: string;
-  /** In the Schleswig-Holstein extract the tiles are built from; absent in a pre-`in_sh` export. */
-  in_sh?: boolean;
 }
 
 /** One row of `names/work/curate.json`. */
@@ -32,8 +34,13 @@ export interface CurateRow {
   result: 'ambiguous' | 'not_found';
   /** The Frisian name `frasch match` worked with. */
   name: string;
-  /** Every non-empty name column, raw cell text, keyed by column name. */
+  /** Every non-empty Frisian name column, raw cell text, keyed by column name. */
   names: Record<string, string>;
+  /** The primary German name, '' when the row has none. */
+  name_de: string;
+  /** The primary Danish name, '' when the row has none. */
+  name_da: string;
+  /** The German and Danish cells, raw: every variant with its remarks. */
   de: string;
   da: string;
   hint: string;
@@ -50,9 +57,13 @@ export type Bbox = [number, number, number, number];
 
 /** `names/work/curate.json` as a whole. */
 export interface CurateWorklist {
-  generated: string;
   bbox: Bbox;
+  /** The kinds in the order the list walks them. */
   kind_order: string[];
+  /** The kinds whose local reference can carry an area instead of a bare point. */
+  polygon_kinds: string[];
+  /** The results a row can have, for the filter. */
+  results: CurateRow['result'][];
   rows: CurateRow[];
 }
 
@@ -107,7 +118,7 @@ export function filterRows(
     if (filter.result !== 'all' && row.result !== filter.result) return false;
     if (filter.hideDone && isDone(row.id)) return false;
     if (!needle) return true;
-    const haystack = [row.name, ...Object.values(row.names ?? {}), row.de, row.da, row.hint]
+    const haystack = [row.name, ...Object.values(row.names), row.de, row.da, row.hint]
       .join(' ')
       .toLowerCase();
     return haystack.includes(needle);
@@ -120,7 +131,7 @@ export function filterRows(
  * reachable, so the leftovers come after it.
  */
 export function rowKinds(worklist: CurateWorklist): string[] {
-  const order = worklist.kind_order ?? [];
+  const order = worklist.kind_order;
   const present = new Set(worklist.rows.map((row) => row.kind));
   const known = order.filter((kind) => present.has(kind));
   const rest = [...present].filter((kind) => !order.includes(kind)).sort();

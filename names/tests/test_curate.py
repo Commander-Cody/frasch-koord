@@ -13,8 +13,16 @@ from frasch import curate
 from frasch import match
 from frasch.__main__ import main
 from frasch.candidates import Candidate
-from frasch.errors import PipelineError
-from conftest import REGISTRY, cand, path_options, places_text, workspace, write_candidates
+from conftest import (
+    REGISTRY,
+    cand,
+    path_options,
+    places_text,
+    read_schema,
+    schema_problems,
+    workspace,
+    write_candidates,
+)
 
 
 def rec(t: str, id: int, lon: float | None, lat: float | None, **tags: str) -> Candidate:
@@ -205,9 +213,9 @@ def export(world: Path) -> None:
     curate.export(workspace(world), REGISTRY)
 
 
-def test_export_writes_the_worklist_and_reports_what_it_left_out(
-    world: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def export_the_review_rows(world: Path) -> Path:
+    """Export EXPORT_PLACES after a match that left three of its rows for
+    review, a decided and a deleted one, and one it matched; -> the worklist."""
     (world / "places.csv").write_text(places_text(EXPORT_PLACES), encoding="utf-8")
     kampen_cell = ";".join(match.fmt_cand(c) for c in (KAMPEN, KAMPEN_DK, KAMPEN_GONE))
     write_matches(
@@ -220,8 +228,33 @@ def test_export_writes_the_worklist_and_reports_what_it_left_out(
         ("bol", "not_found", "", "too far"),
     )
     export(world)
+    return world / "work" / "curate.json"
 
-    out = world / "work" / "curate.json"
+
+def test_the_exported_worklist_keeps_its_schema(world: Path) -> None:
+    worklist = json.loads(export_the_review_rows(world).read_text(encoding="utf-8"))
+    assert schema_problems(worklist, "curate-worklist") == []
+
+
+def test_the_worklist_offers_the_results_of_its_schema(world: Path) -> None:
+    worklist = json.loads(export_the_review_rows(world).read_text(encoding="utf-8"))
+    assert worklist["results"] == read_schema("curate-worklist")["$defs"]["result"]["enum"]
+
+
+def test_a_row_is_exported_with_its_primary_german_and_danish_names(world: Path) -> None:
+    ripen = {"id": "ripen", "kind": "settlement", "mooring": "Ripen"}
+    cells = {"de": "Ripen; Riepen (alt)", "da": "Ribe?"}
+    (world / "places.csv").write_text(places_text([ripen | cells]), encoding="utf-8")
+    write_matches(world / "work" / "matches.csv", ("ripen", "not_found", "", "no candidate"))
+    export(world)
+    (row,) = json.loads((world / "work" / "curate.json").read_text(encoding="utf-8"))["rows"]
+    assert (row["name_de"], row["name_da"]) == ("Ripen", "Ribe")
+
+
+def test_export_writes_the_worklist_and_reports_what_it_left_out(
+    world: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    out = export_the_review_rows(world)
     assert capsys.readouterr().out == (
         f"read {world / 'work' / 'candidates.jsonl'}: kept 3 records "
         f"(3 candidates, 2 hint names, 0s)\n"
@@ -235,6 +268,7 @@ def test_export_writes_the_worklist_and_reports_what_it_left_out(
     worklist = json.loads(out.read_text(encoding="utf-8"))
     assert worklist["bbox"] == [7.8, 54.15, 9.55, 55.12]
     assert worklist["kind_order"] == curate.KIND_ORDER
+    assert worklist["polygon_kinds"] == curate.POLYGON_KINDS
     # settlements before the warft, each kind in places.csv order
     kampen, bol, warft = worklist["rows"]
     assert [kampen["id"], bol["id"], warft["id"]] == ["kampen", "bol", "kirchwarft"]
@@ -245,6 +279,8 @@ def test_export_writes_the_worklist_and_reports_what_it_left_out(
         "result": "ambiguous",
         "name": "Kaamp",
         "names": {"mooring": "Kaamp"},
+        "name_de": "Kampen",
+        "name_da": "",
         "de": "Kampen",
         "da": "",
         "hint": "Sylt",
@@ -288,17 +324,6 @@ def test_export_writes_the_worklist_and_reports_what_it_left_out(
     assert (bol["names"], bol["da"], bol["why"]) == ({"mooring": "Bol"}, "Bøl", "too far")
     assert bol["hint_point"] == [9.02, 54.8, 15.0]  # Karrharde, a fixed circle
     assert (warft["result"], warft["hint_point"], warft["candidates"]) == ("not_found", None, [])
-
-
-def test_export_refuses_matches_without_ids(world: Path) -> None:
-    (world / "places.csv").write_text(places_text(EXPORT_PLACES), encoding="utf-8")
-    matches = world / "work" / "matches.csv"
-    matches.write_text("line,result,candidates,note\n2,not_found,,\n", encoding="utf-8")
-    with pytest.raises(PipelineError) as stop:
-        export(world)
-    assert str(stop.value) == (
-        f"{matches} has no `id` column (written before places.csv had ids) -- re-run `frasch match`"
-    )
 
 
 # ------------------------------------------------------------------- main ---

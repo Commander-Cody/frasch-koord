@@ -26,6 +26,9 @@ import type { ExpressionSpecification } from '@maplibre/maplibre-gl-style-spec';
  * only channel here: the legend pairs every swatch with its name, the list is
  * grouped by dialect, the detail block always spells the dialect out, and
  * clicking a legend row draws that dialect alone.
+ *
+ * A dialect added to the registry needs a colour here: areaLayers.test.ts
+ * holds the table to the registry's tags.
  */
 export const DIALECT_COLORS: Record<string, string> = {
   'frr-x-mooring': '#1baf7a',

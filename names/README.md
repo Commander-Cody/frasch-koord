@@ -95,7 +95,9 @@ One line per dialect, and the **only** place the project lists them. The
 columns of `places.csv`, the `name:*` tags the injector writes, Planetiler's
 `--languages`, the search index and the frontend's language selector all
 derive from it, so adding a dialect is one line here plus a column in
-`places.csv` — no code change.
+`places.csv`. The one thing to add in the code is the dialect's colour in the
+dialect-area review view (`DIALECT_COLORS` in `web/src/dev/areaLayers.ts`); a
+test holds that table to the registry's tags, so it cannot be forgotten.
 
 | column | meaning |
 |---|---|
@@ -302,8 +304,7 @@ object only one extract has — the Danish places (Fanø, Hoyer, Ripen, Röm, �
 are only in `denmark-latest` — loses its match when that extract is left out.
 So `frasch match` stamps `REPORT.md` with the extracts it used and warns when
 a later run gets candidates from another set of extract files than the
-report names (a newer download of the same extract is fine). It also warns
-about a `candidates.jsonl` from before the header: rebuild it.
+report names (a newer download of the same extract is fine).
 
 `frasch match --dry-run` shows what a run would do and writes only the
 git-ignored `work/matches.csv` — neither `places.csv` nor `REPORT.md`.
@@ -349,7 +350,8 @@ uv run frasch curate apply
 ```
 
 `export` writes every ambiguous and not-found row the matcher still owns, with
-its candidates' positions and its location hint, to `work/curate.json`; rows
+its candidates' positions and its location hint, to `work/curate.json`
+(`curate-worklist.schema.json` says what is in it); rows
 deleted from `places.csv` since the match run are dropped with a note (re-run
 `frasch match`). In the browser you pick a candidate, drop a point of your own, or
 `skip` the row; every decision is appended as one line to
@@ -651,6 +653,9 @@ references: coordinates and tag fixes belong in `curation.csv` and the build.
 | `work/` | git-ignored caches (candidates, matches, Wikidata lookups) and the curation view's `curate.json` / `curate-patch.jsonl` |
 | `bootstrap/` | the original sheet export (`sheet-export.csv`) |
 | `curate-patch.schema.json` | the JSON Schema of one line of `work/curate-patch.jsonl`: the contract between the curation view, the Vite dev server and `frasch curate apply` |
+| `curate-worklist.schema.json` | the JSON Schema of `work/curate.json`: the contract between `frasch curate export` and the curation view |
+| `search-index.schema.json` | the JSON Schema of `web/public/data/names.json`: the contract between `frasch build index` and the web app |
+| `dialect-area-parts.schema.json` | the JSON Schema of `dialect_areas_parts.geojson`: the contract between `frasch build areas` and the `?areas` review view |
 
 ## Code
 

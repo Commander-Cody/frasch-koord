@@ -332,13 +332,26 @@ def test_a_curation_session_survives_hand_edits_to_the_list(w: World) -> None:
     assert rows["naibel"]["osm"] == ""
 
 
-def test_every_decision_without_an_id_is_refused_and_kept(w: World) -> None:
-    # a patch written before the row ids: nothing to find the row by, and
-    # none of the decisions may vanish into the archive
-    old = [{k: v for k, v in entry(n, action="skip").items() if k != "id"} for n in (2, 3)]
-    append(w.patch, *old)
+def without_id(line: int) -> dict[str, object]:
+    """A `skip` decision about the row at `line` that does not say which row."""
+    return {k: v for k, v in entry(line, action="skip").items() if k != "id"}
+
+
+def test_lines_without_an_id_are_each_refused_and_kept(w: World) -> None:
+    # nothing says they are about the same row: the later one must not
+    # take the earlier one's place
+    nameless = [without_id(2), without_id(3)]
+    append(w.patch, *nameless)
     assert w.apply() == 2
-    assert lines(w.patch) == old
+    assert lines(w.patch) == nameless
+
+
+def test_a_line_without_an_id_is_refused_with_what_the_schema_says(
+    w: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    append(w.patch, without_id(2))
+    w.apply()
+    assert "'id' is a required property (curate-patch.schema.json)" in capsys.readouterr().out
 
 
 def test_an_entry_that_breaks_the_patch_schema_is_refused_and_kept(

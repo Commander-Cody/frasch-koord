@@ -45,7 +45,7 @@ const MAX_RESULTS = 8;
 /** Flattens all of an entry's names into the indexed `text` field, deduplicated. */
 function toIndexed(entry: NameEntry): IndexedEntry {
   const all = [
-    ...Object.values(entry.names ?? {}),
+    ...Object.values(entry.names),
     entry.local,
     entry.name_nds,
     entry.name_osm,
@@ -54,35 +54,14 @@ function toIndexed(entry: NameEntry): IndexedEntry {
   return { id: entry.id, text: [...new Set(all.filter(Boolean))].join(' ') };
 }
 
-/**
- * The entries MiniSearch can take: it throws on one without an `id` and on a
- * second one with the same `id`, which would take search down for the whole
- * list. names.json is fetched, not type-checked, so skip (and log) those.
- */
-function indexable(entries: NameEntry[]): NameEntry[] {
-  const seen = new Set<string>();
-  const kept = entries.filter((e) => {
-    if (typeof e?.id !== 'string' || seen.has(e.id)) return false;
-    seen.add(e.id);
-    return true;
-  });
-  if (kept.length < entries.length) {
-    console.warn(
-      `names.json: skipped ${entries.length - kept.length} entries without an id or with a repeated one`,
-    );
-  }
-  return kept;
-}
-
 function createSearchIndex(entries: NameEntry[]): SearchIndex | null {
   if (entries.length === 0) return null;
-  const kept = indexable(entries);
   const index = new MiniSearch<IndexedEntry>({
     fields: ['text'],
     searchOptions: { prefix: true, fuzzy: 0.2 },
   });
-  index.addAll(kept.map(toIndexed));
-  return { index, byId: new Map(kept.map((entry) => [entry.id, entry])) };
+  index.addAll(entries.map(toIndexed));
+  return { index, byId: new Map(entries.map((entry) => [entry.id, entry])) };
 }
 
 function search({ index, byId }: SearchIndex, query: string): NameEntry[] {

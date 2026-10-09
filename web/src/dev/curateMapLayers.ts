@@ -46,7 +46,7 @@ export function candidateColor(candidate: CurateCandidate): string {
 export function hasPoint(
   candidate: CurateCandidate,
 ): candidate is CurateCandidate & { lon: number; lat: number } {
-  return typeof candidate.lon === 'number' && typeof candidate.lat === 'number';
+  return candidate.lon !== null && candidate.lat !== null;
 }
 
 /* ------------------------------------------------------------------- pins */

@@ -13,7 +13,7 @@ import requests
 
 from frasch import match
 from frasch.errors import PipelineError
-from conftest import REGISTRY, places_text, workspace
+from conftest import REGISTRY, places_text, workspace, write_candidates
 
 COUNTRIES = [
     {
@@ -45,7 +45,7 @@ Calls = list[tuple[object, ...]]
 def run(world: Path) -> tuple[RunMatch, Path, Path]:
     places = world / "places.csv"
     places.write_text(places_text(COUNTRIES), encoding="utf-8")
-    (world / "work" / "candidates.jsonl").write_text("", encoding="utf-8")
+    write_candidates(world / "work" / "candidates.jsonl")
     cache = world / "work" / "wikidata-countries.json"
 
     def run_match(offline: bool = False) -> int:
@@ -134,7 +134,7 @@ def test_each_country_answer_shows_in_matches_csv_and_the_summary(
     sweden = {"kind": "country", "mooring": "Swäärje", "de": "Schweden"}
     places = world / "places.csv"
     places.write_text(places_text(COUNTRIES + [sweden]), encoding="utf-8")
-    (world / "work" / "candidates.jsonl").write_text("", encoding="utf-8")
+    write_candidates(world / "work" / "candidates.jsonl")
     cache = world / "work" / "wikidata-countries.json"
     cache.write_text(json.dumps({"Dänemark": "Q35", "Niederlande": ""}), encoding="utf-8")
     matches = world / "work" / "matches.csv"

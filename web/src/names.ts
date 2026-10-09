@@ -11,7 +11,8 @@ import type { BuiltFrom } from './provenance';
 /**
  * One entry of public/data/names.json, written by frasch/searchindex.py.
  * Only non-empty values are exported, so every optional field is genuinely
- * absent rather than an empty string.
+ * absent rather than an empty string. The contract itself is
+ * names/search-index.schema.json; names.test.ts pins NameEntry to it.
  */
 export interface NameEntry {
   /** The name-list row's `id`, e.g. "naibel" — stable across edits to the list and OSM alike; the tiles carry it as `frasch:ref`. */
@@ -30,14 +31,6 @@ export interface NameEntry {
   dialect?: string;
   /** Sub-dialect remark of the local name, e.g. "Foortuftinge". */
   variety?: string;
-  /**
-   * Frisian name of no particular dialect — OSM's own `name:frr`, never our
-   * name list, which always knows which dialect a name is in. Only set on an
-   * entry built from a tile feature; the style labels with it too (see the
-   * label chain in style/localize.ts), so the card has to know about it or it
-   * would contradict the label the user just clicked.
-   */
-  name_frr?: string;
   /**
    * Low Saxon name — OSM's `name:nds`, never our name list (it has no Low
    * Saxon column). frasch/searchindex.py takes it from the object's
@@ -68,6 +61,18 @@ export interface NameEntry {
   kind: string;
 }
 
+/** An entry as the place card shows it: with what only a clicked tile feature knows. */
+export interface CardEntry extends NameEntry {
+  /**
+   * Frisian name of no particular dialect — OSM's own `name:frr`, never our
+   * name list, which always knows which dialect a name is in. The style
+   * labels with it too (see the label chain in style/localize.ts), so the
+   * card has to know about it or it would contradict the label the user just
+   * clicked.
+   */
+  name_frr?: string;
+}
+
 /** Properties of a clicked vector-tile feature (source-layer `place`). */
 export type TileProps = Record<string, unknown>;
 
@@ -95,7 +100,7 @@ export interface ShownName {
  * is, where the entry knows one (Ribe is the Danish name, Niebüll the German
  * one), else `osm` — the card then names no language rather than a wrong one.
  */
-function osmNameSource({ name_osm, name_de, name_da }: NameEntry): string {
+function osmNameSource({ name_osm, name_de, name_da }: CardEntry): string {
   if (!name_osm) return 'osm';
   if (name_osm === name_de) return 'de';
   if (name_osm === name_da) return 'da';
@@ -103,7 +108,7 @@ function osmNameSource({ name_osm, name_de, name_da }: NameEntry): string {
 }
 
 /** The entry's value for one tile property of the label chain, and its source. */
-function chainStep(entry: NameEntry, key: string): { name?: string; source: string } {
+function chainStep(entry: CardEntry, key: string): { name?: string; source: string } {
   switch (key) {
     case 'frasch:local':
       return { name: entry.local, source: 'local' };
@@ -120,9 +125,7 @@ function chainStep(entry: NameEntry, key: string): { name?: string; source: stri
       return { name: entry.name_osm, source: osmNameSource(entry) };
   }
   const tag = key.replace(/^name:/, '');
-  // `?.` because names.json is fetched, not type-checked: an archive built
-  // before the multi-dialect schema has no `names` object at all.
-  return { name: entry.names?.[tag], source: tag };
+  return { name: entry.names[tag], source: tag };
 }
 
 /**
@@ -134,7 +137,7 @@ function chainStep(entry: NameEntry, key: string): { name?: string; source: stri
  * Danish is the last resort for the few places the list knows no German
  * name for (Aalborg, Skagen).
  */
-export function resolveName(entry: NameEntry, view: string): ShownName {
+export function resolveName(entry: CardEntry, view: string): ShownName {
   for (const key of labelChain(view)) {
     const { name, source } = chainStep(entry, key);
     if (name) return { name, source };
@@ -144,49 +147,8 @@ export function resolveName(entry: NameEntry, view: string): ShownName {
 }
 
 /** The name to show for an entry in the selected view, see `resolveName`. */
-export function displayName(entry: NameEntry, view: string): string {
+export function displayName(entry: CardEntry, view: string): string {
   return resolveName(entry, view).name;
-}
-
-// ------------------------------------------------------ name-list cells ----
-
-/** A bracketed remark on a variant, e.g. `(wisinge)`. */
-const REMARK = /\([^()]*\)/g;
-
-/**
- * Splits a cell on `;`, but not inside brackets: a remark may itself list
- * several dialects, and `Huađer; Huuger (Sölring; Wisinge)` is two variants,
- * not three.
- */
-function splitVariants(cell: string): string[] {
-  const out: string[] = [];
-  let variant = '';
-  let depth = 0;
-  for (const ch of cell) {
-    if (ch === '(') depth += 1;
-    else if (ch === ')') depth = Math.max(0, depth - 1);
-    if (ch === ';' && depth === 0) {
-      out.push(variant);
-      variant = '';
-    } else {
-      variant += ch;
-    }
-  }
-  out.push(variant);
-  return out;
-}
-
-/**
- * The name of a names/places.csv cell that may hold several variants, as
- * frasch/placelist.py `primary` reads it: the first variant that has a name
- * once its remarks and a trailing `?` are stripped, or '' when none has.
- */
-export function primary(cell: string | undefined): string {
-  for (const variant of splitVariants(cell ?? '')) {
-    const name = variant.replace(REMARK, '').trim().replace(/\?+$/, '').trim();
-    if (name) return name;
-  }
-  return '';
 }
 
 // ------------------------------------------------------------- loading ----
@@ -228,6 +190,37 @@ export function entryLookup(entries: NameEntry[]): EntryLookup {
   return (ref) => byRef.get(ref) ?? byRef.get(ref.split('#')[0]);
 }
 
+/** names.json as loaded: its entries, and what it was built from. */
+export interface NameList {
+  entries: NameEntry[];
+  builtFrom: BuiltFrom;
+}
+
+/**
+ * The name list of a fetched names.json — the one place that looks at what
+ * came over the wire; from here on the app trusts the types. Throws on what
+ * is no name list at all, and drops (and logs) a place without an id or with
+ * a repeated one: either would take the whole search index down.
+ */
+export function parseNames(json: unknown): NameList {
+  const { built_from: builtFrom, places } = (json ?? {}) as {
+    built_from: BuiltFrom;
+    places?: unknown;
+  };
+  if (!Array.isArray(places)) throw new Error('no list of places');
+  const ids = new Set<string>();
+  const entries = (places as NameEntry[]).filter(({ id }) => {
+    if (typeof id !== 'string' || id === '' || ids.has(id)) return false;
+    ids.add(id);
+    return true;
+  });
+  if (entries.length < places.length) {
+    const dropped = places.length - entries.length;
+    console.warn(`names.json: skipped ${dropped} places without an id or with a repeated one`);
+  }
+  return { entries, builtFrom };
+}
+
 const nothing: EntryLookup = () => undefined;
 const LOADING: NamesData = { status: 'loading', entries: [], find: nothing };
 const FAILED: NamesData = { status: 'error', entries: [], find: nothing };
@@ -252,15 +245,10 @@ export function useNames(): NamesData {
         // res.json() rejects that, and anything else that is not the list.
         return res.json();
       })
-      .then((index: unknown) => {
-        const { built_from: builtFrom, places } = (index ?? {}) as {
-          built_from?: BuiltFrom;
-          places?: unknown;
-        };
-        if (!Array.isArray(places)) throw new Error('no list of places');
-        if (cancelled) return;
-        const list = places as NameEntry[];
-        setData({ status: 'ready', entries: list, find: entryLookup(list), builtFrom });
+      .then((json: unknown) => {
+        const { entries, builtFrom } = parseNames(json);
+        if (!cancelled)
+          setData({ status: 'ready', entries, find: entryLookup(entries), builtFrom });
       })
       .catch((err: unknown) => {
         console.error('Failed to load names.json', err);
@@ -286,7 +274,7 @@ function str(props: TileProps | undefined, key: string): string | undefined {
  * OSM's `name:da` on Föhr, say, where our own `da` column is empty.
  * Coordinates are not part of it; nothing on the card needs them.
  */
-export function entryFromTile(props: TileProps): NameEntry {
+export function entryFromTile(props: TileProps): CardEntry {
   const names: Record<string, string> = {};
   for (const d of DIALECTS) {
     const name = str(props, `name:${d.tag}`);
@@ -318,7 +306,7 @@ export function entryFromTile(props: TileProps): NameEntry {
  * its local name with the dialect area it lies in, and OSM's own names.
  * Without an entry the tile alone carries the card.
  */
-export function cardEntry(selection: PlaceSelection): NameEntry {
+export function cardEntry(selection: PlaceSelection): CardEntry {
   const tile = selection.props ? entryFromTile(selection.props) : undefined;
   const entry = selection.entry;
   if (!entry) return tile ?? { id: '', names: {}, name_de: '', lon: 0, lat: 0, kind: '' };

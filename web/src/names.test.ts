@@ -2,22 +2,25 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 
 import patchSchema from '../../names/curate-patch.schema.json';
+import indexSchema from '../../names/search-index.schema.json';
 import {
   cardEntry,
   entryLookup,
   namesUrl,
   osmRefFromFeatureId,
   osmUrl,
+  parseNames,
   placeOsmRef,
-  primary,
   resolveName,
   useNames,
   WIKIDATA_ID,
+  type CardEntry,
   type NameEntry,
 } from './names';
+import { pinnedFields, schemaFields, type Pin } from './testing/schemaPin';
 
 /** A minimal, otherwise-empty entry, for tests that only care about a few fields. */
-function entry(fields: Partial<NameEntry> = {}): NameEntry {
+function entry(fields: Partial<CardEntry> = {}): CardEntry {
   return { id: '', names: {}, name_de: '', lon: 0, lat: 0, kind: '', ...fields };
 }
 
@@ -31,6 +34,82 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
+});
+
+// NameEntry is written by hand; this pins it to the contract of names.json,
+// names/search-index.schema.json (see testing/schemaPin.ts).
+describe('NameEntry', () => {
+  it('has the fields of a place of the search index schema', () => {
+    const pin: Pin<NameEntry> = {
+      id: { string: true },
+      osm: { string: true, optional: true },
+      names: { object: true },
+      local: { string: true, optional: true },
+      dialect: { string: true, optional: true },
+      variety: { string: true, optional: true },
+      name_nds: { string: true, optional: true },
+      name_de: { string: true },
+      name_osm: { string: true, optional: true },
+      name_da: { string: true, optional: true },
+      wikidata: { string: true, optional: true },
+      lon: { number: true },
+      lat: { number: true },
+      kind: { string: true },
+    };
+    expect(pinnedFields(pin)).toEqual(schemaFields(indexSchema.$defs.place, indexSchema));
+  });
+});
+
+describe('parseNames', () => {
+  const NAIBEL = {
+    id: 'naibel',
+    names: {},
+    name_de: 'Niebüll',
+    lon: 8,
+    lat: 54,
+    kind: 'settlement',
+  };
+  const quiet = () => vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+  it('is the places of the file and what it was built from', () => {
+    const builtFrom = { 'places.csv': 'aaa', extracts: [] };
+
+    expect(parseNames({ built_from: builtFrom, places: [NAIBEL] })).toEqual({
+      entries: [NAIBEL],
+      builtFrom,
+    });
+  });
+
+  it('drops a place without an id', () => {
+    quiet();
+
+    const { entries } = parseNames({ places: [{ ...NAIBEL, id: undefined }, NAIBEL] });
+
+    expect(entries).toEqual([NAIBEL]);
+  });
+
+  it('drops a second place with an id already taken', () => {
+    quiet();
+    const twin = { ...NAIBEL, name_de: 'Naibel' };
+
+    const { entries } = parseNames({ places: [NAIBEL, twin] });
+
+    expect(entries).toEqual([NAIBEL]);
+  });
+
+  it('says how many places it dropped', () => {
+    const warn = quiet();
+
+    parseNames({ places: [NAIBEL, NAIBEL, { ...NAIBEL, id: '' }] });
+
+    expect(warn).toHaveBeenCalledExactlyOnceWith(
+      'names.json: skipped 2 places without an id or with a repeated one',
+    );
+  });
+
+  it('refuses a file without a list of places', () => {
+    expect(() => parseNames({ entries: [] })).toThrow('no list of places');
+  });
 });
 
 describe('useNames', () => {
@@ -406,33 +485,5 @@ describe('placeOsmRef', () => {
     expect(placeOsmRef({ props: { name: 'Bredstedt' }, featureId: 2400427661 })).toBe(
       'node/240042766',
     );
-  });
-});
-
-// frasch/placelist.py reads a cell the same way (most examples are its
-// docstrings'): the two must agree on which variant of a cell is its name.
-describe('primary', () => {
-  it('is the first variant of a cell', () => {
-    expect(primary('Rübel; Rübbel (wisinge)')).toBe('Rübel');
-  });
-
-  it('splits only outside brackets, and strips the remark', () => {
-    expect(primary('Huađer; Huuger (Sölring; Wisinge)')).toBe('Huađer');
-  });
-
-  it('strips every remark of the variant', () => {
-    expect(primary('Brouersweerw (Foortuftinge) (Nickelsen 1982)')).toBe('Brouersweerw');
-  });
-
-  it('skips a variant that is only a remark', () => {
-    expect(primary('(remark only); Name')).toBe('Name');
-  });
-
-  it("drops a doubtful name's trailing question mark", () => {
-    expect(primary('Hoorst? (Moor)')).toBe('Hoorst');
-  });
-
-  it('is empty for an empty cell', () => {
-    expect(primary('')).toBe('');
   });
 });

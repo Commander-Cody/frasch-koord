@@ -9,9 +9,9 @@ export interface ErrorBoundaryProps {
    */
   fallback: (reset: () => void) => ReactNode;
   /**
-   * Try `children` again when this changes. App passes the selection: one
-   * malformed names.json entry must not take the panel away for good, only
-   * until the user picks another place (or closes the card).
+   * Try `children` again when this changes. App passes the selection: a
+   * place the card fails to render must not take the panel away for good,
+   * only until the user picks another place (or closes the card).
    */
   resetKey?: unknown;
 }

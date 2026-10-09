@@ -364,15 +364,6 @@ def test_a_second_polygon_for_one_node_is_reported(names: CheckNames) -> None:
     assert [(os.path.basename(p.path), p.line) for p in problems] == [("curation.csv", 3)]
 
 
-def test_lat_lon_columns_left_in_the_name_list_are_reported(names: CheckNames) -> None:
-    # They moved to curation.csv; placelist.read refuses a list that has them.
-    head, *rest = places_text([TOFTUM]).split("\n")
-    text = "\n".join([head + ",lat,lon"] + [r + ",," for r in rest if r]) + "\n"
-    problems = names(text)
-    assert lines(problems) == [1]
-    assert "curation.csv" in problems[0].message
-
-
 @pytest.mark.parametrize(
     "row",
     [
