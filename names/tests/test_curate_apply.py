@@ -229,7 +229,7 @@ def test_curation_csv_edited_during_rollback_is_left_alone(
         w.curation.write_text(theirs, encoding="utf-8")  # a hand edit lands
         raise OSError("disk full")
 
-    monkeypatch.setattr(placelist, "write", failing_write)
+    monkeypatch.setattr(placelist.PlaceList, "write", failing_write)
     with pytest.raises(OSError):
         w.apply()
     assert w.curation.read_text(encoding="utf-8") == theirs
@@ -258,7 +258,7 @@ def test_dry_run_and_keep_leave_the_patch_in_place(w: World) -> None:
 
 # ------------------------------------------------------------ row ids (#23) ---
 def rows_by_id(w: World) -> dict[str, placelist.PlaceRow]:
-    return {r["id"]: r for r in placelist.read(str(w.places), REGISTRY)[0]}
+    return {r["id"]: r for r in placelist.read(str(w.places), REGISTRY).rows}
 
 
 def test_a_withdrawn_decision_stays_withdrawn_whatever_line_it_was_sent_with(w: World) -> None:
@@ -495,6 +495,50 @@ def test_a_local_slug_of_another_row_is_taken(w: World, capsys: pytest.CaptureFi
     assert w.apply() == 1
     assert "local/taarep is already taken" in capsys.readouterr().out
     assert w.curation.read_text(encoding="utf-8") == CURATION_HEADER
+
+
+def test_an_object_another_row_claims_is_refused(
+    w: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # node/9 is the object of `hus`, line 4: the list would be refused (#94)
+    append(w.patch, entry(2, action="osm", osm="node/9"))
+    assert w.apply() == 1
+    assert "node/9 is already claimed by line 4" in capsys.readouterr().out
+
+
+def test_a_wikidata_item_another_row_claims_is_refused(
+    w: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    denmark = {"id": "daanemark", "kind": "country", "mooring": "Däänemark", "wikidata": "Q35"}
+    w.places.write_text(places_text(ROWS + [denmark]), encoding="utf-8")
+    append(w.patch, entry(2, action="osm", osm="node/1", wikidata="Q35"))
+    assert w.apply() == 1
+    assert "Q35 is already claimed by line 5" in capsys.readouterr().out
+
+
+def test_of_two_decisions_for_one_object_the_first_is_applied(w: World) -> None:
+    append(w.patch, entry(2, action="osm", osm="node/1"), entry(3, action="osm", osm="node/1"))
+    w.apply()
+    assert {r["id"]: r["osm"] for r in rows_by_id(w).values()} == {
+        "taarep": "node/1",
+        "uurd": "",
+        "hus": "node/9",
+    }
+
+
+def test_a_decision_that_names_one_object_twice_is_refused(
+    w: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    append(w.patch, entry(2, action="osm", osm="node/1; node/1"))
+    assert w.apply() == 1
+    assert "node/1 twice in `osm`" in capsys.readouterr().out
+
+
+def test_a_row_may_be_given_the_object_it_holds_already(w: World) -> None:
+    matched = ROWS[0] | {"osm": "node/1", "status": "auto"}
+    w.places.write_text(places_text([matched] + ROWS[1:]), encoding="utf-8")
+    append(w.patch, entry(2, action="osm", osm="node/1"))
+    assert w.apply() == 0
 
 
 def test_no_patch_is_an_error(w: World) -> None:

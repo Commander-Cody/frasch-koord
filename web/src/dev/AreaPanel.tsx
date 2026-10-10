@@ -375,7 +375,7 @@ export default function AreaPanel({ mapRef }: AreaPanelProps) {
     const onClick = (event: MapLayerMouseEvent) => {
       const hits = event.features ?? [];
       if (hits.length === 0) return;
-      // Smallest wins, like dialects.AreaIndex: nothing nests today, but a
+      // Smallest wins, like dialect_areas.AreaIndex: nothing nests today, but a
       // Hallig inside a municipality is the obvious next row.
       const best = hits.reduce((winner, candidate) =>
         Number(candidate.properties?.km2) < Number(winner.properties?.km2) ? candidate : winner,

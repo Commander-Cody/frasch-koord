@@ -84,7 +84,10 @@ Wikidata item on two rows, a `local/` reference without a position, a
 missing or repeated `id`, a hand-set `frasch:ref` in `curation.csv` that names
 no row, one OSM object on two `dialect_areas.csv` rows. Without `--fix` it
 only reports; CI runs it that way on every push. The other commands refuse a
-`places.csv` with a row without an `id`.
+`places.csv` with a row without an `id`, and one in which two rows claim the
+same OSM object or Wikidata item, or one row names an object twice: only one
+name can go on the map. A row claims the references of its `osm` cell and its
+`wikidata` item unless it is `skip`.
 
 The rows are in the order of the original sheet (by section, then the owner's
 geographic order); new rows can go anywhere.
@@ -114,7 +117,7 @@ uv run frasch dialects --tags     # frr-x-mooring,frr-x-wieding,...  (tiles/buil
 ```
 
 The shared name logic lives in `frasch/placenames.py` (`resolve`), on top of
-the registry's one reader (`frasch/registry.py`), because injector, exporter
+the registry's one reader (`frasch/dialects.py`), because injector, exporter
 and frontend must agree on it. The injector writes its result as tags
 (`as_tags`), the exporter as a search entry (`as_entry`); the table
 `TILE_KEY` says which field of an entry is which tile key:
@@ -196,7 +199,7 @@ plus the file name and replication timestamp of every extract read — the same
 provenance scheme as the rest of the pipeline (`frasch/provenance.py`).
 
 **No Python consumer may read the parts file.** Its unit is the municipality,
-not the dialect, so handing it to `dialects.AreaIndex` would silently change
+not the dialect, so handing it to `dialect_areas.AreaIndex` would silently change
 every dialect lookup. The unassigned features deliberately carry no `dialect`
 property, which makes `AreaIndex.from_geojson` refuse the file outright rather
 than load it by accident.
@@ -337,7 +340,9 @@ a time.
 **Review**: `names/REPORT.md` lists the *ambiguous* rows with their candidates
 and the *not found* rows with near misses. Resolve a row by writing the right
 `osm` reference into `places.csv` (and `ok` into `status` if you like), or
-`skip` if it should never appear.
+`skip` if it should never appear. When the list has a place twice, the first
+of the two rows gets the object and the second is *not found*, with
+"… is taken by line N" as its note: `skip` one of them.
 
 **Review on the map** — the same worklist as pins, which is usually faster
 than looking every candidate up on openstreetmap.org:
@@ -360,7 +365,8 @@ back — the last entry per row wins, rows are found by their `id`, so hand
 edits to `places.csv` during a session do no harm — and writes `osm`, `wikidata` and
 `status` (`ok`, or `skip`) into `places.csv`, plus one `curation.csv` row per
 place OSM does not have. It touches only the rows `frasch match` owns and refuses
-the rest. It renames the patch file before reading it (`--keep` leaves it), so
+the rest, as it does a decision for an object or Wikidata item another row
+already claims. It renames the patch file before reading it (`--keep` leaves it), so
 decisions made while it runs go to a fresh patch; refused entries are appended
 back to it. Re-run `frasch match` afterwards and export again.
 
@@ -387,7 +393,7 @@ a way or relation that closes into one; else the relation's `label` /
 point as a second try for the dialect lookup, the `admin_level` of an
 administrative boundary, and OSM's `name:nds`, `name` and `name:frr`. It is
 stamped with the extracts it was read from. The injector and the search index both read
-it, and both ask `objects.dialect_at` which dialect an object lies in — so a
+it, and both ask `dialect_areas.dialect_at` which dialect an object lies in — so a
 label and its search entry cannot disagree. An administrative area above
 municipality level (Kreis Nordfriesland, an Amt) gets no dialect: it spans
 several. A search entry lies where the first object of its row's `osm` cell
@@ -435,8 +441,7 @@ uv run frasch inject tiles/data/schleswig-holstein-latest.osm.pbf /dev/null --dr
 ```
 
 It lists how many names it writes per dialect, how many objects fall into each
-dialect area, ids that are not in the extract, rows that claim the same object
-twice (the first row in file order wins, per tag), QIDs it could not find,
+dialect area, ids that are not in the extract, QIDs it could not find,
 objects that carry a QID of the list but are not place-like (left alone), and
 the synthetic polygons it would add.
 
@@ -704,20 +709,25 @@ Everything is typed and checked by `mypy --strict` in CI (tests included).
 A record with fixed keys is a `TypedDict` in the module that produces it
 (`candidates.Candidate`, `objects.LocatedObject`, `placenames.SearchEntry`,
 …); a row of `places.csv` is a plain `dict[str, str]` of its cells, and
-`placelist.read` returns them as `PlaceRow`s, which also know their `line`.
+`placelist.read` returns the list as a `PlaceList` (which writes it back)
+whose rows are `PlaceRow`s: they also know their `line` and the parsed
+references of their `osm` cell.
 
 | module | what |
 |---|---|
 | `__main__` | the command table: which module's `main()` each command runs |
 | `paths` | `Workspace`, one attribute per file of the pipeline; `Workspace.default()` is the repository's layout |
 | `errors`, `cli` | what library code raises; the `main()` wrapper that turns it into an exit status; `add_workspace_options`, the path flags above |
-| `files` | atomic writes, and the fingerprints that notice a file someone else saved meanwhile |
+| `files` | atomic writes, the fingerprints that notice a file someone else saved meanwhile, and the lock that keeps `match` and `curate apply` apart |
 | `tables` | the one parser and writer of the four hand-edited CSV files: byte order mark, `;`-separated export, the header's columns, the cell count and line of every row |
-| `registry` | the one reader of `dialects.csv`, and its export for the frontend |
-| `placelist` | reads/writes/validates `places.csv`: cells, references, ids, the lock |
+| `dialects` | the dialect registry: the one reader of `dialects.csv`, its export for the frontend, `frasch dialects` |
+| `refs` | the references of an `osm` cell: `node/1; way/2` or one `local/<slug>`, parsed and spelled |
+| `namecell` | the grammar of a name cell: variants, the primary one, remarks |
+| `placelist` | the name list `places.csv`: its columns, its rows and what they claim (`claims`, `on_map`), ids, reading it as a `PlaceList` and writing it back |
 | `curationlist` | the one reader of `curation.csv`, and appending to it |
-| `dialects` | the one reader of `dialect_areas.csv` (`area_rows`) and the area lookup (`AreaIndex`) |
-| `objects` | reads and writes the objects file `osm_objects.json`; the object a row's entry stands for (`Objects.for_row`); `dialect_at`, the one dialect lookup; the one message for a reference the file has no object for |
+| `dialect_areas` | which dialect is spoken where: the one reader of `dialect_areas.csv` (`area_rows`), the area lookup (`AreaIndex`) and `dialect_at`, the dialect where an object lies |
+| `objects` | the objects file `osm_objects.json`: what it records, reading and writing it |
+| `placeobjects` | the objects of the name list's rows: which references the file is located for, the one message for a reference it has no object for, the object a row's entry stands for (`for_row`) |
 | `placenames` | which names and attributes a place gets (`resolve`), as tile tags (`as_tags`) and as a search entry (`as_entry`); the tile keys and `TILE_KEY`, the table entry field → tile key; `frasch tile-keys` |
 | `geo` | the North Frisia box, its centre, haversine |
 | `osmscan`, `osmgeom` | the id-filtered passes over an extract; ring assembly and polygons |

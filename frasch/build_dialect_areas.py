@@ -35,7 +35,7 @@ cannot disagree:
 
   --areas  one Feature per *dialect*, municipalities dissolved.  This is
            the lookup file: the injector and the search exporter read it
-           through dialects.AreaIndex ("smallest containing area wins").
+           through dialect_areas.AreaIndex ("smallest containing area wins").
   --parts  one Feature per *municipality*, carrying the `name` and the
            research `note` of its dialect_areas.csv row -- plus the Kreis
            Nordfriesland municipalities that no row claims at all, marked
@@ -74,23 +74,15 @@ from typing import NamedTuple, NotRequired, TypedDict
 import osmium
 from shapely.geometry.base import BaseGeometry
 
-from frasch import (
-    cli,
-    dialects,
-    files,
-    osmgeom,
-    osmscan,
-    placelist,
-    registry,
-)
-from frasch.dialects import AreaRow
+from frasch import cli, dialect_areas, dialects, files, osmgeom, osmscan, refs
+from frasch.dialect_areas import AreaRow
+from frasch.dialects import Dialect, Registry
 from frasch.errors import PipelineError, ValidationError
 from frasch.geo import LonLat
 from frasch.osmscan import Rings
-from frasch.placelist import OsmRef
 from frasch.paths import StrPath, Workspace
 from frasch.provenance import BuiltFrom, ExtractStamp, Stamp
-from frasch.registry import Dialect, Registry
+from frasch.refs import OsmRef
 
 SIMPLIFY_DEG = 0.0005  # ~50 m
 # Neighbouring municipalities are simplified independently, so a shared
@@ -162,14 +154,14 @@ def read_areas(
 ) -> tuple[dict[OsmRef, str], dict[OsmRef, str], list[AreaRow]]:
     """-> ({(type, id): dialect_tag}, {(type, id): label}, [row]) in file order.
 
-    The rows are those of `dialects.area_rows` -- {"line", "dialect", "name",
+    The rows are those of `dialect_areas.area_rows` -- {"line", "dialect", "name",
     "note", "osm", "refs"} -- for the per-municipality parts output.  The two
     indexes stay keyed by OSM reference because that is what the dissolve
     loop and the "not in the extract" report need.
     """
     if not os.path.exists(path):
         raise PipelineError(f"dialect area list not found: {path}")
-    rows, problems = dialects.area_rows(path, reg)
+    rows, problems = dialect_areas.area_rows(path, reg)
     if problems:
         raise ValidationError(problems)
     by_ref = {ref: row["dialect"] for row in rows for ref in row["refs"]}
@@ -321,7 +313,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         allow_missing=a.allow_missing,
         parts=not a.no_parts,
     )
-    run(ws, registry.read(ws.dialects), a.pbf, options)
+    run(ws, dialects.read(ws.dialects), a.pbf, options)
     return 0
 
 
@@ -511,7 +503,7 @@ def _report_missing(
     unless `allow_missing`."""
     lines = [f"{len(missing)} object(s) not found in the extract(s):"]
     lines += [
-        f"  {placelist.format_osm([ref])}  {labels.get(ref) or '?'} ({by_ref[ref]})"
+        f"  {refs.format([ref])}  {labels.get(ref) or '?'} ({by_ref[ref]})"
         for ref in sorted(missing)
     ]
     report = "\n".join(lines)
@@ -547,7 +539,7 @@ def _write_dialects(path: str, fc: FeatureCollection[DialectProperties], total: 
         f"\nwrote {path} ({len(fc['features'])} features, {total} polygons, "
         f"{os.path.getsize(path) / 1e3:.0f} kB)"
     )
-    idx = dialects.AreaIndex.from_geojson(path)
+    idx = dialect_areas.AreaIndex.from_geojson(path)
     print(f"reads back as {len(idx)} polygon(s): {idx.summary()}")
 
 
@@ -624,7 +616,7 @@ def build_parts(
                     "fid": fid,
                     "assigned": False,
                     "name": free_names.get(ref, ""),
-                    "osm": placelist.format_osm([ref]),
+                    "osm": refs.format([ref]),
                     "km2": round(km2(geom), 1),
                 },
                 "geometry": round_geojson(mapping(geom)),

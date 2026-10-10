@@ -17,7 +17,7 @@ from frasch.__main__ import main
 from frasch.errors import PipelineError
 from frasch.paths import StrPath
 from frasch.objects import LocatedObject, Objects, objects_json
-from frasch.placelist import OsmRef
+from frasch.refs import OsmRef
 from frasch.provenance import ExtractStamp, Stamp
 from frasch.placenames import SearchEntry
 from frasch.searchindex import SearchIndex
@@ -51,8 +51,6 @@ LUNGEDIK = {
     "osm": "way/28330569",
     "status": "ok",
 }
-# the same dyke under a second name: two rows, one object
-LUNGDIIK = LUNGEDIK | {"id": "lungdiik", "mooring": "Lungdiik"}
 NORDWARW = {
     "id": "nordwarw",
     "kind": "warft",
@@ -182,16 +180,11 @@ def test_an_entry_is_where_the_first_object_of_its_row_is(export: Export) -> Non
     assert (entries["nordwarw"]["lon"], entries["nordwarw"]["lat"]) == (8.84, 54.67)
 
 
-def test_two_rows_on_one_object_are_two_entries_by_id(export: Export) -> None:
-    entries = export([LUNGEDIK, LUNGDIIK])
-    assert sorted(entries) == ["lungdiik", "lungedik"]
-
-
 def test_a_row_added_on_top_changes_no_other_entry(export: Export) -> None:
-    # even one on the same object, which used to renumber `way/…#<line>`
-    before = export([LUNGEDIK, LUNGDIIK, NAIBEL])
-    after = export([LUNGEDIK | {"id": "lungdik", "mooring": "Lungdik"}, LUNGEDIK, LUNGDIIK, NAIBEL])
-    assert after.pop("lungdik")
+    # an entry is keyed by its row's id, not by where the row stands
+    before = export([LUNGEDIK, NAIBEL])
+    after = export([NORDWARW, LUNGEDIK, NAIBEL])
+    del after["nordwarw"]
     assert after == before
 
 

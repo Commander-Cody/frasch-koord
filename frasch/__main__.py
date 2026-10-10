@@ -21,7 +21,7 @@ COMMANDS = {
     "candidates": ("build_candidates", "scan OSM extracts for every object that could be a place"),
     "match": ("match", "fill the empty osm cells of the name list"),
     "areas": ("build_dialect_areas", "build the dialect areas from the area list"),
-    "dialects": ("registry", "print the dialect registry"),
+    "dialects": ("dialects", "print the dialect registry"),
     "build": ("pipeline", "build one of the pipeline's generated files"),
     "provenance": ("provenance", "print what the index and the tiles are built from"),
     "update": ("update", "bring every file the name list feeds up to date"),

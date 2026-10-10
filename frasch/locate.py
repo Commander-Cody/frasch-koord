@@ -15,14 +15,14 @@ from __future__ import annotations
 import os
 from collections.abc import Collection, Iterable, Mapping, Sequence
 
-from frasch import files, osmgeom, osmscan, placelist
+from frasch import files, osmgeom, osmscan, placelist, placeobjects, refs
+from frasch.dialects import Registry
 from frasch.geo import LonLat
-from frasch.objects import Facts, LocatedObject, Objects, Point, named, objects_json
+from frasch.objects import Facts, LocatedObject, Objects, Point, objects_json
 from frasch.osmscan import Rings
 from frasch.paths import StrPath, Workspace
-from frasch.placelist import OsmRef
 from frasch.provenance import Stamp
-from frasch.registry import Registry
+from frasch.refs import OsmRef
 
 
 def locate(pbfs: Iterable[StrPath], refs: Collection[OsmRef]) -> dict[OsmRef, LocatedObject]:
@@ -173,8 +173,8 @@ def _outline_point(
 
 def wanted_refs(ws: Workspace, reg: Registry) -> set[OsmRef]:
     """The OSM references of the rows on the map, as the name list has them now."""
-    rows, _ = placelist.read(ws.names, reg)
-    return set(named(rows, reg))
+    rows = placelist.read(ws.names, reg).rows
+    return set(placeobjects.named(rows, reg))
 
 
 def located(refs: Collection[OsmRef], pbfs: Sequence[StrPath]) -> Objects:
@@ -187,13 +187,13 @@ def located(refs: Collection[OsmRef], pbfs: Sequence[StrPath]) -> Objects:
 
 def run(ws: Workspace, reg: Registry, pbfs: Sequence[StrPath]) -> None:
     """Locate the objects, write the objects file and say what is missing."""
-    refs = wanted_refs(ws, reg)
-    objects = located(refs, pbfs)
+    wanted = wanted_refs(ws, reg)
+    objects = located(wanted, pbfs)
     files.atomic_write(ws.objects, objects_json(objects))
-    print(f"wrote {ws.objects}: {len(objects.by_ref)} of {len(refs)} objects located")
+    print(f"wrote {ws.objects}: {len(objects.by_ref)} of {len(wanted)} objects located")
     if objects.not_found:
         # the search export and the injector stop on these; fix the rows
         print(
             f"{len(objects.not_found)} not in {', '.join(os.path.basename(p) for p in pbfs)}: "
-            + ", ".join(placelist.format_osm([ref]) for ref in objects.missing(refs))
+            + ", ".join(refs.format([ref]) for ref in objects.missing(wanted))
         )

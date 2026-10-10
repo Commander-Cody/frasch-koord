@@ -38,10 +38,10 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 
 from frasch import check_inputs, check_outputs, cli, curate, files, pipeline
+from frasch.dialects import Registry
 from frasch.errors import PipelineError
 from frasch.paths import Workspace
 from frasch.pipeline import Extracts, Output, Run
-from frasch.registry import Registry
 
 
 class Outcome(enum.Enum):

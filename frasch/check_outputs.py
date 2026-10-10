@@ -30,8 +30,8 @@ import os
 import tempfile
 from collections.abc import Sequence
 
-from frasch import cli, pipeline, placelist, registry
-from frasch.objects import named, read_objects, unlocated
+from frasch import cli, dialects, pipeline, placelist, placeobjects
+from frasch.objects import read_objects
 from frasch.pipeline import Extracts, Run
 
 
@@ -53,8 +53,8 @@ def unlocated_problems(run: Run) -> list[str]:
     first one, the only one the search index needs."""
     if not os.path.exists(run.ws.objects):
         return []
-    rows, _ = placelist.read(run.ws.names, run.reg)
-    return unlocated(read_objects(run.ws.objects), named(rows, run.reg))
+    rows = placelist.read(run.ws.names, run.reg).rows
+    return placeobjects.unlocated(read_objects(run.ws.objects), placeobjects.named(rows, run.reg))
 
 
 def run(run: Run) -> int:
@@ -84,4 +84,4 @@ def main(argv: Sequence[str] | None = None) -> int:
     pipeline.add_area_extract_option(ap)
     a = ap.parse_args(argv)
     ws = cli.workspace(a)
-    return run(Run(ws, registry.read(ws.dialects), Extracts.given(a.extracts, a.area_extract)))
+    return run(Run(ws, dialects.read(ws.dialects), Extracts.given(a.extracts, a.area_extract)))

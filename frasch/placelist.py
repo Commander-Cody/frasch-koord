@@ -1,43 +1,41 @@
-"""Read / write names/places.csv -- the hand-edited name list.
+"""The name list, names/places.csv: its columns, its rows and what they
+hold, and reading and writing the file.
 
 The file is the single source of truth for every North Frisian label on the
 map.  Its conventions (see names/README.md):
 
-* a name cell may hold several variants separated by `;` -- the first one is
-  the primary name (the map label).  A `;` inside a remark does not separate
-  variants (`Huađer; Huuger (Sölring; Wisinge)` is two names)
-* `(...)` after a variant is a remark about it (local variety, source), never
-  part of the name
 * one column per dialect (`mooring`, `wieding`, ... -- the list comes from
-  the dialect registry, frasch.registry), plus `local` (the form the people of
+  the dialect registry, frasch.dialects), plus `local` (the form the people of
   the place itself use when it differs from the dialect of the area, e.g.
-  Fahretoft)
-* `osm` holds one or more OSM references: `node/123`, `way/1; way/2` -- or
-  ONE local reference `local/<slug>` for a place OSM does not have.  The
-  slug keys a row of names/curation.csv that carries the position (`lat` /
-  `lon`); the injector adds a node (or a label polygon) of its own for it
+  Fahretoft); a name cell reads as frasch.namecell says
+* `osm` holds the references of the row (frasch.refs): one or more OSM
+  objects, or ONE local reference for a place OSM does not have, which
+  names/curation.csv positions
 * `status` is `auto` (written by the matcher, recomputed on every run), `ok`
   (checked by a human), `skip` (never put on the map) or empty
+* `id` is the row's own key, which every other file names it by
 
-Everything here is deliberately small and free of OSM libraries so that the
-matcher, the injector and the checks can all share it.  The column layout
-depends on the dialect registry: the functions that need it take a
-`Registry` (frasch.registry).  The dialect-aware name logic (the fallbacks)
-lives one layer up in frasch.dialects.
+`read` gives the list as a `PlaceList`, which also writes it back.  It
+refuses a list that breaks the rules of `rows` -- among them that only one
+row holds an object or a Wikidata item (`claims`).  The column layout depends
+on the dialect registry: the functions that need it take a `Registry`.
+Which names a place gets from its row is frasch.placenames' rule.
 """
 
 from __future__ import annotations
 
-import contextlib
-import errno
 import os
 import re
 import unicodedata
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from typing import NamedTuple
 
-from frasch import files, tables
+from frasch import files, refs, tables
+from frasch.dialects import LOCAL_COLUMN, Registry
 from frasch.errors import Invalid, PipelineError, Problem, ValidationError
-from frasch.registry import LOCAL_COLUMN, Registry
+from frasch.namecell import primary
+from frasch.refs import SLUG, OsmRef, Ref
 from frasch.tables import Table
 
 
@@ -75,95 +73,42 @@ KINDS = {
 }
 STATUSES = {"", "auto", "ok", "skip"}
 
-OSM_TYPES = {"node": "n", "way": "w", "relation": "r"}
-# `local/<slug>`: not an OSM object but a place of our own, positioned in
-# names/curation.csv.  Keyed like the others, with the slug as its id.
-LOCAL_TYPE = "l"
-TYPE_NAME = {v: k for k, v in OSM_TYPES.items()} | {LOCAL_TYPE: "local"}
-# the shape of a row id and of a local reference's slug
-SLUG = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 WIKIDATA_ID = re.compile(r"Q\d+")
-
-_REMARK = re.compile(r"\(([^()]*)\)")
 
 # A row's cells, column -> stripped text: what the functions that only read a
 # row take, so that a row built by hand (a test, a patch) will do as well.
 Row = Mapping[str, str]
-# One reference of an `osm` cell as `parse_osm` returns it: `("w", 12)` for
-# an OSM object, `("l", "westerheide-amrum")` for a local one.
-Ref = tuple[str, int | str]
-# one that names an OSM object: a node, way or relation id
-OsmRef = tuple[str, int]
 
 
 class PlaceRow(dict[str, str]):
-    """A row of the name list as `read` returns it: its cells, and `line`,
-    its physical line number in the file (header = 1) -- for the messages
-    that point an editor at it."""
+    """A row of the name list as `read` returns it: its cells, `line`, its
+    physical line number in the file (header = 1) -- for the messages that
+    point an editor at it --, and the references of its `osm` cell, parsed
+    (`refs`)."""
 
     def __init__(self, cells: Mapping[str, str], line: int):
         super().__init__(cells)
         self.line = line
+        self._parsed: tuple[str, list[Ref]] | None = None  # (the cell, its references)
 
+    @property
+    def refs(self) -> list[Ref]:
+        """The references of the row's `osm` cell, as the cell is now: the
+        matcher and `curate apply` rewrite it."""
+        cell = self["osm"]
+        if self._parsed is None or self._parsed[0] != cell:
+            self._parsed = (cell, refs.parse(cell))
+        return self._parsed[1]
 
-def split_variants(cell: str | None) -> list[str]:
-    """Split a name cell on `;` -- but not inside brackets, because a remark
-    may itself list several dialects: `Huađer; Huuger (Sölring; Wisinge)` is
-    two variants, not three."""
-    out: list[str] = []
-    buf: list[str] = []
-    depth = 0
-    for ch in cell or "":
-        if ch == "(":
-            depth += 1
-        elif ch == ")":
-            depth = max(0, depth - 1)
-        if ch == ";" and depth == 0:
-            out.append("".join(buf))
-            buf = []
-        else:
-            buf.append(ch)
-    out.append("".join(buf))
-    return out
+    @property
+    def osm_refs(self) -> list[OsmRef]:
+        """Those of its references that name an OSM object."""
+        return refs.osm_only(self.refs)
 
-
-def parts(cell: str | None) -> list[tuple[str, str]]:
-    """`"Rübel; Rübbel (wisinge)"` -> `[("Rübel", ""), ("Rübbel", "wisinge")]`.
-
-    The remark comes back without its brackets; several brackets on one
-    variant are joined with `; `.  Variants without a name are dropped."""
-    out: list[tuple[str, str]] = []
-    for part in split_variants(cell):
-        remarks = [m.group(1).strip() for m in _REMARK.finditer(part)]
-        name = _REMARK.sub("", part).strip().rstrip("?").strip()
-        if name:
-            out.append((name, "; ".join(r for r in remarks if r)))
-    return out
-
-
-def variants(cell: str | None) -> list[str]:
-    """`"Rübel; Rübbel (wisinge)"` -> `["Rübel", "Rübbel"]` (remarks stripped)."""
-    out: list[str] = []
-    for name, _ in parts(cell):
-        if name not in out:
-            out.append(name)
-    return out
-
-
-def primary(cell: str | None) -> str:
-    v = variants(cell)
-    return v[0] if v else ""
-
-
-def remark(cell: str | None) -> str:
-    """The remark of the PRIMARY variant of a cell (`""` when it has none)."""
-    p = parts(cell)
-    return p[0][1] if p else ""
-
-
-def label(row: Row, column: str = "mooring") -> str:
-    """The map label of a row for one dialect column (its primary variant)."""
-    return primary(row.get(column))
+    @property
+    def local(self) -> str | None:
+        """The slug of its local reference, for a place OSM does not have."""
+        return refs.local_of(self.refs)
 
 
 def any_name(row: Row, reg: Registry) -> str:
@@ -185,19 +130,12 @@ def point_name(row: Row, reg: Registry) -> str:
     return primary(row.get("de")) or primary(row.get("da")) or any_name(row, reg)
 
 
-def on_map(row: Row, reg: Registry) -> bool:
-    """Whether a row puts names on the map: it has a Frisian name and is
-    neither `skip` nor `not_a_place`.  The injector labels these rows'
-    objects, and the search index lists them."""
-    return row["status"] != "skip" and row["kind"] != "not_a_place" and bool(any_name(row, reg))
-
-
 def owned_by_matcher(row: Row) -> bool:
     """May the matcher (and `frasch curate apply`) (re)write this row's osm /
     wikidata / status?  Not a row a human decided -- `ok`/`skip`, a
     hand-filled reference, a local reference, `not_a_place` -- only one it
     filled itself (`auto`) or one with nothing in it yet."""
-    if local_ref(row["osm"]):
+    if refs.local_of(_refs(row)):
         return False  # a local reference: OSM has no object for it
     if row["kind"] == "not_a_place" or row["status"] in ("ok", "skip"):
         return False
@@ -206,79 +144,43 @@ def owned_by_matcher(row: Row) -> bool:
     return not row["osm"] and not row["wikidata"]
 
 
-def parse_osm(cell: str | None, where: str = "") -> list[Ref]:
-    """`"way/12; way/13"` -> `[("w", 12), ("w", 13)]`;
-    `"local/westerheide-amrum"` -> `[("l", "westerheide-amrum")]`.
+class Claims(NamedTuple):
+    """What a row holds for itself, see `claims`: the objects its `osm` cell
+    names (`refs`) and its Wikidata item (`qid`, `""` for none)."""
 
-    A local reference stands alone: it is the whole cell, never one of
-    several."""
-    out: list[Ref] = []
-    for ref in (cell or "").split(";"):
-        ref = ref.strip()
-        if not ref:
-            continue
-        m = re.fullmatch(rf"(node|way|relation)/(\d+)|(local)/({SLUG.pattern})", ref)
-        if not m:
-            raise Invalid(
-                where,
-                f"bad reference {ref!r} (expected node/ID, "
-                f"way/ID, relation/ID or local/slug with a slug "
-                f"of lowercase letters, digits and hyphens)",
-            )
-        if m.group(3):
-            out.append((LOCAL_TYPE, m.group(4)))
-        else:
-            out.append((OSM_TYPES[m.group(1)], int(m.group(2))))
-    if len(out) > 1 and any(t == LOCAL_TYPE for t, _ in out):
-        raise Invalid(
-            where,
-            f"a local reference stands alone, it cannot be "
-            f"combined with other references: {cell!r}",
-        )
-    return out
+    refs: list[Ref]
+    qid: str
+
+    @property
+    def keys(self) -> list[str]:
+        """Each claim as the list spells it: `way/1`, `Q35`."""
+        return [refs.format([ref]) for ref in self.refs] + ([self.qid] if self.qid else [])
 
 
-def as_osm_ref(ref: Ref) -> OsmRef | None:
-    """The reference as one to an OSM object; None for a local one."""
-    t, i = ref
-    return (t, i) if isinstance(i, int) else None
-
-
-def local_slug(ref: Ref) -> str | None:
-    """The slug of a local reference; None for one to an OSM object."""
-    _, i = ref
-    return i if isinstance(i, str) else None
-
-
-def osm_refs(cell: str | None, where: str = "") -> list[OsmRef]:
-    """The references to OSM objects of an `osm` cell -- none for a local
-    reference."""
-    return [osm for ref in parse_osm(cell, where) if (osm := as_osm_ref(ref))]
-
-
-def format_osm(refs: Iterable[Ref]) -> str:
-    return "; ".join(f"{TYPE_NAME[t]}/{i}" for t, i in refs)
-
-
-def local_ref(cell: str | None) -> str | None:
-    """The slug when the cell is a local reference (`local/<slug>`), else None.
-
-    Places OSM does not have (Harden, most Köge, vanished Halligen, a Warft
-    nobody has mapped) get a reference of our own; names/curation.csv
-    positions it and says how the map treats it, the injector adds the object,
-    the search index takes the position from there, and the matcher leaves the
-    row alone."""
-    refs = parse_osm(cell)
-    return local_slug(refs[0]) if refs else None
-
-
-def claimed_refs(row: Row) -> list[Ref]:
-    """The objects a row puts on the map: the references in its `osm` cell,
-    none for a `skip` row, which never reaches the map.  Only one row per
-    object can: the injector labels an object once."""
+def claims(row: Row) -> Claims:
+    """What a row holds for itself: the objects of its `osm` cell and its
+    Wikidata item -- nothing for a `skip` row, which never reaches the map.
+    It holds them also while it is `not_a_place` or has no Frisian name yet
+    (`on_map` is the narrower question).  Only one row can hold an object or
+    an item: the injector labels it once, so a second claim is a problem of
+    the list (`rows`)."""
     if row["status"] == "skip":
-        return []
-    return parse_osm(row.get("osm"))
+        return Claims([], "")
+    return Claims(_refs(row), row["wikidata"])
+
+
+def _refs(row: Row) -> list[Ref]:
+    """The references of a row's `osm` cell: parsed already for a row of the
+    list, now for one built by hand."""
+    return row.refs if isinstance(row, PlaceRow) else refs.parse(row.get("osm"))
+
+
+def on_map(row: Row, reg: Registry) -> bool:
+    """Whether a row puts names on the map: it claims an object or an item,
+    is a place (not `not_a_place`) and has a Frisian name.  The injector
+    labels these rows' objects, and the search index lists them."""
+    held = claims(row)
+    return bool(held.refs or held.qid) and row["kind"] != "not_a_place" and bool(any_name(row, reg))
 
 
 def header_problem(fields: Sequence[str], reg: Registry) -> str | None:
@@ -302,7 +204,7 @@ def row_problems(row: Row) -> list[str]:
     if row["status"] not in STATUSES:
         out.append(f"unknown status {row['status']!r} (auto / ok / skip / empty)")
     try:
-        local = local_ref(row["osm"])
+        local = refs.local_of(_refs(row))
     except Invalid as exc:
         out.append(exc.reason)
         local = None
@@ -379,7 +281,7 @@ def fill_ids(path: str, reg: Registry) -> int:
     fields = header if "id" in header else header + ["id"]
     if what := header_problem(fields, reg):
         raise ValidationError([Problem(path, 1, what)])
-    rows = [dict(zip(header, cells, strict=True)) for _, cells in found.rows]
+    rows = [PlaceRow(dict(zip(header, cells, strict=True)), n) for n, cells in found.rows]
     taken = {r["id"].strip() for r in rows if r.get("id", "").strip()}
     given = 0
     for r in rows:
@@ -388,7 +290,7 @@ def fill_ids(path: str, reg: Registry) -> int:
             taken.add(r["id"])
             given += 1
     if given or fields is not header:
-        write(rows, path, fields)
+        PlaceList(path, reg, fields, rows, found.digest).write()
     return given
 
 
@@ -396,11 +298,7 @@ def table(path: str) -> Table:
     """The name list as it is on disk -- the one place that opens it."""
     if not os.path.exists(path):
         raise PipelineError(f"name list not found: {path}")
-    found = tables.read_table(path)
-    # remembered so that `write` can tell whether someone else (the matcher,
-    # the curation, a spreadsheet) wrote the file in the meantime
-    _read_digests[os.path.abspath(path)] = found.digest
-    return found
+    return tables.read_table(path)
 
 
 def ids(names: Table) -> set[str]:
@@ -412,82 +310,85 @@ def ids(names: Table) -> set[str]:
     return {row["id"] for _, row in names.records()}
 
 
+def claim_problems(held: Sequence[str], claimed: Mapping[str, int]) -> list[str]:
+    """What is wrong with a row's claims (`held`, as `Claims.keys` spells
+    them): one a row above it holds already (`claimed`: claim -> line), and
+    an object the row itself names twice."""
+    taken = [
+        f"{key} is already claimed by line {claimed[key]} -- only one name can go on the map"
+        for key in held
+        if key in claimed
+    ]
+    twice = [f"{key} twice in `osm`" for key in dict.fromkeys(held) if held.count(key) > 1]
+    return taken + twice
+
+
+def _claim_keys(row: Row) -> list[str]:
+    """What a row claims, as `Claims.keys` spells it -- of an unreadable
+    `osm` cell (`row_problems` says so) nothing."""
+    try:
+        return claims(row).keys
+    except Invalid:
+        return claims({**row, "osm": ""}).keys
+
+
 def rows(names: Table, reg: Registry) -> tuple[list[PlaceRow], list[Problem]]:
     """-> (rows, problems): every row of the name list (`names`, see `table`)
     whose cells line up with the header -- identified by its `id`, knowing
     its `line` -- and what is wrong with the file by the rules `read`
-    enforces.  A row that breaks one is among the rows all the same:
-    frasch.check_inputs has more to say about it.  Without its columns the
-    list has no rows."""
+    enforces: those of a row's cells, and across the rows a unique id and
+    one row per object or Wikidata item (`claims`, each object once).  A row that breaks one
+    is among the rows all the same: frasch.check_inputs has more to say
+    about it.  Without its columns the list has no rows."""
     if what := header_problem(names.header, reg):
         return [], [Problem(names.path, 1, what)]
     found = [PlaceRow(cells, n) for n, cells in names.records()]
     problems = list(names.problems)
-    seen: dict[str, int] = {}
+    seen: dict[str, int] = {}  # id -> the line of its row
+    claimed: dict[str, int] = {}  # `way/1` or `Q35` -> the line of the row that holds it
     for row in found:
-        whats = [*row_problems(row), id_problem(row, seen)]
+        held = _claim_keys(row)
+        whats = [*row_problems(row), id_problem(row, seen), *claim_problems(held, claimed)]
         problems += [Problem(names.path, row.line, what) for what in whats if what]
         seen.setdefault(row["id"], row.line)
+        claimed.update((key, row.line) for key in held if key not in claimed)
     return found, tables.by_line(problems)
 
 
-def read(path: str, reg: Registry) -> tuple[list[PlaceRow], list[str]]:
-    """-> (rows, fieldnames).  A row is identified by its `id` and knows its
-    `line`.  A ValidationError lists everything that breaks the rules."""
+@dataclass
+class PlaceList:
+    """The name list at `path` as `read` found it: its `rows`, under the
+    columns `fields` (those of the registry `reg`, and any of the editor's
+    own), and the `digest` of the file they were read from."""
+
+    path: str
+    reg: Registry
+    fields: list[str]
+    rows: list[PlaceRow]
+    digest: str
+
+    def write(self) -> None:
+        """Write the rows back -- atomically, and only if nobody else changed
+        the file since it was read.
+
+        The file is the source of truth and holds uncommitted hand edits, so
+        a crash or Ctrl-C half-way must not leave it truncated (the rows go
+        to a temporary file that then replaces the original in one step), and
+        a run must not overwrite what a spreadsheet or another script saved
+        while it was busy (it stops instead with `Conflict`; re-run it)."""
+        data = tables.write_rows(self.fields, self.rows)
+        files.atomic_write(self.path, data, expect=self.digest)
+        self.digest = files.digest(data)
+
+
+def read(path: str, reg: Registry) -> PlaceList:
+    """The name list.  A row is identified by its `id` and knows its `line`.
+    A ValidationError lists everything that breaks the rules."""
     found = table(path)
     place_rows, problems = rows(found, reg)
     if problems:
         raise ValidationError(problems)
-    return place_rows, found.header
-
-
-def write(rows: Iterable[Row], path: str, fields: Sequence[str]) -> None:
-    """Write the name list -- atomically, and only if nobody else changed the
-    file since this process `read` it.
-
-    The file is the source of truth and holds uncommitted hand edits, so a
-    crash or Ctrl-C half-way must not leave it truncated (the rows go to a
-    temporary file that then replaces the original in one step), and a run
-    must not overwrite what a spreadsheet or another script saved while it
-    was busy (it stops instead with `Conflict`; re-run it)."""
-    expect = _read_digests.get(os.path.abspath(path))
-    if expect is None:
-        raise RuntimeError(
-            f"placelist.write({path!r}) without a placelist.read "
-            f"of it first -- nothing to check for changes against"
-        )
-    data = tables.write_rows(fields, rows)
-    files.atomic_write(path, data, expect=expect)
-    _read_digests[os.path.abspath(path)] = files.digest(data)
-
-
-_read_digests: dict[str, str] = {}  # abspath -> sha256 of what `read` saw
-
-
-@contextlib.contextmanager
-def lock(lock_path: str) -> Iterator[None]:
-    """Hold the workspace's lock file for the duration of a read-modify-write
-    run, so that `frasch match` and `frasch curate apply` never run at the
-    same time.  Advisory (`flock`): a spreadsheet does not take it -- that is
-    what the check in `write` is for."""
-    import fcntl  # POSIX only; the pipeline runs in WSL
-
-    os.makedirs(os.path.dirname(os.path.abspath(lock_path)), exist_ok=True)
-    with open(lock_path, "a") as fh:
-        try:
-            fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError as exc:
-            if exc.errno not in (errno.EWOULDBLOCK, errno.EAGAIN, errno.EACCES):
-                raise
-            raise PipelineError(
-                f"{lock_path} is held: another `frasch match` or "
-                f"`frasch curate apply` is running -- wait for it to "
-                f"finish"
-            ) from None
-        try:
-            yield
-        finally:
-            fcntl.flock(fh, fcntl.LOCK_UN)
+    return PlaceList(path, reg, found.header, place_rows, found.digest)
 
 
 def describe(row: Row, reg: Registry) -> str:

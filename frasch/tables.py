@@ -3,7 +3,7 @@ curation, the dialect registry and the dialect area list.
 
 They are edited by hand, some in a spreadsheet, and this is the one place
 that parses them.  Each file's own module (frasch.placelist,
-frasch.curationlist, frasch.registry, frasch.dialects) reads its file through
+frasch.curationlist, frasch.dialects, frasch.dialect_areas) reads its file through
 `read_table` and adds only the rules of its rows."""
 
 from __future__ import annotations

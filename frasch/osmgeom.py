@@ -13,9 +13,10 @@ from collections.abc import Iterable, Mapping, Sequence
 
 from shapely.geometry.base import BaseGeometry
 
+from frasch import refs
 from frasch.geo import LonLat
 from frasch.osmscan import Rings
-from frasch.placelist import OsmRef, format_osm
+from frasch.refs import OsmRef
 
 
 def assemble_rings(ways: Iterable[Sequence[int]]) -> tuple[list[list[int]], list[list[int]]]:
@@ -99,7 +100,7 @@ def _polygons(
     """The valid polygons of the closed rings the ways `way_ids` form."""
     from shapely.geometry import Polygon
 
-    where = format_osm([ref])
+    where = refs.format([ref])
     missing = [w for w in way_ids if w not in ways]
     if missing:
         problems.append(f"{where}: {len(missing)} {what} way(s) not in the file")

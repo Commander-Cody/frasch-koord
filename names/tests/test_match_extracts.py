@@ -77,7 +77,7 @@ def recorded(world: Path) -> Sequence[ExtractStamp] | None:
 
 
 def statuses(world: Path) -> dict[str, str]:
-    rows, _ = placelist.read(str(world / "places.csv"), REGISTRY)
+    rows = placelist.read(str(world / "places.csv"), REGISTRY).rows
     return {r["id"]: r["status"] for r in rows}
 
 

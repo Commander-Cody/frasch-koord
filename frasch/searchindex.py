@@ -12,7 +12,7 @@ place is, and so which dialect is the *local* one there, comes from
 names/osm_objects.json (`frasch build objects`) and names/dialect_areas.geojson --
 the same files as the injector uses for the tiles, so a search result and
 the map label agree.  An entry lies where the first object of its row's
-`osm` cell lies (`Objects.for_row`).  A row for a place OSM does not have
+`osm` cell lies (`placeobjects.for_row`).  A row for a place OSM does not have
 (`osm` = `local/<slug>`) takes its position from the curation row with the
 same reference (names/curation.csv).  The Low Saxon
 name (`name_nds`) is the object's OSM `name:nds`: the name list has no Low
@@ -27,7 +27,7 @@ The local name (`local`) of a row that has none is the object's OSM
 
 A row whose entry lies at an object the objects file has none for stops the
 export -- it is on the map, and would be missing from search
-(`objects.require_located` says what helps).  Rows keyed by a Wikidata
+(`placeobjects.require_located` says what helps).  Rows keyed by a Wikidata
 QID alone (the countries) have no position and are left out.
 
 The output records what it was built from (`built_from`, see
@@ -50,18 +50,20 @@ from typing import TypedDict
 
 from frasch import (
     curationlist,
-    dialects,
+    dialect_areas,
     files,
     placelist,
     placenames,
+    placeobjects,
     provenance,
 )
+from frasch.dialects import Registry
 from frasch.errors import PipelineError, rebuild
-from frasch.objects import read_objects, require_located
+from frasch.objects import read_objects
 from frasch.paths import Workspace
-from frasch.placelist import OsmRef, PlaceRow
+from frasch.placelist import PlaceRow
 from frasch.placenames import SearchEntry
-from frasch.registry import Registry
+from frasch.refs import OsmRef
 
 
 class SearchIndex(TypedDict):
@@ -73,25 +75,25 @@ class SearchIndex(TypedDict):
 
 def entry_refs(rows: Iterable[PlaceRow]) -> dict[OsmRef, PlaceRow]:
     """The reference to an OSM object each row's entry lies at, with its row."""
-    return {refs[0]: row for row in rows if (refs := placelist.osm_refs(row["osm"]))}
+    return {row.osm_refs[0]: row for row in rows if row.osm_refs}
 
 
 def build(ws: Workspace, reg: Registry) -> SearchIndex:
     """The search index, `{"built_from", "places"}`, from its input files."""
     if not os.path.exists(ws.areas):
         raise PipelineError(f"{ws.areas} not found -- build it with {rebuild('areas')}")
-    areas = dialects.AreaIndex.from_geojson(ws.areas)
+    areas = dialect_areas.AreaIndex.from_geojson(ws.areas)
     objects = read_objects(ws.objects)
     local_points = curationlist.local_points(ws.curation)
-    rows, _ = placelist.read(ws.names, reg)
+    rows = placelist.read(ws.names, reg).rows
 
     on_map = [r for r in rows if placelist.on_map(r, reg)]
-    require_located(objects, ws.objects, entry_refs(on_map))
+    placeobjects.require_located(objects, ws.objects, entry_refs(on_map))
     places: list[SearchEntry] = []
     for r in on_map:
-        obj = objects.for_row(r, local_points, reg)
+        obj = placeobjects.for_row(objects, r, local_points, reg)
         if obj is not None:
-            places.append(placenames.as_entry(placenames.resolve([r], obj, areas, reg), obj, r))
+            places.append(placenames.as_entry(placenames.resolve(r, obj, areas, reg), obj, r))
     return {"built_from": provenance.stamp(ws).as_json(), "places": places}
 
 

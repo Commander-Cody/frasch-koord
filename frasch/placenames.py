@@ -18,7 +18,7 @@ to pass through into the tiles (`--extra_name_tags`, tiles/nametags.sh).
 * the variety is the bracket remark on the primary `local` variant
 
 Where the place lies is its object's position (frasch.objects), which
-dialect is spoken there the dialect areas' answer (`objects.dialect_at`).
+dialect is spoken there the dialect areas' answer (`dialect_areas.dialect_at`).
 `as_tags` writes the result as the tags of a tile feature, `as_entry` as an
 entry of the search index; `TILE_KEY` says which field of an entry is which
 tile key, and `frasch check-tiles` compares the two by it.
@@ -26,14 +26,14 @@ tile key, and `frasch check-tiles` compares the two by it.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Sequence
 from typing import NamedTuple, NotRequired, TypedDict
 
-from frasch import cli, placelist
-from frasch.dialects import AreaIndex
-from frasch.objects import LocatedObject, dialect_at
+from frasch import cli, namecell
+from frasch.dialect_areas import AreaIndex, dialect_at
+from frasch.dialects import LOCAL_COLUMN, Registry
+from frasch.objects import LocatedObject
 from frasch.placelist import Row
-from frasch.registry import LOCAL_COLUMN, Registry
 
 # ------------------------------------------------------------ tile keys ----
 GERMAN_KEY = "name:de"
@@ -91,29 +91,23 @@ class PlaceNames(NamedTuple):
 
 
 def resolve(
-    rows: Sequence[Row], obj: LocatedObject | None, areas: AreaIndex | None, reg: Registry
+    row: Row, obj: LocatedObject | None, areas: AreaIndex | None, reg: Registry
 ) -> PlaceNames:
-    """The names of the place `rows` give an object: the name-list rows that
-    claim it, in file order -- the first non-empty value wins, and the first
-    row is the one the place is named by.  `obj` is where the object lies and
-    what OSM says of it; None for one of unknown position, which is in no
-    dialect area."""
+    """The names `row`, the name-list row that claims an object, gives it.
+    `obj` is where the object lies and what OSM says of it; None for one of
+    unknown position, which is in no dialect area."""
     area_tag = dialect_at(obj, areas) if obj else None
-    names = {
-        d["tag"]: name
-        for d in reg
-        if (name := _first(_dialect_name(row, d["tag"], area_tag, reg) for row in rows))
-    }
-    listed_local = _first(_local_name(row, area_tag, reg) for row in rows)
+    names = {d["tag"]: name for d in reg if (name := _dialect_name(row, d["tag"], area_tag, reg))}
+    listed_local = _local_name(row, area_tag, reg)
     osm_local = _osm_local_name(obj, area_tag)
     return PlaceNames(
-        id=rows[0]["id"],
-        kind=_first(row["kind"] for row in rows),
+        id=row["id"],
+        kind=row["kind"],
         names=names,
-        name_de=_first(placelist.primary(row["de"]) for row in rows),
+        name_de=namecell.primary(row["de"]),
         dialect=area_tag or "",
         local=listed_local or osm_local,
-        variety=_first(_variety(row) for row in rows),
+        variety=_variety(row),
         local_from_osm=bool(osm_local) and not listed_local,
     )
 
@@ -124,19 +118,14 @@ def unclaimed_local(obj: LocatedObject, areas: AreaIndex | None) -> str:
     return _osm_local_name(obj, dialect_at(obj, areas))
 
 
-def _first(values: Iterable[str]) -> str:
-    """The first non-empty value, or `""`."""
-    return next(filter(None, values), "")
-
-
 def _dialect_name(row: Row, tag: str, area_tag: str | None, reg: Registry) -> str:
     """The name of a place in one dialect, with one fallback: the dialect of
     the place's own area falls back to the `local` column -- a sub-dialect
     form such as Fahretoft's `Brouersweerw` IS the name in the area's
     dialect, it is just not the form the rest of the area uses."""
-    name = placelist.primary(row.get(reg.column_of(tag)))
+    name = namecell.primary(row.get(reg.column_of(tag)))
     if not name and area_tag == tag:
-        name = placelist.primary(row.get(LOCAL_COLUMN))
+        name = namecell.primary(row.get(LOCAL_COLUMN))
     return name
 
 
@@ -144,7 +133,7 @@ def _local_name(row: Row, area_tag: str | None, reg: Registry) -> str:
     """What the people of the place themselves call it: the `local` column,
     or -- when it is empty -- the name in the dialect of the area the place
     lies in.  This is what the "local dialect" map view labels with."""
-    name = placelist.primary(row.get(LOCAL_COLUMN))
+    name = namecell.primary(row.get(LOCAL_COLUMN))
     if not name and area_tag:
         name = _dialect_name(row, area_tag, area_tag, reg)
     return name
@@ -162,7 +151,7 @@ def _variety(row: Row) -> str:
     """The remark on the primary `local` variant -- the name of the local
     variety (`Brouersweerw (Foortuftinge)` -> `Foortuftinge`), which the UI
     can show next to the name.  `""` when there is none."""
-    return placelist.remark(row.get(LOCAL_COLUMN))
+    return namecell.remark(row.get(LOCAL_COLUMN))
 
 
 # ------------------------------------------------------------ as tags ----
@@ -221,7 +210,7 @@ def as_entry(names: PlaceNames, obj: LocatedObject, row: Row) -> SearchEntry:
         out["name_nds"] = name_nds
     if name_osm := obj.get("name"):
         out["name_osm"] = name_osm
-    if name_da := placelist.primary(row["da"]):
+    if name_da := namecell.primary(row["da"]):
         out["name_da"] = name_da
     if row["osm"]:
         out["osm"] = row["osm"]

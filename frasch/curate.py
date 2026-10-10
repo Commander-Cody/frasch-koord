@@ -19,7 +19,9 @@ What gets written where
                            rows the matcher owns -- the same cells it
                            writes itself, and never a row a human has already decided
                            (status ok/skip, a hand-filled reference, a local
-                           reference, `not_a_place`).  Review with `git diff`.
+                           reference, `not_a_place`), and never an object or
+                           Wikidata item another row holds: the name list
+                           would be refused.  Review with `git diff`.
   names/curation.csv       apply: one appended row per `local` decision (a
                            place OSM does not have -- it needs a position).
   names/work/curate-patch.jsonl
@@ -64,20 +66,23 @@ from frasch import (
     candidates,
     cli,
     curationlist,
+    dialects,
     errors,
     files,
     geo,
+    namecell,
     nameindex,
     paths,
     placelist,
-    registry,
+    refs,
 )
 from frasch.candidates import Candidate
+from frasch.dialects import Registry
 from frasch.errors import PipelineError
 from frasch.hints import HINT_FALLBACK, Circle, HintResolver
 from frasch.paths import StrPath, Workspace
-from frasch.placelist import OsmRef, PlaceRow, Row
-from frasch.registry import Registry
+from frasch.placelist import PlaceList, PlaceRow, Row
+from frasch.refs import OsmRef
 
 # The order the browser walks the worklist in: the kinds a human can decide
 # quickly first (a village is either there or it is not), the vague ones last.
@@ -175,13 +180,13 @@ def parse_candidates(cell: str | None) -> list[ListedCandidate]:
         head, _, cls = head.rpartition(":")
         ref, _, name = head.partition(":")
         t, _, ident = ref.partition("/")
-        if t not in placelist.TYPE_NAME or not ident.isdigit():
+        if t not in refs.TYPE_NAME or not ident.isdigit():
             print(f"  ignoring unreadable candidate {part!r}", file=sys.stderr)
             continue
         out.append(
             {
                 "key": (t, int(ident)),
-                "ref": f"{placelist.TYPE_NAME[t]}/{ident}",
+                "ref": f"{refs.TYPE_NAME[t]}/{ident}",
                 "name": name,
                 "class": cls,
                 "km": int(km) if km.isdigit() else None,
@@ -260,7 +265,7 @@ def _read_work(ws: Workspace, reg: Registry) -> _Work:
     """The `ambiguous` and `not_found` rows of the last match the matcher
     still owns, each with its places.csv row."""
     matches = ws.matches
-    rows, _fields = placelist.read(ws.names, reg)
+    rows = placelist.read(ws.names, reg).rows
     by_id = {r["id"]: r for r in rows}
     if not os.path.exists(matches):
         raise PipelineError(f"{matches} not found -- run `frasch match` first")
@@ -358,8 +363,8 @@ def _work_row(
         "result": m["result"],
         "name": placelist.any_name(row, reg),
         "names": {c: row[c] for c in placelist.name_columns(reg) if row[c]},
-        "name_de": placelist.primary(row["de"]),
-        "name_da": placelist.primary(row["da"]),
+        "name_de": namecell.primary(row["de"]),
+        "name_da": namecell.primary(row["da"]),
         "de": row["de"],
         "da": row["da"],
         "hint": row["hint"],
@@ -557,21 +562,27 @@ def owner_problem(row: PlaceRow, names: str) -> str | None:
     return None
 
 
-def decide(entry: PatchEntry, row: dict[str, str]) -> str | None:
-    """Write an `osm` or `skip` decision into `row`; -> why not, or None."""
+def decide(entry: PatchEntry, row: dict[str, str], claimed: Mapping[str, int]) -> str | None:
+    """Write an `osm` or `skip` decision into `row`; -> why not, or None.
+    `claimed` is what the other rows of the list hold (claim -> line): a row
+    cannot be given what one of them claims."""
     if entry["action"] == "skip":
         row["status"] = "skip"
         return None
     try:
-        refs = placelist.parse_osm(entry.get("osm"))
+        chosen = refs.parse(entry.get("osm"))
     except errors.Invalid as exc:
         return str(exc)
-    if not refs:
+    if not chosen:
         return "action=osm without an `osm` reference"
-    if any(t == placelist.LOCAL_TYPE for t, _ in refs):
+    if any(t == refs.LOCAL_TYPE for t, _ in chosen):
         return "a local reference is action=local, not action=osm"
-    row["osm"] = placelist.format_osm(refs)
-    row["wikidata"] = entry.get("wikidata") or row["wikidata"]
+    wikidata = entry.get("wikidata") or row["wikidata"]
+    taken = placelist.claim_problems(placelist.Claims(chosen, wikidata).keys, claimed)
+    if taken:
+        return "; ".join(taken)
+    row["osm"] = refs.format(chosen)
+    row["wikidata"] = wikidata
     row["status"] = "ok"
     return None
 
@@ -646,7 +657,7 @@ def apply(ws: Workspace, reg: Registry, *, dry_run: bool = False, keep: bool = F
     in the patch; a problem that stops the whole apply raises.  `dry_run`:
     say what would change and write nothing.  `keep`: leave the patch file
     where it is."""
-    with placelist.lock(ws.lock):
+    with files.lock(ws.lock):
         return _apply(ws, reg, dry_run, keep)
 
 
@@ -690,11 +701,11 @@ def _apply(ws: Workspace, reg: Registry, dry_run: bool, keep: bool) -> int:
                 )
                 files.atomic_write(curation, cur_text, expect=lists.cur_digest)
                 cur_written = files.digest(cur_text)
-            placelist.write(lists.rows, names, lists.fields)
+            lists.places.write()
     except BaseException:
         if cur_written:
-            refs = [c["osm"] for c in decisions.new_curation]
-            unwrite_curation(curation, lists.cur_data, cur_written, refs)
+            added = [c["osm"] for c in decisions.new_curation]
+            unwrite_curation(curation, lists.cur_data, cur_written, added)
         if snapshot:
             restore_patch(snapshot, patch)
             print(f"nothing applied -- {patch} restored", file=sys.stderr)
@@ -713,11 +724,8 @@ def _apply(ws: Workspace, reg: Registry, dry_run: bool, keep: bool) -> int:
 class _Lists:
     """The name list and curation.csv, as apply checked them."""
 
-    names: str
+    places: PlaceList
     curation: str
-    reg: Registry
-    rows: list[PlaceRow]
-    fields: list[str]
     used_slugs: set[str]  # local/<slug> references curation.csv or a row has
     cur_data: bytes | None  # None = there is no curation.csv
     cur_fields: list[str]
@@ -725,19 +733,26 @@ class _Lists:
 
     @functools.cached_property
     def by_id(self) -> dict[str, PlaceRow]:
-        return {r["id"]: r for r in self.rows}
+        return {r["id"]: r for r in self.places.rows}
+
+    def claimed_by_others(self, row: PlaceRow) -> dict[str, int]:
+        """What the rows of the list but `row` hold, as it stands now with
+        the decisions applied so far: claim -> the line of its row."""
+        return {
+            key: other.line
+            for other in self.places.rows
+            if other is not row
+            for key in placelist.claims(other).keys
+        }
 
 
 def _read_lists(names: str, curation: str, reg: Registry) -> _Lists:
-    rows, fields = placelist.read(names, reg)
+    places = placelist.read(names, reg)
     used_slugs = set(curationlist.local_points(curation))
     cur_data, cur_fields = curationlist.read_bytes(curation)
     cur_digest = files.digest(cur_data) if cur_data is not None else files.MISSING
-    for r in rows:
-        slug = placelist.local_ref(r["osm"])
-        if slug:
-            used_slugs.add(slug)
-    return _Lists(names, curation, reg, rows, fields, used_slugs, cur_data, cur_fields, cur_digest)
+    used_slugs.update(r.local for r in places.rows if r.local)
+    return _Lists(places, curation, used_slugs, cur_data, cur_fields, cur_digest)
 
 
 def _take_snapshot(patch: str) -> str:
@@ -778,17 +793,17 @@ def _decide_entry(line: PatchLine, lists: _Lists, decisions: _Decisions) -> None
     row = lists.by_id.get(e["id"])
     if row is None:
         decisions.refuse(
-            line, f"no row with id {e['id']!r} in {lists.names} (deleted since the export?)"
+            line, f"no row with id {e['id']!r} in {lists.places.path} (deleted since the export?)"
         )
         return
-    why = owner_problem(row, lists.names)
+    why = owner_problem(row, lists.places.path)
     if why is None:
         why = _decide_row(e, row, lists, decisions.new_curation)
     if why:
         decisions.refuse(line, why)
         return
     print(
-        f"  {lists.names}:{row.line} {placelist.describe(row, lists.reg)}: "
+        f"  {lists.places.path}:{row.line} {placelist.describe(row, lists.places.reg)}: "
         f"{decision_text(e, row, lists.curation)}"
     )
     decisions.applied += 1
@@ -800,10 +815,10 @@ def _decide_row(
     """Write a decision into the matcher's `row`, a `local` one's curation
     row into `new_curation`; -> why not, or None."""
     if entry["action"] != "local":
-        return decide(entry, row)
+        return decide(entry, row, lists.claimed_by_others(row))
     why, cur = decide_local(entry, row, lists.used_slugs)
     if cur:
-        cur["name"] = curation_name(row, lists.reg)
+        cur["name"] = curation_name(row, lists.places.reg)
         new_curation.append(cur)
     return why
 
@@ -875,7 +890,7 @@ def restore_patch(snapshot: str, path: str) -> None:
         os.unlink(newer)
 
 
-def unwrite_curation(path: str, old: bytes | None, written: str, refs: Sequence[str]) -> None:
+def unwrite_curation(path: str, old: bytes | None, written: str, added: Sequence[str]) -> None:
     """Undo apply's curation.csv write after the places.csv write failed: put
     back `old` (its bytes before; None = there was no file), unless someone
     changed the file after apply wrote it (`written`, its digest) -- then say
@@ -890,7 +905,7 @@ def unwrite_curation(path: str, old: bytes | None, written: str, refs: Sequence[
     except (OSError, errors.PipelineError) as exc:
         print(
             f"error: could not take the new rows out of {path} again ({exc}) "
-            f"-- delete the rows for {', '.join(refs)} by hand before the next "
+            f"-- delete the rows for {', '.join(added)} by hand before the next "
             f"apply",
             file=sys.stderr,
         )
@@ -906,7 +921,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         with_subcommand(sys.argv[1:] if argv is None else argv, argparser, apply_only)
     )
     ws = cli.workspace(args)
-    reg = registry.read(ws.dialects)
+    reg = dialects.read(ws.dialects)
     if args.cmd == "apply":
         return 1 if apply(ws, reg, dry_run=args.dry_run, keep=args.keep) else 0
     export(ws, reg)

@@ -64,7 +64,7 @@ relation gets no dialect.
 
 Inside a dialect area OSM's own `name:frr` is almost always the local form,
 outside it is a Frisian exonym (Pinneberg -> Pinebärj).  So an object in an
-area whose rows give it no local name gets its `name:frr` as `frasch:local`
+area whose row gives it no local name gets its `name:frr` as `frasch:local`
 (#81), from names/osm_objects.json like its position.  And so does every
 object there *no row claims* -- a Warft, a street, a station -- and nothing
 else from this rule: a pre-pass finds the objects of the extract that carry
@@ -90,8 +90,8 @@ z12 it gives `place=island` nodes.
 Objects are matched by id (or QID) only -- no name matching happens here, so the
 hand-reviewed decisions in the CSVs are the single source of truth.  All other
 tags are preserved (`o.replace(tags=...)`), as are all objects neither file
-mentions.  When two rows claim the same object, the first row in file order
-wins per tag and the rest are reported.
+mentions.  An object is claimed by one row: the name list is refused when
+two rows hold the same one (`placelist.rows`).
 
 The `frasch:*` tags reach the tiles because tiles/build.sh passes them to
 Planetiler via `--extra_name_tags` (`frasch tile-keys` prints them); tag
@@ -115,19 +115,22 @@ import osmium
 from frasch import (
     cli,
     curationlist,
+    dialect_areas,
     dialects,
     locate,
     osmscan,
     placelist,
     placenames,
-    registry,
+    placeobjects,
+    refs,
 )
 from frasch.curationlist import LocalPoint, Square, Tuning
+from frasch.dialects import Registry
 from frasch.errors import PipelineError, rebuild
 from frasch.geo import LonLat
-from frasch.objects import LocatedObject, local_point, point, read_objects, require_located
+from frasch.objects import LocatedObject, point, read_objects
 from frasch.paths import Workspace
-from frasch.placelist import OsmRef, PlaceRow, Ref
+from frasch.placelist import PlaceRow
 from frasch.placenames import (
     DIALECT_KEY,
     GERMAN_KEY,
@@ -139,7 +142,7 @@ from frasch.placenames import (
     REF_KEY,
     VARIETY_KEY,
 )
-from frasch.registry import Registry
+from frasch.refs import OsmRef, Ref
 
 # OSM's own Frisian name, of no stated dialect
 FRISIAN_KEY = "name:frr"
@@ -149,87 +152,46 @@ PLACE_LIKE_KEYS = ("place", "boundary", "natural", "water", "waterway")
 
 # an object of the extract the injector copies
 _OsmObject = osmium.osm.Node | osmium.osm.Way | osmium.osm.Relation
-# (object, column, kept name, its line, dropped name, its line), see `_conflicts`
-Conflict = tuple[Ref, str, str, int, str, int]
-
-
-# (QID, line of the row that keeps it, line of a later row that is ignored)
-DuplicateQid = tuple[str, int, int]
 
 
 # ------------------------------------------------------------ name list ----
 class NameList(NamedTuple):
-    """The name list as the injector uses it.
+    """The name list as the injector uses it: the rows on the map, each
+    under what it claims (`placelist.claims`).
 
-    by_id maps ('w', 12) -> [row, ...] in file order (a local reference is
-    the key ('l', slug)), by_qid 'Q42' -> [row].  The rows are kept whole
-    because the tags of an object depend on where it lies (placenames.resolve),
-    which is only known while the file streams past.  `conflicts` and
-    `duplicate_qids` are reported, not fatal: the first row wins."""
+    by_id maps ('w', 12) -> its row (a local reference is the key
+    ('l', slug)), by_qid 'Q42' -> its row; `used` is how many rows there are.
+    The rows are kept whole because the tags of an object depend on where it
+    lies (placenames.resolve), which is only known while the file streams
+    past."""
 
-    by_id: dict[Ref, list[PlaceRow]]
-    by_qid: dict[str, list[PlaceRow]]
+    by_id: dict[Ref, PlaceRow]
+    by_qid: dict[str, PlaceRow]
     used: int
-    conflicts: list[Conflict]
-    duplicate_qids: list[DuplicateQid]
 
 
 def load_names(path: str, reg: Registry) -> NameList:
-    by_id: dict[Ref, list[PlaceRow]] = {}
-    by_qid: dict[str, list[PlaceRow]] = {}
-    conflicts: list[Conflict] = []
-    duplicate_qids: list[DuplicateQid] = []
-    used = 0
-    rows, _ = placelist.read(path, reg)
-    for row in rows:
-        if not placelist.on_map(row, reg):
-            continue
-        refs = placelist.parse_osm(row["osm"], f"{path}:{row.line}")
-        if refs:
-            # a river or dyke is split into many OSM ways and all of them
-            # need the label
-            for key in refs:
-                by_id.setdefault(key, []).append(row)
-            used += 1
-        elif row["wikidata"]:
-            used += 1
+    by_id: dict[Ref, PlaceRow] = {}
+    by_qid: dict[str, PlaceRow] = {}
+    on_map = [row for row in placelist.read(path, reg).rows if placelist.on_map(row, reg)]
+    for row in on_map:
+        held = placelist.claims(row)
+        # a river or dyke is split into many OSM ways and all of them need
+        # the label
+        by_id.update((key, row) for key in held.refs)
         # Every row with a Wikidata QID also tags the other OSM objects that
         # carry that QID (e.g. the offshore place=sea node of the North Sea,
         # the place node next to a matched boundary relation).  Only rows
         # without any OSM id depend on this; for the others it is a bonus.
-        qid = row["wikidata"]
-        if qid in by_qid:
-            duplicate_qids.append((qid, by_qid[qid][0].line, row.line))
-        elif qid:
-            by_qid[qid] = [row]
-    for key, claim in by_id.items():
-        conflicts += _conflicts(key, claim, reg)
-    return NameList(by_id, by_qid, used, conflicts, duplicate_qids)
-
-
-def _conflicts(key: Ref, rows: Sequence[PlaceRow], reg: Registry) -> list[Conflict]:
-    """Which names a second row for the same object loses.  Reported, not
-    fatal: the first row in file order wins, per tag."""
-    out: list[Conflict] = []
-    if len(rows) < 2:
-        return out
-    for column in reg.columns + [registry.LOCAL_COLUMN]:
-        kept, kept_line = "", 0
-        for row in rows:
-            name = placelist.primary(row[column])
-            if not name:
-                continue
-            if not kept:
-                kept, kept_line = name, row.line
-            elif name != kept:
-                out.append((key, column, kept, kept_line, name, row.line))
-    return out
+        if held.qid:
+            by_qid[held.qid] = row
+    return NameList(by_id, by_qid, len(on_map))
 
 
 def point_tags(
-    rows: Sequence[PlaceRow],
+    row: PlaceRow,
     position: LonLat,
-    areas: dialects.AreaIndex | None,
+    areas: dialect_areas.AreaIndex | None,
     reg: Registry,
     curation_tags: Mapping[str, str],
     where: str = "",
@@ -239,12 +201,11 @@ def point_tags(
     ones live in `name:<tag>` like everywhere else; without it OpenMapTiles
     would drop the node), the name tags, and last the curation row's own
     tags, which win."""
-    row = rows[0]
-    obj = local_point(row, position, reg)
+    obj = placeobjects.local_point(row, position, reg)
     tags = dict(curationlist.POINT_TAGS.get(row["kind"], {}))
     if "name" in obj:
         tags["name"] = obj["name"]
-    tags.update(placenames.as_tags(placenames.resolve(rows, obj, areas, reg)))
+    tags.update(placenames.as_tags(placenames.resolve(row, obj, areas, reg)))
     tags.update(curation_tags)
     if "place" not in tags:
         raise PipelineError(
@@ -257,20 +218,20 @@ def point_tags(
 
 
 def check_local(
-    by_id: Mapping[Ref, Sequence[PlaceRow]], points: Mapping[Ref, LocalPoint], reg: Registry
+    by_id: Mapping[Ref, PlaceRow], points: Mapping[Ref, LocalPoint], reg: Registry
 ) -> None:
     """Validate every local reference before anything is written: the node
     needs a `place=` (see point_tags), and a square only labels as
     `place=island` -- OpenMapTiles takes hamlets, villages etc. from POINTS
     only, so any other value on a polygon would silently label nothing."""
     for key, p in points.items():
-        rows = by_id.get(key)
-        if rows is None:
+        row = by_id.get(key)
+        if row is None:
             continue
-        tags = point_tags(rows, (p["lon"], p["lat"]), None, reg, p["tags"], p["where"])
+        tags = point_tags(row, (p["lon"], p["lat"]), None, reg, p["tags"], p["where"])
         if p["km2"] is not None and tags["place"] != "island":
             raise PipelineError(
-                f"{p['where']}: polygon_km2 on {placelist.format_osm([key])} "
+                f"{p['where']}: polygon_km2 on {refs.format([key])} "
                 f"needs place=island (got place={tags['place']}; "
                 f"OpenMapTiles labels polygons only as islands) -- "
                 f"put `place=island` in set_tags, keep {KIND_KEY}"
@@ -326,7 +287,7 @@ def scan_waterways(path: str, by_id: Iterable[Ref]) -> dict[OsmRef, tuple[OsmRef
 
     -> {('w', id): (relation key, the relation's OSM name)}"""
     members: dict[OsmRef, tuple[OsmRef, str]] = {}
-    rel_ids = {osm[1] for key in by_id if (osm := placelist.as_osm_ref(key)) and osm[0] == "r"}
+    rel_ids = {osm[1] for key in by_id if (osm := refs.as_osm_ref(key)) and osm[0] == "r"}
     for rel_id, rel in osmscan.relations(path, rel_ids).items():
         tags = rel["tags"]
         if not (tags.get("type") == "waterway" or "waterway" in tags):
@@ -337,7 +298,7 @@ def scan_waterways(path: str, by_id: Iterable[Ref]) -> dict[OsmRef, tuple[OsmRef
 
 
 # ---------------------------------------------------- OSM's Frisian names ----
-def scan_osm_local(path: str, areas: dialects.AreaIndex | None) -> dict[OsmRef, str]:
+def scan_osm_local(path: str, areas: dialect_areas.AreaIndex | None) -> dict[OsmRef, str]:
     """OSM's own Frisian name (`name:frr`) of every object of the extract
     that lies in a dialect area -- there it is the local name of an object
     the name list gives none (placenames.unclaimed_local, #81).
@@ -384,10 +345,10 @@ class Injector:
     def __init__(
         self,
         writer: osmium.SimpleWriter | None,
-        by_id: Mapping[Ref, Sequence[PlaceRow]],
-        by_qid: Mapping[str, Sequence[PlaceRow]],
+        by_id: Mapping[Ref, PlaceRow],
+        by_qid: Mapping[str, PlaceRow],
         reg: Registry,
-        areas: dialects.AreaIndex | None = None,
+        areas: dialect_areas.AreaIndex | None = None,
         objects: Mapping[OsmRef, LocatedObject] | None = None,
         curation: Mapping[Ref, Tuning] | None = None,
         members: Mapping[OsmRef, tuple[OsmRef, str]] | None = None,
@@ -471,11 +432,11 @@ class Injector:
         """The node of every local reference a name-list row uses -- or,
         for an area-like place, its pending square."""
         for key, p in self.points.items():
-            rows = self.by_id.get(key)
-            if rows is None:
+            row = self.by_id.get(key)
+            if row is None:
                 continue  # no name-list row uses it (reported in run)
             lon, lat = p["lon"], p["lat"]
-            tags = point_tags(rows, (lon, lat), self.areas, self.reg, p["tags"], p["where"])
+            tags = point_tags(row, (lon, lat), self.areas, self.reg, p["tags"], p["where"])
             self.seen_keys.add(key)
             self._count_names(tags)
             if p["km2"] is not None:
@@ -561,7 +522,7 @@ class Injector:
         if t != "n":
             self.flush(t)
         synth = self._synthetic_at(key, o)
-        hit, area_key = self._rows_for(key, o)  # [row, ...]
+        hit, area_key = self._row_for(key, o)
         cur = self.curation.get(key)
         if cur is not None:
             self.seen_cur.add(key)
@@ -588,12 +549,10 @@ class Injector:
         if self.w is not None:
             self.w.add(o.replace(tags=tags))
 
-    def _row_tags(
-        self, rows: Sequence[PlaceRow], area_key: OsmRef, o: _OsmObject
-    ) -> dict[str, str]:
-        """The tags the rows claiming this object give it (placenames.resolve),
+    def _row_tags(self, row: PlaceRow, area_key: OsmRef, o: _OsmObject) -> dict[str, str]:
+        """The tags the row claiming this object gives it (placenames.resolve),
         where the object of `area_key` lies."""
-        names = placenames.resolve(rows, self.object_of(area_key, o), self.areas, self.reg)
+        names = placenames.resolve(row, self.object_of(area_key, o), self.areas, self.reg)
         if names.local_from_osm:
             self.osm_local_hits["claimed"] += 1
         return placenames.as_tags(names)
@@ -604,8 +563,8 @@ class Injector:
         if qid is not None and qid in self.by_qid:
             self.present_qids.add(qid)
 
-    def _rows_for(self, key: OsmRef, o: _OsmObject) -> tuple[Sequence[PlaceRow] | None, OsmRef]:
-        """The name-list rows that claim this object (None for none) -- by
+    def _row_for(self, key: OsmRef, o: _OsmObject) -> tuple[PlaceRow | None, OsmRef]:
+        """The name-list row that claims this object (None for none) -- by
         its own id, as a same-named member way of a claimed waterway
         relation, or by its QID -- and the key whose position gives its
         dialect."""
@@ -613,13 +572,13 @@ class Injector:
         if hit is not None:
             self.seen_keys.add(key)
             return hit, key
-        member = self._member_rows(key, o)
+        member = self._member_row(key, o)
         if member is not None:
             return member
-        return self._qid_rows(key, o), key
+        return self._qid_row(key, o), key
 
-    def _member_rows(self, key: OsmRef, o: _OsmObject) -> tuple[Sequence[PlaceRow], OsmRef] | None:
-        """The rows of the waterway relation this way is a member of, if it
+    def _member_row(self, key: OsmRef, o: _OsmObject) -> tuple[PlaceRow, OsmRef] | None:
+        """The row of the waterway relation this way is a member of, if it
         carries the relation's name, and the relation's key."""
         mem = self.members.get(key)
         if mem is None:
@@ -630,9 +589,9 @@ class Injector:
             return None
         self.member_hits += 1
         # the member inherits the river's area
-        return self.by_id.get(rel_key) or [], rel_key
+        return self.by_id[rel_key], rel_key
 
-    def _qid_rows(self, key: OsmRef, o: _OsmObject) -> Sequence[PlaceRow] | None:
+    def _qid_row(self, key: OsmRef, o: _OsmObject) -> PlaceRow | None:
         """The row whose `wikidata` QID this object carries, if any and if
         the object is place-like."""
         qid = o.tags.get("wikidata")
@@ -677,7 +636,7 @@ class _Inputs:
 
     reg: Registry
     names: NameList
-    areas: dialects.AreaIndex | None
+    areas: dialect_areas.AreaIndex | None
     curation: curationlist.Curation
     objects: dict[OsmRef, LocatedObject]
     members: dict[OsmRef, tuple[OsmRef, str]]
@@ -730,11 +689,11 @@ def run(
 
 
 def _local_keys(by_id: Iterable[Ref]) -> list[Ref]:
-    return sorted(k for k in by_id if k[0] == placelist.LOCAL_TYPE)
+    return sorted(k for k in by_id if k[0] == refs.LOCAL_TYPE)
 
 
 def _print_names(names: NameList, names_csv: str, dialects_csv: str, reg: Registry) -> None:
-    """What the name list holds, and which rows claim an object or a QID twice."""
+    """What the name list holds."""
     local_keys = _local_keys(names.by_id)
     print(f"name list : {names_csv}")
     print(f"dialects  : {dialects_csv} -> {len(reg)} columns ({', '.join(reg.tags)})")
@@ -743,21 +702,13 @@ def _print_names(names: NameList, names_csv: str, dialects_csv: str, reg: Regist
         f"{len(names.by_qid)} wikidata QIDs"
         + (f" + {len(local_keys)} local reference(s)" if local_keys else "")
     )
-    for ckey, column, kept, kept_line, dropped, line in names.conflicts:
-        print(
-            f"  ! {placelist.format_osm([ckey])} claimed twice in `{column}`: "
-            f"keeping {kept!r} (line {kept_line}), ignoring {dropped!r} "
-            f"(places.csv line {line})"
-        )
-    for qid, kept_line, line in names.duplicate_qids:
-        print(f"  ! {qid} claimed twice: keeping line {kept_line}, ignoring places.csv line {line}")
 
 
-def _load_areas(areas_geojson: str | None, required: bool) -> dialects.AreaIndex | None:
+def _load_areas(areas_geojson: str | None, required: bool) -> dialect_areas.AreaIndex | None:
     """The dialect areas, or None (with a warning) when there are none --
     unless the file was named explicitly (`required`)."""
     if areas_geojson and os.path.exists(areas_geojson):
-        areas = dialects.AreaIndex.from_geojson(areas_geojson)
+        areas = dialect_areas.AreaIndex.from_geojson(areas_geojson)
         print(f"areas     : {areas_geojson} -> {len(areas)} polygon(s): {areas.summary()}")
         return areas
     if required:
@@ -783,7 +734,7 @@ def _read_curation(curation_csv: str | None, required: bool) -> curationlist.Cur
 
 
 def _check_local_refs(
-    by_id: Mapping[Ref, Sequence[PlaceRow]],
+    by_id: Mapping[Ref, PlaceRow],
     points: Mapping[Ref, LocalPoint],
     reg: Registry,
     names_csv: str,
@@ -796,9 +747,9 @@ def _check_local_refs(
     unplaced = [k for k in _local_keys(by_id) if k not in points]
     if unplaced:
         lines = "\n".join(
-            f"  {placelist.format_osm([k])}  "
-            f"{placelist.describe(by_id[k][0], reg)} "
-            f"(places.csv line {by_id[k][0].line})"
+            f"  {refs.format([k])}  "
+            f"{placelist.describe(by_id[k], reg)} "
+            f"(places.csv line {by_id[k].line})"
             for k in unplaced
         )
         raise PipelineError(
@@ -811,14 +762,16 @@ def _check_local_refs(
     unused = sorted(k for k in points if k not in by_id)
     for k in unused:
         print(
-            f"  ! {placelist.format_osm([k])} ({points[k]['label'] or '?'}) is "
+            f"  ! {refs.format([k])} ({points[k]['label'] or '?'}) is "
             f"positioned in {curation_csv} but no row of {names_csv} uses it "
             f"-- nothing added"
         )
 
 
 def _load_objects(
-    areas: dialects.AreaIndex | None, by_id: Mapping[Ref, Sequence[PlaceRow]], objects_json: str
+    areas: dialect_areas.AreaIndex | None,
+    by_id: Mapping[Ref, PlaceRow],
+    objects_json: str,
 ) -> dict[OsmRef, LocatedObject]:
     """Where the name list's objects lie -- needed only with dialect areas,
     and then for every one of them: without a position an object would get
@@ -827,8 +780,8 @@ def _load_objects(
     if not areas:
         return {}
     objects = read_objects(objects_json)
-    first_rows = {osm: rows[0] for key, rows in by_id.items() if (osm := placelist.as_osm_ref(key))}
-    require_located(objects, objects_json, first_rows)
+    located = {osm: row for key, row in by_id.items() if (osm := refs.as_osm_ref(key))}
+    placeobjects.require_located(objects, objects_json, located)
     print(f"objects   : {objects_json} -> {len(objects.by_ref)} located object(s)")
     return objects.by_ref
 
@@ -900,7 +853,7 @@ def _print_tagged(inj: Injector, inputs: _Inputs, seconds: float) -> None:
     )
 
 
-def _print_dialects(inj: Injector, reg: Registry, areas: dialects.AreaIndex | None) -> None:
+def _print_dialects(inj: Injector, reg: Registry, areas: dialect_areas.AreaIndex | None) -> None:
     """The names written per dialect and the objects per dialect area."""
     print("names written per dialect:")
     for d in reg:
@@ -922,16 +875,14 @@ def _print_dialects(inj: Injector, reg: Registry, areas: dialects.AreaIndex | No
             print("  (none -- no tagged object lies in a dialect area)")
 
 
-def _print_added_points(
-    inj: Injector, by_id: Mapping[Ref, Sequence[PlaceRow]], reg: Registry
-) -> None:
+def _print_added_points(inj: Injector, by_id: Mapping[Ref, PlaceRow], reg: Registry) -> None:
     if not inj.added_points:
         return
     print(f"\nadded {len(inj.added_points)} node(s) for places that are not in OSM:")
     for nid, key, _label, lon, lat, tags in inj.added_points:
         print(
-            f"  node/{nid}  {placelist.format_osm([key])} "
-            f"{placelist.describe(by_id[key][0], reg)} at {lat:.5f}, {lon:.5f}: "
+            f"  node/{nid}  {refs.format([key])} "
+            f"{placelist.describe(by_id[key], reg)} at {lat:.5f}, {lon:.5f}: "
             + ", ".join(f"{a}={b}" for a, b in sorted(tags.items()) if not a.startswith("name"))
         )
 
@@ -939,22 +890,20 @@ def _print_added_points(
 def _print_not_found(inj: Injector, names: NameList, reg: Registry, in_file: str) -> None:
     """The ids and QIDs of the name list that the extract does not have."""
     by_id, by_qid = names.by_id, names.by_qid
-    missing = sorted(k for k in set(by_id) - inj.seen_keys if k[0] != placelist.LOCAL_TYPE)
+    missing = sorted(k for k in set(by_id) - inj.seen_keys if k[0] != refs.LOCAL_TYPE)
     if missing:
         print(f"\n{len(missing)} rows reference ids that are not in {in_file}:")
         for key in missing:
-            print(f"  {placelist.format_osm([key])}  {placelist.any_name(by_id[key][0], reg)}")
+            print(f"  {refs.format([key])}  {placelist.any_name(by_id[key], reg)}")
     nf = [q for q in by_qid if q not in inj.present_qids]
     if nf:
         print(
             f"\n{len(nf)} wikidata QIDs not present in the file: "
-            + ", ".join(f"{q} ({placelist.any_name(by_qid[q][0], reg)})" for q in sorted(nf))
+            + ", ".join(f"{q} ({placelist.any_name(by_qid[q], reg)})" for q in sorted(nf))
         )
 
 
-def _print_skipped_carriers(
-    inj: Injector, by_qid: Mapping[str, Sequence[PlaceRow]], reg: Registry
-) -> None:
+def _print_skipped_carriers(inj: Injector, by_qid: Mapping[str, PlaceRow], reg: Registry) -> None:
     """The objects that carry a row's QID but are left alone (#55)."""
     if not inj.skipped_carriers:
         return
@@ -963,7 +912,7 @@ def _print_skipped_carriers(
         "but are not place-like -- not tagged:"
     )
     for (t, i), name, qid in inj.skipped_carriers:
-        print(f"  {t}/{i}  {name}: {qid} ({placelist.any_name(by_qid[qid][0], reg)})")
+        print(f"  {t}/{i}  {name}: {qid} ({placelist.any_name(by_qid[qid], reg)})")
 
 
 def _print_curated(inj: Injector, curation: Mapping[Ref, Tuning], in_file: str) -> None:
@@ -989,7 +938,7 @@ def _print_synthetic(inj: Injector, synthetic: Mapping[Ref, Square], in_file: st
     for wid, nids, label, km2 in inj.created:
         print(f"  way/{wid} (nodes {nids[0]}..{nids[-1]})  {label or '?'}: {km2:g} km²")
     synth_missing = sorted(
-        set(synthetic) - {p["key"] for p in inj.pending if p["key"][0] != placelist.LOCAL_TYPE}
+        set(synthetic) - {p["key"] for p in inj.pending if p["key"][0] != refs.LOCAL_TYPE}
     )
     for t, i in synth_missing:
         print(
@@ -1017,7 +966,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ws = cli.workspace(a)
     run(
         ws,
-        registry.read(ws.dialects),
+        dialects.read(ws.dialects),
         a.infile,
         a.outfile,
         dry_run=a.dry_run,

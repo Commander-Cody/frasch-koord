@@ -18,11 +18,22 @@ import sys
 from collections.abc import Container, Sequence
 from typing import NamedTuple
 
-from frasch import cli, curationlist, dialects, errors, placelist, placenames, registry, tables
+from frasch import (
+    cli,
+    curationlist,
+    dialect_areas,
+    dialects,
+    errors,
+    files,
+    namecell,
+    placelist,
+    placenames,
+    tables,
+)
+from frasch.dialects import Registry
 from frasch.errors import Problem
 from frasch.paths import Workspace
 from frasch.placelist import PlaceRow
-from frasch.registry import Registry
 from frasch.tables import Table
 
 
@@ -34,7 +45,7 @@ _BAD_SEPARATOR = re.compile(r"\s;|;(?! \S)")
 
 def cell_problem(cell: str) -> str | None:
     """What is wrong with the syntax of one name cell (see the conventions in
-    names/README.md), or None.  `placelist.parts` reads a damaged cell
+    names/README.md), or None.  `namecell.parts` reads a damaged cell
     anyway, just differently from what the editor meant."""
     depth = 0
     for ch in cell:
@@ -45,7 +56,7 @@ def cell_problem(cell: str) -> str | None:
         return "unbalanced brackets"
     if _BAD_SEPARATOR.search(cell):
         return "variants are separated by `; ` (no space before, one after)"
-    for variant in placelist.split_variants(cell):
+    for variant in namecell.split_variants(cell):
         m = _VARIANT.fullmatch(variant.strip())
         if not m:
             return f"text after a remark in {variant.strip()!r}"
@@ -56,7 +67,7 @@ def cell_problem(cell: str) -> str | None:
             return f"stray spaces in {name!r}"
         if "?" in name:
             return f"`?` in {name!r} -- say `uncertain` in `note` instead"
-    names = [name for name, _ in placelist.parts(cell)]
+    names = [name for name, _ in namecell.parts(cell)]
     twice = [name for i, name in enumerate(names) if name in names[:i]]
     if twice:
         return f"{', '.join(twice)} twice"
@@ -88,14 +99,14 @@ def check_curation(path: str, ids: Container[str]) -> tuple[list[Problem], set[s
 def check_dialects(path: str) -> tuple[Registry | None, list[Problem]]:
     """-> (the sound rows of the dialect registry, names/dialects.csv -- None
     when there are none --, the problems in it)."""
-    found, problems = registry.rows(path)
+    found, problems = dialects.rows(path)
     return (Registry(found) if found else None, problems)
 
 
 def check_dialect_areas(path: str, reg: Registry) -> list[Problem]:
     """The problems in the dialect area list, names/dialect_areas.csv, by the
-    rules the area build enforces (`dialects.area_rows`)."""
-    _rows, problems = dialects.area_rows(path, reg)
+    rules the area build enforces (`dialect_areas.area_rows`)."""
+    _rows, problems = dialect_areas.area_rows(path, reg)
     return problems
 
 
@@ -103,13 +114,12 @@ def check_places(
     names: Table, curation: str, positioned: Container[str], reg: Registry
 ) -> list[Problem]:
     """The problems in the name list (`names`), whose columns `reg` says:
-    those `placelist.read` refuses it for, and the stricter rules of its name
-    cells and of what its rows claim.  `positioned` are the local references
-    `curation` has a position for."""
+    those `placelist.read` refuses it for, the stricter rules of its name
+    cells, and a local reference `curation` has no position for
+    (`positioned`: those it has one for)."""
     rows, problems = placelist.rows(names, reg)
-    claimed: dict[str, int] = {}  # `way/1` or `Q1` -> line of the first row
     for row in rows:
-        whats = _cell_problems(row, reg) + _claim_problems(row, curation, positioned, claimed)
+        whats = _cell_problems(row, reg) + _position_problems(row, curation, positioned)
         problems += [Problem(names.path, row.line, what) for what in whats]
     return tables.by_line(problems)
 
@@ -127,31 +137,15 @@ def _cell_problems(row: PlaceRow, reg: Registry) -> list[str]:
     return found
 
 
-def _claim_problems(
-    row: PlaceRow, curation: str, positioned: Container[str], claimed: dict[str, int]
-) -> list[str]:
-    """What is wrong with what a row puts on the map: a local reference
-    `curation` has no position for, an object or Wikidata item a row above
-    it claimed already (`claimed`, which takes this row's)."""
+def _position_problems(row: PlaceRow, curation: str, positioned: Container[str]) -> list[str]:
+    """A row's local reference that `curation` has no position for."""
     try:
-        slug = placelist.local_ref(row["osm"])
-        refs = placelist.claimed_refs(row)
+        slug = row.local
     except errors.Invalid:
-        slug, refs = None, []  # `placelist.rows` reported it
-    found: list[str] = []
+        return []  # `placelist.rows` reported it
     if slug and slug not in positioned:
-        found.append(f"local/{slug} has no row with `lat`/`lon` in {curation}")
-    keys = [placelist.format_osm([ref]) for ref in refs]
-    if row["wikidata"] and row["status"] != "skip":
-        keys.append(row["wikidata"])
-    for key in keys:
-        if key in claimed:
-            found.append(
-                f"{key} is already claimed by line {claimed[key]} "
-                f"-- only one name can go on the map"
-            )
-        claimed.setdefault(key, row.line)
-    return found
+        return [f"local/{slug} has no row with `lat`/`lon` in {curation}"]
+    return []
 
 
 def variant_columns(reg: Registry) -> list[str]:
@@ -184,7 +178,7 @@ def fill_ids(ws: Workspace, reg: Registry) -> None:
     got one -- or why none did: the report `check` gives lists that problem
     and every other one."""
     try:
-        with placelist.lock(ws.lock):
+        with files.lock(ws.lock):
             print(f"gave {placelist.fill_ids(ws.names, reg)} row(s) an id", file=sys.stderr)
     except errors.PipelineError as exc:
         print(f"no id given: {exc}", file=sys.stderr)

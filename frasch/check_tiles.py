@@ -19,11 +19,9 @@ Both sides are built from the same files (names/osm_objects.json,
 names/dialect_areas.geojson, names/places.csv) by the same rule
 (frasch.placenames), so a disagreement means the archive and the index were
 built from different states of them -- compare their `built_from` stamps --
-or one of two things the injector does to a feature beyond that rule: a
-second row that claims the entry's object fills what the first leaves empty
-(`frasch check-inputs` rejects such a claim), and a curation row may set a
-tag of its own on it, `frasch:kind` among them.  Anything else is a bug
-(#24).  The tile build does not run in CI; run this (`just check-tiles`)
+or the one thing the injector does to a feature beyond that rule: a
+curation row may set a tag of its own on it, `frasch:kind` among them.
+Anything else is a bug (#24).  The tile build does not run in CI; run this (`just check-tiles`)
 after building tiles.
 """
 
@@ -39,10 +37,10 @@ from typing import Literal, NotRequired, TypedDict
 import mapbox_vector_tile
 from pmtiles.reader import MmapSource, Reader
 
-from frasch import cli, registry
+from frasch import cli, dialects
+from frasch.dialects import Registry
 from frasch.geo import LonLat
 from frasch.placenames import GERMAN_KEY, REF_KEY, TILE_KEY, SearchEntry, dialect_key
-from frasch.registry import Registry
 
 # OpenMapTiles feature ids: the OSM id times ten plus the type
 # (web/src/names.ts's osmRefFromFeatureId)
@@ -227,7 +225,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     with open(index, encoding="utf-8") as fh:
         entries: dict[str, SearchEntry] = {e["id"]: e for e in json.load(fh)["places"]}
     features = archive_features(a.archive, entries, a.zoom)
-    problems = compare(entries, features, registry.read(ws.dialects))
+    problems = compare(entries, features, dialects.read(ws.dialects))
     print(
         f"{len(features)} labelled features in the z{a.zoom} tiles of "
         f"{len(entries)} entries; {len(checked_entries(entries, features))} "

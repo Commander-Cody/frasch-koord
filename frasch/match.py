@@ -13,6 +13,12 @@ What gets written where
                           A row a human has filled in (any `osm`/`wikidata`
                           with a status other than `auto`) or marked `skip`
                           is never touched.  Review the result with `git diff`.
+                          Only one row holds an object or a Wikidata item
+                          (`placelist.claims`): the matcher gives a row
+                          neither what a row it leaves alone holds nor what
+                          it gave a row further up in this run -- of two rows
+                          for one place the second stays unmatched, with
+                          "... is taken by line N".
   names/work/matches.csv  per-row details of the run: what was matched, the
                           decisive tags, lon/lat, the candidate list of
                           ambiguous rows.  Git-ignored.
@@ -67,31 +73,26 @@ import os
 import sys
 import time
 from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, NamedTuple, TypedDict
 
-from frasch import candidates, cli, files, placelist, registry
+from frasch import candidates, cli, dialects, files, placelist, refs
 from frasch.candidates import ISLAND_PLACES, Candidate, decisive_tags, osm_key
+from frasch.dialects import Registry
 from frasch.errors import PipelineError, rebuild
 from frasch.geo import NF_CENTRE, haversine, in_north_frisia
 from frasch.hints import Circle, HintResolver
+from frasch.namecell import primary, variants
 from frasch.nameindex import NameIndex, norm
 from frasch.paths import Workspace
 from frasch.placelist import (
-    OsmRef,
     PlaceRow,
-    Ref,
     Row,
     any_name,
-    format_osm,
-    local_ref,
-    osm_refs,
     owned_by_matcher,
-    parse_osm,
-    primary,
-    variants,
 )
 from frasch.provenance import ExtractStamp, Stamp, unstamped
-from frasch.registry import Registry
+from frasch.refs import OsmRef, Ref
 
 if TYPE_CHECKING:
     import requests
@@ -821,7 +822,7 @@ def _matched_cells(
     members = winner["members"]
     best = _best_member(kind, members)
     return {
-        "osm_type": placelist.TYPE_NAME[best["t"]],
+        "osm_type": refs.TYPE_NAME[best["t"]],
         "osm_id": ";".join(_member_ids(best, members)),
         "match_name": best["tags"].get("name") or best["tags"].get("name:de", ""),
         "match_tags": decisive_tags(best),
@@ -837,11 +838,10 @@ def match_row(
     index: NameIndex,
     hints: HintResolver,
     reg: Registry,
-    claimed: Mapping[Ref, int] | None = None,
+    claimed: Claimed | None = None,
 ) -> MatchResult:
-    """`claimed`: {(type, id): line} of the objects other rows hold that
-    are not the matcher's to give away (see `claimed_objects`)."""
-    claimed = claimed or {}
+    """`claimed`: what other rows hold, which is not this row's to get."""
+    claimed = claimed or Claimed()
     kind = row["kind"]
     out = _unfilled(row)
     if not any_name(row, reg):
@@ -852,10 +852,10 @@ def match_row(
         return _unmatched(out, "not_found", "no German/Danish name to match on")
 
     found = _ranked_candidates(index, queries)
-    taken = [c for c in found if osm_key(c) in claimed]
-    cands = [c for c in found if osm_key(c) not in claimed]
+    taken = [c for c in found if osm_key(c) in claimed.objects]
+    cands = [c for c in found if osm_key(c) not in claimed.objects]
     if not cands:
-        note = taken_note(taken, claimed) if taken else "no name match in OSM"
+        note = taken_note(taken, claimed.objects) if taken else "no name match in OSM"
         return _unmatched(out, "not_found", note)
 
     plaus_all = [c for c in cands if kind_ok(kind, c["tags"])]
@@ -878,12 +878,13 @@ def match_row(
         note = _ambiguous_reason(row, winner, hint_pt, decision.clusters)
         return _unmatched(out, "ambiguous", note, fmt_cands(plaus_all))
 
-    held = _held(kind, taken, winner)
+    held = _held(kind, [c for c in taken if osm_key(c) in claimed.features], winner)
     if held:
         # another row holds part of this very feature (a piece of the same
         # river, or the relation that is the whole river): the rest is not
         # free for a second name
-        return _unmatched(out, "not_found", taken_note(held, claimed), fmt_cands(plaus_all))
+        note = taken_note(held, claimed.objects)
+        return _unmatched(out, "not_found", note, fmt_cands(plaus_all))
 
     out.update(_matched_cells(kind, winner, boundaries))
     if len(winner["members"]) > 1 or len(decision.clusters) > 1:
@@ -904,32 +905,56 @@ def report_cands(cell: str, limit: int = 20) -> str:
 def taken_note(recs: Iterable[Candidate], claimed: Mapping[Ref, int]) -> str:
     """`way/1 is taken by line 7; ...` for the candidates other rows hold."""
     return "; ".join(
-        f"{format_osm([osm_key(c)])} is taken by line {claimed[osm_key(c)]}" for c in recs
+        f"{refs.format([osm_key(c)])} is taken by line {claimed[osm_key(c)]}" for c in recs
     )
 
 
-def claimed_objects(rows: Iterable[PlaceRow]) -> dict[Ref, int]:
-    """{(type, id): line} of the OSM objects that rows the matcher does not
-    own hold (checked or hand-filled).  It never gives them to another row:
-    only one name per object can reach the map."""
-    out: dict[Ref, int] = {}
-    for r in rows:
-        if owned_by_matcher(r):
-            continue
-        for key in placelist.claimed_refs(r):
-            out.setdefault(key, r.line)
-    return out
+@dataclass
+class Claimed:
+    """What the matcher must not give to a row, because another one holds it
+    and only one name per object or Wikidata item can reach the map
+    (`placelist.claims`): `objects` maps (type, id) and `items` a QID to the
+    line of the row that holds it.
+
+    A run starts with what the rows it leaves as they are hold (`of`).  Such
+    a row names its whole feature (`features`): a row that holds one piece of
+    a river leaves the others to no second name.  Each row the run matches is
+    added (`add`), so of two rows for one place the first in the list gets
+    the object -- only the object: what the matcher gave is not a human's
+    word on where the feature ends."""
+
+    objects: dict[Ref, int] = field(default_factory=dict)
+    items: dict[str, int] = field(default_factory=dict)
+    features: set[Ref] = field(default_factory=set)
+
+    @classmethod
+    def of(cls, rows: Iterable[PlaceRow]) -> Claimed:
+        claimed = cls()
+        for row in rows:
+            claimed.add(row)
+        claimed.features = set(claimed.objects)
+        return claimed
+
+    def add(self, row: PlaceRow) -> None:
+        held = placelist.claims(row)
+        for ref in held.refs:
+            self.objects.setdefault(ref, row.line)
+        if held.qid:
+            self.items.setdefault(held.qid, row.line)
 
 
-def find_duplicates(rows: Iterable[PlaceRow]) -> dict[Ref, list[PlaceRow]]:
-    """Two rows pointing at one OSM object -- usually the list has a place
-    twice (two spellings, or two rows from different sheet sections).  Only one of the names can end
-    up on the map."""
-    by_obj: collections.defaultdict[Ref, list[PlaceRow]] = collections.defaultdict(list)
-    for r in rows:
-        for key in placelist.claimed_refs(r):
-            by_obj[key].append(r)
-    return {k: g for k, g in by_obj.items() if len(g) > 1}
+def without_taken_item(o: MatchResult, row: Row, items: Mapping[str, int]) -> MatchResult:
+    """`o`, the match of `row`, without a Wikidata item another row holds
+    (`items`: QID -> line).  A row matched by its item alone -- a country --
+    is then not found; any other keeps its object, which is what it claims
+    first (OSM tags an island and its village with one item)."""
+    qid = o.get("wikidata", "")
+    if o["status"] != "matched" or qid not in items:
+        return o
+    note = f"{qid} is taken by line {items[qid]}"
+    if not o["osm_id"]:
+        return _unmatched(_unfilled(row), "not_found", note)
+    return dict(o, wikidata="", note="; ".join(filter(None, [o.get("note", ""), note])))
 
 
 # --------------------------------------------------------------- extracts ----
@@ -1019,7 +1044,6 @@ def write_report(
         _report_intro(rows)
         + _counts_section(rows, results, reg)
         + _ambiguous_section(rows, results, reg)
-        + _duplicates_section(rows, reg)
         + _not_found_section(rows, results, reg)
         + [built_from.as_comment(), ""]
     )
@@ -1027,7 +1051,7 @@ def write_report(
         fh.write("\n".join(lines))
 
 
-def _report_state(r: Row, results: Mapping[str, MatchResult], reg: Registry) -> str:
+def _report_state(r: PlaceRow, results: Mapping[str, MatchResult], reg: Registry) -> str:
     """Which of the REPORT_STATES the row is in."""
     if r["kind"] == "not_a_place":
         return "not a place"
@@ -1035,7 +1059,7 @@ def _report_state(r: Row, results: Mapping[str, MatchResult], reg: Registry) -> 
         return "skip"
     if not any_name(r, reg):
         return "no Frisian name"
-    if local_ref(r["osm"]):
+    if r.local:
         return "own point"
     if r["osm"] or r["wikidata"]:
         return "auto" if r["status"] == "auto" else "by hand"
@@ -1117,28 +1141,6 @@ def _ambiguous_section(
     return lines
 
 
-def _duplicates_section(rows: Sequence[PlaceRow], reg: Registry) -> list[str]:
-    dups = find_duplicates(rows)
-    lines = [f"## Rows sharing one OSM object ({len(dups)})\n"]
-    lines.append(
-        "The list has these places twice (two spellings, or rows from two "
-        "sheet sections). Only one name can be injected -- the first row wins; "
-        "decide which, and `skip` the other.\n"
-    )
-    lines.append("| OSM object | rows (line) | Frisian names | German |")
-    lines.append("|---|---|---|---|")
-    for key, g in sorted(dups.items(), key=lambda kv: kv[1][0].line):
-        lines.append(
-            f"| `{format_osm([key])}` | "
-            + ", ".join(f"{x['id']} ({x.line})" for x in g)
-            + " | "
-            + ", ".join(any_name(x, reg) for x in g)
-            + f" | {primary(g[0]['de'])} |"
-        )
-    lines.append("")
-    return lines
-
-
 def _not_found_section(
     rows: Sequence[PlaceRow], results: Mapping[str, MatchResult], reg: Registry
 ) -> list[str]:
@@ -1175,8 +1177,7 @@ def write_matches(
         w.writeheader()
         for r in rows:
             res = results.get(r["id"])
-            refs = osm_refs(r["osm"])
-            hit = index.by_key.get(refs[0]) if refs else None
+            hit = index.by_key.get(r.osm_refs[0]) if r.osm_refs else None
             rec = {
                 "id": r["id"],
                 "line": str(r.line),
@@ -1204,7 +1205,7 @@ def write_matches(
                     else "not a place"
                     if r["kind"] == "not_a_place"
                     else "own point"
-                    if local_ref(r["osm"])
+                    if r.local
                     else "by hand"
                     if (r["osm"] or r["wikidata"] or r["status"] == "ok")
                     else ""
@@ -1223,13 +1224,14 @@ def run(ws: Workspace, reg: Registry, *, offline: bool = False, dry_run: bool = 
     """Match the rows the matcher owns and write the result (see the module
     docstring); -> the exit status.  `offline`: no call to the Wikidata API,
     the cache only.  `dry_run`: only matches.csv is written."""
-    with placelist.lock(ws.lock):
+    with files.lock(ws.lock):
         return _run(ws, reg, offline, dry_run)
 
 
 def _run(ws: Workspace, reg: Registry, offline: bool, dry_run: bool) -> int:
     t0 = time.time()
-    rows, fields = placelist.read(ws.names, reg)
+    names = placelist.read(ws.names, reg)
+    rows = names.rows
     print(f"loaded {len(rows)} rows from {ws.names}")
 
     extracts = check_extracts(ws.candidates, ws.report)
@@ -1241,29 +1243,29 @@ def _run(ws: Workspace, reg: Registry, offline: bool, dry_run: bool) -> int:
     )
     hints = HintResolver(index)
 
-    todo = [r for r in rows if owned_by_matcher(r) and any_name(r, reg)]
-    claimed = claimed_objects(rows)
-    country_rows = [r for r in todo if r["kind"] == "country"]
+    owned = [r for r in rows if owned_by_matcher(r) and any_name(r, reg)]
+    country_rows = [r for r in owned if r["kind"] == "country"]
     qids, wd_failed = wikidata_countries(
         [primary(r["de"]) for r in country_rows], ws.wikidata_cache, offline
     )
-    unresolved: list[PlaceRow] = []
+    # no answer is not "no country": such a row is left as it is
+    unresolved = [r for r in country_rows if primary(r["de"]) in wd_failed]
+    results = {r["id"]: _lookup_failed(r) for r in unresolved}
+    todo = [r for r in owned if r["id"] not in results]
+    rematched = {r["id"] for r in todo}
+    claimed = Claimed.of(r for r in rows if r["id"] not in rematched)
 
-    results: dict[str, MatchResult] = {}
     changed: collections.Counter[str] = collections.Counter()
     for r in todo:
         before = _reference(r)
-        if r["kind"] == "country" and primary(r["de"]) in wd_failed:
-            # no answer is not "no country": leave the row as it is
-            unresolved.append(r)
-            results[r["id"]] = _lookup_failed(r)
-            continue
         if r["kind"] == "country":
             o = _country_result(r, qids)
         else:
             o = match_row(r, index, hints, reg, claimed)
+        o = without_taken_item(o, r, claimed.items)
         results[r["id"]] = o
         _write_back(r, o)
+        claimed.add(r)
         change = _change(before, _reference(r))
         if change:
             changed[change] += 1
@@ -1271,12 +1273,12 @@ def _run(ws: Workspace, reg: Registry, offline: bool, dry_run: bool) -> int:
     # matches.csv first: a run that cannot write it leaves places.csv as it was
     write_matches(rows, results, index, ws.matches, reg)
     if not dry_run:
-        placelist.write(rows, ws.names, fields)
+        names.write()
         write_report(rows, results, ws.report, reg, stamp(ws, extracts))
 
-    cnt = collections.Counter(o["status"] for o in results.values())
+    cnt = collections.Counter(results[r["id"]]["status"] for r in owned)
     print(
-        f"matcher owns {len(todo)} of {len(rows)} rows: "
+        f"matcher owns {len(owned)} of {len(rows)} rows: "
         + ", ".join(f"{v} {k}" for k, v in cnt.most_common())
     )
     print(
@@ -1320,7 +1322,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     a = ap.parse_args(argv)
     ws = cli.workspace(a)
-    return run(ws, registry.read(ws.dialects), offline=a.offline, dry_run=a.dry_run)
+    return run(ws, dialects.read(ws.dialects), offline=a.offline, dry_run=a.dry_run)
 
 
 def _lookup_failed(r: PlaceRow) -> MatchResult:
@@ -1356,8 +1358,8 @@ def _reference(r: PlaceRow) -> tuple[str, str, str]:
 def _write_back(r: PlaceRow, o: MatchResult) -> None:
     """Put a match into the row as `status=auto`; clear the row otherwise."""
     if o["status"] == "matched":
-        r["osm"] = format_osm(
-            parse_osm("; ".join(f"{o['osm_type']}/{i}" for i in o["osm_id"].split(";") if i))
+        r["osm"] = refs.format(
+            refs.parse("; ".join(f"{o['osm_type']}/{i}" for i in o["osm_id"].split(";") if i))
         )
         r["wikidata"] = o["wikidata"]
         r["status"] = "auto"

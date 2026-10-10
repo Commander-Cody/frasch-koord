@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from frasch import placelist, registry, tables
+from frasch import dialects, placelist, tables
 from frasch.errors import PipelineError, Problem, ValidationError
 from conftest import REGISTRY, TOFTUM, places_text
 
@@ -15,9 +15,9 @@ def test_reads_a_list_saved_with_a_byte_order_mark(tmp_path: Path) -> None:
     # Excel's "CSV UTF-8" starts the file with one.
     path = tmp_path / "places.csv"
     path.write_bytes(b"\xef\xbb\xbf" + places_text([TOFTUM]).encode("utf-8"))
-    rows, fields = placelist.read(str(path), REGISTRY)
-    assert fields[0] == "kind"
-    assert rows[0]["mooring"] == "Toftem"
+    names = placelist.read(str(path), REGISTRY)
+    assert names.fields[0] == "kind"
+    assert names.rows[0]["mooring"] == "Toftem"
 
 
 def test_a_missing_list_is_a_pipeline_error_not_a_traceback(tmp_path: Path) -> None:
@@ -48,10 +48,10 @@ def test_refuses_a_row_with_a_comma_too_few_as_such(tmp_path: Path) -> None:
 
 def test_line_numbers_are_those_of_the_file_after_a_blank_line(tmp_path: Path) -> None:
     # REPORT.md, the curation and the input check all point editors at a row's `line`.
-    head, first, second, _ = places_text([TOFTUM, {**TOFTUM, "mooring": "Taftem"}]).split("\n")
+    head, first, second, _ = places_text([TOFTUM, {**TOFTUM, "osm": "node/2"}]).split("\n")
     path = tmp_path / "places.csv"
     path.write_text("\n".join([head, first, "", second]) + "\n", encoding="utf-8")
-    rows, _ = placelist.read(str(path), REGISTRY)
+    rows = placelist.read(str(path), REGISTRY).rows
     assert [r.line for r in rows] == [2, 4]
 
 
@@ -77,14 +77,20 @@ def test_refuses_a_row_without_a_unique_well_formed_id(
 def test_every_row_carries_its_id(tmp_path: Path) -> None:
     path = tmp_path / "places.csv"
     path.write_text(places_text([{**TOFTUM, "id": "toftem"}]), encoding="utf-8")
-    rows, _ = placelist.read(str(path), REGISTRY)
+    rows = placelist.read(str(path), REGISTRY).rows
     assert rows[0]["id"] == "toftem"
 
 
 def test_every_broken_row_is_reported_at_once(tmp_path: Path) -> None:
     path = tmp_path / "places.csv"
     path.write_text(
-        places_text([{**TOFTUM, "kind": "town"}, TOFTUM, {**TOFTUM, "status": "done"}]),
+        places_text(
+            [
+                {**TOFTUM, "kind": "town"},
+                {**TOFTUM, "osm": "node/2"},
+                {**TOFTUM, "osm": "node/3", "status": "done"},
+            ]
+        ),
         encoding="utf-8",
     )
     with pytest.raises(ValidationError) as exc:
@@ -106,6 +112,33 @@ def test_every_problem_of_a_row_is_reported_not_only_its_first(tmp_path: Path) -
     ]
 
 
+def test_refuses_an_object_two_rows_claim(tmp_path: Path) -> None:
+    # only one of the two names can go on the map (#94)
+    path = tmp_path / "places.csv"
+    rows = [
+        {"kind": "warft", "mooring": "Lungendik", "osm": "way/28330569"},
+        {"kind": "warft", "mooring": "Lungedik", "osm": "way/1; way/28330569"},
+    ]
+    path.write_text(places_text(rows), encoding="utf-8")
+    with pytest.raises(ValidationError) as exc:
+        placelist.read(str(path), REGISTRY)
+    assert exc.value.problems == [
+        Problem(
+            str(path),
+            3,
+            "way/28330569 is already claimed by line 2 -- only one name can go on the map",
+        )
+    ]
+
+
+def test_refuses_a_row_that_names_one_object_twice(tmp_path: Path) -> None:
+    path = tmp_path / "places.csv"
+    path.write_text(places_text([{**TOFTUM, "osm": "node/1; node/1"}]), encoding="utf-8")
+    with pytest.raises(ValidationError) as exc:
+        placelist.read(str(path), REGISTRY)
+    assert exc.value.problems == [Problem(str(path), 2, "node/1 twice in `osm`")]
+
+
 def test_the_registry_passed_in_sets_the_name_columns(tmp_path: Path) -> None:
     # `--dialects` of the commands: a registry with other dialects reads a
     # list with other columns, and names a row by them.
@@ -116,12 +149,12 @@ def test_the_registry_passed_in_sets_the_name_columns(tmp_path: Path) -> None:
         "frr-x-fering,fering,Fering,living,no,\n",
         encoding="utf-8",
     )
-    reg = registry.read(str(dialects_csv))
+    reg = dialects.read(str(dialects_csv))
     path = tmp_path / "places.csv"
     path.write_text(
         "kind,solring,local,fering,de,hint,da,osm,wikidata,status,note,id\n"
         "settlement,,,Olersem,Oldsum,,,,,,,oldsum\n",
         encoding="utf-8",
     )
-    rows, _ = placelist.read(str(path), reg)
+    rows = placelist.read(str(path), reg).rows
     assert placelist.any_name(rows[0], reg) == "Olersem"
