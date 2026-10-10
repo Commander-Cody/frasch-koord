@@ -1,5 +1,4 @@
-"""match.py: kind rules, clustering, which rows the matcher owns, and the
-decision `match_row` makes for a row
+"""match.py: clustering, and the decision `match_row` makes for a row
 (README "Matching rules (v1)").
 
 `match_row` runs against a real `NameIndex` built from a tiny candidates.jsonl
@@ -178,30 +177,6 @@ OCKHOLM = cand(
 )
 
 
-# ---------------------------------------------------------------- kind_ok ---
-@pytest.mark.parametrize(
-    "kind,tags,ok",
-    [
-        ("settlement", {"place": "village"}, True),
-        ("settlement", {"highway": "residential"}, False),  # the street "Holm"
-        ("settlement", {"boundary": "administrative", "admin_level": "8"}, True),
-        ("settlement", {"boundary": "administrative", "admin_level": "4"}, False),  # a Land
-        ("hallig", {"place": "isolated_dwelling"}, True),  # some Halligen are one dwelling
-        ("island", {"place": "isolated_dwelling"}, False),
-        ("island", {"natural": "peninsula"}, True),  # Nordstrand
-        ("warft", {"landuse": "residential"}, True),
-        ("warft", {"highway": "service"}, False),
-        ("water", {"waterway": "river"}, True),
-        ("road", {"highway": "unclassified"}, True),
-        ("road", {"place": "village"}, False),
-        ("country", {"boundary": "administrative", "admin_level": "2"}, True),
-        ("country", {"boundary": "administrative", "admin_level": "4"}, False),
-    ],
-)
-def test_kind_ok(kind: str, tags: dict[str, str], ok: bool) -> None:
-    assert match.kind_ok(kind, tags) is ok
-
-
 # ---------------------------------------------------------------- cluster ---
 def test_two_village_nodes_two_km_apart_are_two_villages() -> None:
     a = cand("n", 1, 8.80, 54.80, name="Holm", place="village")
@@ -242,31 +217,6 @@ def test_a_record_without_location_is_a_cluster_of_its_own() -> None:
     clusters = match.cluster([a, b])
     assert len(clusters) == 2
     assert clusters[1]["lon"] is None
-
-
-# ------------------------------------------------------- owned_by_matcher ---
-@pytest.mark.parametrize(
-    "cells,owned",
-    [
-        ({}, True),  # nothing yet
-        ({"osm": "node/240063898", "status": "auto"}, True),  # filled by match.py
-        ({"wikidata": "Q35", "status": "auto", "kind": "country"}, True),
-        ({"osm": "relation/1420394"}, False),  # filled by hand
-        ({"wikidata": "Q35", "kind": "country"}, False),
-        ({"osm": "node/1331229597", "status": "ok"}, False),
-        ({"status": "ok"}, False),  # checked: no reference
-        ({"status": "skip"}, False),
-        ({"kind": "not_a_place"}, False),
-    ],
-)
-def test_owned_by_matcher(cells: dict[str, str], owned: bool) -> None:
-    assert placelist.owned_by_matcher(row(**{"kind": "settlement", **cells})) is owned
-
-
-def test_a_local_reference_is_never_the_matchers_even_as_auto() -> None:
-    # the only way it matters: `local/` with status auto would otherwise count
-    r = row(kind="settlement", osm="local/westerheide-amrum", status="auto")
-    assert placelist.owned_by_matcher(r) is False
 
 
 # -------------------------------------------------------------- match_row ---
@@ -371,6 +321,36 @@ def test_a_hint_that_fits_confirms_the_only_candidate(tmp_path: Path) -> None:
     assert out["osm_id"] == "310191124"
 
 
+def test_a_hint_that_names_an_archipelago_reaches_as_far_as_one_that_names_an_island(
+    tmp_path: Path,
+) -> None:
+    halligen = cand("r", 1, 8.60, 54.60, name="Halligen", natural="archipelago")
+    nine_km_north = cand("n", 2, 8.60, 54.681, name="Holm", place="village")
+    out = run(
+        tmp_path,
+        row(kind="settlement", mooring="Hulm", de="Holm", hint="Halligen"),
+        nine_km_north,
+        halligen,
+    )
+    assert out["note"] == "auto: location hint"
+
+
+def test_a_hint_means_the_island_of_that_name_rather_than_a_nearer_namesake(
+    tmp_path: Path,
+) -> None:
+    islet = cand("w", 1, 8.00, 54.70, name="Oland", natural="islet")  # 58 km from the centre
+    namesake = cand("r", 2, 9.30, 54.70, name="Oland", boundary="administrative")  # 26 km
+    on_the_islet = cand("n", 3, 8.01, 54.70, name="Holm", place="village")
+    out = run(
+        tmp_path,
+        row(kind="settlement", mooring="Hulm", de="Holm", hint="Oland"),
+        on_the_islet,
+        islet,
+        namesake,
+    )
+    assert out["note"] == "auto: location hint"
+
+
 def test_a_hint_nobody_knows_matches_nothing_and_binds_nothing(tmp_path: Path) -> None:
     # an unresolvable hint is no hint: the single candidate still wins
     out = run(
@@ -471,6 +451,12 @@ def test_a_warft_outside_north_frisia_is_left_for_review(tmp_path: Path) -> None
     out = run(tmp_path, row(kind="warft", mooring="Schörkewärw", de="Kirchwarft"), far)
     assert out["status"] == "ambiguous"
     assert "verify by hand" in out["note"]
+
+
+def test_a_match_the_scan_could_not_place_is_left_for_review_as_such(tmp_path: Path) -> None:
+    unplaced = cand("r", 1, None, None, name="Neuer Koog", place="polder")
+    out = run(tmp_path, row(kind="koog", mooring="Naie Kuuch", de="Neuer Koog"), unplaced)
+    assert out["note"] == "only match has no known position (koog) -- verify by hand"
 
 
 def test_danish_name_is_used_when_there_is_no_german_one(tmp_path: Path) -> None:

@@ -37,3 +37,15 @@ def test_one_degree_of_latitude_is_about_111_km() -> None:
 
 def test_the_distance_to_an_unknown_position_is_unknown() -> None:
     assert geo.haversine(8.0, 54.0, None, None) is None
+
+
+def test_an_unknown_distance_counts_as_the_one_given_for_it() -> None:
+    assert geo.km_or(None, unknown=500.0) == 500.0
+
+
+def test_no_distance_at_all_is_a_distance() -> None:
+    assert geo.km_or(0.0, unknown=500.0) == 0.0
+
+
+def test_the_centre_of_north_frisia_is_no_distance_from_it() -> None:
+    assert geo.from_centre(*geo.NF_CENTRE) == 0.0

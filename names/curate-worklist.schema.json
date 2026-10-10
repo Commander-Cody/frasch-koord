@@ -4,7 +4,15 @@
   "title": "Curation worklist",
   "description": "names/work/curate.json: the rows of names/places.csv the last `frasch match` left for a human, with their candidates. `frasch curate export` writes it (frasch/curate.py), the curation view (web `?curate`, web/src/dev/curateWorklist.ts) reads it through the Vite dev server. It carries every rule of the name list the view needs, so that the browser reads no cell of places.csv itself.",
   "type": "object",
-  "required": ["bbox", "kind_order", "polygon_kinds", "results", "rows"],
+  "required": [
+    "bbox",
+    "kind_order",
+    "polygon_kinds",
+    "class_keys",
+    "settlement_places",
+    "results",
+    "rows"
+  ],
   "additionalProperties": false,
   "properties": {
     "bbox": {
@@ -21,6 +29,16 @@
     },
     "polygon_kinds": {
       "description": "The kinds whose local reference can be labelled with a square of an area (`polygon_km2`) instead of a node.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "class_keys": {
+      "description": "The OSM tags that say what kind of thing an object is, the most telling first (frasch/osmtags.py): a candidate's `class` is the value of the first of them it has, and the view sums a lookup result up by them.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "settlement_places": {
+      "description": "The `place` values of a settlement: a candidate whose `class` is one of them is a place where people live.",
       "type": "array",
       "items": { "type": "string" }
     },

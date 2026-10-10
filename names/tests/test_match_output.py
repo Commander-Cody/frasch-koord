@@ -103,7 +103,18 @@ def test_an_ok_row_without_a_reference_is_left_alone_and_counted_by_hand(world: 
     assert "| **total** | **1** | **1** | **0** | **1** | **0** |" in report
     assert "| aphusem-3 |" not in report.split("## Not found")[1]
     with open(world / "work" / "matches.csv", encoding="utf-8", newline="") as fh:
-        assert [m["result"] for m in csv.DictReader(fh) if m["id"] == "aphusem-3"] == ["by hand"]
+        assert [m["result"] for m in csv.DictReader(fh) if m["id"] == "aphusem-3"] == ["by_hand"]
+
+
+def test_matches_csv_says_no_name_for_a_filled_row_that_lost_its_frisian_name(world: Path) -> None:
+    # the report counts it under "no Frisian name": the two agree on a row's state
+    nameless = {"id": "uphusum", "kind": "settlement", "de": "Uphusum"}
+    rows = ROWS + [nameless | {"osm": "node/1", "status": "auto"}]
+    (world / "places.csv").write_text(places_text(rows), encoding="utf-8")
+    write_candidates(world / "work" / "candidates.jsonl", TOFTUM, *UPHUSUM)
+    match_main(world)
+    with open(world / "work" / "matches.csv", encoding="utf-8", newline="") as fh:
+        assert [m["result"] for m in csv.DictReader(fh) if m["id"] == "uphusum"] == ["no_name"]
 
 
 def test_a_run_that_cannot_write_matches_csv_leaves_places_csv_alone(world: Path) -> None:

@@ -150,9 +150,10 @@ def test_main_keeps_named_classified_objects_with_their_positions(
     pbf = write_mixed_extract(tmp_path / "mixed.osm.pbf")
     out = build(tmp_path, pbf)
 
-    # not kept: the kiosk (no class), the unnamed hamlet, the bus stop
-    # (a road outside North Frisia) and the unnamed way; a relation's
-    # position is the mean of its member ways' first nodes, or none at all
+    # not kept: the kiosk (no class), the unnamed hamlet, the hamlet named in
+    # Frisian alone (no name the matcher looks for), the bus stop (a road
+    # outside North Frisia) and the unnamed way; a relation's position is
+    # the mean of its member ways' first nodes, or none at all
     assert list(candidates.read_records(out)) == [
         {
             "src": "mixed",
@@ -160,17 +161,7 @@ def test_main_keeps_named_classified_objects_with_their_positions(
             "id": 1,
             "lon": 8.83,
             "lat": 54.71,
-            "cls": ["place=village"],
-            "tags": {"place": "village", "population": "40", "name": "Toftum"},
-        },
-        {
-            "src": "mixed",
-            "t": "n",
-            "id": 4,
-            "lon": 8.86,
-            "lat": 54.74,
-            "cls": ["place=hamlet"],
-            "tags": {"place": "hamlet", "name:frr": "Hoorbel"},
+            "tags": {"place": "village", "name": "Toftum"},
         },
         {
             "src": "mixed",
@@ -178,7 +169,6 @@ def test_main_keeps_named_classified_objects_with_their_positions(
             "id": 20,
             "lon": 8.813333,
             "lat": 54.606667,
-            "cls": ["highway=residential"],
             "tags": {"highway": "residential", "name": "Dorfstraße"},
         },
         {
@@ -187,7 +177,6 @@ def test_main_keeps_named_classified_objects_with_their_positions(
             "id": 22,
             "lon": 8.86,
             "lat": 54.66,
-            "cls": ["landuse=farmland"],
             "tags": {"landuse": "farmland", "name": "Koogweg"},
         },
         {
@@ -196,7 +185,6 @@ def test_main_keeps_named_classified_objects_with_their_positions(
             "id": 30,
             "lon": 8.86,
             "lat": 54.66,
-            "cls": ["place=polder", "wikidata"],
             "tags": {"place": "polder", "wikidata": "Q1", "name": "Neuer Koog"},
         },
         {
@@ -205,7 +193,6 @@ def test_main_keeps_named_classified_objects_with_their_positions(
             "id": 31,
             "lon": None,
             "lat": None,
-            "cls": ["boundary=historic"],
             "tags": {"boundary": "historic", "name": "Verloren"},
         },
     ]
@@ -214,15 +201,48 @@ def test_main_keeps_named_classified_objects_with_their_positions(
         stderr == f"scanning {pbf} ...\n  mixed: 15 objects scanned, 3 way centroids cached, Ns\n"
     )
     assert stdout == (
-        f"\nwrote 6 candidates to {out} in Ns\n"
-        "  nodes 2  ways 2  relations 2\n"
+        f"\nwrote 5 candidates to {out} in Ns\n"
+        "  nodes 1  ways 2  relations 2\n"
         "counts by tag class (an object can count in several):\n"
         "         1  boundary\n"
         "         1  highway\n"
         "         1  landuse\n"
-        "         3  place\n"
+        "         2  place\n"
         "         1  wikidata\n"
     )
+
+
+def scanned_tags(tmp_path: Path, tags: dict[str, str]) -> list[dict[str, str]]:
+    """The tags of the candidate records a scan makes of one node with `tags`."""
+    pbf = write_extract(tmp_path / "one.osm.pbf", nodes={1: ((8.83, 54.71), tags)})
+    return [rec["tags"] for rec in candidates.read_records(build(tmp_path, pbf))]
+
+
+def test_an_object_named_by_its_short_name_alone_is_a_candidate(tmp_path: Path) -> None:
+    wyk = {"short_name": "Wyk", "place": "town"}
+    assert scanned_tags(tmp_path, wyk) == [wyk]
+
+
+def test_a_record_keeps_only_the_tags_the_pipeline_reads(tmp_path: Path) -> None:
+    husum = {
+        "name": "Husum",
+        "name:frr": "Hüsem",
+        "loc_name": "Husem",
+        "place": "town",
+        "population": "23000",
+        "wikidata": "Q21159",
+        "wikipedia": "de:Husum",
+        "ref": "HUS",
+    }
+    assert scanned_tags(tmp_path, husum) == [
+        {"name": "Husum", "place": "town", "wikidata": "Q21159"}
+    ]
+
+
+def test_a_marina_stays_a_candidate_though_no_kind_reads_what_it_is(tmp_path: Path) -> None:
+    # a near miss a reviewer may still pick
+    marina = {"name": "Sportboothafen Dagebüll", "leisure": "marina"}
+    assert scanned_tags(tmp_path, marina) == [{"name": "Sportboothafen Dagebüll"}]
 
 
 def test_the_command_scans_into_the_work_directory_its_option_names(tmp_path: Path) -> None:

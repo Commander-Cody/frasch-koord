@@ -12,6 +12,8 @@ describe('the worklist types', () => {
       bbox: { array: true },
       kind_order: { array: true },
       polygon_kinds: { array: true },
+      class_keys: { array: true },
+      settlement_places: { array: true },
       results: { array: true },
       rows: { array: true },
     };

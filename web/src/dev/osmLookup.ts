@@ -18,21 +18,21 @@ export interface LookupResult {
   wikidata?: string;
 }
 
-/** Tags worth seeing at a glance in a lookup result. */
-const INTERESTING_TAGS = [
-  'place',
-  'highway',
-  'natural',
-  'landuse',
-  'waterway',
-  'boundary',
-  'water',
-  'man_made',
-];
+/** Where a lookup searches, and what it shows of a result. */
+export interface LookupScope {
+  /** The worklist's bbox. */
+  bbox: Bbox;
+  /** The worklist's `class_keys`: the tags worth seeing at a glance in a result. */
+  classKeys: readonly string[];
+}
 
-function tagSummary(tags: Record<string, string> | undefined): string {
+function tagSummary(
+  tags: Record<string, string> | undefined,
+  classKeys: readonly string[],
+): string {
   if (!tags) return '';
-  return INTERESTING_TAGS.filter((k) => tags[k])
+  return classKeys
+    .filter((k) => tags[k])
     .map((k) => `${k}=${tags[k]}`)
     .join(' ');
 }
@@ -58,7 +58,7 @@ interface NominatimHit {
 
 async function searchNominatim(
   query: string,
-  [w, s, e, n]: Bbox,
+  { bbox: [w, s, e, n] }: LookupScope,
   signal: AbortSignal,
 ): Promise<LookupResult[]> {
   const url =
@@ -90,7 +90,7 @@ interface OverpassElement {
 
 async function searchOverpass(
   query: string,
-  [w, s, e, n]: Bbox,
+  { bbox: [w, s, e, n], classKeys }: LookupScope,
   signal: AbortSignal,
 ): Promise<LookupResult[]> {
   const overpassQuery =
@@ -113,10 +113,10 @@ async function searchOverpass(
     results.push({
       ref: `${element.type}/${element.id}`,
       name: element.tags?.name ?? '',
-      what: tagSummary(element.tags) || element.type,
+      what: tagSummary(element.tags, classKeys) || element.type,
       lon,
       lat,
-      tags: tagSummary(element.tags),
+      tags: tagSummary(element.tags, classKeys),
       wikidata: element.tags?.wikidata,
     });
   }
@@ -142,7 +142,7 @@ export interface OsmLookup {
  * The lookup's query, starting at `initialQuery`, and what the last search
  * found. A search still on its way when the component unmounts is aborted.
  */
-export function useOsmLookup(bbox: Bbox, initialQuery: string): OsmLookup {
+export function useOsmLookup(scope: LookupScope, initialQuery: string): OsmLookup {
   const [query, setQuery] = useState(initialQuery);
   const [results, setResults] = useState<LookupResult[]>([]);
   const [source, setSource] = useState('');
@@ -158,7 +158,7 @@ export function useOsmLookup(bbox: Bbox, initialQuery: string): OsmLookup {
     setBusy(true);
     setError(null);
     try {
-      const found = await SERVICES[service](query, bbox, controller.signal);
+      const found = await SERVICES[service](query, scope, controller.signal);
       setResults(found);
       setSource(`${service}: ${found.length} result(s)`);
     } catch (err: unknown) {

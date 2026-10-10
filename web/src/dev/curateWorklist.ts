@@ -62,6 +62,10 @@ export interface CurateWorklist {
   kind_order: string[];
   /** The kinds whose local reference can carry an area instead of a bare point. */
   polygon_kinds: string[];
+  /** The OSM tags that say what kind of thing an object is, the most telling first. */
+  class_keys: string[];
+  /** The `place` values of a settlement, as a candidate's `class` has them. */
+  settlement_places: string[];
   /** The results a row can have, for the filter. */
   results: CurateRow['result'][];
   rows: CurateRow[];

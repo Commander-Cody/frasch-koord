@@ -38,6 +38,10 @@ export interface CurateDetailProps {
   done: PatchEntry | null;
   /** The worklist's bbox, which the lookups search in. */
   bbox: Bbox;
+  /** The worklist's class tags, by which a lookup result is summed up. */
+  classKeys: readonly string[];
+  /** The worklist's settlement classes: their candidates get the settlement colour. */
+  settlementPlaces: readonly string[];
   /** Whether a local reference of the row's kind can carry an area instead of a bare point. */
   canBePolygon: boolean;
   mapRef: RefObject<MapViewHandle | null>;
@@ -99,11 +103,13 @@ export default function CurateDetail({
   row,
   done,
   bbox,
+  classKeys,
+  settlementPlaces,
   canBePolygon,
   mapRef,
   onSave,
 }: CurateDetailProps) {
-  const lookup = useOsmLookup(bbox, row.name_de || row.name_da || row.name);
+  const lookup = useOsmLookup({ bbox, classKeys }, row.name_de || row.name_da || row.name);
   const { checked, toggle, checkAll, clear } = useCheckedRefs();
   const [activeRef, setActiveRef] = useState<string | null>(null);
   const [note, setNote] = useState('');
@@ -115,6 +121,7 @@ export default function CurateDetail({
     mapRef,
     row,
     bbox,
+    settlementPlaces,
     lookupResults: lookup.results,
     checked,
     onActivate: setActiveRef,
@@ -155,6 +162,7 @@ export default function CurateDetail({
       <fieldset className="curate-decisions" disabled={saving} aria-busy={saving}>
         <Candidates
           candidates={row.candidates}
+          colorOf={(candidate) => candidateColor(candidate, settlementPlaces)}
           activeRef={activeRef}
           isChecked={isChecked}
           onToggle={toggle}
@@ -232,6 +240,8 @@ function RowFacts({ row }: { row: CurateRow }) {
 
 interface CandidatesProps {
   candidates: CurateCandidate[];
+  /** A candidate's colour, as on its pin. */
+  colorOf: (candidate: CurateCandidate) => string;
   activeRef: string | null;
   isChecked: (ref: string) => boolean;
   onToggle: (ref: string, wikidata?: string) => void;
@@ -243,6 +253,7 @@ interface CandidatesProps {
 /** The matcher's candidates, numbered and coloured like their pins. */
 function Candidates({
   candidates,
+  colorOf,
   activeRef,
   isChecked,
   onToggle,
@@ -273,7 +284,7 @@ function Candidates({
             key={candidate.ref}
             osmRef={candidate.ref}
             number={i + 1}
-            color={candidateColor(candidate)}
+            color={colorOf(candidate)}
             name={candidate.name}
             meta={candidateMeta(candidate)}
             wikidataTag={candidate.wikidata}

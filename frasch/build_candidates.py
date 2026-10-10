@@ -5,16 +5,21 @@ Output: names/work/candidates.jsonl  (one JSON object per line)
   first line  {"header": {"extracts": [{"file", "replication_timestamp"}, ...]}}
               -- the extracts it was built from (frasch.candidates); `frasch match` warns
               when that set changes between two of its runs
-  then        {"src","t","id","lon","lat","cls","tags":{...}}  per candidate
-              (frasch.candidates)
+  then        {"src","t","id","lon","lat","tags":{...}}  per candidate
+              (frasch.candidates), with the tags the pipeline reads
+              (frasch.osmtags.KEPT_KEYS) and no other
 
-Tag filter (object must carry a name-ish tag AND one of):
+Tag filter (object must carry a name the matcher looks for,
+frasch.osmtags.NAME_FIELDS, AND one of):
   place=*, natural=<water-ish/island-ish>, water=*, waterway=*, landuse=*,
   boundary=administrative|political|historic|maritime|land_area|place|
            protected_area,
-  man_made=*, historic=*, amenity=harbour, harbour=*, leisure=marina,
-  admin_level=*, wikidata=*, wikipedia=*,
+  man_made=*, historic=*,
   highway=*  -- only inside North Frisia (frasch.geo.NF_BBOX, Helgoland included)
+  -- the class tags (frasch.osmtags.CLASS_KEYS) -- or, as a near miss a
+  reviewer may still pick though no kind matches on it:
+  amenity=harbour, harbour=*, leisure=marina, admin_level=*, wikidata=*,
+  wikipedia=*
 
 Why these: a reconnaissance pass over Schleswig-Holstein showed that
   * Warften are mostly place=isolated_dwelling / place=hamlet nodes, plus
@@ -40,15 +45,15 @@ import json
 import os
 import sys
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Sequence
 from typing import IO
 
 import osmium
 
 from frasch import candidates, cli, files, geo, osmscan
 from frasch.geo import LonLat
+from frasch.osmtags import CLASS_KEYS, KEPT_KEYS, NAME_FIELDS, Tags
 from frasch.paths import Workspace
-
 
 NATURAL_KEEP = {
     "water",
@@ -81,75 +86,35 @@ BOUNDARY_KEEP = {
     "place",
     "protected_area",
 }
-NAME_KEYS_EXTRA = (
-    "alt_name",
-    "old_name",
-    "official_name",
-    "loc_name",
-    "short_name",
-    "int_name",
-    "nat_name",
-    "reg_name",
+# The values of a class tag that make an object a candidate; of a class tag
+# that is not listed, any value does.
+KEEP_VALUES = {"natural": NATURAL_KEEP, "boundary": BOUNDARY_KEEP}
+# The class tags that make a candidate only inside North Frisia: named roads.
+NF_ONLY_CLASSES = {"highway"}
+# What else makes a named object a candidate, by the name the scan counts it
+# under: nothing a kind matches on, but a near miss a reviewer may still pick.
+ALSO_KEPT: tuple[tuple[str, Callable[[Tags], bool]], ...] = (
+    ("harbour", lambda tags: "harbour" in tags or tags.get("amenity") == "harbour"),
+    ("marina", lambda tags: tags.get("leisure") == "marina"),
+    ("admin_level", lambda tags: "admin_level" in tags),
+    ("wikidata", lambda tags: "wikidata" in tags),
+    ("wikipedia", lambda tags: "wikipedia" in tags and "wikidata" not in tags),
 )
-CLASS_KEYS = (
-    "place",
-    "natural",
-    "water",
-    "waterway",
-    "landuse",
-    "boundary",
-    "man_made",
-    "historic",
-    "harbour",
-    "leisure",
-    "amenity",
-    "highway",
-    "admin_level",
-    "type",
-    "tourism",
-    "building",
-)
-EXTRA_KEYS = ("wikidata", "wikipedia", "population", "ref")
 
 
-def name_tags(tags: Mapping[str, str]) -> dict[str, str]:
-    out = {}
-    for k, v in tags.items():
-        if k == "name" or k.startswith("name:") or k in NAME_KEYS_EXTRA:
-            out[k] = v
-    return out
+def kept_for(tags: Tags, in_north_frisia: bool) -> list[str]:
+    """Why a named object is a candidate -- its class tags, and what else
+    keeps it (ALSO_KEPT) --, nothing if it is none.  `in_north_frisia`:
+    whether it lies there."""
 
+    def is_class(key: str) -> bool:
+        if key not in tags or (key in NF_ONLY_CLASSES and not in_north_frisia):
+            return False
+        return key not in KEEP_VALUES or tags[key] in KEEP_VALUES[key]
 
-def classify(tags: Mapping[str, str]) -> list[str] | None:
-    """Return a sorted list of tag classes the object belongs to, or None."""
-    cls = []
-    if "place" in tags:
-        cls.append("place=" + tags["place"])
-    if tags.get("natural") in NATURAL_KEEP:
-        cls.append("natural=" + tags["natural"])
-    if "water" in tags:
-        cls.append("water=" + tags["water"])
-    if "waterway" in tags:
-        cls.append("waterway=" + tags["waterway"])
-    if "landuse" in tags:
-        cls.append("landuse=" + tags["landuse"])
-    if tags.get("boundary") in BOUNDARY_KEEP:
-        cls.append("boundary=" + tags["boundary"])
-    if "man_made" in tags:
-        cls.append("man_made=" + tags["man_made"])
-    if "historic" in tags:
-        cls.append("historic=" + tags["historic"])
-    if "harbour" in tags or tags.get("amenity") == "harbour":
-        cls.append("harbour")
-    if tags.get("leisure") == "marina":
-        cls.append("marina")
-    if "admin_level" in tags:
-        cls.append("admin_level=" + tags["admin_level"])
-    if "wikidata" in tags:
-        cls.append("wikidata")
-    elif "wikipedia" in tags:
-        cls.append("wikipedia")
-    return cls or None
+    return [key for key in CLASS_KEYS if is_class(key)] + [
+        name for name, holds in ALSO_KEPT if holds(tags)
+    ]
 
 
 class WayCentroids:
@@ -220,14 +185,9 @@ def way_centroid(w: osmium.osm.Way, sample: int = 12) -> LonLat | None:
 
 
 def has_name(tags: osmium.osm.TagList) -> bool:
-    """Cheap-first test for any name-ish tag (works on the C++ TagList)."""
-    for k in ("name", "alt_name", "old_name", "official_name"):
-        if k in tags:
-            return True
-    for tag in tags:
-        if tag.k.startswith("name:"):
-            return True
-    return False
+    """Whether an object carries a name the matcher looks for (works on the
+    C++ TagList, before the tags are copied)."""
+    return any(key in tags for key in NAME_FIELDS)
 
 
 def process(
@@ -264,12 +224,13 @@ def process(
         else:  # an area or a changeset: never a candidate
             continue
 
-        rec = _record(o, src, lon, lat)
-        if rec is None:
+        tags = dict(otags)
+        why = kept_for(tags, geo.in_north_frisia(lon, lat))
+        if not why:
             continue
+        rec = _record(o, src, lon, lat, tags)
         out.write(json.dumps(rec, ensure_ascii=False) + "\n")
-        for cl in rec["cls"]:
-            counts[cl.split("=")[0]] += 1
+        counts.update(why)
         counts["_total"] += 1
         counts["_total_" + rec["t"]] += 1
     print(
@@ -300,30 +261,17 @@ def _record(
     src: str,
     lon: float | None,
     lat: float | None,
-) -> candidates.Candidate | None:
-    """The record of a named object at (lon, lat), or None if it has no class
-    worth keeping."""
-    tags = dict(o.tags)
-    cls = classify(tags) or []
-    # named roads: only inside North Frisia
-    if "highway" in tags and geo.in_north_frisia(lon, lat):
-        cls.append("highway=" + tags["highway"])
-    if not cls:
-        return None
-
-    names = name_tags(tags)
-    if not names:
-        return None
-    keep = {k: tags[k] for k in CLASS_KEYS + EXTRA_KEYS if k in tags}
-    keep.update(names)
+    tags: Tags,
+) -> candidates.Candidate:
+    """The record of a candidate at (lon, lat): of its `tags`, those the
+    pipeline reads."""
     return {
         "src": src,
         "t": o.type_str(),  # 'n' | 'w' | 'r'
         "id": o.id,
         "lon": round(lon, 6) if lon is not None else None,
         "lat": round(lat, 6) if lat is not None else None,
-        "cls": cls,
-        "tags": keep,
+        "tags": {key: tags[key] for key in KEPT_KEYS if key in tags},
     }
 
 

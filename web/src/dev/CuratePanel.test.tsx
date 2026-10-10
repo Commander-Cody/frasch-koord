@@ -50,6 +50,8 @@ const WORKLIST: CurateWorklist = {
   bbox: [8, 54, 9, 55],
   kind_order: ['settlement'],
   polygon_kinds: ['koog'],
+  class_keys: ['place', 'boundary'],
+  settlement_places: ['village', 'town'],
   results: ['ambiguous', 'not_found'],
   rows: [
     curateRow('naibel', 'Naibel', 'Niebüll'),
@@ -143,26 +145,28 @@ async function renderPanel() {
   await screen.findByText('Naibel');
 }
 
-/** Runs an Overpass lookup that finds one way, `way/<id>`, tagged with `wikidata`. */
-async function findOverpassResult(osmRef: string, wikidata: string) {
+/** Runs an Overpass lookup that finds one object, `osmRef`, with `tags`. */
+async function findOverpassObject(osmRef: string, tags: Record<string, string>) {
   const [type, id] = osmRef.split('/');
   fireEvent.click(screen.getByRole('button', { name: 'Overpass' }));
   const { reply } = lookups[lookups.length - 1];
   await act(async () => {
     reply.resolve(
-      json({
-        elements: [
-          {
-            type,
-            id: Number(id),
-            center: { lat: 54.8, lon: 8.8 },
-            tags: { name: 'Niebüll', wikidata },
-          },
-        ],
-      }),
+      json({ elements: [{ type, id: Number(id), center: { lat: 54.8, lon: 8.8 }, tags }] }),
     );
     await reply.promise;
   });
+}
+
+/** Runs an Overpass lookup that finds one way, `way/<id>`, tagged with `wikidata`. */
+function findOverpassResult(osmRef: string, wikidata: string) {
+  return findOverpassObject(osmRef, { name: 'Niebüll', wikidata });
+}
+
+/** The colour of the number a candidate or lookup result is listed with. */
+async function listedColor(osmRef: string): Promise<string> {
+  const item = await listedItem(osmRef);
+  return (item.querySelector('.curate-num') as HTMLElement).style.background;
 }
 
 /** The lookup result or candidate listed with `osmRef`. */
@@ -212,6 +216,40 @@ describe('CuratePanel', () => {
     await openRow('Naibel');
 
     expect(screen.queryByLabelText('polygon_km2')).not.toBeNull();
+  });
+
+  it('sums a lookup result up by the class tags of the worklist, in their order', async () => {
+    worklist = { ...WORKLIST, class_keys: ['historic', 'place'] };
+    await renderPanel();
+    await openRow('Naibel');
+
+    await findOverpassObject('node/501', {
+      name: 'Niebüll',
+      place: 'hamlet',
+      amenity: 'pub',
+      historic: 'yes',
+    });
+
+    const item = await listedItem('node/501');
+    expect(item.querySelector('.curate-candidate-meta')?.textContent).toBe(
+      'historic=yes place=hamlet',
+    );
+  });
+
+  it('colours a candidate as a settlement when the worklist says its class is one', async () => {
+    const row = {
+      ...curateRow('naibel', 'Naibel', 'Niebüll'),
+      candidates: [
+        candidate('node/1', 'Niebüll', 'polder'),
+        candidate('node/2', 'Niebüll', 'bus_stop'),
+      ],
+    };
+    worklist = { ...WORKLIST, settlement_places: ['polder'], rows: [row] };
+    await renderPanel();
+
+    await openRow('Naibel');
+
+    expect(await listedColor('node/1')).not.toBe(await listedColor('node/2'));
   });
 
   it('offers no area of a local reference for any other kind', async () => {

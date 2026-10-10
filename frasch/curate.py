@@ -19,7 +19,8 @@ What gets written where
                            rows the matcher owns -- the same cells it
                            writes itself, and never a row a human has already decided
                            (status ok/skip, a hand-filled reference, a local
-                           reference, `not_a_place`), and never an object or
+                           reference, `not_a_place`) or one without a Frisian
+                           name, and never an object or
                            Wikidata item another row holds: the name list
                            would be refused.  Review with `git diff`.
   names/curation.csv       apply: one appended row per `local` decision (a
@@ -70,8 +71,10 @@ from frasch import (
     errors,
     files,
     geo,
+    kinds,
     namecell,
     nameindex,
+    osmtags,
     paths,
     placelist,
     refs,
@@ -81,26 +84,8 @@ from frasch.dialects import Registry
 from frasch.errors import PipelineError
 from frasch.hints import HINT_FALLBACK, Circle, HintResolver
 from frasch.paths import StrPath, Workspace
-from frasch.placelist import PlaceList, PlaceRow, Row
+from frasch.placelist import PlaceList, PlaceRow, Reference, Row
 from frasch.refs import OsmRef
-
-# The order the browser walks the worklist in: the kinds a human can decide
-# quickly first (a village is either there or it is not), the vague ones last.
-KIND_ORDER = [
-    "settlement",
-    "island",
-    "hallig",
-    "helgoland",
-    "sand",
-    "landscape",
-    "water",
-    "harde",
-    "road",
-    "country",
-    "koog",
-    "warft",
-    "not_a_place",
-]
 
 # The extract (`src` of a candidate) the tiles are built from: only its
 # objects can carry an injected name, so it is what "in Schleswig-Holstein"
@@ -109,10 +94,6 @@ SH_SRC = "schleswig-holstein"
 
 # The results of a match that leave a row for a human.
 RESULTS = ("ambiguous", "not_found")
-
-# The kinds whose local reference can be a square of an area (`polygon_km2`,
-# see `decide_local`) instead of a node: the ones that are an area.
-POLYGON_KINDS = ["koog", "harde", "landscape", "island", "hallig", "sand"]
 
 # ------------------------------------------------------------- the worklist ---
 # curate.json, as names/curate-worklist.schema.json defines it and
@@ -157,6 +138,8 @@ class Worklist(TypedDict):
     bbox: list[float]
     kind_order: list[str]
     polygon_kinds: list[str]
+    class_keys: list[str]
+    settlement_places: list[str]
     results: list[str]
     rows: list[WorkRow]
 
@@ -208,7 +191,7 @@ def stream_records(
             continue
         if not hint_norms:
             continue
-        for field in nameindex.NAME_FIELDS:
+        for field in osmtags.NAME_FIELDS:
             v = rec["tags"].get(field)
             if v and any(
                 nameindex.norm(p) in hint_norms for p, _pen in nameindex.split_name_values(v)
@@ -235,7 +218,7 @@ def work_candidate(listed: ListedCandidate, rec: Candidate | None, in_sh: bool) 
     if rec is None:  # candidates.jsonl rebuilt since the run
         return c
     c["lon"], c["lat"] = rec["lon"], rec["lat"]
-    c["tags"] = candidates.decisive_tags(rec)
+    c["tags"] = osmtags.decisive(rec["tags"])
     c["in_sh"] = in_sh
     if rec["tags"].get("wikidata"):
         c["wikidata"] = rec["tags"]["wikidata"]
@@ -279,7 +262,7 @@ def _read_work(ws: Workspace, reg: Registry) -> _Work:
             if row is None:  # deleted from places.csv since the run
                 work.stale += 1
                 continue
-            if not placelist.owned_by_matcher(row):
+            if not placelist.state(row, reg).matchers:
                 work.unowned += 1  # decided by hand since the last run
                 continue
             work.matches.append((row, m))
@@ -328,8 +311,7 @@ def _work_rows(
     for row, m in work:
         cands = _work_candidates(m["candidates"], index, srcs)
         out.append(_work_row(row, m, cands, hints.resolve(_first_hint(row)), reg))
-    order = {k: i for i, k in enumerate(KIND_ORDER)}
-    out.sort(key=lambda r: (order.get(r["kind"], len(order)), r["line"]))
+    out.sort(key=lambda r: (kinds.KIND_ORDER.index(r["kind"]), r["line"]))
     return out
 
 
@@ -379,8 +361,10 @@ def _write_worklist(path: str, rows: list[WorkRow]) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     worklist: Worklist = {
         "bbox": list(geo.NF_BBOX),
-        "kind_order": KIND_ORDER,
-        "polygon_kinds": POLYGON_KINDS,
+        "kind_order": kinds.KIND_ORDER,
+        "polygon_kinds": kinds.POLYGON_KINDS,
+        "class_keys": list(osmtags.CLASS_KEYS),
+        "settlement_places": sorted(osmtags.SETTLEMENT_PLACES),
         "results": list(RESULTS),
         "rows": rows,
     }
@@ -551,13 +535,14 @@ def schema_problem(entry: object) -> str | None:
     return f"{where + ': ' if where else ''}{error.message} (curate-patch.schema.json)"
 
 
-def owner_problem(row: PlaceRow, names: str) -> str | None:
-    """Why apply refuses an entry's row before looking at its decision, or
-    None: the row must be the matcher's to fill."""
-    if not placelist.owned_by_matcher(row):
+def owner_problem(row: PlaceRow, names: PlaceList) -> str | None:
+    """Why apply refuses an entry's row of the list `names` before looking
+    at its decision, or None: the row must be the matcher's to fill."""
+    state = placelist.state(row, names.reg)
+    if not state.matchers:
         return (
-            f"{names}:{row.line} is not the matcher's to fill "
-            f"(status={row['status'] or 'empty'}, osm={row['osm'] or '-'})"
+            f"{names.path}:{row.line} is not the matcher's to fill "
+            f"({state.label}: status={row['status'] or 'empty'}, osm={row['osm'] or '-'})"
         )
     return None
 
@@ -565,9 +550,10 @@ def owner_problem(row: PlaceRow, names: str) -> str | None:
 def decide(entry: PatchEntry, row: dict[str, str], claimed: Mapping[str, int]) -> str | None:
     """Write an `osm` or `skip` decision into `row`; -> why not, or None.
     `claimed` is what the other rows of the list hold (claim -> line): a row
-    cannot be given what one of them claims."""
+    cannot be given what one of them claims.  The decision is the row's
+    whole reference: nothing of what the matcher gave it stays."""
     if entry["action"] == "skip":
-        row["status"] = "skip"
+        Reference.skipped().write(row)
         return None
     try:
         chosen = refs.parse(entry.get("osm"))
@@ -577,13 +563,11 @@ def decide(entry: PatchEntry, row: dict[str, str], claimed: Mapping[str, int]) -
         return "action=osm without an `osm` reference"
     if any(t == refs.LOCAL_TYPE for t, _ in chosen):
         return "a local reference is action=local, not action=osm"
-    wikidata = entry.get("wikidata") or row["wikidata"]
-    taken = placelist.claim_problems(placelist.Claims(chosen, wikidata).keys, claimed)
+    picked = Reference.checked(chosen, entry.get("wikidata", ""))
+    taken = placelist.claim_problems(placelist.Claims(chosen, picked.wikidata).keys, claimed)
     if taken:
         return "; ".join(taken)
-    row["osm"] = refs.format(chosen)
-    row["wikidata"] = wikidata
-    row["status"] = "ok"
+    picked.write(row)
     return None
 
 
@@ -600,9 +584,7 @@ def decide_local(
     lat, lon = entry.get("lat"), entry.get("lon")
     if lat is None or lon is None:
         return "action=local needs `lat` and `lon`", None
-    row["osm"] = f"local/{slug}"
-    row["wikidata"] = ""
-    row["status"] = "ok"
+    Reference.local(slug).write(row)
     used_slugs.add(slug)
     cur = {c: "" for c in curationlist.COLUMNS}
     cur.update(
@@ -616,25 +598,21 @@ def decide_local(
 
 
 def decision_text(entry: PatchEntry, row: Row, curation: str) -> str:
-    """What an applied decision changed, for the log."""
-    if entry["action"] == "skip":
-        return "status = skip"
-    if entry["action"] == "osm":
-        return (
-            f"osm = {row['osm']}"
-            + (f", wikidata = {entry['wikidata']}" if entry.get("wikidata") else "")
-            + ", status = ok"
-        )
-    text = (
-        f"osm = {row['osm']}, status = ok; "
-        f"{curation} += {fmt_deg(entry['lat'])}/{fmt_deg(entry['lon'])}"
-    )
+    """What an applied decision changed, for the log: the reference `row`
+    has now -- every cell of it, an empty one as `-`, since a decision
+    leaves nothing of an older reference -- and for a `local` decision the
+    curation row that positions it."""
+    osm, wikidata, status = (cell or "-" for cell in Reference.of(row))
+    text = f"osm = {osm}, wikidata = {wikidata}, status = {status}"
+    if entry["action"] != "local":
+        return text
+    text += f"; {curation} += {fmt_deg(entry['lat'])}/{fmt_deg(entry['lon'])}"
     if (km2 := entry.get("polygon_km2")) is not None:
         return text + f", polygon_km2 = {km2:g}"
-    if row["kind"] not in curationlist.POINT_TAGS:
+    if not kinds.rule(row["kind"]).point_place:
         text += (
             f"\n    warning: kind={row['kind']} has no default `place=` "
-            f"(curationlist.POINT_TAGS) -- put one into the curation row's "
+            f"(`point_place` in frasch/kinds.py) -- put one into the curation row's "
             f"`set_tags` before the next build"
         )
     return text
@@ -796,7 +774,7 @@ def _decide_entry(line: PatchLine, lists: _Lists, decisions: _Decisions) -> None
             line, f"no row with id {e['id']!r} in {lists.places.path} (deleted since the export?)"
         )
         return
-    why = owner_problem(row, lists.places.path)
+    why = owner_problem(row, lists.places)
     if why is None:
         why = _decide_row(e, row, lists, decisions.new_curation)
     if why:

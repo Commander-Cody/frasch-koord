@@ -32,7 +32,6 @@ def rec(t: str, id: int, lon: float | None, lat: float | None, **tags: str) -> C
         "id": id,
         "lon": lon,
         "lat": lat,
-        "cls": [],
         "tags": tags,
     }
 
@@ -236,6 +235,39 @@ def test_the_exported_worklist_keeps_its_schema(world: Path) -> None:
     assert schema_problems(worklist, "curate-worklist") == []
 
 
+def test_the_worklist_names_the_class_tags_the_most_telling_first(world: Path) -> None:
+    worklist = json.loads(export_the_review_rows(world).read_text(encoding="utf-8"))
+    assert worklist["class_keys"] == [
+        "place",
+        "natural",
+        "boundary",
+        "waterway",
+        "landuse",
+        "man_made",
+        "highway",
+        "water",
+        "historic",
+    ]
+
+
+def test_the_worklist_names_the_place_values_of_a_settlement(world: Path) -> None:
+    worklist = json.loads(export_the_review_rows(world).read_text(encoding="utf-8"))
+    assert worklist["settlement_places"] == [
+        "borough",
+        "city",
+        "farm",
+        "hamlet",
+        "isolated_dwelling",
+        "locality",
+        "municipality",
+        "neighbourhood",
+        "quarter",
+        "suburb",
+        "town",
+        "village",
+    ]
+
+
 def test_the_worklist_offers_the_results_of_its_schema(world: Path) -> None:
     worklist = json.loads(export_the_review_rows(world).read_text(encoding="utf-8"))
     assert worklist["results"] == read_schema("curate-worklist")["$defs"]["result"]["enum"]
@@ -267,8 +299,29 @@ def test_export_writes_the_worklist_and_reports_what_it_left_out(
     )
     worklist = json.loads(out.read_text(encoding="utf-8"))
     assert worklist["bbox"] == [7.8, 54.15, 9.55, 55.12]
-    assert worklist["kind_order"] == curate.KIND_ORDER
-    assert worklist["polygon_kinds"] == curate.POLYGON_KINDS
+    assert worklist["kind_order"] == [
+        "settlement",
+        "island",
+        "hallig",
+        "helgoland",
+        "sand",
+        "landscape",
+        "water",
+        "harde",
+        "road",
+        "country",
+        "koog",
+        "warft",
+        "not_a_place",
+    ]
+    assert sorted(worklist["polygon_kinds"]) == [
+        "hallig",
+        "harde",
+        "island",
+        "koog",
+        "landscape",
+        "sand",
+    ]
     # settlements before the warft, each kind in places.csv order
     kampen, bol, warft = worklist["rows"]
     assert [kampen["id"], bol["id"], warft["id"]] == ["kampen", "bol", "kirchwarft"]
