@@ -83,7 +83,7 @@ from frasch.dialects import Registry
 from frasch.errors import PipelineError
 from frasch.hints import HINT_FALLBACK, Circle, HintResolver
 from frasch.paths import StrPath, Workspace
-from frasch.placelist import PlaceList, PlaceRow, Row
+from frasch.placelist import PlaceList, PlaceRow, Reference, Row
 from frasch.refs import OsmRef
 
 # The extract (`src` of a candidate) the tiles are built from: only its
@@ -259,7 +259,7 @@ def _read_work(ws: Workspace, reg: Registry) -> _Work:
             if row is None:  # deleted from places.csv since the run
                 work.stale += 1
                 continue
-            if not placelist.owned_by_matcher(row):
+            if not placelist.state(row, reg).matchers:
                 work.unowned += 1  # decided by hand since the last run
                 continue
             work.matches.append((row, m))
@@ -530,12 +530,12 @@ def schema_problem(entry: object) -> str | None:
     return f"{where + ': ' if where else ''}{error.message} (curate-patch.schema.json)"
 
 
-def owner_problem(row: PlaceRow, names: str) -> str | None:
-    """Why apply refuses an entry's row before looking at its decision, or
-    None: the row must be the matcher's to fill."""
-    if not placelist.owned_by_matcher(row):
+def owner_problem(row: PlaceRow, names: PlaceList) -> str | None:
+    """Why apply refuses an entry's row of the list `names` before looking
+    at its decision, or None: the row must be the matcher's to fill."""
+    if not placelist.state(row, names.reg).matchers:
         return (
-            f"{names}:{row.line} is not the matcher's to fill "
+            f"{names.path}:{row.line} is not the matcher's to fill "
             f"(status={row['status'] or 'empty'}, osm={row['osm'] or '-'})"
         )
     return None
@@ -544,9 +544,10 @@ def owner_problem(row: PlaceRow, names: str) -> str | None:
 def decide(entry: PatchEntry, row: dict[str, str], claimed: Mapping[str, int]) -> str | None:
     """Write an `osm` or `skip` decision into `row`; -> why not, or None.
     `claimed` is what the other rows of the list hold (claim -> line): a row
-    cannot be given what one of them claims."""
+    cannot be given what one of them claims.  The decision is the row's
+    whole reference: nothing of what the matcher gave it stays."""
     if entry["action"] == "skip":
-        row["status"] = "skip"
+        Reference.skipped().write(row)
         return None
     try:
         chosen = refs.parse(entry.get("osm"))
@@ -556,13 +557,11 @@ def decide(entry: PatchEntry, row: dict[str, str], claimed: Mapping[str, int]) -
         return "action=osm without an `osm` reference"
     if any(t == refs.LOCAL_TYPE for t, _ in chosen):
         return "a local reference is action=local, not action=osm"
-    wikidata = entry.get("wikidata") or row["wikidata"]
-    taken = placelist.claim_problems(placelist.Claims(chosen, wikidata).keys, claimed)
+    picked = Reference.checked(chosen, entry.get("wikidata", ""))
+    taken = placelist.claim_problems(placelist.Claims(chosen, picked.wikidata).keys, claimed)
     if taken:
         return "; ".join(taken)
-    row["osm"] = refs.format(chosen)
-    row["wikidata"] = wikidata
-    row["status"] = "ok"
+    picked.write(row)
     return None
 
 
@@ -579,9 +578,7 @@ def decide_local(
     lat, lon = entry.get("lat"), entry.get("lon")
     if lat is None or lon is None:
         return "action=local needs `lat` and `lon`", None
-    row["osm"] = f"local/{slug}"
-    row["wikidata"] = ""
-    row["status"] = "ok"
+    Reference.local(slug).write(row)
     used_slugs.add(slug)
     cur = {c: "" for c in curationlist.COLUMNS}
     cur.update(
@@ -775,7 +772,7 @@ def _decide_entry(line: PatchLine, lists: _Lists, decisions: _Decisions) -> None
             line, f"no row with id {e['id']!r} in {lists.places.path} (deleted since the export?)"
         )
         return
-    why = owner_problem(row, lists.places.path)
+    why = owner_problem(row, lists.places)
     if why is None:
         why = _decide_row(e, row, lists, decisions.new_curation)
     if why:

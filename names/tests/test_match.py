@@ -1,5 +1,4 @@
-"""match.py: clustering, which rows the matcher owns, and the
-decision `match_row` makes for a row
+"""match.py: clustering, and the decision `match_row` makes for a row
 (README "Matching rules (v1)").
 
 `match_row` runs against a real `NameIndex` built from a tiny candidates.jsonl
@@ -218,31 +217,6 @@ def test_a_record_without_location_is_a_cluster_of_its_own() -> None:
     clusters = match.cluster([a, b])
     assert len(clusters) == 2
     assert clusters[1]["lon"] is None
-
-
-# ------------------------------------------------------- owned_by_matcher ---
-@pytest.mark.parametrize(
-    "cells,owned",
-    [
-        ({}, True),  # nothing yet
-        ({"osm": "node/240063898", "status": "auto"}, True),  # filled by match.py
-        ({"wikidata": "Q35", "status": "auto", "kind": "country"}, True),
-        ({"osm": "relation/1420394"}, False),  # filled by hand
-        ({"wikidata": "Q35", "kind": "country"}, False),
-        ({"osm": "node/1331229597", "status": "ok"}, False),
-        ({"status": "ok"}, False),  # checked: no reference
-        ({"status": "skip"}, False),
-        ({"kind": "not_a_place"}, False),
-    ],
-)
-def test_owned_by_matcher(cells: dict[str, str], owned: bool) -> None:
-    assert placelist.owned_by_matcher(row(**{"kind": "settlement", **cells})) is owned
-
-
-def test_a_local_reference_is_never_the_matchers_even_as_auto() -> None:
-    # the only way it matters: `local/` with status auto would otherwise count
-    r = row(kind="settlement", osm="local/westerheide-amrum", status="auto")
-    assert placelist.owned_by_matcher(r) is False
 
 
 # -------------------------------------------------------------- match_row ---

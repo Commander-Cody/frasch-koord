@@ -17,6 +17,7 @@ import pytest
 
 from frasch import paths, placelist, refs
 from frasch.paths import Workspace
+from frasch.placelist import Reference, RowState
 from conftest import REGISTRY
 from frasch.dialects import LOCAL_COLUMN, Dialect, Registry
 
@@ -44,6 +45,107 @@ def test_a_local_reference_is_none_of_a_rows_osm_objects() -> None:
 
 def test_a_row_for_a_place_osm_does_not_have_knows_its_slug() -> None:
     assert place(osm="local/westerheide-amrum").local == "westerheide-amrum"
+
+
+# ------------------------------------------------------------------ state ---
+def named(**cells: str) -> placelist.PlaceRow:
+    """A settlement row with a Frisian name."""
+    return place(**{"kind": "settlement", "mooring": "Toftem", **cells})
+
+
+@pytest.mark.parametrize(
+    "cells,state",
+    [
+        ({}, RowState.OPEN),  # nothing yet
+        ({"osm": "node/240063898", "status": "auto"}, RowState.AUTO),  # filled by the matcher
+        ({"wikidata": "Q35", "status": "auto", "kind": "country"}, RowState.AUTO),
+        ({"osm": "relation/1420394"}, RowState.BY_HAND),  # filled by hand
+        ({"wikidata": "Q35", "kind": "country"}, RowState.BY_HAND),
+        ({"osm": "node/1331229597", "status": "ok"}, RowState.BY_HAND),
+        ({"status": "ok"}, RowState.BY_HAND),  # checked: OSM has nothing to name
+        ({"osm": "local/westerheide-amrum", "status": "ok"}, RowState.OWN_POINT),
+        ({"mooring": ""}, RowState.NO_NAME),
+        ({"status": "skip"}, RowState.SKIP),
+        ({"kind": "not_a_place"}, RowState.NOT_A_PLACE),
+    ],
+)
+def test_a_rows_cells_say_what_state_it_is_in(cells: dict[str, str], state: RowState) -> None:
+    assert placelist.state(named(**cells), REGISTRY) is state
+
+
+def test_a_row_that_is_not_a_place_is_that_before_it_is_skipped() -> None:
+    assert placelist.state(named(kind="not_a_place", status="skip"), REGISTRY) is (
+        RowState.NOT_A_PLACE
+    )
+
+
+def test_a_skipped_row_is_skipped_whether_or_not_it_has_a_name() -> None:
+    assert placelist.state(named(mooring="", status="skip"), REGISTRY) is RowState.SKIP
+
+
+def test_a_row_the_matcher_filled_has_no_name_once_it_lost_it() -> None:
+    lost = named(mooring="", osm="node/240063898", status="auto")
+    assert placelist.state(lost, REGISTRY) is RowState.NO_NAME
+
+
+def test_a_local_reference_is_an_own_point_even_as_auto() -> None:
+    # the only way it matters: `local/` with status auto would otherwise count
+    r = named(osm="local/westerheide-amrum", status="auto")
+    assert placelist.state(r, REGISTRY) is RowState.OWN_POINT
+
+
+def test_an_auto_row_with_nothing_in_it_is_open() -> None:
+    assert placelist.state(named(status="auto"), REGISTRY) is RowState.OPEN
+
+
+@pytest.mark.parametrize(
+    "state,matchers",
+    [
+        (RowState.OPEN, True),
+        (RowState.AUTO, True),
+        (RowState.BY_HAND, False),
+        (RowState.OWN_POINT, False),
+        (RowState.NO_NAME, False),
+        (RowState.SKIP, False),
+        (RowState.NOT_A_PLACE, False),
+    ],
+)
+def test_only_an_open_or_an_auto_row_is_the_matchers_to_fill(
+    state: RowState, matchers: bool
+) -> None:
+    assert state.matchers is matchers
+
+
+# -------------------------------------------------------------- reference ---
+def test_a_match_is_written_as_auto() -> None:
+    assert Reference.auto([("w", 7), ("n", 1)], "Q5") == ("way/7; node/1", "Q5", "auto")
+
+
+def test_a_humans_pick_is_written_as_ok() -> None:
+    assert Reference.checked([("n", 1)], "") == ("node/1", "", "ok")
+
+
+def test_a_place_osm_does_not_have_is_written_as_its_local_reference() -> None:
+    assert Reference.local("westerheide-amrum") == ("local/westerheide-amrum", "", "ok")
+
+
+def test_a_skipped_row_keeps_no_reference() -> None:
+    assert Reference.skipped() == ("", "", "skip")
+
+
+def test_a_cleared_row_is_empty() -> None:
+    assert Reference.cleared() == ("", "", "")
+
+
+def test_a_reference_is_read_from_the_cells_of_a_row() -> None:
+    row = place(osm="node/1", wikidata="Q5", status="ok")
+    assert Reference.of(row) == ("node/1", "Q5", "ok")
+
+
+def test_a_reference_written_into_a_row_replaces_all_three_cells() -> None:
+    row = place(osm="node/1", wikidata="Q5", status="auto", note="mine")
+    Reference.cleared().write(row)
+    assert (row["osm"], row["wikidata"], row["status"], row["note"]) == ("", "", "", "mine")
 
 
 # ----------------------------------------------------------------- claims ---

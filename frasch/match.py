@@ -87,12 +87,7 @@ from frasch.namecell import primary, variants
 from frasch.nameindex import NameIndex, norm
 from frasch.osmtags import UNRANKED
 from frasch.paths import Workspace
-from frasch.placelist import (
-    PlaceRow,
-    Row,
-    any_name,
-    owned_by_matcher,
-)
+from frasch.placelist import PlaceRow, Reference, Row, RowState, any_name
 from frasch.provenance import ExtractStamp, Stamp, unstamped
 from frasch.refs import OsmRef, Ref
 
@@ -818,16 +813,18 @@ def check_extracts(candidates_path: str, report_path: str) -> Sequence[ExtractSt
 
 
 # ----------------------------------------------------------------- report ----
+# What the report says of an open row, by what the run made of it.
+AMBIGUOUS, NOT_FOUND = "ambiguous", "not found"
 # the columns of the report's counts table, in order
 REPORT_STATES = [
-    "auto",
-    "by hand",
-    "own point",
-    "ambiguous",
-    "not found",
-    "skip",
-    "no Frisian name",
-    "not a place",
+    RowState.AUTO.label,
+    RowState.BY_HAND.label,
+    RowState.OWN_POINT.label,
+    AMBIGUOUS,
+    NOT_FOUND,
+    RowState.SKIP.label,
+    RowState.NO_NAME.label,
+    RowState.NOT_A_PLACE.label,
 ]
 
 
@@ -854,21 +851,13 @@ def write_report(
 
 
 def _report_state(r: PlaceRow, results: Mapping[str, MatchResult], reg: Registry) -> str:
-    """Which of the REPORT_STATES the row is in."""
-    if r["kind"] == "not_a_place":
-        return "not a place"
-    if r["status"] == "skip":
-        return "skip"
-    if not any_name(r, reg):
-        return "no Frisian name"
-    if r.local:
-        return "own point"
-    if r["osm"] or r["wikidata"]:
-        return "auto" if r["status"] == "auto" else "by hand"
-    if r["status"] == "ok":
-        return "by hand"  # checked: OSM has nothing to name
+    """Which of the REPORT_STATES the row is in: its state
+    (`placelist.state`), and for an open row what the run made of it."""
+    state = placelist.state(r, reg)
+    if state is not RowState.OPEN:
+        return state.label
     res = results.get(r["id"])
-    return "ambiguous" if res and res["status"] == "ambiguous" else "not found"
+    return AMBIGUOUS if res and res["status"] == "ambiguous" else NOT_FOUND
 
 
 def _report_ref(r: PlaceRow, reg: Registry) -> str:
@@ -928,7 +917,7 @@ def _counts_section(
 def _ambiguous_section(
     rows: Sequence[PlaceRow], results: Mapping[str, MatchResult], reg: Registry
 ) -> list[str]:
-    amb = [r for r in rows if _report_state(r, results, reg) == "ambiguous"]
+    amb = [r for r in rows if _report_state(r, results, reg) == AMBIGUOUS]
     lines = [f"## Ambiguous ({len(amb)})\n"]
     lines.append("`candidates` format: `type/id:name:class:km-from-NF-centre`\n")
     lines.append("| id | line | kind | Frisian | German | hint | why | candidates |")
@@ -946,7 +935,7 @@ def _ambiguous_section(
 def _not_found_section(
     rows: Sequence[PlaceRow], results: Mapping[str, MatchResult], reg: Registry
 ) -> list[str]:
-    nf = [r for r in rows if _report_state(r, results, reg) == "not found"]
+    nf = [r for r in rows if _report_state(r, results, reg) == NOT_FOUND]
     lines = [f"## Not found ({len(nf)})\n"]
     lines.append(
         "Either the feature is not in OSM at all, or OSM spells it "
@@ -972,7 +961,9 @@ def write_matches(
     reg: Registry,
 ) -> None:
     """work/matches.csv: one line per places.csv row, with the match details
-    (and lon/lat also for rows a human filled in, looked up by id)."""
+    (and lon/lat also for rows a human filled in, looked up by id).  Its
+    `result` is what the run made of the row, and the state of a row it did
+    not match (`placelist.RowState`)."""
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with files.replacing(path, text=True) as fh:
         w = csv.DictWriter(fh, fieldnames=MATCH_COLUMNS, lineterminator="\n")
@@ -1001,17 +992,7 @@ def write_matches(
                     note=res.get("note", ""),
                 )
             else:
-                rec["result"] = (
-                    "skip"
-                    if r["status"] == "skip"
-                    else "not a place"
-                    if r["kind"] == "not_a_place"
-                    else "own point"
-                    if r.local
-                    else "by hand"
-                    if (r["osm"] or r["wikidata"] or r["status"] == "ok")
-                    else ""
-                )
+                rec["result"] = placelist.state(r, reg).value
                 if hit is not None:
                     rec.update(
                         match_name=hit["tags"].get("name", ""),
@@ -1045,7 +1026,7 @@ def _run(ws: Workspace, reg: Registry, offline: bool, dry_run: bool) -> int:
     )
     hints = HintResolver(index)
 
-    owned = [r for r in rows if owned_by_matcher(r) and any_name(r, reg)]
+    owned = [r for r in rows if placelist.state(r, reg).matchers]
     country_rows = [r for r in owned if r["kind"] == "country"]
     qids, wd_failed = wikidata_countries(
         [primary(r["de"]) for r in country_rows], ws.wikidata_cache, offline
@@ -1059,7 +1040,7 @@ def _run(ws: Workspace, reg: Registry, offline: bool, dry_run: bool) -> int:
 
     changed: collections.Counter[str] = collections.Counter()
     for r in todo:
-        before = _reference(r)
+        before = Reference.of(r)
         if r["kind"] == "country":
             o = _country_result(r, qids)
         else:
@@ -1068,7 +1049,7 @@ def _run(ws: Workspace, reg: Registry, offline: bool, dry_run: bool) -> int:
         results[r["id"]] = o
         _write_back(r, o)
         claimed.add(r)
-        change = _change(before, _reference(r))
+        change = _change(before, Reference.of(r))
         if change:
             changed[change] += 1
 
@@ -1152,32 +1133,24 @@ def _country_result(r: PlaceRow, qids: Mapping[str, str]) -> MatchResult:
     return o
 
 
-def _reference(r: PlaceRow) -> tuple[str, str, str]:
-    """The cells of a row the matcher writes."""
-    return r["osm"], r["wikidata"], r["status"]
-
-
 def _write_back(r: PlaceRow, o: MatchResult) -> None:
     """Put a match into the row as `status=auto`; clear the row otherwise."""
     if o["status"] == "matched":
-        r["osm"] = refs.format(
-            refs.parse("; ".join(f"{o['osm_type']}/{i}" for i in o["osm_id"].split(";") if i))
-        )
-        r["wikidata"] = o["wikidata"]
-        r["status"] = "auto"
+        objects = refs.parse("; ".join(f"{o['osm_type']}/{i}" for i in o["osm_id"].split(";") if i))
+        Reference.auto(objects, o["wikidata"]).write(r)
     else:  # lost / never had a match
-        r["osm"], r["wikidata"], r["status"] = "", "", ""
+        Reference.cleared().write(r)
 
 
-def _change(before: tuple[str, str, str], after: tuple[str, str, str]) -> str | None:
+def _change(before: Reference, after: Reference) -> str | None:
     """`filled`, `cleared` or `changed` -- what the run did to a row's
     reference -- or None when it left it as it was."""
     if after == before:
         return None
     return (
         "filled"
-        if after[2] == "auto" and before[2] != "auto"
+        if after.status == placelist.AUTO and before.status != placelist.AUTO
         else "cleared"
-        if before[2] == "auto" and not after[2]
+        if before.status == placelist.AUTO and not after.status
         else "changed"
     )

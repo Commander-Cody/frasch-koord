@@ -541,6 +541,42 @@ def test_a_row_may_be_given_the_object_it_holds_already(w: World) -> None:
     assert w.apply() == 0
 
 
+def reference(w: World, ident: str) -> tuple[str, str, str]:
+    """The `osm`, `wikidata` and `status` cells of the row `ident`."""
+    row = rows_by_id(w)[ident]
+    return row["osm"], row["wikidata"], row["status"]
+
+
+def with_an_auto_match(w: World) -> None:
+    """The first row as the matcher filled it after the worklist was exported."""
+    matched = ROWS[0] | {"osm": "node/1", "wikidata": "Q1", "status": "auto"}
+    w.places.write_text(places_text([matched] + ROWS[1:]), encoding="utf-8")
+
+
+def test_a_decision_without_a_wikidata_item_leaves_none_of_another_object(w: World) -> None:
+    with_an_auto_match(w)
+    append(w.patch, entry(2, action="osm", osm="way/5; way/6"))
+    w.apply()
+    assert reference(w, "taarep") == ("way/5; way/6", "", "ok")
+
+
+def test_a_skip_decision_leaves_nothing_of_a_match_nobody_checked(w: World) -> None:
+    with_an_auto_match(w)
+    append(w.patch, entry(2, action="skip"))
+    w.apply()
+    assert reference(w, "taarep") == ("", "", "skip")
+
+
+def test_a_decision_for_a_row_that_lost_its_frisian_name_is_refused(
+    w: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    nameless = ROWS[0] | {"mooring": ""}
+    w.places.write_text(places_text([nameless] + ROWS[1:]), encoding="utf-8")
+    append(w.patch, entry(2, action="osm", osm="node/1"))
+    assert w.apply() == 1
+    assert f"{w.places}:2 is not the matcher's to fill" in capsys.readouterr().out
+
+
 def test_no_patch_is_an_error(w: World) -> None:
     before = w.places.read_bytes()
     with pytest.raises(PipelineError) as stop:
