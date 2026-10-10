@@ -235,6 +235,39 @@ def test_the_exported_worklist_keeps_its_schema(world: Path) -> None:
     assert schema_problems(worklist, "curate-worklist") == []
 
 
+def test_the_worklist_names_the_class_tags_the_most_telling_first(world: Path) -> None:
+    worklist = json.loads(export_the_review_rows(world).read_text(encoding="utf-8"))
+    assert worklist["class_keys"] == [
+        "place",
+        "natural",
+        "boundary",
+        "waterway",
+        "landuse",
+        "man_made",
+        "highway",
+        "water",
+        "historic",
+    ]
+
+
+def test_the_worklist_names_the_place_values_of_a_settlement(world: Path) -> None:
+    worklist = json.loads(export_the_review_rows(world).read_text(encoding="utf-8"))
+    assert worklist["settlement_places"] == [
+        "borough",
+        "city",
+        "farm",
+        "hamlet",
+        "isolated_dwelling",
+        "locality",
+        "municipality",
+        "neighbourhood",
+        "quarter",
+        "suburb",
+        "town",
+        "village",
+    ]
+
+
 def test_the_worklist_offers_the_results_of_its_schema(world: Path) -> None:
     worklist = json.loads(export_the_review_rows(world).read_text(encoding="utf-8"))
     assert worklist["results"] == read_schema("curate-worklist")["$defs"]["result"]["enum"]

@@ -22,22 +22,15 @@ const COLOR_OTHER = '#6d4c41';
 const COLOR_HINT = '#00897b';
 export const COLOR_LOOKUP = '#f9a825';
 
-/** OSM/OpenMapTiles classes that mean "a place where people live". */
-const SETTLEMENT_CLASSES = new Set([
-  'city',
-  'town',
-  'village',
-  'hamlet',
-  'suburb',
-  'neighbourhood',
-  'isolated_dwelling',
-  'farm',
-  'locality',
-  'allotments',
-]);
-
-export function candidateColor(candidate: CurateCandidate): string {
-  if (SETTLEMENT_CLASSES.has(candidate.class)) return COLOR_SETTLEMENT;
+/**
+ * A candidate's pin colour. `settlementPlaces`: the classes that mean "a
+ * place where people live" (the worklist's `settlement_places`).
+ */
+export function candidateColor(
+  candidate: CurateCandidate,
+  settlementPlaces: readonly string[],
+): string {
+  if (settlementPlaces.includes(candidate.class)) return COLOR_SETTLEMENT;
   if (candidate.ref.startsWith('way/') || candidate.ref.startsWith('relation/')) return COLOR_AREA;
   return COLOR_OTHER;
 }
@@ -63,6 +56,11 @@ interface PinWiring {
   pins: Map<string, HTMLElement>;
   onActivate: (ref: string) => void;
   onToggle: (ref: string, wikidata?: string) => void;
+}
+
+/** The wiring of the candidates' pins, which also have a colour each. */
+interface CandidatePinWiring extends PinWiring {
+  colorOf: (candidate: CurateCandidate) => string;
 }
 
 /** Both moves answer the user's own action, so `essential`: reduced motion does not skip them. */
@@ -160,6 +158,8 @@ export interface RowPinsOptions {
   row: CurateRow;
   /** The worklist's bbox: what the map shows when the row has nothing to pin. */
   bbox: Bbox;
+  /** The worklist's `settlement_places`: what colours a candidate's pin as a settlement. */
+  settlementPlaces: readonly string[];
   lookupResults: LookupResult[];
   /** What is ticked for a multi-object pick; those pins are marked. */
   checked: readonly { ref: string }[];
@@ -174,7 +174,8 @@ export interface RowPinsOptions {
  * with the map fitted to the row. Ticked refs get their pins marked.
  */
 export function useRowPins(options: RowPinsOptions): void {
-  const { mapRef, row, bbox, lookupResults, checked, onActivate, onToggle } = options;
+  const { mapRef, row, bbox, settlementPlaces, lookupResults, checked, onActivate, onToggle } =
+    options;
   /** Pin element per ref, so ticking only toggles a class instead of re-adding markers. */
   const pinEls = useRef(new Map<string, HTMLElement>());
 
@@ -183,7 +184,10 @@ export function useRowPins(options: RowPinsOptions): void {
     if (!map) return;
     const pins = pinEls.current;
     const bounds = new LngLatBounds();
-    const markers = [...candidateMarkers(map, row, { pins, onActivate, onToggle }, bounds)];
+    const colorOf = (candidate: CurateCandidate) => candidateColor(candidate, settlementPlaces);
+    const markers = [
+      ...candidateMarkers(map, row, { pins, colorOf, onActivate, onToggle }, bounds),
+    ];
     const hint = row.hint_point;
     if (hint) markers.push(hintMarker(map, hint, row.hint, bounds));
     const stopCircle = hint ? drawHintCircle(map, hint) : () => {};
@@ -200,7 +204,7 @@ export function useRowPins(options: RowPinsOptions): void {
       stopCircle();
       removeMarkers(markers, pins);
     };
-  }, [row, bbox, mapRef, onActivate, onToggle]);
+  }, [row, bbox, settlementPlaces, mapRef, onActivate, onToggle]);
 
   useEffect(() => {
     const map = mapRef.current?.getMap();
@@ -224,14 +228,14 @@ export function useRowPins(options: RowPinsOptions): void {
 function candidateMarkers(
   map: MapLibreMap,
   row: CurateRow,
-  { pins, onActivate, onToggle }: PinWiring,
+  { pins, colorOf, onActivate, onToggle }: CandidatePinWiring,
   bounds: LngLatBounds,
 ): Marker[] {
   const markers: Marker[] = [];
   row.candidates.forEach((candidate, i) => {
     if (!hasPoint(candidate)) return;
     const title = `${candidate.ref} ${candidate.name} (${candidate.class})`;
-    const el = pinElement(String(i + 1), candidateColor(candidate), title);
+    const el = pinElement(String(i + 1), colorOf(candidate), title);
     onPinClick(
       el,
       () => onActivate(candidate.ref),
