@@ -145,6 +145,8 @@ class KindRule:
     boundary  what a bare administrative boundary is among its candidates
     nf_only   the kind exists only in North Frisia: a match elsewhere is
               wrong
+    by_item   a feature of the kind is found by its Wikidata item, not as
+              an OSM object (a country: the matcher asks Wikidata)
     point_place
               the `place=` of the node the injector adds for a local
               reference -- only where the OSM equivalent is unambiguous; any
@@ -165,6 +167,7 @@ class KindRule:
     whole: RecTest = nothing
     boundary: Boundary = Boundary.FEATURE
     nf_only: bool = False
+    by_item: bool = False
     point_place: str | None = None
     polygon_capable: bool = False
 
@@ -288,7 +291,7 @@ RULES = (
         polygon_capable=True,
     ),
     KindRule("road", accepted=(tag("highway"),), fit=ROAD_FIT),
-    KindRule("country", accepted=(admin_boundary([2]),)),
+    KindRule("country", accepted=(admin_boundary([2]),), by_item=True),
     KindRule(
         "koog",
         accepted=(

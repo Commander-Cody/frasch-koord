@@ -538,10 +538,11 @@ def schema_problem(entry: object) -> str | None:
 def owner_problem(row: PlaceRow, names: PlaceList) -> str | None:
     """Why apply refuses an entry's row of the list `names` before looking
     at its decision, or None: the row must be the matcher's to fill."""
-    if not placelist.state(row, names.reg).matchers:
+    state = placelist.state(row, names.reg)
+    if not state.matchers:
         return (
             f"{names.path}:{row.line} is not the matcher's to fill "
-            f"(status={row['status'] or 'empty'}, osm={row['osm'] or '-'})"
+            f"({state.label}: status={row['status'] or 'empty'}, osm={row['osm'] or '-'})"
         )
     return None
 
@@ -597,19 +598,15 @@ def decide_local(
 
 
 def decision_text(entry: PatchEntry, row: Row, curation: str) -> str:
-    """What an applied decision changed, for the log."""
-    if entry["action"] == "skip":
-        return "status = skip"
-    if entry["action"] == "osm":
-        return (
-            f"osm = {row['osm']}"
-            + (f", wikidata = {entry['wikidata']}" if entry.get("wikidata") else "")
-            + ", status = ok"
-        )
-    text = (
-        f"osm = {row['osm']}, status = ok; "
-        f"{curation} += {fmt_deg(entry['lat'])}/{fmt_deg(entry['lon'])}"
-    )
+    """What an applied decision changed, for the log: the reference `row`
+    has now -- every cell of it, an empty one as `-`, since a decision
+    leaves nothing of an older reference -- and for a `local` decision the
+    curation row that positions it."""
+    osm, wikidata, status = (cell or "-" for cell in Reference.of(row))
+    text = f"osm = {osm}, wikidata = {wikidata}, status = {status}"
+    if entry["action"] != "local":
+        return text
+    text += f"; {curation} += {fmt_deg(entry['lat'])}/{fmt_deg(entry['lon'])}"
     if (km2 := entry.get("polygon_km2")) is not None:
         return text + f", polygon_km2 = {km2:g}"
     if not kinds.rule(row["kind"]).point_place:

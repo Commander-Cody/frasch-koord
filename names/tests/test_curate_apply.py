@@ -439,11 +439,11 @@ def test_apply_logs_each_decision_and_sums_up(w: World, capsys: pytest.CaptureFi
         # an entry without a `line` comes first
         f"  refused patch line 4 (None / None): no row with id 'nai' in {w.places} "
         "(deleted since the export?)\n"
-        f"  {w.places}:2 Taarep (Dorf): osm = local/taarep, status = ok; "
+        f"  {w.places}:2 Taarep (Dorf): osm = local/taarep, wikidata = -, status = ok; "
         f"{w.curation} += 54.6/8.9, polygon_km2 = 1.5\n"
         f"  {w.places}:3 Uurd (Ort): osm = node/1, wikidata = Q5, status = ok\n"
         f"  refused patch line 3 (Hüs / Haus): {w.places}:4 is not the matcher's "
-        "to fill (status=ok, osm=node/9)\n"
+        "to fill (by hand: status=ok, osm=node/9)\n"
         f"patch applied, moved to {snapshot}\n"
         f"2 refused entries kept in {w.patch}\n"
         f"2 row(s) written to {w.places}, 1 appended to {w.curation}, 2 refused\n"
@@ -574,7 +574,28 @@ def test_a_decision_for_a_row_that_lost_its_frisian_name_is_refused(
     w.places.write_text(places_text([nameless] + ROWS[1:]), encoding="utf-8")
     append(w.patch, entry(2, action="osm", osm="node/1"))
     assert w.apply() == 1
-    assert f"{w.places}:2 is not the matcher's to fill" in capsys.readouterr().out
+    assert (
+        f"{w.places}:2 is not the matcher's to fill (no Frisian name: status=empty, osm=-)\n"
+        in capsys.readouterr().out
+    )
+
+
+def test_the_log_of_a_skip_shows_the_reference_it_leaves_empty(
+    w: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with_an_auto_match(w)
+    append(w.patch, entry(2, action="skip"))
+    w.apply(dry_run=True)
+    assert "Taarep (Dorf): osm = -, wikidata = -, status = skip\n" in capsys.readouterr().out
+
+
+def test_the_log_of_a_pick_shows_the_wikidata_item_it_leaves_empty(
+    w: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with_an_auto_match(w)
+    append(w.patch, entry(2, action="osm", osm="way/5"))
+    w.apply(dry_run=True)
+    assert "Taarep (Dorf): osm = way/5, wikidata = -, status = ok\n" in capsys.readouterr().out
 
 
 def test_no_patch_is_an_error(w: World) -> None:

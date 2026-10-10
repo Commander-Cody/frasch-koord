@@ -302,9 +302,13 @@ names the extracts it was read from, with their replication timestamps. It needs
 extracts sorted by id, as Geofabrik's are, and stops on one that is not
 (`osmium sort` fixes it). A candidate is an object with a name the matcher
 looks for (`name`, `name:de`, `name:da`, `official_name`, `short_name`,
-`alt_name`, `old_name`) and a tag that says what it is; its record keeps
-those tags and its Wikidata item, and no other tag (`frasch/osmtags.py` has
-the lists).
+`alt_name`, `old_name`) and a tag that says what it is (`place`, `natural`,
+`waterway`, …; a road only inside North Frisia) — or, as a near miss a
+reviewer may still pick, a harbour, a marina or anything with an
+`admin_level`, a Wikidata item or a Wikipedia article. Its record keeps the
+tags the pipeline reads and no other: those names, the class tags,
+`admin_level`, `type` and `wikidata` (`frasch/osmtags.py` has the lists,
+the docstring of `frasch/build_candidates.py` the filter).
 
 Build the candidates from **every** extract: a row the matcher filled from an
 object only one extract has — the Danish places (Fanø, Hoyer, Ripen, Röm, …)

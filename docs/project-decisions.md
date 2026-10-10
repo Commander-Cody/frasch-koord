@@ -934,8 +934,9 @@ three and four times.
 | the browser's `SETTLEMENT_CLASSES` and `INTERESTING_TAGS` | `settlement_places` and `class_keys` of the worklist |
 
 - **A kind's rule is data**: the tag tests it accepts, the tests of its
-  canonical object, the points of its type bonus (`Fit`), and what a bare
-  administrative boundary is to it. The table was compared with the functions
+  canonical object, the points of its type bonus (`Fit`), what a bare
+  administrative boundary is to it, and whether it is found by its Wikidata
+  item instead of an OSM object (`by_item`: a country). The table was compared with the functions
   it replaces on random tag sets before those were deleted. The type bonuses
   stay numbers in the table, each beside the test it belongs to; the weights
   that apply to every kind are named (`WIKIDATA_BONUS`, `GERMAN_NAME_BONUS`,

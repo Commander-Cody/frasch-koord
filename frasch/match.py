@@ -1033,7 +1033,7 @@ def _run(ws: Workspace, reg: Registry, offline: bool, dry_run: bool) -> int:
     hints = HintResolver(index)
 
     owned = [r for r in rows if placelist.state(r, reg).matchers]
-    country_rows = [r for r in owned if r["kind"] == "country"]
+    country_rows = [r for r in owned if kinds.rule(r["kind"]).by_item]
     qids, wd_failed = wikidata_countries(
         [primary(r["de"]) for r in country_rows], ws.wikidata_cache, offline
     )
@@ -1047,7 +1047,7 @@ def _run(ws: Workspace, reg: Registry, offline: bool, dry_run: bool) -> int:
     changed: collections.Counter[str] = collections.Counter()
     for r in todo:
         before = Reference.of(r)
-        if r["kind"] == "country":
+        if kinds.rule(r["kind"]).by_item:
             o = _country_result(r, qids)
         else:
             o = match_row(r, index, hints, reg, claimed)
