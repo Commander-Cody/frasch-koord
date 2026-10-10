@@ -32,7 +32,6 @@ def rec(t: str, id: int, lon: float | None, lat: float | None, **tags: str) -> C
         "id": id,
         "lon": lon,
         "lat": lat,
-        "cls": [],
         "tags": tags,
     }
 

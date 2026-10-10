@@ -5,7 +5,7 @@ export (frasch.curate) read it.
   first line  {"header": {"extracts": [{"file", "replication_timestamp"}, ...]}}
               -- the stamp of the extracts it was built from
               (`provenance.Stamp.read` reads it)
-  then        {"src","t","id","lon","lat","cls","tags":{...}}  per candidate
+  then        {"src","t","id","lon","lat","tags":{...}}  per candidate
               (`read_records`)
 """
 
@@ -21,16 +21,16 @@ from frasch.refs import OsmRef
 
 
 class Candidate(TypedDict):
-    """One candidate record.  `lon`/`lat` are None for an object the scan
-    could not place; `cls` are the classes it was kept for (`place=village`,
-    `wikidata`, ...); `tags` only the ones the pipeline reads."""
+    """One candidate record.  `src` is the extract it was found in (its
+    file name up to `-latest`); `lon`/`lat` are None for an object the scan
+    could not place; `tags` are those of its tags the pipeline reads
+    (frasch.osmtags.KEPT_KEYS)."""
 
     src: str
     t: str
     id: int
     lon: float | None
     lat: float | None
-    cls: list[str]
     tags: dict[str, str]
 
 
