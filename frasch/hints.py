@@ -9,9 +9,8 @@ Harden and a few spellings OSM does not know have fixed circles.
 
 from __future__ import annotations
 
-from frasch import osmtags
+from frasch import geo, osmtags
 from frasch.candidates import Candidate
-from frasch.geo import NF_CENTRE, haversine
 from frasch.nameindex import NameIndex, norm
 from frasch.osmtags import Tags
 
@@ -95,7 +94,7 @@ def _plausibility(rec: Candidate) -> float:
     """Nearer to North Frisia is better; an island or a village better
     still.  Of equals, the first record wins."""
     tags = rec["tags"]
-    score = -(haversine(rec["lon"], rec["lat"], *NF_CENTRE) or 999)
+    score = -geo.km_or(geo.from_centre(rec["lon"], rec["lat"]), unknown=geo.FAR)
     if osmtags.is_island(tags):
         score += ISLAND_BONUS
     if tags.get("place") in osmtags.VILLAGE_PLACES:

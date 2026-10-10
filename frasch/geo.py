@@ -12,6 +12,9 @@ NF_BBOX = (7.8, 54.15, 9.55, 55.12)
 NF_CENTRE = (8.9, 54.7)  # lon, lat
 
 EARTH_RADIUS_KM = 6371.0
+# What an unknown distance counts as where only a near one matters: further
+# than anything.
+FAR = math.inf
 
 LonLat = tuple[float, float]
 
@@ -37,3 +40,15 @@ def haversine(
     dl = math.radians(lon2 - lon1)
     a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
     return 2 * EARTH_RADIUS_KM * math.asin(math.sqrt(a))
+
+
+def from_centre(lon: float | None, lat: float | None) -> float | None:
+    """How far a point is from the centre of North Frisia in km, None for
+    an unknown position."""
+    return haversine(lon, lat, *NF_CENTRE)
+
+
+def km_or(distance: float | None, unknown: float) -> float:
+    """`distance`, and `unknown` where it is not known (None) -- 0.0 is a
+    distance like any other."""
+    return unknown if distance is None else distance

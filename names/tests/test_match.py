@@ -453,6 +453,12 @@ def test_a_warft_outside_north_frisia_is_left_for_review(tmp_path: Path) -> None
     assert "verify by hand" in out["note"]
 
 
+def test_a_match_the_scan_could_not_place_is_left_for_review_as_such(tmp_path: Path) -> None:
+    unplaced = cand("r", 1, None, None, name="Neuer Koog", place="polder")
+    out = run(tmp_path, row(kind="koog", mooring="Naie Kuuch", de="Neuer Koog"), unplaced)
+    assert out["note"] == "only match has no known position (koog) -- verify by hand"
+
+
 def test_danish_name_is_used_when_there_is_no_german_one(tmp_path: Path) -> None:
     out = run(tmp_path, row(kind="settlement", mooring="Hulm", da="Holme"), HOLME_DK)
     assert out["status"] == "matched"

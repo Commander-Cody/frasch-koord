@@ -80,7 +80,8 @@ from frasch import candidates, cli, dialects, files, kinds, osmtags, placelist, 
 from frasch.candidates import Candidate, osm_key
 from frasch.dialects import Registry
 from frasch.errors import PipelineError, rebuild
-from frasch.geo import NF_CENTRE, haversine, in_north_frisia
+from frasch import geo
+from frasch.geo import haversine, in_north_frisia
 from frasch.hints import Circle, HintResolver
 from frasch.kinds import Boundary, KindRule
 from frasch.namecell import primary, variants
@@ -115,6 +116,7 @@ MATCH_COLUMNS = [
 CLUSTER_KM = 3.0  # objects this close describe the same feature
 SEPARATION_KM = 30.0  # a winner must be this far from every rival
 BOUNDARY_QID_KM = 10.0  # a boundary further from a place node is a namesake
+MINOR_PLACE_KM = 50.0  # a hamlet further from North Frisia is no plausible match
 
 # `match_row`'s result for a row: its cells plus the MATCH_COLUMNS and
 # osm_type / osm_id -- a line of work/matches.csv.  Its `note` is the
@@ -389,7 +391,7 @@ def _centred(members: list[Candidate]) -> Cluster:
 def fmt_cand(rec: Candidate) -> str:
     tags = rec["tags"]
     place = osmtags.class_of(tags) or "-"
-    d = haversine(rec["lon"], rec["lat"], *NF_CENTRE)
+    d = geo.from_centre(rec["lon"], rec["lat"])
     ds = f"{d:.0f}" if d is not None else "?"
     nm = (tags.get("name") or tags.get("name:de") or "")[:40]
     return f"{rec['t']}/{rec['id']}:{nm}:{place}:{ds}"
@@ -401,8 +403,8 @@ def fmt_cands(cands: Iterable[RankedCandidate]) -> str:
     them (a "Dorfstraße" has hundreds of ways); only REPORT.md shortens it."""
 
     def key(c: RankedCandidate) -> tuple[int, float, str, int]:
-        d = haversine(c["lon"], c["lat"], *NF_CENTRE)
-        return (c.get("rank", UNRANKED), 1e9 if d is None else d, c["t"], c["id"])
+        d = geo.km_or(geo.from_centre(c["lon"], c["lat"]), unknown=geo.FAR)
+        return (c.get("rank", UNRANKED), d, c["t"], c["id"])
 
     return ";".join(fmt_cand(c) for c in sorted(cands, key=key))
 
@@ -424,7 +426,8 @@ def _decide(
     if len(inside) == 1:
         cand = inside[0]
         if all(
-            (haversine(cand["lon"], cand["lat"], c["lon"], c["lat"]) or 1e9) > SEPARATION_KM
+            geo.km_or(haversine(cand["lon"], cand["lat"], c["lon"], c["lat"]), unknown=geo.FAR)
+            > SEPARATION_KM
             for c in clusters
             if c is not cand
         ):
@@ -443,7 +446,7 @@ def _placed(cl: Cluster, hint_pt: Circle | None) -> PlacedCluster:
         **cl,
         "hint_ok": hint_ok,
         "hint_d": hint_d,
-        "nf_d": haversine(cl["lon"], cl["lat"], *NF_CENTRE),
+        "nf_d": geo.from_centre(cl["lon"], cl["lat"]),
         "in_nf": in_north_frisia(cl["lon"], cl["lat"]),
     }
 
@@ -457,7 +460,7 @@ def _suspicious(rule: KindRule, winner: PlacedCluster) -> bool:
     if rule.nf_only:
         return True
     minor = any(m["tags"].get("place") in osmtags.MINOR_PLACES for m in winner["members"])
-    return minor and (winner["nf_d"] or 1e9) > 50
+    return minor and geo.km_or(winner["nf_d"], unknown=geo.FAR) > MINOR_PLACE_KM
 
 
 def _outranks_a_hit_in_north_frisia(winner: PlacedCluster, weaker: Iterable[Candidate]) -> bool:
@@ -481,10 +484,14 @@ def _ambiguous_reason(
         if hint_pt:
             return f"location hint '{row['hint']}' matched no cluster"
         return f"{len(clusters)} plausible candidates"
-    distance = f"{(winner['nf_d'] or 0):.0f} km from North Frisia"
+    where = (
+        "has no known position"
+        if winner["nf_d"] is None
+        else f"is {winner['nf_d']:.0f} km from North Frisia"
+    )
     if _suspicious(kinds.rule(row["kind"]), winner):
-        return f"only match is {distance} ({row['kind']}) -- verify by hand"
-    return f"best name hit is {distance}, a weaker one lies inside -- verify by hand"
+        return f"only match {where} ({row['kind']}) -- verify by hand"
+    return f"best name hit {where}, a weaker one lies inside -- verify by hand"
 
 
 class _Decision(NamedTuple):
@@ -573,10 +580,8 @@ def _best_member(rule: KindRule, members: list[Candidate]) -> Candidate:
             rule.bonus(r)
             + (kinds.WIKIDATA_BONUS if r["tags"].get("wikidata") else 0)
             + (kinds.GERMAN_NAME_BONUS if r["tags"].get("name:de") else 0)
-            - (
-                (haversine(r["lon"], r["lat"], *NF_CENTRE) or kinds.UNPLACED_KM)
-                / kinds.KM_PER_POINT
-            )
+            - geo.km_or(geo.from_centre(r["lon"], r["lat"]), unknown=kinds.UNPLACED_KM)
+            / kinds.KM_PER_POINT
         ),
     )
 
