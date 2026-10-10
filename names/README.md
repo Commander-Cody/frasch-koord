@@ -48,7 +48,7 @@ are gone from the tree; `git show b602a3f:names/bootstrap/` lists them.
 
 | column | meaning |
 |---|---|
-| `kind` | `settlement`, `koog`, `harde`, `island`, `hallig`, `sand`, `warft`, `landscape`, `water`, `road`, `country`, `helgoland`, or `not_a_place` (dictionary-only rows such as *Håli*, *bütenlönj*). Decides which OSM objects count as a match and becomes the tile attribute `frasch:kind`. |
+| `kind` | `settlement`, `koog`, `harde`, `island`, `hallig`, `sand`, `warft`, `landscape`, `water`, `road`, `country`, `helgoland`, or `not_a_place` (dictionary-only rows such as *Håli*, *bütenlönj*). Decides which OSM objects count as a match and becomes the tile attribute `frasch:kind`; what each kind means to the pipeline is its rule in `frasch/kinds.py`. |
 | `mooring` | the Mooring name(s). **The first one is the map label** in the Mooring view. |
 | `local` | the form the people of the place **itself** use where it differs from the dialect of the area around it (sub-dialects such as Fahretoft's *Foortuftinge*). Empty means "same as the area's dialect". The bracket remark names the variety and becomes the tile attribute `frasch:variety`: `Brouersweerw (Foortuftinge)`. |
 | one column per dialect | `wieding`, `karrhard`, `nordgoes`, `midgoes`, `suedgoes`, `fering`, `oomrang`, `solring`, `hallig`, `halunder` — the names in that dialect. **The column list comes from `dialects.csv`**, see below; the old catch-all `other` column is gone (see *Migration*). |
@@ -300,7 +300,15 @@ git diff names/places.csv     # review what it filled in
 one step (an interrupted run leaves the previous file), and its first line
 names the extracts it was read from, with their replication timestamps. It needs
 extracts sorted by id, as Geofabrik's are, and stops on one that is not
-(`osmium sort` fixes it).
+(`osmium sort` fixes it). A candidate is an object with a name the matcher
+looks for (`name`, `name:de`, `name:da`, `official_name`, `short_name`,
+`alt_name`, `old_name`) and a tag that says what it is (`place`, `natural`,
+`waterway`, …; a road only inside North Frisia) — or, as a near miss a
+reviewer may still pick, a harbour, a marina or anything with an
+`admin_level`, a Wikidata item or a Wikipedia article. Its record keeps the
+tags the pipeline reads and no other: those names, the class tags,
+`admin_level`, `type` and `wikidata` (`frasch/osmtags.py` has the lists,
+the docstring of `frasch/build_candidates.py` the filter).
 
 Build the candidates from **every** extract: a row the matcher filled from an
 object only one extract has — the Danish places (Fanø, Hoyer, Ripen, Röm, …)
@@ -320,9 +328,26 @@ another `places.csv` or `dialects.csv` — so after an edit to either, run
 
 `frasch match` only ever rewrites the `osm`, `wikidata` and `status` cells of rows
 it owns: rows whose `osm`, `wikidata` and `status` are all empty, and rows it
-filled earlier (`status=auto`). A row you filled in, marked `ok` or `skip`, or a
-`not_a_place` row is never touched, so re-running is always safe. Undo a
-single row with `git checkout -p`.
+filled earlier (`status=auto`). A row you filled in, marked `ok` or `skip`, a
+`not_a_place` row or one without a Frisian name is never touched, so
+re-running is always safe. Undo a single row with `git checkout -p`.
+
+What a row is follows from its cells alone, and one function says it
+(`placelist.state`). A row is in the first of these states that holds:
+
+| state | the row | in `REPORT.md` |
+|---|---|---|
+| `not_a_place` | has that `kind` | not a place |
+| `skip` | has that `status` | skip |
+| `no_name` | has no Frisian name in any column | no Frisian name |
+| `own_point` | has a local reference | own point |
+| `by_hand` | is `ok`, or has an `osm` / `wikidata` that is not `auto` | by hand |
+| `auto` | was filled by the matcher | auto |
+| `open` | has nothing in it yet | ambiguous / not found |
+
+The matcher owns the `auto` and the `open` rows. `work/matches.csv` gives, in
+`result`, what the run made of a row it owns (`matched`, `ambiguous`,
+`not_found`, `lookup_failed`) and the state of any other.
 
 A country row is matched through Wikidata (answers cached in
 `work/wikidata-countries.json`). If the lookup fails, or `--offline` finds no
@@ -364,7 +389,9 @@ deleted from `places.csv` since the match run are dropped with a note (re-run
 back — the last entry per row wins, rows are found by their `id`, so hand
 edits to `places.csv` during a session do no harm — and writes `osm`, `wikidata` and
 `status` (`ok`, or `skip`) into `places.csv`, plus one `curation.csv` row per
-place OSM does not have. It touches only the rows `frasch match` owns and refuses
+place OSM does not have. A decision replaces all three cells: nothing of what
+the matcher had given the row stays beside it — not its Wikidata item when
+you pick another object, and no reference at all on a row you skip. It touches only the rows `frasch match` owns and refuses
 the rest, as it does a decision for an object or Wikidata item another row
 already claims. It renames the patch file before reading it (`--keep` leaves it), so
 decisions made while it runs go to a fresh patch; refused entries are appended
@@ -461,7 +488,8 @@ the synthetic polygons it would add.
   `Kampen (Sylt)` also answers to *Kampen*, `Kreis Dithmarschen` to
   *Dithmarschen*, `Wyk auf Föhr` to *Wyk*. Compound splitting is **not**
   done: `Gotteskoogsee` does not match OSM's `Gotteskoog See`.
-* Candidates are filtered by **kind compatibility**, reduced to the canonical
+* Candidates are filtered by **kind compatibility** (the rule of the row's
+  kind, `frasch/kinds.py`), reduced to the canonical
   object where OSM has one (the `type=waterway` relation of a river, the
   `place=island` polygon of a Hallig, the place node rather than a dyke or a
   street of the same name), then clustered: 3 km for point features, 30 km for
@@ -512,7 +540,7 @@ with a real `osm` reference. One local reference, one row per file.
   tagged with the row's `name:<dialect>` / `frasch:*` tags, `name` = the
   German name (else Danish, else any Frisian name — OpenMapTiles drops a
   nameless place node), and a default `place=` value from `kind`
-  (`POINT_TAGS` in `frasch/curationlist.py`: `settlement`/`warft` → `hamlet`, `island` /
+  (`point_place` of the kind's rule in `frasch/kinds.py`: `settlement`/`warft` → `hamlet`, `island` /
   `hallig` → `island`; a `kind` with no default needs `place=` in the
   curation row's `set_tags`, or the build stops). The curation row's
   `set_tags`/`minzoom`/`maxzoom` are applied last, so `set_tags` can override
@@ -723,13 +751,15 @@ references of their `osm` cell.
 | `dialects` | the dialect registry: the one reader of `dialects.csv`, its export for the frontend, `frasch dialects` |
 | `refs` | the references of an `osm` cell: `node/1; way/2` or one `local/<slug>`, parsed and spelled |
 | `namecell` | the grammar of a name cell: variants, the primary one, remarks |
-| `placelist` | the name list `places.csv`: its columns, its rows and what they claim (`claims`, `on_map`), ids, reading it as a `PlaceList` and writing it back |
+| `kinds` | the kinds of the name list, one `KindRule` each: which OSM objects can be one, which of them is the feature and carries the name, the default `place=` of a local reference, the review order |
+| `placelist` | the name list `places.csv`: its columns, its rows, the state each is in (`state`) and what they claim (`claims`, `on_map`), the `Reference` the matcher and `curate apply` write, ids, reading it as a `PlaceList` and writing it back |
 | `curationlist` | the one reader of `curation.csv`, and appending to it |
 | `dialect_areas` | which dialect is spoken where: the one reader of `dialect_areas.csv` (`area_rows`), the area lookup (`AreaIndex`) and `dialect_at`, the dialect where an object lies |
 | `objects` | the objects file `osm_objects.json`: what it records, reading and writing it |
 | `placeobjects` | the objects of the name list's rows: which references the file is located for, the one message for a reference it has no object for, the object a row's entry stands for (`for_row`) |
 | `placenames` | which names and attributes a place gets (`resolve`), as tile tags (`as_tags`) and as a search entry (`as_entry`); the tile keys and `TILE_KEY`, the table entry field → tile key; `frasch tile-keys` |
-| `geo` | the North Frisia box, its centre, haversine |
+| `geo` | the North Frisia box, its centre, haversine, and what an unknown distance counts as |
+| `osmtags` | the OSM tags the pipeline reads, each list once: the name tags and their ranks, the class tags, the `place` values of a settlement and of an island |
 | `osmscan`, `osmgeom` | the id-filtered passes over an extract; ring assembly and polygons |
 | `candidates`, `nameindex`, `hints` | the candidates file, the name index of the matcher and the curation export, location hints |
 | `searchindex` | builds and writes the search index |

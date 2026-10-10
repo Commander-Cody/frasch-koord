@@ -15,6 +15,10 @@ map.  Its conventions (see names/README.md):
   (checked by a human), `skip` (never put on the map) or empty
 * `id` is the row's own key, which every other file names it by
 
+What a row is to the pipeline follows from these cells, and `state` is the
+one reading of it: whether the matcher may fill it, what the matcher's
+report counts it as, and what `curate apply` refuses.
+
 `read` gives the list as a `PlaceList`, which also writes it back.  It
 refuses a list that breaks the rules of `rows` -- among them that only one
 row holds an object or a Wikidata item (`claims`).  The column layout depends
@@ -24,18 +28,20 @@ Which names a place gets from its row is frasch.placenames' rule.
 
 from __future__ import annotations
 
+import enum
 import os
 import re
 import unicodedata
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping, MutableMapping, Sequence
 from dataclasses import dataclass
 from typing import NamedTuple
 
 from frasch import files, refs, tables
+from frasch.kinds import KINDS, NOT_A_PLACE
 from frasch.dialects import LOCAL_COLUMN, Registry
 from frasch.errors import Invalid, PipelineError, Problem, ValidationError
 from frasch.namecell import primary
-from frasch.refs import SLUG, OsmRef, Ref
+from frasch.refs import LOCAL_TYPE, SLUG, OsmRef, Ref
 from frasch.tables import Table
 
 
@@ -56,22 +62,8 @@ def columns(reg: Registry) -> list[str]:
     )
 
 
-KINDS = {
-    "settlement",
-    "koog",
-    "harde",
-    "island",
-    "hallig",
-    "sand",
-    "warft",
-    "landscape",
-    "water",
-    "road",
-    "country",
-    "helgoland",
-    "not_a_place",
-}
-STATUSES = {"", "auto", "ok", "skip"}
+AUTO, OK, SKIP = "auto", "ok", "skip"  # the values of `status`, beside the empty one
+STATUSES = {"", AUTO, OK, SKIP}
 
 WIKIDATA_ID = re.compile(r"Q\d+")
 
@@ -130,18 +122,104 @@ def point_name(row: Row, reg: Registry) -> str:
     return primary(row.get("de")) or primary(row.get("da")) or any_name(row, reg)
 
 
-def owned_by_matcher(row: Row) -> bool:
-    """May the matcher (and `frasch curate apply`) (re)write this row's osm /
-    wikidata / status?  Not a row a human decided -- `ok`/`skip`, a
-    hand-filled reference, a local reference, `not_a_place` -- only one it
-    filled itself (`auto`) or one with nothing in it yet."""
+class RowState(enum.Enum):
+    """What a row is to the pipeline, by its cells (`state`).  A row is in
+    the first of these that holds for it; the value is how work/matches.csv
+    spells the state, `label` how the matcher's report does."""
+
+    NOT_A_PLACE = "not_a_place"  # a dictionary-only row
+    SKIP = "skip"  # the owner keeps it off the map
+    NO_NAME = "no_name"  # no Frisian name yet: nothing to put on the map
+    OWN_POINT = "own_point"  # a local reference: a place OSM does not have
+    BY_HAND = "by_hand"  # a human filled its reference in, or checked it
+    AUTO = "auto"  # the matcher filled it, and fills it again on every run
+    OPEN = "open"  # nothing in it yet
+
+    @property
+    def matchers(self) -> bool:
+        """May the matcher (and `frasch curate apply`) (re)write the row's
+        osm / wikidata / status?  Only of a row it filled itself or one with
+        nothing in it yet -- never what a human decided."""
+        return self in (RowState.AUTO, RowState.OPEN)
+
+    @property
+    def label(self) -> str:
+        return _STATE_LABELS[self]
+
+
+_STATE_LABELS = {
+    RowState.NOT_A_PLACE: "not a place",
+    RowState.SKIP: "skip",
+    RowState.NO_NAME: "no Frisian name",
+    RowState.OWN_POINT: "own point",
+    RowState.BY_HAND: "by hand",
+    RowState.AUTO: "auto",
+    RowState.OPEN: "open",
+}
+
+
+def state(row: Row, reg: Registry) -> RowState:
+    """The state a row is in."""
+    status, has_reference = row["status"], bool(row["osm"] or row["wikidata"])
+    if row["kind"] == NOT_A_PLACE:
+        return RowState.NOT_A_PLACE
+    if status == SKIP:
+        return RowState.SKIP
+    if not any_name(row, reg):
+        return RowState.NO_NAME
     if refs.local_of(_refs(row)):
-        return False  # a local reference: OSM has no object for it
-    if row["kind"] == "not_a_place" or row["status"] in ("ok", "skip"):
-        return False
-    if row["status"] == "auto":
-        return True
-    return not row["osm"] and not row["wikidata"]
+        return RowState.OWN_POINT
+    if status == OK or (has_reference and status != AUTO):
+        return RowState.BY_HAND  # `ok` without a reference: OSM has nothing to name
+    return RowState.AUTO if has_reference else RowState.OPEN
+
+
+class Reference(NamedTuple):
+    """The cells of a row that say which object it names, and who said so:
+    `osm`, `wikidata` and `status`.  The matcher and `frasch curate apply`
+    write the three as one, so that no cell of an older answer stays beside
+    a newer one -- as one of the references below."""
+
+    osm: str
+    wikidata: str
+    status: str
+
+    @classmethod
+    def of(cls, row: Row) -> Reference:
+        """The reference a row has."""
+        return cls(row["osm"], row["wikidata"], row["status"])
+
+    @classmethod
+    def auto(cls, objects: Sequence[Ref], qid: str) -> Reference:
+        """What the matcher found: `objects`, and the item `qid` (`""` for
+        none).  It finds it again, or something else, on its next run."""
+        return cls(refs.format(objects), qid, AUTO)
+
+    @classmethod
+    def checked(cls, objects: Sequence[Ref], qid: str) -> Reference:
+        """What a human picked: `objects`, and the item `qid` (`""` for
+        none)."""
+        return cls(refs.format(objects), qid, OK)
+
+    @classmethod
+    def local(cls, slug: str) -> Reference:
+        """A place OSM does not have, which names/curation.csv positions --
+        and which has no Wikidata item."""
+        return cls(refs.format([(LOCAL_TYPE, slug)]), "", OK)
+
+    @classmethod
+    def skipped(cls) -> Reference:
+        """A row the owner keeps off the map: it names nothing."""
+        return cls("", "", SKIP)
+
+    @classmethod
+    def cleared(cls) -> Reference:
+        """Nothing: a row the matcher found no object for."""
+        return cls("", "", "")
+
+    def write(self, row: MutableMapping[str, str]) -> None:
+        """Put the reference into the cells of `row`."""
+        row["osm"], row["wikidata"], row["status"] = self
 
 
 class Claims(NamedTuple):
@@ -164,7 +242,7 @@ def claims(row: Row) -> Claims:
     (`on_map` is the narrower question).  Only one row can hold an object or
     an item: the injector labels it once, so a second claim is a problem of
     the list (`rows`)."""
-    if row["status"] == "skip":
+    if row["status"] == SKIP:
         return Claims([], "")
     return Claims(_refs(row), row["wikidata"])
 
@@ -180,7 +258,7 @@ def on_map(row: Row, reg: Registry) -> bool:
     is a place (not `not_a_place`) and has a Frisian name.  The injector
     labels these rows' objects, and the search index lists them."""
     held = claims(row)
-    return bool(held.refs or held.qid) and row["kind"] != "not_a_place" and bool(any_name(row, reg))
+    return bool(held.refs or held.qid) and row["kind"] != NOT_A_PLACE and bool(any_name(row, reg))
 
 
 def header_problem(fields: Sequence[str], reg: Registry) -> str | None:

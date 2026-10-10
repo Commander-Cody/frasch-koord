@@ -100,14 +100,7 @@ def cand(
     """One candidates.jsonl record (build_candidates.py's format).  Tag keys
     with a colon are passed with a double underscore (`name__de`)."""
     tags = {k.replace("__", ":"): v for k, v in tags.items()}
-    cls = [
-        f"{k}={tags[k]}"
-        for k in ("place", "natural", "boundary", "highway", "man_made")
-        if k in tags
-    ]
-    if "wikidata" in tags:
-        cls.append("wikidata")
-    return {"src": src, "t": t, "id": id, "lon": lon, "lat": lat, "cls": cls, "tags": tags}
+    return {"src": src, "t": t, "id": id, "lon": lon, "lat": lat, "tags": tags}
 
 
 def write_candidates(path: Path, *recs: Candidate, extracts: Sequence[ExtractStamp] = ()) -> Path:

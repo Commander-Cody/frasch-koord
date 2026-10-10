@@ -34,19 +34,6 @@ from frasch.tables import Table
 COLUMNS = ["osm", "name", "lat", "lon", "set_tags", "minzoom", "maxzoom", "polygon_km2", "note"]
 MAX_ZOOM = 24  # the deepest zoom a map style knows
 
-# The default `place=` of the node the injector adds for a local reference, by
-# the row's kind.  Only kinds whose OSM equivalent is unambiguous are listed;
-# any other kind needs `place=...` in the curation row's `set_tags` (and a look
-# at whether OpenMapTiles keeps that tag: it has no `place=locality` at all,
-# and `isolated_dwelling` nodes only from z14 while `hamlet` nodes come at z11
-# -- which is why a Warft is a hamlet here, as OSM's own Hallig Warften are).
-POINT_TAGS = {
-    "settlement": {"place": "hamlet"},
-    "warft": {"place": "hamlet"},
-    "island": {"place": "island"},
-    "hallig": {"place": "island"},
-}
-
 
 # ------------------------------------------------------------------ cells ---
 def parse_point(lat: str | None, lon: str | None, where: str = "") -> LonLat | None:

@@ -15,21 +15,7 @@ import unicodedata
 from collections.abc import Iterable
 
 from frasch.candidates import Candidate, osm_key
-
-# name tag -> how trustworthy an exact hit on it is (lower = better).  A hit on
-# the OSM `name` itself beats a hit on `name:de`, which beats alt/old names:
-# otherwise the Danish village Holme (name:de=Holm) outranks the North Frisian
-# village Holm (name=Holm).
-NAME_FIELD_RANK = {
-    "name": 0,
-    "name:de": 1,
-    "official_name": 2,
-    "name:da": 2,
-    "short_name": 2,  # Stadt Wyk auf Föhr: short_name=Wyk
-    "alt_name": 4,
-    "old_name": 4,
-}
-NAME_FIELDS = tuple(NAME_FIELD_RANK)
+from frasch.osmtags import NAME_FIELD_RANK, UNRANKED
 
 # ----------------------------------------------------------- normalisation ---
 _UML = {
@@ -105,7 +91,7 @@ def split_name_values(v: str) -> list[tuple[str, int]]:
 
 class NameIndex:
     """Candidate records (frasch.candidates) by normalised name, and by
-    reference.  Every name tag of NAME_FIELD_RANK and every variant of its
+    reference.  Every name tag of osmtags.NAME_FIELD_RANK and every variant of its
     value (`split_name_values`) is a key; a record found under several
     keeps its best rank."""
 
@@ -118,7 +104,7 @@ class NameIndex:
             for field, rank in NAME_FIELD_RANK.items():
                 for part, penalty in split_name_values(rec["tags"].get(field) or ""):
                     n = norm(part)
-                    if n and rank + penalty < self.by_name[n].get(i, 99):
+                    if n and rank + penalty < self.by_name[n].get(i, UNRANKED):
                         self.by_name[n][i] = rank + penalty
 
     def lookup(self, name: str) -> list[tuple[Candidate, int]]:

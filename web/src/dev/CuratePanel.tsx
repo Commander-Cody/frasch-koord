@@ -171,6 +171,8 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
           row={selected}
           done={doneById.get(selected.id) ?? null}
           bbox={worklist.bbox}
+          classKeys={worklist.class_keys}
+          settlementPlaces={worklist.settlement_places}
           canBePolygon={worklist.polygon_kinds.includes(selected.kind)}
           mapRef={mapRef}
           onSave={save}

@@ -8,8 +8,9 @@ Candidates come from names/work/candidates.jsonl (`frasch candidates`).
 
 What gets written where
   names/places.csv        only `osm`, `wikidata` and `status` of the rows the
-                          matcher owns: rows with an empty `osm` + `wikidata`
-                          cell, and rows it filled earlier (`status=auto`).
+                          matcher owns (`placelist.state`): rows with an
+                          empty `osm` + `wikidata` cell, and rows it filled
+                          earlier (`status=auto`).
                           A row a human has filled in (any `osm`/`wikidata`
                           with a status other than `auto`) or marked `skip`
                           is never touched.  Review the result with `git diff`.
@@ -35,6 +36,7 @@ What gets written where
 
 Ranking / decision
   1. keep only candidates whose tags are compatible with the row's `kind`
+     (its rule, frasch.kinds)
   2. cluster the survivors geographically (30 km)
   3. `matched`   - one cluster, or exactly one cluster satisfies the row's
                    location hint, or exactly one cluster is inside North Frisia
@@ -76,21 +78,18 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, NamedTuple, TypedDict
 
-from frasch import candidates, cli, dialects, files, placelist, refs
-from frasch.candidates import ISLAND_PLACES, Candidate, decisive_tags, osm_key
+from frasch import candidates, cli, dialects, files, geo, kinds, osmtags, placelist, refs
+from frasch.candidates import Candidate, osm_key
 from frasch.dialects import Registry
 from frasch.errors import PipelineError, rebuild
-from frasch.geo import NF_CENTRE, haversine, in_north_frisia
+from frasch.geo import haversine, in_north_frisia
 from frasch.hints import Circle, HintResolver
+from frasch.kinds import Boundary, KindRule
 from frasch.namecell import primary, variants
 from frasch.nameindex import NameIndex, norm
+from frasch.osmtags import UNRANKED
 from frasch.paths import Workspace
-from frasch.placelist import (
-    PlaceRow,
-    Row,
-    any_name,
-    owned_by_matcher,
-)
+from frasch.placelist import PlaceRow, Reference, Row, RowState, any_name
 from frasch.provenance import ExtractStamp, Stamp, unstamped
 from frasch.refs import OsmRef, Ref
 
@@ -118,6 +117,7 @@ MATCH_COLUMNS = [
 CLUSTER_KM = 3.0  # objects this close describe the same feature
 SEPARATION_KM = 30.0  # a winner must be this far from every rival
 BOUNDARY_QID_KM = 10.0  # a boundary further from a place node is a namesake
+MINOR_PLACE_KM = 50.0  # a hamlet further from North Frisia is no plausible match
 
 # `match_row`'s result for a row: its cells plus the MATCH_COLUMNS and
 # osm_type / osm_id -- a line of work/matches.csv.  Its `note` is the
@@ -150,172 +150,6 @@ class PlacedCluster(Cluster):
     hint_d: float | None
     nf_d: float | None
     in_nf: bool
-
-
-# -------------------------------------------------------- kind / tag rules ---
-SETTLEMENT_PLACES = {
-    "city",
-    "town",
-    "village",
-    "hamlet",
-    "isolated_dwelling",
-    "locality",
-    "suburb",
-    "neighbourhood",
-    "borough",
-    "quarter",
-    "farm",
-    "municipality",
-}
-
-
-def kind_ok(kind: str, tags: Mapping[str, str]) -> bool:
-    place = tags.get("place")
-    nat = tags.get("natural")
-    bnd = tags.get("boundary")
-    lvl = tags.get("admin_level")
-    lu = tags.get("landuse")
-
-    if kind == "settlement":
-        if place in SETTLEMENT_PLACES:
-            return True
-        return bnd == "administrative" and lvl in ("6", "7", "8", "9", "10", "11")
-    if kind == "koog":
-        if place in SETTLEMENT_PLACES | {"polder"}:
-            return True
-        return bool(
-            bnd in ("administrative", "protected_area") or lu or nat in ("water", "wetland")
-        )
-    if kind == "harde":
-        return bnd in ("historic", "political", "administrative") or place == "region"
-    if kind in ("island", "hallig"):
-        if place in ISLAND_PLACES or nat in ISLAND_PLACES | {"peninsula"}:
-            return True
-        if kind == "hallig" and place in SETTLEMENT_PLACES:
-            return True
-        return bnd == "administrative" and lvl in ("8", "9", "10", "11")
-    if kind == "sand":
-        return nat in {
-            "sand",
-            "shoal",
-            "beach",
-            "mud",
-            "reef",
-            "wetland",
-        } or place in ISLAND_PLACES | {"locality"}
-    if kind == "warft":
-        if place in {"isolated_dwelling", "farm", "locality", "hamlet", "village", "neighbourhood"}:
-            return True
-        if lu in {"residential", "farmyard", "meadow"}:
-            return True
-        return bool(tags.get("man_made") or tags.get("historic"))
-    if kind == "landscape":
-        if place in {"region", "county", "state", "district", "province", "island", "archipelago"}:
-            return True
-        if nat in {"peninsula", "ridge", "hill", "archipelago"}:
-            return True
-        return bnd in {"administrative", "historic", "political"}
-    if kind == "water":
-        if nat in {"water", "bay", "strait", "wetland", "spring", "sand"}:
-            return True
-        if tags.get("water") or tags.get("waterway"):
-            return True
-        return place == "sea" or bnd in {"maritime", "place"}
-    if kind == "road":
-        return bool(tags.get("highway"))
-    if kind == "country":
-        return bnd == "administrative" and lvl == "2"
-    if kind == "helgoland":
-        return bool(
-            place
-            or nat
-            or tags.get("man_made")
-            or tags.get("historic")
-            or tags.get("water")
-            or tags.get("waterway")
-        )
-    return True  # kind == other
-
-
-def is_waterway_relation(rec: Candidate) -> bool:
-    """A `type=waterway` relation: the whole river, grouping its ways.  It
-    carries no `waterway` tag of its own, so `kind_ok` does not take it for
-    water."""
-    return rec["t"] == "r" and rec["tags"].get("type") == "waterway"
-
-
-def canonical(kind: str, cands: list[RankedCandidate]) -> list[RankedCandidate]:
-    """Narrow a candidate set to the object(s) that really *are* the feature.
-
-    Rivers are split into dozens of `waterway=river` ways spread over more than
-    the clustering distance, and islands carry both a coastline way and several
-    place nodes.  If OSM has the canonical object (a `type=waterway` relation,
-    a `place=island` polygon, a `place=sea` relation), only that is considered.
-    """
-    if kind == "water":
-        strong = [c for c in cands if is_waterway_relation(c) or c["tags"].get("place") == "sea"]
-        if strong:
-            return strong
-        strong = [
-            c
-            for c in cands
-            if c["t"] in ("w", "r")
-            and (c["tags"].get("natural") == "water" or c["tags"].get("water"))
-        ]
-        if strong:
-            return strong
-    elif kind in ("settlement", "warft", "koog"):
-        strong = [c for c in cands if c["tags"].get("place")]
-        if strong:
-            return strong
-    elif kind in ("island", "hallig", "sand"):
-        strong = [
-            c
-            for c in cands
-            if c["t"] in ("w", "r")
-            and (
-                c["tags"].get("place") in ISLAND_PLACES
-                or c["tags"].get("natural") in ISLAND_PLACES | {"peninsula"}
-            )
-        ]
-        if strong:
-            return strong
-    return cands
-
-
-def type_bonus(kind: str, rec: Candidate) -> int:
-    t, tags = rec["t"], rec["tags"]
-    place = tags.get("place")
-    if kind in ("settlement", "warft", "koog"):
-        # OpenMapTiles labels settlements from the place NODE
-        if t == "n" and place:
-            return 30
-        if t == "r" and tags.get("boundary") == "administrative":
-            return 12
-        if t == "w" and place:
-            return 8
-        return 2
-    if kind in ("island", "hallig", "sand"):
-        if t in ("w", "r") and (place in ISLAND_PLACES or tags.get("natural") in ISLAND_PLACES):
-            return 30
-        if t == "n" and place:
-            return 18
-        return 4
-    if kind == "water":
-        if t in ("w", "r") and (tags.get("natural") or tags.get("water") or place == "sea"):
-            return 25
-        if tags.get("waterway"):
-            return 20
-        return 6
-    if kind == "landscape":
-        if t == "r" and (tags.get("boundary") or place):
-            return 25
-        if t == "n" and (place or tags.get("natural")):
-            return 22
-        return 6
-    if kind == "road":
-        return 20 if t == "w" else 4
-    return 10 if t == "n" else 6
 
 
 # --------------------------------------------------------------- wikidata ----
@@ -445,31 +279,7 @@ def row_query_names(row: Row) -> list[str]:
     return variants(row.get("de")) or variants(row.get("da"))
 
 
-MINOR_PLACES = {
-    "hamlet",
-    "isolated_dwelling",
-    "locality",
-    "farm",
-    "neighbourhood",
-    "suburb",
-    "quarter",
-}
-# these features exist only in North Frisia -- a match elsewhere is wrong
-NF_ONLY_KINDS = {"koog", "hallig", "sand", "warft", "harde"}
-
 CORE_MIN_KM = 1.0  # two settlement nodes this close are one village
-CORE_PLACES = {
-    "city",
-    "town",
-    "village",
-    "hamlet",
-    "isolated_dwelling",
-    "suburb",
-    "neighbourhood",
-    "locality",
-    "farm",
-    "polder",
-}
 
 
 def linear_radius(rec: Candidate) -> float | None:
@@ -491,21 +301,22 @@ def is_linear(rec: Candidate) -> bool:
 def is_core(rec: Candidate) -> bool:
     """A settlement node -- two of these more than CORE_MIN_KM apart are two
     different villages, however similar their names."""
-    return rec["t"] == "n" and rec["tags"].get("place") in CORE_PLACES
+    return rec["t"] == "n" and rec["tags"].get("place") in osmtags.CORE_PLACES
 
 
 def absorb_boundaries(
-    kind: str, cands: list[RankedCandidate]
+    rule: KindRule, cands: list[RankedCandidate]
 ) -> tuple[list[RankedCandidate], list[RankedCandidate]]:
     """Prefer the place NODE over its administrative boundary (that is what
-    OpenMapTiles labels).  Returns (kept, dropped)."""
-    if kind == "landscape":
+    OpenMapTiles labels), where the kind's rule says so.  Returns (kept,
+    dropped)."""
+    if rule.boundary is Boundary.FEATURE:
+        return cands, []  # Harden: the historic boundary is it
+    if rule.boundary is Boundary.YIELDS_TO_NODE:
         # for a landscape/Kreis the boundary usually *is* the feature -- only a
         # real place node (place=county/region/...) beats it
         if not any(c["t"] == "n" and c["tags"].get("place") for c in cands):
             return cands, []
-    elif kind not in ("settlement", "warft", "koog", "hallig", "island", "sand", "helgoland"):
-        return cands, []  # Harden: the historic boundary is it
     kept: list[RankedCandidate] = []
     dropped: list[RankedCandidate] = []
     for c in cands:
@@ -580,17 +391,8 @@ def _centred(members: list[Candidate]) -> Cluster:
 
 def fmt_cand(rec: Candidate) -> str:
     tags = rec["tags"]
-    place = (
-        tags.get("place")
-        or tags.get("natural")
-        or tags.get("boundary")
-        or tags.get("waterway")
-        or tags.get("landuse")
-        or tags.get("man_made")
-        or tags.get("highway")
-        or "-"
-    )
-    d = haversine(rec["lon"], rec["lat"], *NF_CENTRE)
+    place = osmtags.class_of(tags) or "-"
+    d = geo.from_centre(rec["lon"], rec["lat"])
     ds = f"{d:.0f}" if d is not None else "?"
     nm = (tags.get("name") or tags.get("name:de") or "")[:40]
     return f"{rec['t']}/{rec['id']}:{nm}:{place}:{ds}"
@@ -602,8 +404,8 @@ def fmt_cands(cands: Iterable[RankedCandidate]) -> str:
     them (a "Dorfstraße" has hundreds of ways); only REPORT.md shortens it."""
 
     def key(c: RankedCandidate) -> tuple[int, float, str, int]:
-        d = haversine(c["lon"], c["lat"], *NF_CENTRE)
-        return (c.get("rank", 99), 1e9 if d is None else d, c["t"], c["id"])
+        d = geo.km_or(geo.from_centre(c["lon"], c["lat"]), unknown=geo.FAR)
+        return (c.get("rank", UNRANKED), d, c["t"], c["id"])
 
     return ";".join(fmt_cand(c) for c in sorted(cands, key=key))
 
@@ -625,7 +427,8 @@ def _decide(
     if len(inside) == 1:
         cand = inside[0]
         if all(
-            (haversine(cand["lon"], cand["lat"], c["lon"], c["lat"]) or 1e9) > SEPARATION_KM
+            geo.km_or(haversine(cand["lon"], cand["lat"], c["lon"], c["lat"]), unknown=geo.FAR)
+            > SEPARATION_KM
             for c in clusters
             if c is not cand
         ):
@@ -644,21 +447,21 @@ def _placed(cl: Cluster, hint_pt: Circle | None) -> PlacedCluster:
         **cl,
         "hint_ok": hint_ok,
         "hint_d": hint_d,
-        "nf_d": haversine(cl["lon"], cl["lat"], *NF_CENTRE),
+        "nf_d": geo.from_centre(cl["lon"], cl["lat"]),
         "in_nf": in_north_frisia(cl["lon"], cl["lat"]),
     }
 
 
-def _suspicious(kind: str, winner: PlacedCluster) -> bool:
+def _suspicious(rule: KindRule, winner: PlacedCluster) -> bool:
     """True if an otherwise clear winner is implausible for a North Frisian
     name list: a Koog/Warft/Hallig outside North Frisia, or a far-away minor
     place (hamlet, isolated dwelling, ...)."""
     if winner["in_nf"]:
         return False
-    if kind in NF_ONLY_KINDS:
+    if rule.nf_only:
         return True
-    minor = any(m["tags"].get("place") in MINOR_PLACES for m in winner["members"])
-    return minor and (winner["nf_d"] or 1e9) > 50
+    minor = any(m["tags"].get("place") in osmtags.MINOR_PLACES for m in winner["members"])
+    return minor and geo.km_or(winner["nf_d"], unknown=geo.FAR) > MINOR_PLACE_KM
 
 
 def _outranks_a_hit_in_north_frisia(winner: PlacedCluster, weaker: Iterable[Candidate]) -> bool:
@@ -682,10 +485,14 @@ def _ambiguous_reason(
         if hint_pt:
             return f"location hint '{row['hint']}' matched no cluster"
         return f"{len(clusters)} plausible candidates"
-    distance = f"{(winner['nf_d'] or 0):.0f} km from North Frisia"
-    if _suspicious(row["kind"], winner):
-        return f"only match is {distance} ({row['kind']}) -- verify by hand"
-    return f"best name hit is {distance}, a weaker one lies inside -- verify by hand"
+    where = (
+        "has no known position"
+        if winner["nf_d"] is None
+        else f"is {winner['nf_d']:.0f} km from North Frisia"
+    )
+    if _suspicious(kinds.rule(row["kind"]), winner):
+        return f"only match {where} ({row['kind']}) -- verify by hand"
+    return f"best name hit {where}, a weaker one lies inside -- verify by hand"
 
 
 class _Decision(NamedTuple):
@@ -719,7 +526,7 @@ def _ranked_candidates(index: NameIndex, queries: Iterable[str]) -> list[RankedC
         for rec, rank in index.lookup(q):
             key = osm_key(rec)
             recs[key] = rec
-            if rank < best_rank.get(key, 99):
+            if rank < best_rank.get(key, UNRANKED):
                 best_rank[key] = rank
     return [{**rec, "rank": best_rank[key]} for key, rec in recs.items()]
 
@@ -733,7 +540,7 @@ def _split_by_rank(
 
 
 def _decide_by_rank(
-    kind: str,
+    rule: KindRule,
     best_hits: list[RankedCandidate],
     plaus_all: list[RankedCandidate],
     hint_pt: Circle | None,
@@ -741,45 +548,41 @@ def _decide_by_rank(
     """`_decide` among the best name hits, and among all of them when the
     best hits' winner is implausible."""
     winner, reason, clusters = _decide(best_hits, hint_pt)
-    if winner is not None and _suspicious(kind, winner) and len(plaus_all) > len(best_hits):
+    if winner is not None and _suspicious(rule, winner) and len(plaus_all) > len(best_hits):
         # the best-ranked name hit is implausible -- reconsider the weaker hits
         # (OSM disambiguators such as "Kampen (Sylt)", German exonyms, ...)
         w2, r2, c2 = _decide(plaus_all, hint_pt)
-        if w2 is not None and not _suspicious(kind, w2):
+        if w2 is not None and not _suspicious(rule, w2):
             return _Decision(w2, r2 + " (weaker name hit)", c2, plaus_all)
     return _Decision(winner, reason, clusters, best_hits)
 
 
 def _needs_review(
-    kind: str, winner: PlacedCluster, weaker: Iterable[Candidate], hint_pt: Circle | None
+    rule: KindRule, winner: PlacedCluster, weaker: Iterable[Candidate], hint_pt: Circle | None
 ) -> bool:
     """True if a winner is too doubtful to take: implausible for the list,
     or a far-away pick over a weaker hit in North Frisia."""
-    if _suspicious(kind, winner):
+    if _suspicious(rule, winner):
         return True
     # a hint's pick is binding
     return not hint_pt and _outranks_a_hit_in_north_frisia(winner, weaker)
 
 
-def _held(kind: str, taken: Iterable[Candidate], winner: PlacedCluster) -> list[Candidate]:
+def _held(rule: KindRule, taken: Iterable[Candidate], winner: PlacedCluster) -> list[Candidate]:
     """The objects of `taken` that are part of the winner's feature."""
-    return [
-        c
-        for c in taken
-        if (kind_ok(kind, c["tags"]) or (kind == "water" and is_waterway_relation(c)))
-        and len(cluster(winner["members"] + [c])) == 1
-    ]
+    return [c for c in taken if rule.covers(c) and len(cluster(winner["members"] + [c])) == 1]
 
 
-def _best_member(kind: str, members: list[Candidate]) -> Candidate:
+def _best_member(rule: KindRule, members: list[Candidate]) -> Candidate:
     """The object of a cluster that gets the name."""
     return max(
         members,
         key=lambda r: (
-            type_bonus(kind, r)
-            + (8 if r["tags"].get("wikidata") else 0)
-            + (4 if r["tags"].get("name:de") else 0)
-            - ((haversine(r["lon"], r["lat"], *NF_CENTRE) or 500) / 200)
+            rule.bonus(r)
+            + (kinds.WIKIDATA_BONUS if r["tags"].get("wikidata") else 0)
+            + (kinds.GERMAN_NAME_BONUS if r["tags"].get("name:de") else 0)
+            - geo.km_or(geo.from_centre(r["lon"], r["lat"]), unknown=kinds.UNPLACED_KM)
+            / kinds.KM_PER_POINT
         ),
     )
 
@@ -816,16 +619,16 @@ def _member_ids(best: Candidate, members: list[Candidate]) -> list[str]:
 
 
 def _matched_cells(
-    kind: str, winner: PlacedCluster, boundaries: list[RankedCandidate]
+    rule: KindRule, winner: PlacedCluster, boundaries: list[RankedCandidate]
 ) -> MatchResult:
     """The match columns, `wikidata` and `status` of a row the winner matches."""
     members = winner["members"]
-    best = _best_member(kind, members)
+    best = _best_member(rule, members)
     return {
         "osm_type": refs.TYPE_NAME[best["t"]],
         "osm_id": ";".join(_member_ids(best, members)),
         "match_name": best["tags"].get("name") or best["tags"].get("name:de", ""),
-        "match_tags": decisive_tags(best),
+        "match_tags": osmtags.decisive(best["tags"]),
         "lon": "" if best["lon"] is None else f"{best['lon']:.6f}",
         "lat": "" if best["lat"] is None else f"{best['lat']:.6f}",
         "wikidata": _member_qid(best, members, boundaries),
@@ -842,7 +645,7 @@ def match_row(
 ) -> MatchResult:
     """`claimed`: what other rows hold, which is not this row's to get."""
     claimed = claimed or Claimed()
-    kind = row["kind"]
+    rule = kinds.rule(row["kind"])
     out = _unfilled(row)
     if not any_name(row, reg):
         return _unmatched(out, "not_found", "no Frisian name")
@@ -858,27 +661,27 @@ def match_row(
         note = taken_note(taken, claimed.objects) if taken else "no name match in OSM"
         return _unmatched(out, "not_found", note)
 
-    plaus_all = [c for c in cands if kind_ok(kind, c["tags"])]
+    plaus_all = [c for c in cands if rule.accepts(c["tags"])]
     if not plaus_all:
         # the German name exists in OSM, but only on streets / buildings /
         # bus stops -- the feature itself is not mapped.  Not a review task.
-        note = f"{len(cands)} name match(es), none compatible with kind={kind}"
+        note = f"{len(cands)} name match(es), none compatible with kind={rule.name}"
         return _unmatched(out, "not_found", note, fmt_cands(cands))
     # set the boundaries aside first: canonical() would drop them, and their
     # wikidata is the fallback for a place node without one
-    plaus_all, boundaries = absorb_boundaries(kind, plaus_all)
-    plaus_all = canonical(kind, plaus_all)
+    plaus_all, boundaries = absorb_boundaries(rule, plaus_all)
+    plaus_all = rule.canonical(plaus_all)
     best_hits, weaker = _split_by_rank(plaus_all)
 
     hint_pt = hints.resolve(row.get("hint", "").split(";")[0].strip())
 
-    decision = _decide_by_rank(kind, best_hits, plaus_all, hint_pt)
+    decision = _decide_by_rank(rule, best_hits, plaus_all, hint_pt)
     winner = decision.winner
-    if winner is None or _needs_review(kind, winner, weaker, hint_pt):
+    if winner is None or _needs_review(rule, winner, weaker, hint_pt):
         note = _ambiguous_reason(row, winner, hint_pt, decision.clusters)
         return _unmatched(out, "ambiguous", note, fmt_cands(plaus_all))
 
-    held = _held(kind, [c for c in taken if osm_key(c) in claimed.features], winner)
+    held = _held(rule, [c for c in taken if osm_key(c) in claimed.features], winner)
     if held:
         # another row holds part of this very feature (a piece of the same
         # river, or the relation that is the whole river): the rest is not
@@ -886,7 +689,7 @@ def match_row(
         note = taken_note(held, claimed.objects)
         return _unmatched(out, "not_found", note, fmt_cands(plaus_all))
 
-    out.update(_matched_cells(kind, winner, boundaries))
+    out.update(_matched_cells(rule, winner, boundaries))
     if len(winner["members"]) > 1 or len(decision.clusters) > 1:
         out["candidates"] = fmt_cands(decision.plaus)
     out["note"] = f"auto: {decision.reason}" if decision.reason != "single cluster" else ""
@@ -1016,16 +819,18 @@ def check_extracts(candidates_path: str, report_path: str) -> Sequence[ExtractSt
 
 
 # ----------------------------------------------------------------- report ----
+# What the report says of an open row, by what the run made of it.
+AMBIGUOUS, NOT_FOUND = "ambiguous", "not found"
 # the columns of the report's counts table, in order
 REPORT_STATES = [
-    "auto",
-    "by hand",
-    "own point",
-    "ambiguous",
-    "not found",
-    "skip",
-    "no Frisian name",
-    "not a place",
+    RowState.AUTO.label,
+    RowState.BY_HAND.label,
+    RowState.OWN_POINT.label,
+    AMBIGUOUS,
+    NOT_FOUND,
+    RowState.SKIP.label,
+    RowState.NO_NAME.label,
+    RowState.NOT_A_PLACE.label,
 ]
 
 
@@ -1052,21 +857,13 @@ def write_report(
 
 
 def _report_state(r: PlaceRow, results: Mapping[str, MatchResult], reg: Registry) -> str:
-    """Which of the REPORT_STATES the row is in."""
-    if r["kind"] == "not_a_place":
-        return "not a place"
-    if r["status"] == "skip":
-        return "skip"
-    if not any_name(r, reg):
-        return "no Frisian name"
-    if r.local:
-        return "own point"
-    if r["osm"] or r["wikidata"]:
-        return "auto" if r["status"] == "auto" else "by hand"
-    if r["status"] == "ok":
-        return "by hand"  # checked: OSM has nothing to name
+    """Which of the REPORT_STATES the row is in: its state
+    (`placelist.state`), and for an open row what the run made of it."""
+    state = placelist.state(r, reg)
+    if state is not RowState.OPEN:
+        return state.label
     res = results.get(r["id"])
-    return "ambiguous" if res and res["status"] == "ambiguous" else "not found"
+    return AMBIGUOUS if res and res["status"] == "ambiguous" else NOT_FOUND
 
 
 def _report_ref(r: PlaceRow, reg: Registry) -> str:
@@ -1126,7 +923,7 @@ def _counts_section(
 def _ambiguous_section(
     rows: Sequence[PlaceRow], results: Mapping[str, MatchResult], reg: Registry
 ) -> list[str]:
-    amb = [r for r in rows if _report_state(r, results, reg) == "ambiguous"]
+    amb = [r for r in rows if _report_state(r, results, reg) == AMBIGUOUS]
     lines = [f"## Ambiguous ({len(amb)})\n"]
     lines.append("`candidates` format: `type/id:name:class:km-from-NF-centre`\n")
     lines.append("| id | line | kind | Frisian | German | hint | why | candidates |")
@@ -1144,7 +941,7 @@ def _ambiguous_section(
 def _not_found_section(
     rows: Sequence[PlaceRow], results: Mapping[str, MatchResult], reg: Registry
 ) -> list[str]:
-    nf = [r for r in rows if _report_state(r, results, reg) == "not found"]
+    nf = [r for r in rows if _report_state(r, results, reg) == NOT_FOUND]
     lines = [f"## Not found ({len(nf)})\n"]
     lines.append(
         "Either the feature is not in OSM at all, or OSM spells it "
@@ -1170,7 +967,9 @@ def write_matches(
     reg: Registry,
 ) -> None:
     """work/matches.csv: one line per places.csv row, with the match details
-    (and lon/lat also for rows a human filled in, looked up by id)."""
+    (and lon/lat also for rows a human filled in, looked up by id).  Its
+    `result` is what the run made of the row, and the state of a row it did
+    not match (`placelist.RowState`)."""
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with files.replacing(path, text=True) as fh:
         w = csv.DictWriter(fh, fieldnames=MATCH_COLUMNS, lineterminator="\n")
@@ -1199,21 +998,11 @@ def write_matches(
                     note=res.get("note", ""),
                 )
             else:
-                rec["result"] = (
-                    "skip"
-                    if r["status"] == "skip"
-                    else "not a place"
-                    if r["kind"] == "not_a_place"
-                    else "own point"
-                    if r.local
-                    else "by hand"
-                    if (r["osm"] or r["wikidata"] or r["status"] == "ok")
-                    else ""
-                )
+                rec["result"] = placelist.state(r, reg).value
                 if hit is not None:
                     rec.update(
                         match_name=hit["tags"].get("name", ""),
-                        match_tags=decisive_tags(hit),
+                        match_tags=osmtags.decisive(hit["tags"]),
                         lon="" if hit["lon"] is None else f"{hit['lon']:.6f}",
                         lat="" if hit["lat"] is None else f"{hit['lat']:.6f}",
                     )
@@ -1243,8 +1032,8 @@ def _run(ws: Workspace, reg: Registry, offline: bool, dry_run: bool) -> int:
     )
     hints = HintResolver(index)
 
-    owned = [r for r in rows if owned_by_matcher(r) and any_name(r, reg)]
-    country_rows = [r for r in owned if r["kind"] == "country"]
+    owned = [r for r in rows if placelist.state(r, reg).matchers]
+    country_rows = [r for r in owned if kinds.rule(r["kind"]).by_item]
     qids, wd_failed = wikidata_countries(
         [primary(r["de"]) for r in country_rows], ws.wikidata_cache, offline
     )
@@ -1257,8 +1046,8 @@ def _run(ws: Workspace, reg: Registry, offline: bool, dry_run: bool) -> int:
 
     changed: collections.Counter[str] = collections.Counter()
     for r in todo:
-        before = _reference(r)
-        if r["kind"] == "country":
+        before = Reference.of(r)
+        if kinds.rule(r["kind"]).by_item:
             o = _country_result(r, qids)
         else:
             o = match_row(r, index, hints, reg, claimed)
@@ -1266,7 +1055,7 @@ def _run(ws: Workspace, reg: Registry, offline: bool, dry_run: bool) -> int:
         results[r["id"]] = o
         _write_back(r, o)
         claimed.add(r)
-        change = _change(before, _reference(r))
+        change = _change(before, Reference.of(r))
         if change:
             changed[change] += 1
 
@@ -1350,32 +1139,24 @@ def _country_result(r: PlaceRow, qids: Mapping[str, str]) -> MatchResult:
     return o
 
 
-def _reference(r: PlaceRow) -> tuple[str, str, str]:
-    """The cells of a row the matcher writes."""
-    return r["osm"], r["wikidata"], r["status"]
-
-
 def _write_back(r: PlaceRow, o: MatchResult) -> None:
     """Put a match into the row as `status=auto`; clear the row otherwise."""
     if o["status"] == "matched":
-        r["osm"] = refs.format(
-            refs.parse("; ".join(f"{o['osm_type']}/{i}" for i in o["osm_id"].split(";") if i))
-        )
-        r["wikidata"] = o["wikidata"]
-        r["status"] = "auto"
+        objects = refs.parse("; ".join(f"{o['osm_type']}/{i}" for i in o["osm_id"].split(";") if i))
+        Reference.auto(objects, o["wikidata"]).write(r)
     else:  # lost / never had a match
-        r["osm"], r["wikidata"], r["status"] = "", "", ""
+        Reference.cleared().write(r)
 
 
-def _change(before: tuple[str, str, str], after: tuple[str, str, str]) -> str | None:
+def _change(before: Reference, after: Reference) -> str | None:
     """`filled`, `cleared` or `changed` -- what the run did to a row's
     reference -- or None when it left it as it was."""
     if after == before:
         return None
     return (
         "filled"
-        if after[2] == "auto" and before[2] != "auto"
+        if after.status == placelist.AUTO and before.status != placelist.AUTO
         else "cleared"
-        if before[2] == "auto" and not after[2]
+        if before.status == placelist.AUTO and not after.status
         else "changed"
     )
