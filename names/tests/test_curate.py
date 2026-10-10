@@ -266,8 +266,29 @@ def test_export_writes_the_worklist_and_reports_what_it_left_out(
     )
     worklist = json.loads(out.read_text(encoding="utf-8"))
     assert worklist["bbox"] == [7.8, 54.15, 9.55, 55.12]
-    assert worklist["kind_order"] == curate.KIND_ORDER
-    assert worklist["polygon_kinds"] == curate.POLYGON_KINDS
+    assert worklist["kind_order"] == [
+        "settlement",
+        "island",
+        "hallig",
+        "helgoland",
+        "sand",
+        "landscape",
+        "water",
+        "harde",
+        "road",
+        "country",
+        "koog",
+        "warft",
+        "not_a_place",
+    ]
+    assert sorted(worklist["polygon_kinds"]) == [
+        "hallig",
+        "harde",
+        "island",
+        "koog",
+        "landscape",
+        "sand",
+    ]
     # settlements before the warft, each kind in places.csv order
     kampen, bol, warft = worklist["rows"]
     assert [kampen["id"], bol["id"], warft["id"]] == ["kampen", "bol", "kirchwarft"]

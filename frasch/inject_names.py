@@ -39,7 +39,7 @@ a row of `names/curation.csv` that carries its position (`lat` / `lon`) and,
 like any curation row, may carry `set_tags` / `minzoom` / `maxzoom` /
 `polygon_km2`.  Without `polygon_km2` the injector adds a *new node* at that
 position, tagged like any other object plus the `place=` value its `kind`
-maps to (curationlist.POINT_TAGS, overridable by `set_tags`) and a `name` -- OpenMapTiles
+maps to (`point_place` in frasch.kinds, overridable by `set_tags`) and a `name` -- OpenMapTiles
 drops a nameless place node.  With `polygon_km2` no labelled node is written;
 only the synthetic square (see curation below) is, which is how an area-like
 place (a Koog) gets a label from the zoom OpenMapTiles gives polygons of that
@@ -117,6 +117,7 @@ from frasch import (
     curationlist,
     dialect_areas,
     dialects,
+    kinds,
     locate,
     osmscan,
     placelist,
@@ -202,7 +203,8 @@ def point_tags(
     would drop the node), the name tags, and last the curation row's own
     tags, which win."""
     obj = placeobjects.local_point(row, position, reg)
-    tags = dict(curationlist.POINT_TAGS.get(row["kind"], {}))
+    place = kinds.rule(row["kind"]).point_place
+    tags = {"place": place} if place else {}
     if "name" in obj:
         tags["name"] = obj["name"]
     tags.update(placenames.as_tags(placenames.resolve(row, obj, areas, reg)))
@@ -210,8 +212,8 @@ def point_tags(
     if "place" not in tags:
         raise PipelineError(
             f"{where}: kind {row['kind']!r} (places.csv line "
-            f"{row.line}) has no default place= (POINT_TAGS in "
-            f"frasch/curationlist.py) -- give the curation row "
+            f"{row.line}) has no default place= (`point_place` in "
+            f"frasch/kinds.py) -- give the curation row "
             f"`place=...` in set_tags"
         )
     return tags

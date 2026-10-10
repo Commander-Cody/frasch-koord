@@ -76,15 +76,16 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, NamedTuple, TypedDict
 
-from frasch import candidates, cli, dialects, files, osmtags, placelist, refs
+from frasch import candidates, cli, dialects, files, kinds, osmtags, placelist, refs
 from frasch.candidates import Candidate, osm_key
 from frasch.dialects import Registry
 from frasch.errors import PipelineError, rebuild
 from frasch.geo import NF_CENTRE, haversine, in_north_frisia
 from frasch.hints import Circle, HintResolver
+from frasch.kinds import Boundary, KindRule
 from frasch.namecell import primary, variants
 from frasch.nameindex import NameIndex, norm
-from frasch.osmtags import ISLAND_PLACES, SETTLEMENT_PLACES, UNRANKED
+from frasch.osmtags import UNRANKED
 from frasch.paths import Workspace
 from frasch.placelist import (
     PlaceRow,
@@ -151,156 +152,6 @@ class PlacedCluster(Cluster):
     hint_d: float | None
     nf_d: float | None
     in_nf: bool
-
-
-# -------------------------------------------------------- kind / tag rules ---
-def kind_ok(kind: str, tags: Mapping[str, str]) -> bool:
-    place = tags.get("place")
-    nat = tags.get("natural")
-    bnd = tags.get("boundary")
-    lvl = tags.get("admin_level")
-    lu = tags.get("landuse")
-
-    if kind == "settlement":
-        if place in SETTLEMENT_PLACES:
-            return True
-        return bnd == "administrative" and lvl in ("6", "7", "8", "9", "10", "11")
-    if kind == "koog":
-        if place in SETTLEMENT_PLACES | {"polder"}:
-            return True
-        return bool(
-            bnd in ("administrative", "protected_area") or lu or nat in ("water", "wetland")
-        )
-    if kind == "harde":
-        return bnd in ("historic", "political", "administrative") or place == "region"
-    if kind in ("island", "hallig"):
-        if place in ISLAND_PLACES or nat in ISLAND_PLACES | {"peninsula"}:
-            return True
-        if kind == "hallig" and place in SETTLEMENT_PLACES:
-            return True
-        return bnd == "administrative" and lvl in ("8", "9", "10", "11")
-    if kind == "sand":
-        return nat in {
-            "sand",
-            "shoal",
-            "beach",
-            "mud",
-            "reef",
-            "wetland",
-        } or place in ISLAND_PLACES | {"locality"}
-    if kind == "warft":
-        if place in {"isolated_dwelling", "farm", "locality", "hamlet", "village", "neighbourhood"}:
-            return True
-        if lu in {"residential", "farmyard", "meadow"}:
-            return True
-        return bool(tags.get("man_made") or tags.get("historic"))
-    if kind == "landscape":
-        if place in {"region", "county", "state", "district", "province", "island", "archipelago"}:
-            return True
-        if nat in {"peninsula", "ridge", "hill", "archipelago"}:
-            return True
-        return bnd in {"administrative", "historic", "political"}
-    if kind == "water":
-        if nat in {"water", "bay", "strait", "wetland", "spring", "sand"}:
-            return True
-        if tags.get("water") or tags.get("waterway"):
-            return True
-        return place == "sea" or bnd in {"maritime", "place"}
-    if kind == "road":
-        return bool(tags.get("highway"))
-    if kind == "country":
-        return bnd == "administrative" and lvl == "2"
-    if kind == "helgoland":
-        return bool(
-            place
-            or nat
-            or tags.get("man_made")
-            or tags.get("historic")
-            or tags.get("water")
-            or tags.get("waterway")
-        )
-    return True  # kind == other
-
-
-def is_waterway_relation(rec: Candidate) -> bool:
-    """A `type=waterway` relation: the whole river, grouping its ways.  It
-    carries no `waterway` tag of its own, so `kind_ok` does not take it for
-    water."""
-    return rec["t"] == "r" and rec["tags"].get("type") == "waterway"
-
-
-def canonical(kind: str, cands: list[RankedCandidate]) -> list[RankedCandidate]:
-    """Narrow a candidate set to the object(s) that really *are* the feature.
-
-    Rivers are split into dozens of `waterway=river` ways spread over more than
-    the clustering distance, and islands carry both a coastline way and several
-    place nodes.  If OSM has the canonical object (a `type=waterway` relation,
-    a `place=island` polygon, a `place=sea` relation), only that is considered.
-    """
-    if kind == "water":
-        strong = [c for c in cands if is_waterway_relation(c) or c["tags"].get("place") == "sea"]
-        if strong:
-            return strong
-        strong = [
-            c
-            for c in cands
-            if c["t"] in ("w", "r")
-            and (c["tags"].get("natural") == "water" or c["tags"].get("water"))
-        ]
-        if strong:
-            return strong
-    elif kind in ("settlement", "warft", "koog"):
-        strong = [c for c in cands if c["tags"].get("place")]
-        if strong:
-            return strong
-    elif kind in ("island", "hallig", "sand"):
-        strong = [
-            c
-            for c in cands
-            if c["t"] in ("w", "r")
-            and (
-                c["tags"].get("place") in ISLAND_PLACES
-                or c["tags"].get("natural") in ISLAND_PLACES | {"peninsula"}
-            )
-        ]
-        if strong:
-            return strong
-    return cands
-
-
-def type_bonus(kind: str, rec: Candidate) -> int:
-    t, tags = rec["t"], rec["tags"]
-    place = tags.get("place")
-    if kind in ("settlement", "warft", "koog"):
-        # OpenMapTiles labels settlements from the place NODE
-        if t == "n" and place:
-            return 30
-        if t == "r" and tags.get("boundary") == "administrative":
-            return 12
-        if t == "w" and place:
-            return 8
-        return 2
-    if kind in ("island", "hallig", "sand"):
-        if t in ("w", "r") and (place in ISLAND_PLACES or tags.get("natural") in ISLAND_PLACES):
-            return 30
-        if t == "n" and place:
-            return 18
-        return 4
-    if kind == "water":
-        if t in ("w", "r") and (tags.get("natural") or tags.get("water") or place == "sea"):
-            return 25
-        if tags.get("waterway"):
-            return 20
-        return 6
-    if kind == "landscape":
-        if t == "r" and (tags.get("boundary") or place):
-            return 25
-        if t == "n" and (place or tags.get("natural")):
-            return 22
-        return 6
-    if kind == "road":
-        return 20 if t == "w" else 4
-    return 10 if t == "n" else 6
 
 
 # --------------------------------------------------------------- wikidata ----
@@ -430,9 +281,6 @@ def row_query_names(row: Row) -> list[str]:
     return variants(row.get("de")) or variants(row.get("da"))
 
 
-# these features exist only in North Frisia -- a match elsewhere is wrong
-NF_ONLY_KINDS = {"koog", "hallig", "sand", "warft", "harde"}
-
 CORE_MIN_KM = 1.0  # two settlement nodes this close are one village
 
 
@@ -459,17 +307,18 @@ def is_core(rec: Candidate) -> bool:
 
 
 def absorb_boundaries(
-    kind: str, cands: list[RankedCandidate]
+    rule: KindRule, cands: list[RankedCandidate]
 ) -> tuple[list[RankedCandidate], list[RankedCandidate]]:
     """Prefer the place NODE over its administrative boundary (that is what
-    OpenMapTiles labels).  Returns (kept, dropped)."""
-    if kind == "landscape":
+    OpenMapTiles labels), where the kind's rule says so.  Returns (kept,
+    dropped)."""
+    if rule.boundary is Boundary.FEATURE:
+        return cands, []  # Harden: the historic boundary is it
+    if rule.boundary is Boundary.YIELDS_TO_NODE:
         # for a landscape/Kreis the boundary usually *is* the feature -- only a
         # real place node (place=county/region/...) beats it
         if not any(c["t"] == "n" and c["tags"].get("place") for c in cands):
             return cands, []
-    elif kind not in ("settlement", "warft", "koog", "hallig", "island", "sand", "helgoland"):
-        return cands, []  # Harden: the historic boundary is it
     kept: list[RankedCandidate] = []
     dropped: list[RankedCandidate] = []
     for c in cands:
@@ -604,13 +453,13 @@ def _placed(cl: Cluster, hint_pt: Circle | None) -> PlacedCluster:
     }
 
 
-def _suspicious(kind: str, winner: PlacedCluster) -> bool:
+def _suspicious(rule: KindRule, winner: PlacedCluster) -> bool:
     """True if an otherwise clear winner is implausible for a North Frisian
     name list: a Koog/Warft/Hallig outside North Frisia, or a far-away minor
     place (hamlet, isolated dwelling, ...)."""
     if winner["in_nf"]:
         return False
-    if kind in NF_ONLY_KINDS:
+    if rule.nf_only:
         return True
     minor = any(m["tags"].get("place") in osmtags.MINOR_PLACES for m in winner["members"])
     return minor and (winner["nf_d"] or 1e9) > 50
@@ -638,7 +487,7 @@ def _ambiguous_reason(
             return f"location hint '{row['hint']}' matched no cluster"
         return f"{len(clusters)} plausible candidates"
     distance = f"{(winner['nf_d'] or 0):.0f} km from North Frisia"
-    if _suspicious(row["kind"], winner):
+    if _suspicious(kinds.rule(row["kind"]), winner):
         return f"only match is {distance} ({row['kind']}) -- verify by hand"
     return f"best name hit is {distance}, a weaker one lies inside -- verify by hand"
 
@@ -688,7 +537,7 @@ def _split_by_rank(
 
 
 def _decide_by_rank(
-    kind: str,
+    rule: KindRule,
     best_hits: list[RankedCandidate],
     plaus_all: list[RankedCandidate],
     hint_pt: Circle | None,
@@ -696,45 +545,43 @@ def _decide_by_rank(
     """`_decide` among the best name hits, and among all of them when the
     best hits' winner is implausible."""
     winner, reason, clusters = _decide(best_hits, hint_pt)
-    if winner is not None and _suspicious(kind, winner) and len(plaus_all) > len(best_hits):
+    if winner is not None and _suspicious(rule, winner) and len(plaus_all) > len(best_hits):
         # the best-ranked name hit is implausible -- reconsider the weaker hits
         # (OSM disambiguators such as "Kampen (Sylt)", German exonyms, ...)
         w2, r2, c2 = _decide(plaus_all, hint_pt)
-        if w2 is not None and not _suspicious(kind, w2):
+        if w2 is not None and not _suspicious(rule, w2):
             return _Decision(w2, r2 + " (weaker name hit)", c2, plaus_all)
     return _Decision(winner, reason, clusters, best_hits)
 
 
 def _needs_review(
-    kind: str, winner: PlacedCluster, weaker: Iterable[Candidate], hint_pt: Circle | None
+    rule: KindRule, winner: PlacedCluster, weaker: Iterable[Candidate], hint_pt: Circle | None
 ) -> bool:
     """True if a winner is too doubtful to take: implausible for the list,
     or a far-away pick over a weaker hit in North Frisia."""
-    if _suspicious(kind, winner):
+    if _suspicious(rule, winner):
         return True
     # a hint's pick is binding
     return not hint_pt and _outranks_a_hit_in_north_frisia(winner, weaker)
 
 
-def _held(kind: str, taken: Iterable[Candidate], winner: PlacedCluster) -> list[Candidate]:
+def _held(rule: KindRule, taken: Iterable[Candidate], winner: PlacedCluster) -> list[Candidate]:
     """The objects of `taken` that are part of the winner's feature."""
-    return [
-        c
-        for c in taken
-        if (kind_ok(kind, c["tags"]) or (kind == "water" and is_waterway_relation(c)))
-        and len(cluster(winner["members"] + [c])) == 1
-    ]
+    return [c for c in taken if rule.covers(c) and len(cluster(winner["members"] + [c])) == 1]
 
 
-def _best_member(kind: str, members: list[Candidate]) -> Candidate:
+def _best_member(rule: KindRule, members: list[Candidate]) -> Candidate:
     """The object of a cluster that gets the name."""
     return max(
         members,
         key=lambda r: (
-            type_bonus(kind, r)
-            + (8 if r["tags"].get("wikidata") else 0)
-            + (4 if r["tags"].get("name:de") else 0)
-            - ((haversine(r["lon"], r["lat"], *NF_CENTRE) or 500) / 200)
+            rule.bonus(r)
+            + (kinds.WIKIDATA_BONUS if r["tags"].get("wikidata") else 0)
+            + (kinds.GERMAN_NAME_BONUS if r["tags"].get("name:de") else 0)
+            - (
+                (haversine(r["lon"], r["lat"], *NF_CENTRE) or kinds.UNPLACED_KM)
+                / kinds.KM_PER_POINT
+            )
         ),
     )
 
@@ -771,11 +618,11 @@ def _member_ids(best: Candidate, members: list[Candidate]) -> list[str]:
 
 
 def _matched_cells(
-    kind: str, winner: PlacedCluster, boundaries: list[RankedCandidate]
+    rule: KindRule, winner: PlacedCluster, boundaries: list[RankedCandidate]
 ) -> MatchResult:
     """The match columns, `wikidata` and `status` of a row the winner matches."""
     members = winner["members"]
-    best = _best_member(kind, members)
+    best = _best_member(rule, members)
     return {
         "osm_type": refs.TYPE_NAME[best["t"]],
         "osm_id": ";".join(_member_ids(best, members)),
@@ -797,7 +644,7 @@ def match_row(
 ) -> MatchResult:
     """`claimed`: what other rows hold, which is not this row's to get."""
     claimed = claimed or Claimed()
-    kind = row["kind"]
+    rule = kinds.rule(row["kind"])
     out = _unfilled(row)
     if not any_name(row, reg):
         return _unmatched(out, "not_found", "no Frisian name")
@@ -813,27 +660,27 @@ def match_row(
         note = taken_note(taken, claimed.objects) if taken else "no name match in OSM"
         return _unmatched(out, "not_found", note)
 
-    plaus_all = [c for c in cands if kind_ok(kind, c["tags"])]
+    plaus_all = [c for c in cands if rule.accepts(c["tags"])]
     if not plaus_all:
         # the German name exists in OSM, but only on streets / buildings /
         # bus stops -- the feature itself is not mapped.  Not a review task.
-        note = f"{len(cands)} name match(es), none compatible with kind={kind}"
+        note = f"{len(cands)} name match(es), none compatible with kind={rule.name}"
         return _unmatched(out, "not_found", note, fmt_cands(cands))
     # set the boundaries aside first: canonical() would drop them, and their
     # wikidata is the fallback for a place node without one
-    plaus_all, boundaries = absorb_boundaries(kind, plaus_all)
-    plaus_all = canonical(kind, plaus_all)
+    plaus_all, boundaries = absorb_boundaries(rule, plaus_all)
+    plaus_all = rule.canonical(plaus_all)
     best_hits, weaker = _split_by_rank(plaus_all)
 
     hint_pt = hints.resolve(row.get("hint", "").split(";")[0].strip())
 
-    decision = _decide_by_rank(kind, best_hits, plaus_all, hint_pt)
+    decision = _decide_by_rank(rule, best_hits, plaus_all, hint_pt)
     winner = decision.winner
-    if winner is None or _needs_review(kind, winner, weaker, hint_pt):
+    if winner is None or _needs_review(rule, winner, weaker, hint_pt):
         note = _ambiguous_reason(row, winner, hint_pt, decision.clusters)
         return _unmatched(out, "ambiguous", note, fmt_cands(plaus_all))
 
-    held = _held(kind, [c for c in taken if osm_key(c) in claimed.features], winner)
+    held = _held(rule, [c for c in taken if osm_key(c) in claimed.features], winner)
     if held:
         # another row holds part of this very feature (a piece of the same
         # river, or the relation that is the whole river): the rest is not
@@ -841,7 +688,7 @@ def match_row(
         note = taken_note(held, claimed.objects)
         return _unmatched(out, "not_found", note, fmt_cands(plaus_all))
 
-    out.update(_matched_cells(kind, winner, boundaries))
+    out.update(_matched_cells(rule, winner, boundaries))
     if len(winner["members"]) > 1 or len(decision.clusters) > 1:
         out["candidates"] = fmt_cands(decision.plaus)
     out["note"] = f"auto: {decision.reason}" if decision.reason != "single cluster" else ""

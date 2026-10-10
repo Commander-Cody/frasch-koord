@@ -70,6 +70,7 @@ from frasch import (
     errors,
     files,
     geo,
+    kinds,
     namecell,
     nameindex,
     osmtags,
@@ -85,24 +86,6 @@ from frasch.paths import StrPath, Workspace
 from frasch.placelist import PlaceList, PlaceRow, Row
 from frasch.refs import OsmRef
 
-# The order the browser walks the worklist in: the kinds a human can decide
-# quickly first (a village is either there or it is not), the vague ones last.
-KIND_ORDER = [
-    "settlement",
-    "island",
-    "hallig",
-    "helgoland",
-    "sand",
-    "landscape",
-    "water",
-    "harde",
-    "road",
-    "country",
-    "koog",
-    "warft",
-    "not_a_place",
-]
-
 # The extract (`src` of a candidate) the tiles are built from: only its
 # objects can carry an injected name, so it is what "in Schleswig-Holstein"
 # means for the curation view.  An object near the border can come from both.
@@ -110,10 +93,6 @@ SH_SRC = "schleswig-holstein"
 
 # The results of a match that leave a row for a human.
 RESULTS = ("ambiguous", "not_found")
-
-# The kinds whose local reference can be a square of an area (`polygon_km2`,
-# see `decide_local`) instead of a node: the ones that are an area.
-POLYGON_KINDS = ["koog", "harde", "landscape", "island", "hallig", "sand"]
 
 # ------------------------------------------------------------- the worklist ---
 # curate.json, as names/curate-worklist.schema.json defines it and
@@ -329,8 +308,7 @@ def _work_rows(
     for row, m in work:
         cands = _work_candidates(m["candidates"], index, srcs)
         out.append(_work_row(row, m, cands, hints.resolve(_first_hint(row)), reg))
-    order = {k: i for i, k in enumerate(KIND_ORDER)}
-    out.sort(key=lambda r: (order.get(r["kind"], len(order)), r["line"]))
+    out.sort(key=lambda r: (kinds.KIND_ORDER.index(r["kind"]), r["line"]))
     return out
 
 
@@ -380,8 +358,8 @@ def _write_worklist(path: str, rows: list[WorkRow]) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     worklist: Worklist = {
         "bbox": list(geo.NF_BBOX),
-        "kind_order": KIND_ORDER,
-        "polygon_kinds": POLYGON_KINDS,
+        "kind_order": kinds.KIND_ORDER,
+        "polygon_kinds": kinds.POLYGON_KINDS,
         "results": list(RESULTS),
         "rows": rows,
     }
@@ -632,10 +610,10 @@ def decision_text(entry: PatchEntry, row: Row, curation: str) -> str:
     )
     if (km2 := entry.get("polygon_km2")) is not None:
         return text + f", polygon_km2 = {km2:g}"
-    if row["kind"] not in curationlist.POINT_TAGS:
+    if not kinds.rule(row["kind"]).point_place:
         text += (
             f"\n    warning: kind={row['kind']} has no default `place=` "
-            f"(curationlist.POINT_TAGS) -- put one into the curation row's "
+            f"(`point_place` in frasch/kinds.py) -- put one into the curation row's "
             f"`set_tags` before the next build"
         )
     return text

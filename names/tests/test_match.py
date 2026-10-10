@@ -1,4 +1,4 @@
-"""match.py: kind rules, clustering, which rows the matcher owns, and the
+"""match.py: clustering, which rows the matcher owns, and the
 decision `match_row` makes for a row
 (README "Matching rules (v1)").
 
@@ -176,30 +176,6 @@ OCKHOLM = cand(
     name__da="Okholm",
     place="village",
 )
-
-
-# ---------------------------------------------------------------- kind_ok ---
-@pytest.mark.parametrize(
-    "kind,tags,ok",
-    [
-        ("settlement", {"place": "village"}, True),
-        ("settlement", {"highway": "residential"}, False),  # the street "Holm"
-        ("settlement", {"boundary": "administrative", "admin_level": "8"}, True),
-        ("settlement", {"boundary": "administrative", "admin_level": "4"}, False),  # a Land
-        ("hallig", {"place": "isolated_dwelling"}, True),  # some Halligen are one dwelling
-        ("island", {"place": "isolated_dwelling"}, False),
-        ("island", {"natural": "peninsula"}, True),  # Nordstrand
-        ("warft", {"landuse": "residential"}, True),
-        ("warft", {"highway": "service"}, False),
-        ("water", {"waterway": "river"}, True),
-        ("road", {"highway": "unclassified"}, True),
-        ("road", {"place": "village"}, False),
-        ("country", {"boundary": "administrative", "admin_level": "2"}, True),
-        ("country", {"boundary": "administrative", "admin_level": "4"}, False),
-    ],
-)
-def test_kind_ok(kind: str, tags: dict[str, str], ok: bool) -> None:
-    assert match.kind_ok(kind, tags) is ok
 
 
 # ---------------------------------------------------------------- cluster ---

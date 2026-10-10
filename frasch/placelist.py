@@ -32,6 +32,7 @@ from dataclasses import dataclass
 from typing import NamedTuple
 
 from frasch import files, refs, tables
+from frasch.kinds import KINDS, NOT_A_PLACE
 from frasch.dialects import LOCAL_COLUMN, Registry
 from frasch.errors import Invalid, PipelineError, Problem, ValidationError
 from frasch.namecell import primary
@@ -56,21 +57,6 @@ def columns(reg: Registry) -> list[str]:
     )
 
 
-KINDS = {
-    "settlement",
-    "koog",
-    "harde",
-    "island",
-    "hallig",
-    "sand",
-    "warft",
-    "landscape",
-    "water",
-    "road",
-    "country",
-    "helgoland",
-    "not_a_place",
-}
 STATUSES = {"", "auto", "ok", "skip"}
 
 WIKIDATA_ID = re.compile(r"Q\d+")
@@ -137,7 +123,7 @@ def owned_by_matcher(row: Row) -> bool:
     filled itself (`auto`) or one with nothing in it yet."""
     if refs.local_of(_refs(row)):
         return False  # a local reference: OSM has no object for it
-    if row["kind"] == "not_a_place" or row["status"] in ("ok", "skip"):
+    if row["kind"] == NOT_A_PLACE or row["status"] in ("ok", "skip"):
         return False
     if row["status"] == "auto":
         return True
@@ -180,7 +166,7 @@ def on_map(row: Row, reg: Registry) -> bool:
     is a place (not `not_a_place`) and has a Frisian name.  The injector
     labels these rows' objects, and the search index lists them."""
     held = claims(row)
-    return bool(held.refs or held.qid) and row["kind"] != "not_a_place" and bool(any_name(row, reg))
+    return bool(held.refs or held.qid) and row["kind"] != NOT_A_PLACE and bool(any_name(row, reg))
 
 
 def header_problem(fields: Sequence[str], reg: Registry) -> str | None:
