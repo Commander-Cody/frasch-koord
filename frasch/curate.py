@@ -72,6 +72,7 @@ from frasch import (
     geo,
     namecell,
     nameindex,
+    osmtags,
     paths,
     placelist,
     refs,
@@ -208,7 +209,7 @@ def stream_records(
             continue
         if not hint_norms:
             continue
-        for field in nameindex.NAME_FIELDS:
+        for field in osmtags.NAME_FIELDS:
             v = rec["tags"].get(field)
             if v and any(
                 nameindex.norm(p) in hint_norms for p, _pen in nameindex.split_name_values(v)
@@ -235,7 +236,7 @@ def work_candidate(listed: ListedCandidate, rec: Candidate | None, in_sh: bool) 
     if rec is None:  # candidates.jsonl rebuilt since the run
         return c
     c["lon"], c["lat"] = rec["lon"], rec["lat"]
-    c["tags"] = candidates.decisive_tags(rec)
+    c["tags"] = osmtags.decisive(rec["tags"])
     c["in_sh"] = in_sh
     if rec["tags"].get("wikidata"):
         c["wikidata"] = rec["tags"]["wikidata"]

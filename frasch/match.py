@@ -76,14 +76,15 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, NamedTuple, TypedDict
 
-from frasch import candidates, cli, dialects, files, placelist, refs
-from frasch.candidates import ISLAND_PLACES, Candidate, decisive_tags, osm_key
+from frasch import candidates, cli, dialects, files, osmtags, placelist, refs
+from frasch.candidates import Candidate, osm_key
 from frasch.dialects import Registry
 from frasch.errors import PipelineError, rebuild
 from frasch.geo import NF_CENTRE, haversine, in_north_frisia
 from frasch.hints import Circle, HintResolver
 from frasch.namecell import primary, variants
 from frasch.nameindex import NameIndex, norm
+from frasch.osmtags import ISLAND_PLACES, SETTLEMENT_PLACES, UNRANKED
 from frasch.paths import Workspace
 from frasch.placelist import (
     PlaceRow,
@@ -153,22 +154,6 @@ class PlacedCluster(Cluster):
 
 
 # -------------------------------------------------------- kind / tag rules ---
-SETTLEMENT_PLACES = {
-    "city",
-    "town",
-    "village",
-    "hamlet",
-    "isolated_dwelling",
-    "locality",
-    "suburb",
-    "neighbourhood",
-    "borough",
-    "quarter",
-    "farm",
-    "municipality",
-}
-
-
 def kind_ok(kind: str, tags: Mapping[str, str]) -> bool:
     place = tags.get("place")
     nat = tags.get("natural")
@@ -445,31 +430,10 @@ def row_query_names(row: Row) -> list[str]:
     return variants(row.get("de")) or variants(row.get("da"))
 
 
-MINOR_PLACES = {
-    "hamlet",
-    "isolated_dwelling",
-    "locality",
-    "farm",
-    "neighbourhood",
-    "suburb",
-    "quarter",
-}
 # these features exist only in North Frisia -- a match elsewhere is wrong
 NF_ONLY_KINDS = {"koog", "hallig", "sand", "warft", "harde"}
 
 CORE_MIN_KM = 1.0  # two settlement nodes this close are one village
-CORE_PLACES = {
-    "city",
-    "town",
-    "village",
-    "hamlet",
-    "isolated_dwelling",
-    "suburb",
-    "neighbourhood",
-    "locality",
-    "farm",
-    "polder",
-}
 
 
 def linear_radius(rec: Candidate) -> float | None:
@@ -491,7 +455,7 @@ def is_linear(rec: Candidate) -> bool:
 def is_core(rec: Candidate) -> bool:
     """A settlement node -- two of these more than CORE_MIN_KM apart are two
     different villages, however similar their names."""
-    return rec["t"] == "n" and rec["tags"].get("place") in CORE_PLACES
+    return rec["t"] == "n" and rec["tags"].get("place") in osmtags.CORE_PLACES
 
 
 def absorb_boundaries(
@@ -580,16 +544,7 @@ def _centred(members: list[Candidate]) -> Cluster:
 
 def fmt_cand(rec: Candidate) -> str:
     tags = rec["tags"]
-    place = (
-        tags.get("place")
-        or tags.get("natural")
-        or tags.get("boundary")
-        or tags.get("waterway")
-        or tags.get("landuse")
-        or tags.get("man_made")
-        or tags.get("highway")
-        or "-"
-    )
+    place = osmtags.class_of(tags) or "-"
     d = haversine(rec["lon"], rec["lat"], *NF_CENTRE)
     ds = f"{d:.0f}" if d is not None else "?"
     nm = (tags.get("name") or tags.get("name:de") or "")[:40]
@@ -603,7 +558,7 @@ def fmt_cands(cands: Iterable[RankedCandidate]) -> str:
 
     def key(c: RankedCandidate) -> tuple[int, float, str, int]:
         d = haversine(c["lon"], c["lat"], *NF_CENTRE)
-        return (c.get("rank", 99), 1e9 if d is None else d, c["t"], c["id"])
+        return (c.get("rank", UNRANKED), 1e9 if d is None else d, c["t"], c["id"])
 
     return ";".join(fmt_cand(c) for c in sorted(cands, key=key))
 
@@ -657,7 +612,7 @@ def _suspicious(kind: str, winner: PlacedCluster) -> bool:
         return False
     if kind in NF_ONLY_KINDS:
         return True
-    minor = any(m["tags"].get("place") in MINOR_PLACES for m in winner["members"])
+    minor = any(m["tags"].get("place") in osmtags.MINOR_PLACES for m in winner["members"])
     return minor and (winner["nf_d"] or 1e9) > 50
 
 
@@ -719,7 +674,7 @@ def _ranked_candidates(index: NameIndex, queries: Iterable[str]) -> list[RankedC
         for rec, rank in index.lookup(q):
             key = osm_key(rec)
             recs[key] = rec
-            if rank < best_rank.get(key, 99):
+            if rank < best_rank.get(key, UNRANKED):
                 best_rank[key] = rank
     return [{**rec, "rank": best_rank[key]} for key, rec in recs.items()]
 
@@ -825,7 +780,7 @@ def _matched_cells(
         "osm_type": refs.TYPE_NAME[best["t"]],
         "osm_id": ";".join(_member_ids(best, members)),
         "match_name": best["tags"].get("name") or best["tags"].get("name:de", ""),
-        "match_tags": decisive_tags(best),
+        "match_tags": osmtags.decisive(best["tags"]),
         "lon": "" if best["lon"] is None else f"{best['lon']:.6f}",
         "lat": "" if best["lat"] is None else f"{best['lat']:.6f}",
         "wikidata": _member_qid(best, members, boundaries),
@@ -1213,7 +1168,7 @@ def write_matches(
                 if hit is not None:
                     rec.update(
                         match_name=hit["tags"].get("name", ""),
-                        match_tags=decisive_tags(hit),
+                        match_tags=osmtags.decisive(hit["tags"]),
                         lon="" if hit["lon"] is None else f"{hit['lon']:.6f}",
                         lat="" if hit["lat"] is None else f"{hit['lat']:.6f}",
                     )

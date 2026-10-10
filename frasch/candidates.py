@@ -19,9 +19,6 @@ from frasch.paths import StrPath
 from frasch.provenance import BuiltFrom, ExtractStamp, Stamp
 from frasch.refs import OsmRef
 
-# the `place` / `natural` values of an island
-ISLAND_PLACES = {"island", "islet", "archipelago"}
-
 
 class Candidate(TypedDict):
     """One candidate record.  `lon`/`lat` are None for an object the scan
@@ -59,23 +56,3 @@ def osm_key(rec: Candidate) -> OsmRef:
     """A candidate record's (type, id), as `refs.parse` spells a
     reference: `("w", 28330569)`."""
     return rec["t"], rec["id"]
-
-
-def decisive_tags(rec: Candidate) -> str:
-    """The tags that say what kind of thing a record is, `place=village;...`
-    -- for the matcher's output and the curation view."""
-    tags = rec["tags"]
-    keys = (
-        "place",
-        "natural",
-        "water",
-        "waterway",
-        "boundary",
-        "admin_level",
-        "landuse",
-        "man_made",
-        "historic",
-        "highway",
-        "type",
-    )
-    return ";".join(f"{k}={tags[k]}" for k in keys if k in tags)

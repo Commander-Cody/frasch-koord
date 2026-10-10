@@ -371,6 +371,36 @@ def test_a_hint_that_fits_confirms_the_only_candidate(tmp_path: Path) -> None:
     assert out["osm_id"] == "310191124"
 
 
+def test_a_hint_that_names_an_archipelago_reaches_as_far_as_one_that_names_an_island(
+    tmp_path: Path,
+) -> None:
+    halligen = cand("r", 1, 8.60, 54.60, name="Halligen", natural="archipelago")
+    nine_km_north = cand("n", 2, 8.60, 54.681, name="Holm", place="village")
+    out = run(
+        tmp_path,
+        row(kind="settlement", mooring="Hulm", de="Holm", hint="Halligen"),
+        nine_km_north,
+        halligen,
+    )
+    assert out["note"] == "auto: location hint"
+
+
+def test_a_hint_means_the_island_of_that_name_rather_than_a_nearer_namesake(
+    tmp_path: Path,
+) -> None:
+    islet = cand("w", 1, 8.00, 54.70, name="Oland", natural="islet")  # 58 km from the centre
+    namesake = cand("r", 2, 9.30, 54.70, name="Oland", boundary="administrative")  # 26 km
+    on_the_islet = cand("n", 3, 8.01, 54.70, name="Holm", place="village")
+    out = run(
+        tmp_path,
+        row(kind="settlement", mooring="Hulm", de="Holm", hint="Oland"),
+        on_the_islet,
+        islet,
+        namesake,
+    )
+    assert out["note"] == "auto: location hint"
+
+
 def test_a_hint_nobody_knows_matches_nothing_and_binds_nothing(tmp_path: Path) -> None:
     # an unresolvable hint is no hint: the single candidate still wins
     out = run(

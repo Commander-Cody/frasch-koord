@@ -9,15 +9,20 @@ Harden and a few spellings OSM does not know have fixed circles.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-
-from frasch.candidates import ISLAND_PLACES, Candidate
+from frasch import osmtags
+from frasch.candidates import Candidate
 from frasch.geo import NF_CENTRE, haversine
 from frasch.nameindex import NameIndex, norm
+from frasch.osmtags import Tags
 
 HINT_KM = 8.0  # a village-sized hint
 HINT_KM_ISLAND = 10.0  # a Hallig / small island
 HINT_KM_LARGE = 25.0  # Sylt, Foehr, Eiderstedt, a Harde ...
+
+# What makes a place of the hint's name the one it means, in km nearer to
+# North Frisia (`_plausibility`).
+ISLAND_BONUS = 40
+VILLAGE_BONUS = 30
 
 # A hint's circle: lon, lat, radius in km.
 Circle = tuple[float, float, float]
@@ -80,7 +85,7 @@ class HintResolver:
         return lon, lat, _radius(key, best["tags"])
 
 
-def _is_a_place(tags: Mapping[str, str]) -> bool:
+def _is_a_place(tags: Tags) -> bool:
     return bool(
         tags.get("place") or tags.get("natural") or tags.get("boundary") == "administrative"
     )
@@ -91,20 +96,16 @@ def _plausibility(rec: Candidate) -> float:
     still.  Of equals, the first record wins."""
     tags = rec["tags"]
     score = -(haversine(rec["lon"], rec["lat"], *NF_CENTRE) or 999)
-    if tags.get("place") in ISLAND_PLACES or tags.get("natural") == "peninsula":
-        score += 40
-    if tags.get("place") in ("village", "town", "city", "hamlet"):
-        score += 30
+    if osmtags.is_island(tags):
+        score += ISLAND_BONUS
+    if tags.get("place") in osmtags.VILLAGE_PLACES:
+        score += VILLAGE_BONUS
     return score
 
 
-def _radius(key: str, tags: Mapping[str, str]) -> float:
+def _radius(key: str, tags: Tags) -> float:
     if key in LARGE_HINTS:
         return HINT_KM_LARGE
-    if (
-        tags.get("place") in ISLAND_PLACES
-        or tags.get("place") == "region"
-        or tags.get("natural") in ("island", "islet", "peninsula")
-    ):
+    if osmtags.is_island(tags) or tags.get("place") == "region":
         return HINT_KM_ISLAND
     return HINT_KM
