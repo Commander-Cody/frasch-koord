@@ -19,7 +19,8 @@ What gets written where
                            rows the matcher owns -- the same cells it
                            writes itself, and never a row a human has already decided
                            (status ok/skip, a hand-filled reference, a local
-                           reference, `not_a_place`), and never an object or
+                           reference, `not_a_place`) or one without a Frisian
+                           name, and never an object or
                            Wikidata item another row holds: the name list
                            would be refused.  Review with `git diff`.
   names/curation.csv       apply: one appended row per `local` decision (a

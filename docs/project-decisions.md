@@ -919,6 +919,65 @@ the names they were written with:
 - The registry's `Dialect` is built from one field list (`FIELDS`, the keys
   of the `TypedDict`).
 
+## Decided 2026-10-10: one model for kinds, row state and OSM tags (issue #97)
+
+A row's kind and its state decide most of what the matcher and the curation
+step do, and neither had one definition; the OSM tag lists were written out
+three and four times.
+
+| was | is |
+|---|---|
+| `match.kind_ok`, `canonical`, `type_bonus`, `NF_ONLY_KINDS`, the kind tuple of `absorb_boundaries`; `placelist.KINDS`; `curate.KIND_ORDER`, `POLYGON_KINDS`; `curationlist.POINT_TAGS` | `frasch/kinds.py`: one `KindRule` per kind, in review order |
+| `placelist.owned_by_matcher`, `match._report_state`, the `result` chain of `write_matches`, `curate.owner_problem` | `placelist.state(row, reg)` → `RowState` |
+| `match._write_back`, `curate.decide`, `curate.decide_local` writing `osm` / `wikidata` / `status` | `placelist.Reference` and its five constructors |
+| `nameindex.NAME_FIELD_RANK`, the scan's `NAME_KEYS_EXTRA` and `has_name`; `CLASS_KEYS`, `candidates.decisive_tags`, the chain in `match.fmt_cand`; `SETTLEMENT_PLACES`, `MINOR_PLACES`, `CORE_PLACES`, `ISLAND_PLACES` | `frasch/osmtags.py` |
+| the browser's `SETTLEMENT_CLASSES` and `INTERESTING_TAGS` | `settlement_places` and `class_keys` of the worklist |
+
+- **A kind's rule is data**: the tag tests it accepts, the tests of its
+  canonical object, the points of its type bonus (`Fit`), and what a bare
+  administrative boundary is to it. The table was compared with the functions
+  it replaces on random tag sets before those were deleted. The type bonuses
+  stay numbers in the table, each beside the test it belongs to; the weights
+  that apply to every kind are named (`WIKIDATA_BONUS`, `GERMAN_NAME_BONUS`,
+  `KM_PER_POINT`, `UNPLACED_KM`).
+- **A peninsula's outline gets the island bonus.** It passed as the canonical
+  object of an island (Nordstrand) and then scored 4 instead of 30.
+- **`RowState` has the report's precedence** (not a place, skip, no name, own
+  point, by hand, auto, open). `matches.csv` spells a state as the enum does
+  (`by_hand`, `own_point`, `no_name`, …), in the style of `not_found`
+  (owner's choice); the report keeps its headings, from the enum's labels.
+  The match outcomes (`matched`, `ambiguous`, …) are left for #98.
+- **A row without a Frisian name is not the matcher's.** The matcher already
+  left such rows alone; `curate apply` now refuses a decision for a row that
+  lost its name since the export.
+- **A reference is written whole.** A patch entry without a Wikidata item
+  clears the row's item: `entry.get("wikidata") or row["wikidata"]` kept the
+  item of the object the matcher had given the row beside the new `osm`. A
+  skip decision clears `osm` and `wikidata` too (owner's choice): an
+  unreviewed auto match stayed beside `skip`, and read as hand-filled once
+  the `skip` was removed.
+- **The scan keeps the same objects, and of each only what is read** (owner's
+  choice): the objects kept for a bare `wikidata` / `wikipedia` tag, a
+  harbour or a marina stay candidates, as near misses a reviewer can pick.
+  A record loses `cls` and the tags nothing read; `candidates.jsonl` shrank
+  from 36.6 MB to 28.4 MB. "Named" now means one of the seven name tags the
+  index reads: an object named by `short_name` alone is scanned (the
+  extracts of September 2026 have none), 76 objects named only by a
+  `name:*` no row could find it by are not.
+- **One order of the class tags**, that of the `class` in a `candidates`
+  cell, with `water` and `historic` added at the end: an object that had
+  only one of these was listed as `-`.
+- **The hint resolver takes an island by the kinds' rule** (`osmtags.is_island`):
+  a hint that names a `natural=archipelago` gets the island radius, and an
+  island named by `natural` alone is as plausible as one named by `place`.
+- **An unknown distance is not nought.** `x or default` took a real `0.0`
+  for unknown, and the default `0` printed "0 km from North Frisia" for a
+  match the scan could not place. `geo.km_or` and `geo.FAR` replace it.
+- **No generated file is part of the change** (owner's choice). On the
+  extracts of September 2026 the matcher gives every row what it gave
+  before; a run changes one line of `REPORT.md` (the near miss of Rungholt
+  is an `archaeological_site`, no longer `-`).
+
 ## Remaining open questions
 1. Hosting provider for the site (R2 + Pages proposed, nothing set up yet); the tiles are GitHub release assets for now (issue #28).
 2. When to do the planet build (needs the VM; only after the North Frisia build looks right).

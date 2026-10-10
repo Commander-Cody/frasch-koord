@@ -8,8 +8,9 @@ Candidates come from names/work/candidates.jsonl (`frasch candidates`).
 
 What gets written where
   names/places.csv        only `osm`, `wikidata` and `status` of the rows the
-                          matcher owns: rows with an empty `osm` + `wikidata`
-                          cell, and rows it filled earlier (`status=auto`).
+                          matcher owns (`placelist.state`): rows with an
+                          empty `osm` + `wikidata` cell, and rows it filled
+                          earlier (`status=auto`).
                           A row a human has filled in (any `osm`/`wikidata`
                           with a status other than `auto`) or marked `skip`
                           is never touched.  Review the result with `git diff`.
@@ -35,6 +36,7 @@ What gets written where
 
 Ranking / decision
   1. keep only candidates whose tags are compatible with the row's `kind`
+     (its rule, frasch.kinds)
   2. cluster the survivors geographically (30 km)
   3. `matched`   - one cluster, or exactly one cluster satisfies the row's
                    location hint, or exactly one cluster is inside North Frisia
@@ -76,11 +78,10 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, NamedTuple, TypedDict
 
-from frasch import candidates, cli, dialects, files, kinds, osmtags, placelist, refs
+from frasch import candidates, cli, dialects, files, geo, kinds, osmtags, placelist, refs
 from frasch.candidates import Candidate, osm_key
 from frasch.dialects import Registry
 from frasch.errors import PipelineError, rebuild
-from frasch import geo
 from frasch.geo import haversine, in_north_frisia
 from frasch.hints import Circle, HintResolver
 from frasch.kinds import Boundary, KindRule
