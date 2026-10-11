@@ -1,6 +1,6 @@
 """nameindex.py: how a name is normalised, which variants of an OSM name
-value count, and the index of candidate records by name that the matcher and
-the curation export look names up in."""
+value count, and the index of candidate records by name that the matcher
+looks names up in."""
 
 from __future__ import annotations
 

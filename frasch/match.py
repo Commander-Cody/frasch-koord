@@ -569,17 +569,29 @@ def _run(ws: Workspace, reg: Registry, offline: bool, dry_run: bool) -> int:
     results, changed = _match_rows(rows, owned, sources)
 
     # matches.jsonl first: a run that cannot write it leaves places.csv as it was
-    matchfile.write(
-        ws.matches,
-        (matchfile.entry(r["id"], results[r["id"]], sources.hints.of_row(r), index) for r in owned),
-    )
+    matchfile.write(ws.matches, (sources.entry(r, results[r["id"]]) for r in owned))
     if not dry_run:
         names.write()
         matchreport.write(rows, results, ws.report, reg, matchreport.stamp(ws, extracts))
 
     outcomes = collections.Counter(results[r["id"]].result for r in owned)
+    _print_summary(ws, f"{len(owned)} of {len(rows)}", outcomes, changed, dry_run)
+    print(f"done in {time.time() - t0:.0f}s")
+    unanswered = [r for r in owned if results[r["id"]].result is Outcome.LOOKUP_FAILED]
+    return _unanswered_status(unanswered, reg, offline)
+
+
+def _print_summary(
+    ws: Workspace,
+    owned: str,
+    outcomes: collections.Counter[Outcome],
+    changed: collections.Counter[str],
+    dry_run: bool,
+) -> None:
+    """What the run made of the rows the matcher owns (`owned`: how many of
+    how many), what it did to places.csv and which files it wrote."""
     print(
-        f"matcher owns {len(owned)} of {len(rows)} rows: "
+        f"matcher owns {owned} rows: "
         + ", ".join(f"{n} {outcome.value}" for outcome, n in outcomes.most_common())
     )
     print(
@@ -587,9 +599,6 @@ def _run(ws: Workspace, reg: Registry, offline: bool, dry_run: bool) -> int:
         f"{changed['changed']} changed" + (" (dry run -- not written)" if dry_run else "")
     )
     print("wrote", ws.matches, *(() if dry_run else ("and", ws.report)))
-    print(f"done in {time.time() - t0:.0f}s")
-    unanswered = [r for r in owned if results[r["id"]].result is Outcome.LOOKUP_FAILED]
-    return _unanswered_status(unanswered, reg, offline)
 
 
 def _extracts(ws: Workspace) -> Sequence[ExtractStamp]:
@@ -633,6 +642,10 @@ class _Sources:
         else:
             found = match_row(row, self.index, self.hints, self.reg, claimed)
         return claimed.without_taken_item(found)
+
+    def entry(self, row: PlaceRow, result: MatchResult) -> matchfile.Entry:
+        """The line of the matches file for `row` and what the run made of it."""
+        return matchfile.entry(row["id"], result, self.hints.of_row(row), self.index)
 
     def unanswered(self, row: PlaceRow) -> bool:
         """Whether `row` is a country row Wikidata gave no answer for."""

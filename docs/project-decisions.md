@@ -979,6 +979,69 @@ three and four times.
   before; a run changes one line of `REPORT.md` (the near miss of Rungholt
   is an `archaeological_site`, no longer `-`).
 
+## Decided 2026-10-11: the matcher by concern, a typed result, a structured matches file (issue #98)
+
+`match.py` was seven modules, its result an untyped dict whose `status` meant
+two things, and it handed its candidates to the curation export as one text
+cell, which the export parsed back before reading the candidates file again.
+
+| was | is |
+|---|---|
+| `match.MatchResult` (a dict: the row's cells, `status`, `osm_type`, a `;`-joined `osm_id`, `candidates` as text), `RankedCandidate` | `frasch/matchresult.py`: the frozen dataclass `MatchResult`, the `Outcome` enum, `RankedCandidate` |
+| `match.linear_radius`, `is_core`, `cluster`, `_centred`, `_placed`, the re-clustering in `_held` | `frasch/clusters.py`, with `same_feature(a, b)` |
+| `match.wikidata_countries`, `_wikidata_country`, `read_wikidata_cache` | `frasch/wikidata.py`: `countries`, `read_cache` |
+| `match.write_matches`, `fmt_cands`, `MATCH_COLUMNS`; `curate.parse_candidates`, `stream_records`, `_read_index`, `_work_candidates`, `work_candidate`, `ListedCandidate`, `_first_hint` | `frasch/matchfile.py`: `entry`, `write`, `read` |
+| `match.write_report` and its sections, `report_cands`, `fmt_cand`, `stamp`, `extract_set_warning`, `check_extracts` | `frasch/matchreport.py` (`write`, `stamp`, `extracts_warning`) and `candidates.extracts` |
+| `work/matches.csv` | `work/matches.jsonl` |
+
+- **The command stays in `match.py`** (owner's choice), next to the decision:
+  `run` and `main` read and write through the other modules, and
+  `match.run` is still what the pipeline and the tests call. The result types
+  have their own module, `matchresult`, so that the two writers do not import
+  the command that calls them.
+- **A result is typed and holds nothing twice.** `result` is an `Outcome`
+  (`matched`, `ambiguous`, `not_found`, `lookup_failed`; the first open point
+  of the #97 entry), no longer the word `status`, which a row's cell has. The
+  references are parsed pairs, the candidates are records, in the order a
+  reviewer sees them; text is made by the writers alone.
+- **`matches.jsonl` holds the rows the matcher owns, each with its whole
+  result** (owner's choice): the reference a matched row gets, so a
+  `--dry-run` still shows what a run would write, where its hint points, and
+  every candidate with position, tags, Wikidata item and `in_sh`. A row the
+  matcher does not own is not in it; its state is in `places.csv`. The file
+  stays a scratch file of two Python modules: it has no schema file.
+- **`curate export` reads `matches.jsonl` and `places.csv`, nothing else.** It
+  no longer streams `candidates.jsonl`, builds a second name index or resolves
+  the hints again, and has no `--candidates` option. A candidate's position
+  and tags are those of the run, never missing because the candidates were
+  rebuilt since; its name is whole (a `;` or `:` in it lost it or cut it
+  before, and 40 characters were the limit). The worklist keeps its keys;
+  `REPORT.md` still cuts a name to 40 characters.
+- **A note names a row by its id**: "… is taken by row `<id>`". The line
+  went stale with the next edit above it. `REPORT.md` keeps its `line`
+  column (#23).
+- **What the matcher gives a row holds the rest of that feature** (owner's
+  decision; the gap the #94 entry left). Of two matcher-owned rows for one
+  feature the second got a sibling object: the river's ways when the first
+  row got the relation, the municipality when it got the place node. A row
+  the run matched now holds its feature against the rows after it as a row a
+  human decided does — except against a row that finds the object only by a
+  name it merely also goes by (a name hit as weak as one on `alt_name` or
+  `old_name`, `osmtags.BYNAME_RANK`): the dyke Deezbüll Deich carries
+  `alt_name=Deezbülleck`, and the row of the hamlet Deezbülleck keeps its
+  node. This narrows the #94 addendum "only the exact object". The real list
+  comes out unchanged.
+- **Library code returns what it has to say.** `wikidata.countries` returns
+  its warnings and catches `requests.RequestException` and `RuntimeError`
+  only (a programming error was reported as "lookup failed");
+  `matchreport.extracts_warning` returns the warning; the command prints.
+  The report is written with `files.atomic_write`.
+- **No generated file is part of the change.** On the extracts of September
+  2026 every row gets what it got before and the worklist is the same; the
+  next run rewrites three notes of `REPORT.md` from "line N" to the row's
+  id. After the change, `curate export` needs one `frasch match` run: it does
+  not read an old `work/matches.csv`.
+
 ## Remaining open questions
 1. Hosting provider for the site (R2 + Pages proposed, nothing set up yet); the tiles are GitHub release assets for now (issue #28).
 2. When to do the planet build (needs the VM; only after the North Frisia build looks right).

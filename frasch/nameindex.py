@@ -1,6 +1,5 @@
 """Names as the matcher compares them, and the index of candidate records by
-name that frasch.match and the curation export (frasch.curate) look them
-up in.
+name that frasch.match and the hint resolver (frasch.hints) look them up in.
 
 Matching is exact after normalisation (`norm`): no fuzzy matching.  An OSM
 name value also counts without the annotations OSM adds to it
