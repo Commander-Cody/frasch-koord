@@ -61,7 +61,7 @@ class Workspace:
             index=os.path.join(web, "public", "data", "names.json"),
             registry_json=os.path.join(web, "src", "generated", "dialects.json"),
             candidates=os.path.join(work, "candidates.jsonl"),
-            matches=os.path.join(work, "matches.csv"),
+            matches=os.path.join(work, "matches.jsonl"),
             wikidata_cache=os.path.join(work, "wikidata-countries.json"),
             worklist=os.path.join(work, "curate.json"),
             patch=os.path.join(work, "curate-patch.jsonl"),

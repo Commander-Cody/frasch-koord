@@ -31,7 +31,7 @@ def test_a_workspace_lays_its_files_out_like_the_repository(tmp_path: Path) -> N
         "index": "web/public/data/names.json",
         "registry_json": "web/src/generated/dialects.json",
         "candidates": "names/work/candidates.jsonl",
-        "matches": "names/work/matches.csv",
+        "matches": "names/work/matches.jsonl",
         "wikidata_cache": "names/work/wikidata-countries.json",
         "worklist": "names/work/curate.json",
         "patch": "names/work/curate-patch.jsonl",
@@ -47,7 +47,7 @@ def test_another_work_directory_takes_the_scratch_files(tmp_path: Path) -> None:
     moved = Workspace.at(tmp_path).with_work(tmp_path / "scratch")
     assert relative(moved, tmp_path) == relative(Workspace.at(tmp_path), tmp_path) | {
         "candidates": "scratch/candidates.jsonl",
-        "matches": "scratch/matches.csv",
+        "matches": "scratch/matches.jsonl",
         "wikidata_cache": "scratch/wikidata-countries.json",
         "worklist": "scratch/curate.json",
         "patch": "scratch/curate-patch.jsonl",

@@ -9,6 +9,8 @@ Harden and a few spellings OSM does not know have fixed circles.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from frasch import geo, osmtags
 from frasch.candidates import Candidate
 from frasch.nameindex import NameIndex, norm
@@ -69,6 +71,10 @@ class HintResolver:
         if key not in self.cache:
             self.cache[key] = HINT_FALLBACK.get(key) or self._lookup(hint, key)
         return self.cache[key]
+
+    def of_row(self, row: Mapping[str, str]) -> Circle | None:
+        """Where the place a row's `hint` cell names first lies, or None."""
+        return self.resolve(row.get("hint", "").split(";")[0].strip())
 
     def _lookup(self, hint: str, key: str) -> Circle | None:
         places = [

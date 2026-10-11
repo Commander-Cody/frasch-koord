@@ -16,6 +16,7 @@ from collections.abc import Iterable
 
 from frasch.candidates import Candidate, osm_key
 from frasch.osmtags import NAME_FIELD_RANK, UNRANKED
+from frasch.refs import OsmRef
 
 # ----------------------------------------------------------- normalisation ---
 _UML = {
@@ -91,7 +92,8 @@ def split_name_values(v: str) -> list[tuple[str, int]]:
 
 class NameIndex:
     """Candidate records (frasch.candidates) by normalised name, and by
-    reference.  Every name tag of osmtags.NAME_FIELD_RANK and every variant of its
+    reference -- an object two extracts have is two records, of which
+    `by_key` has the last and `sources` names both extracts.  Every name tag of osmtags.NAME_FIELD_RANK and every variant of its
     value (`split_name_values`) is a key; a record found under several
     keeps its best rank."""
 
@@ -100,6 +102,10 @@ class NameIndex:
         # norm -> {rec index: rank}
         self.by_name: collections.defaultdict[str, dict[int, int]] = collections.defaultdict(dict)
         self.by_key = {osm_key(rec): rec for rec in self.recs}
+        # reference -> the extracts (`src`) its records came from
+        self.sources: collections.defaultdict[OsmRef, set[str]] = collections.defaultdict(set)
+        for rec in self.recs:
+            self.sources[osm_key(rec)].add(rec["src"])
         for i, rec in enumerate(self.recs):
             for field, rank in NAME_FIELD_RANK.items():
                 for part, penalty in split_name_values(rec["tags"].get(field) or ""):

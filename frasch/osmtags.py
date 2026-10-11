@@ -30,6 +30,13 @@ NAME_FIELD_RANK = {
 NAME_FIELDS = tuple(NAME_FIELD_RANK)
 UNRANKED = 99  # worse than any rank a name hit can have: not found yet
 
+
+def name_of(tags: Tags) -> str:
+    """An object's name as the pipeline shows it: its `name`, else its
+    German one, `""` when it has neither."""
+    return tags.get("name") or tags.get("name:de") or ""
+
+
 # The tags that say what kind of thing an object is, the most telling first:
 # an island's coastline way (`place=island`, `natural=coastline`) is an island.
 CLASS_KEYS = (

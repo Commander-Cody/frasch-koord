@@ -7,7 +7,8 @@ from REPORT.md means looking every candidate up on openstreetmap.org; on a map
 the answer is usually obvious at a glance.  So:
 
     frasch curate export  ->  names/work/curate.json   (the worklist, with the
-                          candidates' coordinates and the row's location hint)
+                          candidates' coordinates and the row's location hint,
+                          as the matcher left them in names/work/matches.jsonl)
        the browser (web/, `?curate`, Vite dev server only) shows them as pins
        and appends one decision per line to names/work/curate-patch.jsonl
     frasch curate apply   <-  names/work/curate-patch.jsonl
@@ -38,9 +39,8 @@ in one step and only if it did not change on disk meanwhile; when the second
 write fails, the first is undone, so a failed apply changes neither file.
 names/work/.lock keeps it from running at the same time as `frasch match`.
 
-The export never builds the matcher's full candidate index (180k records, most of
-a gigabyte): it streams names/work/candidates.jsonl once and keeps only the
-records the worklist actually mentions.
+The export reads no candidates: everything the worklist shows of them the
+matcher wrote into names/work/matches.jsonl (frasch.matchfile).
 
 Run:  frasch curate                    # = export
       frasch curate apply --dry-run
@@ -50,7 +50,6 @@ from __future__ import annotations
 
 import argparse
 import collections
-import csv
 import dataclasses
 import functools
 import io
@@ -64,7 +63,6 @@ from typing import Any, Literal, NotRequired, TypedDict, final
 import jsonschema
 
 from frasch import (
-    candidates,
     cli,
     curationlist,
     dialects,
@@ -72,48 +70,42 @@ from frasch import (
     files,
     geo,
     kinds,
+    matchfile,
     namecell,
-    nameindex,
     osmtags,
     paths,
     placelist,
     refs,
 )
-from frasch.candidates import Candidate
 from frasch.dialects import Registry
 from frasch.errors import PipelineError
-from frasch.hints import HINT_FALLBACK, Circle, HintResolver
+from frasch.matchresult import Outcome
 from frasch.paths import StrPath, Workspace
 from frasch.placelist import PlaceList, PlaceRow, Reference, Row
-from frasch.refs import OsmRef
-
-# The extract (`src` of a candidate) the tiles are built from: only its
-# objects can carry an injected name, so it is what "in Schleswig-Holstein"
-# means for the curation view.  An object near the border can come from both.
-SH_SRC = "schleswig-holstein"
 
 # The results of a match that leave a row for a human.
-RESULTS = ("ambiguous", "not_found")
+RESULTS = tuple(outcome.value for outcome in Outcome if outcome.for_review)
 
 # ------------------------------------------------------------- the worklist ---
 # curate.json, as names/curate-worklist.schema.json defines it and
 # web/src/dev/curateWorklist.ts reads it
 
-# a candidate as the matcher's `candidates` cell names it (`class` is a
-# keyword); `km` is its distance from the centre of North Frisia
-_Listed = TypedDict("_Listed", {"ref": str, "name": str, "class": str, "km": int | None})
-
-
-class ListedCandidate(_Listed):
-    key: OsmRef
-
-
-class WorkCandidate(_Listed):
-    lon: float | None
-    lat: float | None
-    tags: str
-    in_sh: bool
-    wikidata: NotRequired[str]
+# a candidate as the matches file lists it (`matchfile.ListedCandidate`),
+# without the rank of its name hit (`class` is a keyword)
+WorkCandidate = TypedDict(
+    "WorkCandidate",
+    {
+        "ref": str,
+        "name": str,
+        "class": str,
+        "km": int | None,
+        "lon": float | None,
+        "lat": float | None,
+        "tags": str,
+        "in_sh": bool,
+        "wikidata": NotRequired[str],
+    },
+)
 
 
 class WorkRow(TypedDict):
@@ -144,102 +136,21 @@ class Worklist(TypedDict):
     rows: list[WorkRow]
 
 
-# ------------------------------------------------------------- candidates ---
-def parse_candidates(cell: str | None) -> list[ListedCandidate]:
-    """The `candidates` column of work/matches.csv -> one dict per candidate.
-
-    `match.fmt_cand` writes `type/id:name:class:km` joined by `;` and escapes
-    nothing, so a name with a colon in it is only readable from the ends: the
-    reference stops at the first colon, class and km are the last two fields.
-    (A name with a `;` would still split wrongly -- fmt_cand truncates names to
-    40 characters, so that stays a theoretical loss.)
-    """
-    out: list[ListedCandidate] = []
-    for part in (cell or "").split(";"):
-        part = part.strip()
-        if not part:
-            continue
-        head, _, km = part.rpartition(":")
-        head, _, cls = head.rpartition(":")
-        ref, _, name = head.partition(":")
-        t, _, ident = ref.partition("/")
-        if t not in refs.TYPE_NAME or not ident.isdigit():
-            print(f"  ignoring unreadable candidate {part!r}", file=sys.stderr)
-            continue
-        out.append(
-            {
-                "key": (t, int(ident)),
-                "ref": f"{refs.TYPE_NAME[t]}/{ident}",
-                "name": name,
-                "class": cls,
-                "km": int(km) if km.isdigit() else None,
-            }
-        )
-    return out
-
-
-def stream_records(
-    path: StrPath, keys: Collection[OsmRef], hint_norms: Collection[str]
-) -> list[Candidate]:
-    """One pass over work/candidates.jsonl, keeping the records the worklist
-    refers to (by id) and those a location hint could name (by normalised
-    name) -- roughly a thousand of 180 000."""
-    kept: list[Candidate] = []
-    for rec in candidates.read_records(path):
-        if (rec["t"], rec["id"]) in keys:
-            kept.append(rec)
-            continue
-        if not hint_norms:
-            continue
-        for field in osmtags.NAME_FIELDS:
-            v = rec["tags"].get(field)
-            if v and any(
-                nameindex.norm(p) in hint_norms for p, _pen in nameindex.split_name_values(v)
-            ):
-                kept.append(rec)
-                break
-    return kept
-
-
 # ----------------------------------------------------------------- export ---
-def work_candidate(listed: ListedCandidate, rec: Candidate | None, in_sh: bool) -> WorkCandidate:
-    """A candidate as the worklist shows it: with its position and what it is,
-    when candidates.jsonl still has its record."""
-    c: WorkCandidate = {
-        "ref": listed["ref"],
-        "name": listed["name"],
-        "class": listed["class"],
-        "km": listed["km"],
-        "lon": None,
-        "lat": None,
-        "tags": "",
-        "in_sh": False,
-    }
-    if rec is None:  # candidates.jsonl rebuilt since the run
-        return c
-    c["lon"], c["lat"] = rec["lon"], rec["lat"]
-    c["tags"] = osmtags.decisive(rec["tags"])
-    c["in_sh"] = in_sh
-    if rec["tags"].get("wikidata"):
-        c["wikidata"] = rec["tags"]["wikidata"]
-    return c
-
-
 def export(ws: Workspace, reg: Registry) -> None:
     """Write the worklist for the browser: the rows the last match left for
     a human, with their candidates."""
     work = _read_work(ws, reg)
-    index = _read_index(ws.candidates, work.matches)
-    out = _work_rows(work.matches, index, reg)
+    out = _work_rows(work.matches, reg)
     _write_worklist(ws.worklist, out)
     _print_export_summary(ws, out, work)
 
 
 @dataclasses.dataclass
 class _Work:
-    """The rows of work/matches.csv for the worklist, and how many it left out."""
+    """The lines of work/matches.jsonl for the worklist, and how many it left out."""
 
-    matches: list[tuple[PlaceRow, dict[str, str]]]
+    matches: list[tuple[PlaceRow, matchfile.Entry]]
     stale: int = 0  # deleted from places.csv since the run
     unowned: int = 0  # decided by hand since the run
 
@@ -247,97 +158,31 @@ class _Work:
 def _read_work(ws: Workspace, reg: Registry) -> _Work:
     """The `ambiguous` and `not_found` rows of the last match the matcher
     still owns, each with its places.csv row."""
-    matches = ws.matches
-    rows = placelist.read(ws.names, reg).rows
-    by_id = {r["id"]: r for r in rows}
-    if not os.path.exists(matches):
-        raise PipelineError(f"{matches} not found -- run `frasch match` first")
-
+    by_id = {r["id"]: r for r in placelist.read(ws.names, reg).rows}
     work = _Work([])
-    with open(matches, encoding="utf-8", newline="") as fh:
-        for m in csv.DictReader(fh):
-            if m["result"] not in RESULTS:
-                continue
-            row = by_id.get(m["id"])
-            if row is None:  # deleted from places.csv since the run
-                work.stale += 1
-                continue
-            if not placelist.state(row, reg).matchers:
-                work.unowned += 1  # decided by hand since the last run
-                continue
+    for m in matchfile.read(ws.matches):
+        if not Outcome(m["result"]).for_review:
+            continue
+        row = by_id.get(m["id"])
+        if row is None:  # deleted from places.csv since the run
+            work.stale += 1
+        elif not placelist.state(row, reg).matchers:
+            work.unowned += 1  # decided by hand since the last run
+        else:
             work.matches.append((row, m))
     return work
 
 
-def _first_hint(row: PlaceRow) -> str:
-    """The place a row's `hint` names first."""
-    return row["hint"].split(";")[0].strip()
-
-
-def _read_index(
-    path: StrPath, work: Iterable[tuple[PlaceRow, dict[str, str]]]
-) -> nameindex.NameIndex:
-    """The name index of the candidates.jsonl records the worklist needs: its
-    candidates, and what its location hints could name."""
-    keys: set[OsmRef] = set()
-    hint_norms: set[str] = set()
-    for row, m in work:
-        for c in parse_candidates(m["candidates"]):
-            keys.add(c["key"])
-        key = nameindex.norm(_first_hint(row))
-        if key and key not in HINT_FALLBACK:
-            hint_norms.add(key)
-
-    t0 = time.time()
-    index = nameindex.NameIndex(stream_records(path, keys, hint_norms))
-    print(
-        f"read {path}: kept {len(index.recs):,} records "
-        f"({len(keys):,} candidates, {len(hint_norms)} hint names, "
-        f"{time.time() - t0:.0f}s)"
-    )
-    return index
-
-
-def _work_rows(
-    work: Iterable[tuple[PlaceRow, dict[str, str]]], index: nameindex.NameIndex, reg: Registry
-) -> list[WorkRow]:
+def _work_rows(work: Iterable[tuple[PlaceRow, matchfile.Entry]], reg: Registry) -> list[WorkRow]:
     """One worklist row per match, in the order the browser walks them."""
-    hints = HintResolver(index)
-    srcs: collections.defaultdict[OsmRef, set[str | None]] = collections.defaultdict(set)
-    for rec in index.recs:
-        srcs[(rec["t"], rec["id"])].add(rec.get("src"))
-
-    out: list[WorkRow] = []
-    for row, m in work:
-        cands = _work_candidates(m["candidates"], index, srcs)
-        out.append(_work_row(row, m, cands, hints.resolve(_first_hint(row)), reg))
+    out = [_work_row(row, m, reg) for row, m in work]
     out.sort(key=lambda r: (kinds.KIND_ORDER.index(r["kind"]), r["line"]))
     return out
 
 
-def _work_candidates(
-    cell: str, index: nameindex.NameIndex, srcs: Mapping[OsmRef, set[str | None]]
-) -> list[WorkCandidate]:
-    """The candidates of the matcher's `candidates` cell as the worklist shows
-    them; `srcs` are the extracts each record of `index` came from."""
-    cands = []
-    for listed in parse_candidates(cell):
-        ref = listed["key"]
-        found = index.by_key.get(ref)
-        in_sh = found is not None and SH_SRC in srcs[ref]
-        cands.append(work_candidate(listed, found, in_sh))
-    return cands
-
-
-def _work_row(
-    row: PlaceRow,
-    m: dict[str, str],
-    cands: list[WorkCandidate],
-    hint_pt: Circle | None,
-    reg: Registry,
-) -> WorkRow:
-    """A row of the worklist: the places.csv row, what the matcher said about
-    it, its candidates and where its hint points."""
+def _work_row(row: PlaceRow, m: matchfile.Entry, reg: Registry) -> WorkRow:
+    """A row of the worklist: the places.csv row, and what the matcher said
+    about it -- why it left it, its candidates and where its hint points."""
     return {
         "id": row["id"],
         "line": row.line,
@@ -351,10 +196,27 @@ def _work_row(
         "da": row["da"],
         "hint": row["hint"],
         "note": row["note"],
-        "why": m["note"],
-        "hint_point": list(hint_pt) if hint_pt else None,
-        "candidates": cands,
+        "why": m["why"],
+        "hint_point": m["hint_point"],
+        "candidates": [_work_candidate(c) for c in m["candidates"]],
     }
+
+
+def _work_candidate(listed: matchfile.ListedCandidate) -> WorkCandidate:
+    """A candidate as the worklist shows it."""
+    shown: WorkCandidate = {
+        "ref": listed["ref"],
+        "name": listed["name"],
+        "class": listed["class"],
+        "km": listed["km"],
+        "lon": listed["lon"],
+        "lat": listed["lat"],
+        "tags": listed["tags"],
+        "in_sh": listed["in_sh"],
+    }
+    if "wikidata" in listed:
+        shown["wikidata"] = listed["wikidata"]
+    return shown
 
 
 def _write_worklist(path: str, rows: list[WorkRow]) -> None:
@@ -375,10 +237,10 @@ def _write_worklist(path: str, rows: list[WorkRow]) -> None:
 
 def _print_export_summary(ws: Workspace, rows: list[WorkRow], work: _Work) -> None:
     path = ws.worklist
-    # as the docs name the file: `work/matches.csv`, next to the name list
+    # as the docs name the file: `work/matches.jsonl`, next to the name list
     matches = os.path.relpath(ws.matches, os.path.dirname(ws.names))
     cnt = collections.Counter(r["result"] for r in rows)
-    # a candidate has a position only when candidates.jsonl still had its record
+    # a candidate has no position when the scan could not place its object
     n_pos = sum(c["lon"] is not None for r in rows for c in r["candidates"])
     n_hint = sum(r["hint_point"] is not None for r in rows)
     print(
@@ -931,7 +793,7 @@ def parser() -> tuple[argparse.ArgumentParser, set[str]]:
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     ex = sub.add_parser("export", help="write the worklist for the browser", allow_abbrev=False)
-    cli.add_workspace_options(ex, "names", "dialects", "matches", "candidates", "worklist", "work")
+    cli.add_workspace_options(ex, "names", "dialects", "matches", "worklist", "work")
 
     ap_ = sub.add_parser("apply", help="write the browser's decisions back", allow_abbrev=False)
     cli.add_workspace_options(ap_, "names", "dialects", "curation", "patch", "work")

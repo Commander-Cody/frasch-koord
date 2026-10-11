@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import csv
 import json
 import time
 from pathlib import Path
@@ -11,7 +10,7 @@ from typing import NoReturn, Protocol
 import pytest
 import requests
 
-from frasch import match
+from frasch import match, matchfile
 from frasch.errors import PipelineError
 from conftest import REGISTRY, places_text, workspace, write_candidates
 
@@ -122,11 +121,15 @@ def test_cache_of_the_wrong_shape_fails(run: tuple[RunMatch, Path, Path], outage
         run_match(offline=True)
 
 
-def test_user_agent_names_a_contact() -> None:
-    assert "https://github.com/Commander-Cody/frasch-koord" in match.WD_USER_AGENT
+def test_an_outage_is_reported_for_each_country(
+    run: tuple[RunMatch, Path, Path], outage: Calls, capsys: pytest.CaptureFixture[str]
+) -> None:
+    run_match, _places, _cache = run
+    run_match()
+    assert "wikidata lookup failed for Niederlande: Wikidata is down" in capsys.readouterr().err
 
 
-def test_each_country_answer_shows_in_matches_csv_and_the_summary(
+def test_each_country_answer_shows_in_the_matches_file_and_the_summary(
     world: Path, outage: Calls, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """A cached item matches, a cached "no item" clears, no answer at all
@@ -137,18 +140,16 @@ def test_each_country_answer_shows_in_matches_csv_and_the_summary(
     write_candidates(world / "work" / "candidates.jsonl")
     cache = world / "work" / "wikidata-countries.json"
     cache.write_text(json.dumps({"Dänemark": "Q35", "Niederlande": ""}), encoding="utf-8")
-    matches = world / "work" / "matches.csv"
     code = match.run(workspace(world), REGISTRY, offline=True)
     assert code == 1
-    with open(matches, encoding="utf-8", newline="") as fh:
-        got = [
-            (m["de"], m["wikidata"], m["result"], m["match_name"], m["match_tags"], m["note"])
-            for m in csv.DictReader(fh)
-        ]
+    got = [
+        (m["wikidata"], m["result"], m["match_name"], m["match_tags"], m["why"])
+        for m in matchfile.read(world / "work" / "matches.jsonl")
+    ]
     assert got == [
-        ("Dänemark", "Q35", "matched", "Dänemark", "wikidata", "auto: wikidata"),
-        ("Niederlande", "", "not_found", "", "", "no Wikidata country item found"),
-        ("Schweden", "", "lookup_failed", "", "", "Wikidata lookup failed -- row left unchanged"),
+        ("Q35", "matched", "Dänemark", "wikidata", "auto: wikidata"),
+        ("", "not_found", "", "", "no Wikidata country item found"),
+        ("", "lookup_failed", "", "", "Wikidata lookup failed -- row left unchanged"),
     ]
     out, err = capsys.readouterr()
     assert "matcher owns 3 of 3 rows: 1 matched, 1 not_found, 1 lookup_failed" in out.splitlines()
