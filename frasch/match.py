@@ -457,9 +457,10 @@ class Claimed:
     rest of it to no second name.  What the run itself gave out (`given`) is
     not a human's word on where the feature ends, though: it holds the
     feature only against a row that finds the object by one of its own
-    names, not by `alt_name` or `old_name` alone (`RankedCandidate.byname`).  The dyke Deezbüll Deich also goes by `alt_name=Deezbülleck` and
-    lies at the hamlet of that name -- the row of the dyke takes the dyke,
-    not the hamlet."""
+    names, not by `alt_name` or `old_name` alone (`RankedCandidate.byname`).
+    The dyke Deezbüll Deich also goes by `alt_name=Deezbülleck` and lies at
+    the hamlet of that name -- the row of the dyke takes the dyke, not the
+    hamlet."""
 
     objects: dict[Ref, str] = field(default_factory=dict)
     items: dict[str, str] = field(default_factory=dict)

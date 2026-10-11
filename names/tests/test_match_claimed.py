@@ -227,6 +227,31 @@ def test_an_object_found_by_an_annotated_name_of_its_own_holds_its_feature(world
     assert why(world, "row-2") == "node/1 is taken by row row-1"
 
 
+def test_an_object_one_of_a_rows_names_finds_by_a_name_of_its_own_holds_its_feature(
+    world: Path,
+) -> None:
+    # the second row's `Holm` is the village's own name; that its `Holme`
+    # finds the village only as an `alt_name` takes nothing from that
+    holm = [
+        cand("n", 240102263, 8.866668, 54.833305, name="Holm", alt_name="Holme", place="village"),
+        cand(
+            "r",
+            1420394,
+            8.857041,
+            54.831964,
+            name="Holm",
+            boundary="administrative",
+            admin_level="8",
+        ),
+    ]
+    rows = [
+        {"kind": "settlement", "mooring": "Hulm", "de": "Holm"},
+        {"kind": "settlement", "mooring": "Holem", "de": "Holm; Holme"},
+    ]
+    run_match(world, rows, holm)
+    assert why(world, "row-2") == "node/240102263 is taken by row row-1"
+
+
 def test_a_matched_row_that_lost_its_frisian_name_keeps_its_object(world: Path) -> None:
     # the matcher leaves such a row as it is, so its object is not free
     nameless = {"kind": "warft", "de": "Langedeich", "osm": "way/28330569", "status": "auto"}
