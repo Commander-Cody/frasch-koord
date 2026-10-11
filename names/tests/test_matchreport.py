@@ -13,7 +13,7 @@ from conftest import REGISTRY, cand, places_text
 
 
 def ranked(t: str, id: int, lon: float, lat: float, **tags: str) -> RankedCandidate:
-    return {**cand(t, id, lon, lat, **tags), "rank": 0}
+    return {**cand(t, id, lon, lat, **tags), "rank": 0, "byname": False}
 
 
 # one row in every state of the report
@@ -139,10 +139,8 @@ def test_the_report_cuts_a_candidates_name_to_forty_characters(world: Path) -> N
 
 
 def test_the_report_says_when_a_candidate_has_no_position(world: Path) -> None:
-    nowhere: RankedCandidate = {
-        **cand("r", 1, None, None, name="Kampen", place="hamlet"),
-        "rank": 0,
-    }
+    unplaced = cand("r", 1, None, None, name="Kampen", place="hamlet")
+    nowhere: RankedCandidate = {**unplaced, "rank": 0, "byname": False}
     assert "`r/1:Kampen:hamlet:?`" in report_of(world, nowhere)
 
 

@@ -178,25 +178,53 @@ def test_of_two_rows_for_one_village_the_second_gets_no_other_object_of_it(world
     assert (second["osm"], second["status"]) == ("", "")
 
 
+# the dyke lies at the hamlet and carries its name as `alt_name`
+DEEZBUELL_DYKE = cand(
+    "w",
+    55824588,
+    8.806919,
+    54.762135,
+    man_made="dyke",
+    name="Deezbüll Deich",
+    alt_name="Deezbülleck",
+)
+DEEZBUELLECK = cand("n", 10158150149, 8.800352, 54.763511, place="hamlet", name="Deezbülleck")
+DEESBELJARN = {"kind": "warft", "mooring": "Deesbeljarn", "de": "Deezbülleck"}
+
+
 def test_a_row_keeps_its_object_next_to_one_the_matcher_gave_another_row(world: Path) -> None:
-    # the dyke lies at the hamlet and carries its name as `alt_name`: the row
-    # of the dyke takes the dyke, not the whole place
-    dyke = cand(
-        "w",
-        55824588,
-        8.806919,
-        54.762135,
-        man_made="dyke",
-        name="Deezbüll Deich",
-        alt_name="Deezbülleck",
-    )
-    hamlet = cand("n", 10158150149, 8.800352, 54.763511, place="hamlet", name="Deezbülleck")
-    rows = [
-        {"kind": "warft", "mooring": "Deesbeldik", "de": "Deezbüll Deich"},
-        {"kind": "warft", "mooring": "Deesbeljarn", "de": "Deezbülleck"},
-    ]
-    _, second = run_match(world, rows, [dyke, hamlet])
+    # the row of the dyke takes the dyke, not the whole place
+    dyke_row = {"kind": "warft", "mooring": "Deesbeldik", "de": "Deezbüll Deich"}
+    _, second = run_match(world, [dyke_row, DEESBELJARN], [DEEZBUELL_DYKE, DEEZBUELLECK])
     assert (second["osm"], second["status"]) == ("node/10158150149", "auto")
+
+
+def test_a_dyke_a_human_gave_to_another_row_holds_the_hamlet_it_also_names(world: Path) -> None:
+    # the word of a row a human decided reaches over its whole feature, by
+    # whatever name the second row finds the object
+    checked = {"kind": "warft", "mooring": "Deesbeldik", "de": "Deezbüll Deich"} | {
+        "osm": "way/55824588",
+        "status": "ok",
+    }
+    run_match(world, [checked, DEESBELJARN], [DEEZBUELL_DYKE, DEEZBUELLECK])
+    assert why(world, "row-2") == "way/55824588 is taken by row row-1"
+
+
+def test_an_object_found_by_an_annotated_name_of_its_own_holds_its_feature(world: Path) -> None:
+    # `Klockries (NF)` is the village's own short name, though the hit on it
+    # ranks no better than one on an `alt_name`
+    klockries = [
+        cand(
+            "n", 1, 8.83, 54.75, place="village", name="Klockries-Dorf", short_name="Klockries (NF)"
+        ),
+        cand("r", 2, 8.84, 54.755, name="Klockries", boundary="administrative", admin_level="8"),
+    ]
+    rows = [
+        {"kind": "settlement", "mooring": "Klookriis-Toorp", "de": "Klockries-Dorf"},
+        {"kind": "settlement", "mooring": "Klookriis", "de": "Klockries"},
+    ]
+    run_match(world, rows, klockries)
+    assert why(world, "row-2") == "node/1 is taken by row row-1"
 
 
 def test_a_matched_row_that_lost_its_frisian_name_keeps_its_object(world: Path) -> None:

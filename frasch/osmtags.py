@@ -28,9 +28,9 @@ NAME_FIELD_RANK = {
     "old_name": 4,
 }
 NAME_FIELDS = tuple(NAME_FIELD_RANK)
-# A hit of this rank or worse is on a name the object merely also goes by
-# (`alt_name`, `old_name`), not on one of its own.
-BYNAME_RANK = NAME_FIELD_RANK["alt_name"]
+# The name tags for what an object merely also goes by, or once went by: a hit
+# on one of these alone does not make the object the feature of that name.
+BYNAME_FIELDS = frozenset({"alt_name", "old_name"})
 UNRANKED = 99  # worse than any rank a name hit can have: not found yet
 
 

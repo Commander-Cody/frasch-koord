@@ -25,7 +25,7 @@ KAMPEN_MUNICIPALITY = cand(
 
 
 def ranked(rec: Candidate, rank: int = 0) -> RankedCandidate:
-    return {**rec, "rank": rank}
+    return {**rec, "rank": rank, "byname": False}
 
 
 def round_trip(tmp_path: Path, result: MatchResult, *recs: Candidate) -> matchfile.Entry:

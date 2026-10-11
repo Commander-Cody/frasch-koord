@@ -1026,8 +1026,10 @@ cell, which the export parsed back before reading the candidates file again.
   row got the relation, the municipality when it got the place node. A row
   the run matched now holds its feature against the rows after it as a row a
   human decided does — except against a row that finds the object only by a
-  name it merely also goes by (a name hit as weak as one on `alt_name` or
-  `old_name`, `osmtags.BYNAME_RANK`): the dyke Deezbüll Deich carries
+  name it merely also goes by (`alt_name` or `old_name` alone,
+  `osmtags.BYNAME_FIELDS`; the index says so with each hit, since a rank
+  cannot: an annotated `short_name` ranks like an `alt_name`): the dyke
+  Deezbüll Deich carries
   `alt_name=Deezbülleck`, and the row of the hamlet Deezbülleck keeps its
   node. This narrows the #94 addendum "only the exact object". The real list
   comes out unchanged.
@@ -1049,7 +1051,7 @@ cell, which the export parsed back before reading the candidates file again.
 
 ## Name-mapping pipeline (built 2026-09-15)
 
-Scripts in `names/` (see `names/README.md` for the workflow; since #91 they are the commands of `frasch`, see the 2026-10-06 entry): `placelist.py` (reads/validates `places.csv`, shared); `build_candidates.py` (one pyosmium pass over the SH + DK extracts, ~8.5 min, 182k candidates); `match.py` (exact match after normalisation, no fuzzy matching; fills empty `osm`/`wikidata` cells of `places.csv` and marks them `status=auto`; writes `names/work/matches.csv` with the details and `names/REPORT.md` as the hand-review worklist); `tiles/inject_names.py` (tags the PBF). Keys: OSM reference `type/id` (several allowed for split rivers/dykes) plus the Wikidata QID where the object has one; countries via Wikidata only.
+Scripts in `names/` (see `names/README.md` for the workflow; since #91 they are the commands of `frasch`, see the 2026-10-06 entry): `placelist.py` (reads/validates `places.csv`, shared); `build_candidates.py` (one pyosmium pass over the SH + DK extracts, ~8.5 min, 182k candidates); `match.py` (exact match after normalisation, no fuzzy matching; fills empty `osm`/`wikidata` cells of `places.csv` and marks them `status=auto`; writes `names/work/matches.jsonl` (until #98: `matches.csv`) with the details and `names/REPORT.md` as the hand-review worklist); `tiles/inject_names.py` (tags the PBF). Keys: OSM reference `type/id` (several allowed for split rivers/dykes) plus the Wikidata QID where the object has one; countries via Wikidata only.
 
 First run: 825 place rows → **437 matched, 41 ambiguous, 340 not found**, 7 not places. Settlements 225/334 matched; Köge 25/87; Warften 117/276; waters 24/45; islands 26/41; Harden 0/8; countries 12/12. 447 objects tagged in the SH extract (Denmark rows resolve once a DK-covering build exists). 34 matches spot-checked by hand, all correct; all 59 location-hinted matches verified geometrically.
 

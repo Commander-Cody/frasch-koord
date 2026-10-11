@@ -103,7 +103,6 @@ from frasch.kinds import Boundary, KindRule
 from frasch.matchresult import MatchResult, Outcome, RankedCandidate
 from frasch.namecell import primary, variants
 from frasch.nameindex import NameIndex, norm
-from frasch.osmtags import UNRANKED
 from frasch.paths import Workspace
 from frasch.placelist import PlaceRow, Reference, Row, any_name
 from frasch.provenance import ExtractStamp
@@ -121,16 +120,16 @@ def row_query_names(row: Row) -> list[str]:
 
 
 def _ranked_candidates(index: NameIndex, queries: Iterable[str]) -> list[RankedCandidate]:
-    """Every record any of `queries` finds, with the best rank it found it with."""
-    best_rank: dict[OsmRef, int] = {}
-    recs: dict[OsmRef, Candidate] = {}
+    """Every record any of `queries` finds, with the best hit it found it with."""
+    found: dict[OsmRef, RankedCandidate] = {}
     for q in queries:
-        for rec, rank in index.lookup(q):
-            key = osm_key(rec)
-            recs[key] = rec
-            if rank < best_rank.get(key, UNRANKED):
-                best_rank[key] = rank
-    return [{**rec, "rank": best_rank[key]} for key, rec in recs.items()]
+        for hit in index.lookup(q):
+            key = osm_key(hit.rec)
+            rank, byname = hit.rank, hit.byname
+            if key in found:
+                rank, byname = min(rank, found[key]["rank"]), byname and found[key]["byname"]
+            found[key] = {**hit.rec, "rank": rank, "byname": byname}
+    return list(found.values())
 
 
 def _split_by_rank(
@@ -458,7 +457,7 @@ class Claimed:
     rest of it to no second name.  What the run itself gave out (`given`) is
     not a human's word on where the feature ends, though: it holds the
     feature only against a row that finds the object by one of its own
-    names.  The dyke Deezbüll Deich also goes by `alt_name=Deezbülleck` and
+    names, not by `alt_name` or `old_name` alone (`RankedCandidate.byname`).  The dyke Deezbüll Deich also goes by `alt_name=Deezbülleck` and
     lies at the hamlet of that name -- the row of the dyke takes the dyke,
     not the hamlet."""
 
@@ -500,8 +499,8 @@ class Claimed:
 
     def _holds_feature(self, c: RankedCandidate) -> bool:
         """Whether the row that holds `c` holds its whole feature against
-        the row that found `c` with the name hit `c["rank"]`."""
-        return osm_key(c) not in self.given or c["rank"] < osmtags.BYNAME_RANK
+        the row whose names found `c`."""
+        return osm_key(c) not in self.given or not c["byname"]
 
     def taken_note(self, recs: Iterable[Candidate]) -> str:
         """`way/1 is taken by row naibel; ...` for the candidates other rows

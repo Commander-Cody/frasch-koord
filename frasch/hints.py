@@ -78,11 +78,11 @@ class HintResolver:
 
     def _lookup(self, hint: str, key: str) -> Circle | None:
         places = [
-            (rec, lon, lat)
-            for rec, _rank in self.index.lookup(hint)
-            if (lon := rec["lon"]) is not None
-            and (lat := rec["lat"]) is not None
-            and _is_a_place(rec["tags"])
+            (hit.rec, lon, lat)
+            for hit in self.index.lookup(hint)
+            if (lon := hit.rec["lon"]) is not None
+            and (lat := hit.rec["lat"]) is not None
+            and _is_a_place(hit.rec["tags"])
         ]
         if not places:
             return None

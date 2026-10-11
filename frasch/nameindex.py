@@ -12,9 +12,10 @@ import collections
 import re
 import unicodedata
 from collections.abc import Iterable
+from typing import NamedTuple
 
 from frasch.candidates import Candidate, osm_key
-from frasch.osmtags import NAME_FIELD_RANK, UNRANKED
+from frasch.osmtags import BYNAME_FIELDS, NAME_FIELD_RANK, UNRANKED
 from frasch.refs import OsmRef
 
 # ----------------------------------------------------------- normalisation ---
@@ -89,32 +90,46 @@ def split_name_values(v: str) -> list[tuple[str, int]]:
     return [(x, pen) for x, pen in vals if x]
 
 
+class NameHit(NamedTuple):
+    """A record a name finds.  `rank` is that of the best name tag it is
+    found by (lower = better, osmtags.NAME_FIELD_RANK plus the penalty of an
+    annotated value); `byname` says that every tag it is found by is one of
+    osmtags.BYNAME_FIELDS -- the object only also goes by the name."""
+
+    rec: Candidate
+    rank: int
+    byname: bool
+
+
 class NameIndex:
-    """Candidate records (frasch.candidates) by normalised name, and by
-    reference -- an object two extracts have is two records, of which
-    `by_key` has the last and `sources` names both extracts.  Every name tag of osmtags.NAME_FIELD_RANK and every variant of its
-    value (`split_name_values`) is a key; a record found under several
-    keeps its best rank."""
+    """Candidate records (frasch.candidates) by normalised name.  Every name
+    tag of osmtags.NAME_FIELD_RANK and every variant of its value
+    (`split_name_values`) is a key; a record found under several keeps its
+    best rank.  An object two extracts have is two records: `sources` names
+    the extracts (`src`) of each object."""
 
     def __init__(self, recs: Iterable[Candidate]):
         self.recs = list(recs)
-        # norm -> {rec index: rank}
-        self.by_name: collections.defaultdict[str, dict[int, int]] = collections.defaultdict(dict)
-        self.by_key = {osm_key(rec): rec for rec in self.recs}
-        # reference -> the extracts (`src`) its records came from
-        self.sources: collections.defaultdict[OsmRef, set[str]] = collections.defaultdict(set)
-        for rec in self.recs:
-            self.sources[osm_key(rec)].add(rec["src"])
+        # norm -> {rec index: (rank, byname)}
+        self.by_name: collections.defaultdict[str, dict[int, tuple[int, bool]]] = (
+            collections.defaultdict(dict)
+        )
+        self.sources: dict[OsmRef, tuple[str, ...]] = {}
         for i, rec in enumerate(self.recs):
+            key = osm_key(rec)
+            self.sources[key] = (*self.sources.get(key, ()), rec["src"])
             for field, rank in NAME_FIELD_RANK.items():
                 for part, penalty in split_name_values(rec["tags"].get(field) or ""):
-                    n = norm(part)
-                    if n and rank + penalty < self.by_name[n].get(i, UNRANKED):
-                        self.by_name[n][i] = rank + penalty
+                    self._add(norm(part), i, rank + penalty, field in BYNAME_FIELDS)
 
-    def lookup(self, name: str) -> list[tuple[Candidate, int]]:
-        """-> [(record, name-field rank)]"""
-        n = norm(name)
-        if not n:
-            return []
-        return [(self.recs[i], r) for i, r in self.by_name.get(n, {}).items()]
+    def _add(self, name: str, i: int, rank: int, byname: bool) -> None:
+        """Count a hit of the normalised `name` on the record `i`."""
+        if not name:
+            return
+        best, only_bynames = self.by_name[name].get(i, (UNRANKED, True))
+        self.by_name[name][i] = (min(best, rank), only_bynames and byname)
+
+    def lookup(self, name: str) -> list[NameHit]:
+        """The records `name` finds."""
+        hits = self.by_name.get(norm(name), {})
+        return [NameHit(self.recs[i], rank, byname) for i, (rank, byname) in hits.items()]

@@ -58,16 +58,25 @@ def test_a_dry_run_shows_the_reference_a_row_would_get(world: Path) -> None:
     assert matches(world)["toftem"]["osm"] == "node/240044107"
 
 
-def test_the_matches_file_says_where_the_hint_of_a_row_without_a_match_points(
-    world: Path,
+SYLT = cand("r", 1576925, 8.418235, 54.888448, name="Sylt", place="island")
+
+
+@pytest.mark.parametrize(
+    "hint,points_at",
+    [
+        ("Karrharde", [9.02, 54.8, 15.0]),  # no object of OSM: a fixed circle
+        ("Sylt", [8.418235, 54.888448, 25.0]),  # a large island narrows down less
+        ("Toftum; bei Niebüll", [8.83, 54.71, 8.0]),  # the place the hint names first
+    ],
+)
+def test_the_matches_file_says_where_a_hint_points(
+    world: Path, hint: str, points_at: list[float]
 ) -> None:
     lost = {"id": "ferlaasen", "kind": "settlement", "mooring": "Ferlääsen", "de": "Verloren"}
-    rows = ROWS + [lost | {"hint": "Toftum"}]
-    (world / "places.csv").write_text(places_text(rows), encoding="utf-8")
-    write_candidates(world / "work" / "candidates.jsonl", TOFTUM, *UPHUSUM)
+    (world / "places.csv").write_text(places_text([lost | {"hint": hint}]), encoding="utf-8")
+    write_candidates(world / "work" / "candidates.jsonl", TOFTUM, SYLT)
     match_main(world)
-    # a village-sized circle around Toftum
-    assert matches(world)["ferlaasen"]["hint_point"] == [8.83, 54.71, 8.0]
+    assert matches(world)["ferlaasen"]["hint_point"] == points_at
 
 
 def test_the_matches_file_leaves_out_a_row_the_matcher_does_not_own(world: Path) -> None:

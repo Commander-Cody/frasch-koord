@@ -83,20 +83,31 @@ KAMPEN = cand("n", 240063898, 8.344065, 54.95377, name="Kampen (Sylt)", place="v
 
 def test_a_name_finds_its_records_with_the_rank_of_the_field_it_is_in() -> None:
     index = nameindex.NameIndex([HOLM, HOLME])
-    assert sorted((rec["id"], rank) for rec, rank in index.lookup("holm")) == [
+    assert sorted((hit.rec["id"], hit.rank) for hit in index.lookup("holm")) == [
         (240102263, 0),
         (2716731633, 1),
     ]
 
 
 def test_a_bare_name_behind_an_osm_annotation_is_found_with_a_penalty() -> None:
-    assert [(rec["id"], rank) for rec, rank in nameindex.NameIndex([KAMPEN]).lookup("Kampen")] == [
-        (240063898, 2)
-    ]
+    hits = nameindex.NameIndex([KAMPEN]).lookup("Kampen")
+    assert [(hit.rec["id"], hit.rank) for hit in hits] == [(240063898, 2)]
 
 
-def test_records_are_found_by_their_reference_too() -> None:
-    assert nameindex.NameIndex([HOLM]).by_key[("n", 240102263)] is HOLM
+def test_a_name_an_object_merely_also_goes_by_is_a_byname_hit() -> None:
+    dyke = cand("w", 55824588, 8.8, 54.76, name="Deezbüll Deich", alt_name="Deezbülleck")
+    assert [hit.byname for hit in nameindex.NameIndex([dyke]).lookup("Deezbülleck")] == [True]
+
+
+def test_an_annotated_name_of_its_own_is_no_byname_hit_though_it_ranks_like_one() -> None:
+    village = cand("n", 1, 8.8, 54.76, name="Klockries-Dorf", short_name="Klockries (NF)")
+    hits = nameindex.NameIndex([village]).lookup("Klockries")
+    assert [(hit.rank, hit.byname) for hit in hits] == [(4, False)]
+
+
+def test_a_name_of_its_own_that_is_also_a_byname_is_no_byname_hit() -> None:
+    village = cand("n", 1, 8.8, 54.76, name="Klockries", old_name="Klockries")
+    assert [hit.byname for hit in nameindex.NameIndex([village]).lookup("Klockries")] == [False]
 
 
 def test_an_empty_name_finds_nothing() -> None:

@@ -29,10 +29,13 @@ class Outcome(enum.Enum):
 
 
 class RankedCandidate(Candidate):
-    """A candidate record with the best name-field rank (`NameIndex.lookup`)
-    any of the row's names found it with."""
+    """A candidate record with how the row's names found it
+    (`nameindex.NameHit`): the best `rank` any of them found it with, and
+    whether all of them found it only by a name it merely also goes by
+    (`byname`)."""
 
     rank: int
+    byname: bool
 
 
 @dataclass(frozen=True)
