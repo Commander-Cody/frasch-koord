@@ -140,6 +140,44 @@ def test_the_second_row_for_a_place_says_which_row_took_its_object(world: Path) 
     assert why(world, "row-2") == "way/28330569 is taken by row row-1"
 
 
+# the Arlau as a relation that is tagged as the river itself, and its ways
+ARLAU_RELATION = cand("r", 2389612, 9.0, 54.62, name="Arlau", type="waterway", waterway="river")
+ARLAU_WAYS = [cand("w", i, 9.0, 54.6 + 0.01 * i, name="Arlau", waterway="river") for i in (1, 2, 3)]
+ARLOU = {"kind": "water", "mooring": "Arlou", "de": "Arlau"}
+
+
+def test_of_two_rows_for_one_river_the_second_gets_no_other_object_of_it(world: Path) -> None:
+    # the first row gets the relation; the river's ways are not free for a second name
+    _, second = run_match(
+        world, [ARLOU, ARLOU | {"mooring": "Äarlou"}], [ARLAU_RELATION, *ARLAU_WAYS]
+    )
+    assert (second["osm"], second["status"]) == ("", "")
+
+
+def test_the_second_row_for_a_river_says_which_row_took_it(world: Path) -> None:
+    run_match(world, [ARLOU, ARLOU | {"mooring": "Äarlou"}], [ARLAU_RELATION, *ARLAU_WAYS])
+    assert why(world, "row-2") == "relation/2389612 is taken by row row-1"
+
+
+def test_of_two_rows_for_one_village_the_second_gets_no_other_object_of_it(world: Path) -> None:
+    # the first row gets the place node; its municipality is the same village
+    holm = [
+        cand("n", 240102263, 8.866668, 54.833305, name="Holm", place="village"),
+        cand(
+            "r",
+            1420394,
+            8.857041,
+            54.831964,
+            name="Holm",
+            boundary="administrative",
+            admin_level="8",
+        ),
+    ]
+    hulm = {"kind": "settlement", "mooring": "Hulm", "de": "Holm"}
+    _, second = run_match(world, [hulm, hulm | {"mooring": "Holem"}], holm)
+    assert (second["osm"], second["status"]) == ("", "")
+
+
 def test_a_row_keeps_its_object_next_to_one_the_matcher_gave_another_row(world: Path) -> None:
     # the dyke lies at the hamlet and carries its name as `alt_name`: the row
     # of the dyke takes the dyke, not the whole place

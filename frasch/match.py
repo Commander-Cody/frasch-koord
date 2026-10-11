@@ -449,26 +449,36 @@ class Claimed:
     (`placelist.claims`): `objects` maps (type, id) and `items` a QID to the
     id of the row that holds it.
 
-    A run starts with what the rows it leaves as they are hold (`of`).  Such
-    a row names its whole feature (`features`): a row that holds one piece of
-    a river leaves the others to no second name.  Each row the run matches is
-    added (`add`), so of two rows for one place the first in the list gets
-    the object -- only the object: what the matcher gave is not a human's
-    word on where the feature ends."""
+    A run starts with what the rows it leaves as they are hold (`of`), and
+    each row it matches is added (`give`): of two rows for one place the
+    first in the list gets the object.
+
+    A row that holds an object names its whole feature (`held`): one that
+    holds a piece of a river, or the relation that is the river, leaves the
+    rest of it to no second name.  What the run itself gave out (`given`) is
+    not a human's word on where the feature ends, though: it holds the
+    feature only against a row that finds the object by one of its own
+    names.  The dyke Deezbüll Deich also goes by `alt_name=Deezbülleck` and
+    lies at the hamlet of that name -- the row of the dyke takes the dyke,
+    not the hamlet."""
 
     objects: dict[Ref, str] = field(default_factory=dict)
     items: dict[str, str] = field(default_factory=dict)
-    features: set[Ref] = field(default_factory=set)
+    given: set[Ref] = field(default_factory=set)
 
     @classmethod
     def of(cls, rows: Iterable[PlaceRow]) -> Claimed:
         claimed = cls()
         for row in rows:
-            claimed.add(row)
-        claimed.features = set(claimed.objects)
+            claimed._add(row)
         return claimed
 
-    def add(self, row: PlaceRow) -> None:
+    def give(self, row: PlaceRow) -> None:
+        """Count what the run wrote into `row` as held by it."""
+        self._add(row)
+        self.given.update(placelist.claims(row).refs)
+
+    def _add(self, row: PlaceRow) -> None:
         held = placelist.claims(row)
         for ref in held.refs:
             self.objects.setdefault(ref, row["id"])
@@ -476,17 +486,22 @@ class Claimed:
             self.items.setdefault(held.qid, row["id"])
 
     def held(
-        self, rule: KindRule, taken: Iterable[Candidate], winner: PlacedCluster
-    ) -> list[Candidate]:
+        self, rule: KindRule, taken: Iterable[RankedCandidate], winner: PlacedCluster
+    ) -> list[RankedCandidate]:
         """The objects of `taken` -- candidates of a row that other rows
         hold -- that are part of the feature the row would get, `winner`."""
         return [
             c
             for c in taken
-            if osm_key(c) in self.features
+            if self._holds_feature(c)
             and rule.covers(c)
             and any(same_feature(c, member) for member in winner["members"])
         ]
+
+    def _holds_feature(self, c: RankedCandidate) -> bool:
+        """Whether the row that holds `c` holds its whole feature against
+        the row that found `c` with the name hit `c["rank"]`."""
+        return osm_key(c) not in self.given or c["rank"] < osmtags.BYNAME_RANK
 
     def taken_note(self, recs: Iterable[Candidate]) -> str:
         """`way/1 is taken by row naibel; ...` for the candidates other rows
@@ -641,7 +656,7 @@ def _match_rows(
         before = Reference.of(r)
         results[r["id"]] = sources.match(r, claimed)
         _write_back(r, results[r["id"]])
-        claimed.add(r)
+        claimed.give(r)
         if change := _change(before, Reference.of(r)):
             changed[change] += 1
     return results, changed
