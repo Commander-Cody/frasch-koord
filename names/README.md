@@ -667,7 +667,9 @@ rather than the square (see below).
 injected row; `set_tags` is how an object the list does not mention gets one.
 
 `tiles/build.sh` passes the file to `frasch inject` automatically;
-`--no-curation` ignores it, `--curation OTHER.csv` swaps it.
+`--curation OTHER.csv` (or `CURATION=…` for `build.sh`) swaps it. The file
+has to be there: `frasch inject` stops without it, as it does without any
+other of its inputs.
 
 ## License
 
@@ -793,4 +795,6 @@ references of their `osm` cell.
 | `pipeline` | the table of the generated files (`OUTPUTS`): what builds each, from what, and when it is stale; `frasch build` |
 | `check_inputs`, `check_outputs` | `frasch check-inputs` and `check-outputs` |
 | `match` | the matcher's decision for a row (`match_row`), what other rows hold (`Claimed`), and the `frasch match` command, which reads and writes through the modules above |
-| the rest | the commands' own modules: `update`, `build_candidates`, `curate` (with `apply`, the transaction that writes the decisions), `build_dialect_areas` (`areas`), `inject_names` (`inject`), `check_tiles` (`check-tiles`) |
+| `inject_names` | the `frasch inject` command (`run`, `main`) and the `Injector`, which gives each object of the extract its tags as it streams past |
+| `inject/` | the injector's parts: `claims` (the name list as claims: which row holds an object, by reference, as a member way of a waterway relation or by its QID), `synthetic` (the objects it adds: the node of a place OSM does not have, the synthetic squares, their ids and their place in the file), `writer` (the copy of the extract, or nowhere on a dry run), `inputs` (`load_inputs`: every input read and checked before anything is written), `stats` (what a run counts) and `report` (its log, as lines) |
+| the rest | the commands' own modules: `update`, `build_candidates`, `curate` (with `apply`, the transaction that writes the decisions), `build_dialect_areas` (`areas`), `check_tiles` (`check-tiles`) |
