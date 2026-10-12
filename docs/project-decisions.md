@@ -1176,8 +1176,10 @@ result into place and then died in `frasch provenance` on the missing file.
   square (`n/6` and `nodes 7..10` before).
 - **The `name:frr` pre-pass leaves out what a row holds by reference**: those
   objects have their `name:frr` in the objects file, and the main pass threw
-  the located copy away. Its line of the report counts the others: 202 on
-  the Schleswig-Holstein extract, of the 397 it located before.
+  the located copy away. Its line of the report counts the others, "no row
+  holds by reference": 202 on the Schleswig-Holstein extract, of the 397 it
+  located before. 167 of them get the name; the rest a row claims after all,
+  by its QID or as a member way of a river.
 - **The tags written are what they were.** On the Schleswig-Holstein extract
   of September 2026 (17.3 million objects) the injected file is byte for
   byte the one the code before the change writes, and the report differs in

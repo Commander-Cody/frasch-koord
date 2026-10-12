@@ -425,7 +425,7 @@ def test_report_of_a_run(injected_run: tuple[Path, list[str]]) -> None:
         "synthetic : 1 polygon(s) to add around nodes",
         "local     : 1 local reference(s) positioned in <dir>/curation.csv",
         "objects   : <dir>/osm_objects.json -> 4 located object(s)",
-        "name:frr  : 2 object(s) in a dialect area that no row claims have one in OSM",
+        "name:frr  : 2 object(s) in a dialect area that no row holds by reference have one in OSM",
         "",
         "scanned 24 objects in 0s",
         "tagged  5 objects: 2 nodes, 1 ways, 2 relations "

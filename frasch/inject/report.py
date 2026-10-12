@@ -39,7 +39,7 @@ def input_lines(inputs: Inputs, ws: Workspace) -> list[str]:
     if inputs.osm_local:
         lines.append(
             f"{FRISIAN_KEY}  : {len(inputs.osm_local)} object(s) in a dialect area that no row "
-            "claims have one in OSM"
+            "holds by reference have one in OSM"
         )
     return lines
 
@@ -79,6 +79,11 @@ def _curation_lines(inputs: Inputs, ws: Workspace) -> list[str]:
 
 
 # -------------------------------------------------------------- the result ----
+def _node(node_id: int) -> str:
+    """An added node, as the lists spell a reference to one."""
+    return refs.format([("n", node_id)])
+
+
 def result_lines(stats: Stats, inputs: Inputs, extract: str, seconds: float) -> list[str]:
     """What the scan of `extract` tagged, added and curated, and what it did
     not find; a section starts with an empty line."""
@@ -142,7 +147,7 @@ def _added_point_lines(stats: Stats, inputs: Inputs) -> list[str]:
         "",
         f"added {len(stats.added_points)} node(s) for places that are not in OSM:",
         *(
-            f"  node/{point.node_id}  {refs.format([point.key])} "
+            f"  {_node(point.node_id)}  {refs.format([point.key])} "
             f"{placelist.describe(by_id[point.key], reg)} at {point.lat:.5f}, {point.lon:.5f}: "
             + ", ".join(
                 f"{k}={v}" for k, v in sorted(point.tags.items()) if not k.startswith("name")
@@ -217,7 +222,8 @@ def _square_lines(stats: Stats, inputs: Inputs, in_file: str) -> list[str]:
         return []
     lines = ["", f"added {len(stats.added_squares)} synthetic polygon(s):"]
     lines += [
-        f"  way/{square.way_id} (node/{square.node_ids[0]}..node/{square.node_ids[-1]})  "
+        f"  {refs.format([('w', square.way_id)])} "
+        f"({_node(square.node_ids[0])}..{_node(square.node_ids[-1])})  "
         f"{square.label or '?'}: {square.km2:g} km²"
         for square in stats.added_squares
     ]
