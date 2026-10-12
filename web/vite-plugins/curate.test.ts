@@ -229,6 +229,14 @@ describe('createCurateMiddleware', () => {
     expect(await readPatchEntries()).toEqual([]);
   });
 
+  it('names the field an entry lacks', async () => {
+    // the schema finds a missing field at the entry, not at the field
+    const res = await post(jsonHeaders, JSON.stringify({ ...localEntry, lon: undefined }));
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'lon: breaks required (curate-patch.schema.json)',
+    });
+  });
+
   it('rejects an entry with a field of another action with 400', async () => {
     const res = await post(jsonHeaders, JSON.stringify({ ...fullEntries.osm, polygon_km2: 2 }));
     expect(res.status).toBe(400);
