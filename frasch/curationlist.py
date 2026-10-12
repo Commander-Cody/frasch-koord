@@ -22,9 +22,10 @@ from __future__ import annotations
 import math
 import os
 from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from typing import NamedTuple, TypedDict
 
-from frasch import refs, tables
+from frasch import files, refs, tables
 from frasch.errors import Invalid, Problem, ValidationError
 from frasch.geo import LonLat
 from frasch.placenames import MAXZOOM_KEY, MINZOOM_KEY
@@ -214,20 +215,24 @@ def rows(path: str) -> tuple[list[Entry], list[Problem]]:
     `minzoom` / `maxzoom` (int or None), `km2` (float or None) and `label`
     (the `name` cell).  Rows without a reference are spacer lines and left
     out."""
-    table = _table(path)
+    return _rows(_table(path))
+
+
+def _rows(table: Table) -> tuple[list[Entry], list[Problem]]:
+    """`rows` of the file as it was read."""
     entries: list[Entry] = []
     problems = list(table.problems)
     seen = _Seen()
     for n, row in table.records():
         entry, found = _entry(n, row, seen)
-        problems += [Problem(path, n, what) for what in found]
+        problems += [Problem(table.path, n, what) for what in found]
         if entry:
             entries.append(entry)
     return entries, tables.by_line(problems)
 
 
-def _valid_entries(path: str) -> list[Entry]:
-    entries, problems = rows(path)
+def _valid_entries(table: Table) -> list[Entry]:
+    entries, problems = _rows(table)
     if problems:
         raise ValidationError(problems)
     return entries
@@ -272,7 +277,7 @@ def read(path: str) -> Curation:
     """The curation; a ValidationError lists every row that breaks the
     rules."""
     curation = Curation({}, {}, {})
-    for e in _valid_entries(path):
+    for e in _valid_entries(_table(path)):
         tags = dict(e["tags"])
         for key, zoom in ((MINZOOM_KEY, e["minzoom"]), (MAXZOOM_KEY, e["maxzoom"])):
             if zoom is not None:
@@ -300,28 +305,48 @@ def local_points(path: str) -> dict[str, LonLat]:
     places OSM does not have; `{}` without the file."""
     if not os.path.exists(path):
         return {}
-    return {local: pos for e in _valid_entries(path) if (local := e["local"]) and (pos := e["pos"])}
+    return _local_points(_valid_entries(_table(path)))
+
+
+def _local_points(entries: Iterable[Entry]) -> dict[str, LonLat]:
+    return {local: pos for e in entries if (local := e["local"]) and (pos := e["pos"])}
 
 
 # -------------------------------------------------------------- appending ---
-def read_bytes(path: str) -> tuple[bytes | None, list[str]]:
-    """-> (the file's bytes, None when it does not exist; its columns).  The
-    columns are the file's own (it is hand-edited, so it may have gained
-    one); COLUMNS are among them."""
+@dataclass(frozen=True)
+class Appendable:
+    """The file as `frasch curate apply` appends to it (`read_for_appending`):
+    read once, so that its new rows land after exactly the bytes whose rows
+    were checked."""
+
+    path: str
+    data: bytes | None  # None: there is no file
+    # its columns: the file's own (it is hand-edited, so it may have gained
+    # one), COLUMNS among them
+    fields: list[str]
+    slugs: frozenset[str]  # the local references it positions
+
+    @property
+    def digest(self) -> str:
+        """What `files.atomic_write` compares against to notice that someone
+        else wrote the file in the meantime."""
+        return files.MISSING if self.data is None else files.digest(self.data)
+
+    def with_rows(self, new_rows: Iterable[Mapping[str, str]]) -> bytes:
+        """The whole file with `new_rows` appended: the old bytes untouched,
+        the new rows in the file's column order; with a header when there
+        was no file."""
+        if self.data is None:
+            return tables.write_rows(self.fields, new_rows)
+        data = self.data if not self.data or self.data.endswith(b"\n") else self.data + b"\n"
+        return data + tables.write_rows(self.fields, new_rows, header=False)
+
+
+def read_for_appending(path: str) -> Appendable:
+    """The file, for rows to be appended to it; a ValidationError lists
+    every row that breaks the rules."""
     if not os.path.exists(path):
-        return None, COLUMNS
+        return Appendable(path, None, COLUMNS, frozenset())
     table = _table(path)
-    if table.problems:
-        raise ValidationError(table.problems)
-    return table.data, table.header
-
-
-def appended(data: bytes | None, fields: list[str], new_rows: Iterable[Mapping[str, str]]) -> bytes:
-    """The whole file with `new_rows` appended: the old bytes (`read_bytes`)
-    untouched, the new rows in the file's column order; with a header when
-    there was no file."""
-    if data is None:
-        return tables.write_rows(fields, new_rows)
-    if data and not data.endswith(b"\n"):
-        data += b"\n"
-    return data + tables.write_rows(fields, new_rows, header=False)
+    slugs = frozenset(_local_points(_valid_entries(table)))
+    return Appendable(path, table.data, table.header, slugs)

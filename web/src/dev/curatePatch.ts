@@ -60,7 +60,7 @@ export function decidedRows(entries: PatchEntry[]): Map<string, PatchEntry> {
   return last;
 }
 
-const WIKIDATA = new RegExp(patchSchema.properties.wikidata.pattern);
+const WIKIDATA = new RegExp(patchSchema.$defs.wikidata.pattern);
 
 /**
  * The Wikidata id an OSM object's `wikidata` tag names, if it names exactly

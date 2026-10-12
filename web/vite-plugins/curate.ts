@@ -5,22 +5,29 @@
  * The browser cannot read or append to files in `names/work/`, so the Vite dev
  * server does it: it hands out the worklist `frasch curate export` wrote and
  * appends every pick to an append-only JSONL patch that `frasch curate apply`
- * consumes. Dev only (`apply: 'serve'`) — a production build has no such thing,
- * which is why the panel tells the user to start the dev server when the fetch
- * fails.
+ * consumes — every pick that keeps the patch's contract, that is
+ * (names/curate-patch.schema.json): `apply` would refuse any other. Dev only
+ * (`apply: 'serve'`) — a production build has no such thing, which is why the
+ * panel tells the user to start the dev server when the fetch fails.
  */
 import { appendFile, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import {
+  registerSchema,
+  validate,
+  type OutputUnit,
+  type SchemaObject,
+  type Validator,
+} from '@hyperjump/json-schema/draft-2020-12';
+import { BASIC } from '@hyperjump/json-schema/experimental';
 import type { Connect, Plugin } from 'vite';
 
 import patchSchema from '../../names/curate-patch.schema.json' with { type: 'json' };
+import { PATCH_FIELDS } from './patchFields.ts';
 
 /** Everything this plugin answers lives under here; anything else falls through. */
 const BASE = '/__curate/';
-
-/** The patch contract's actions: any other would only confuse `apply`. */
-const ACTIONS = new Set<string>(patchSchema.properties.action.enum);
 
 /** A patch entry is a handful of short strings; anything bigger is a mistake. */
 const MAX_BODY = 64 * 1024;
@@ -33,7 +40,7 @@ const MAX_BODY = 64 * 1024;
  * `__proto__`, a key from some other tool poking the endpoint — is dropped
  * rather than carried through.
  */
-const PATCH_ENTRY_KEYS = Object.keys(patchSchema.properties).filter((key) => key !== 'at');
+const PATCH_ENTRY_KEYS = PATCH_FIELDS.filter((key) => key !== 'at');
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   const text = JSON.stringify(body);
@@ -110,6 +117,67 @@ function pickKnownFields(entry: Record<string, unknown>): Record<string, unknown
   return picked;
 }
 
+/** A JSON value, as the validator takes one. */
+type Json = Parameters<Validator>[0];
+
+/** The patch contract compiled, on the first entry posted. */
+let patchValidator: Promise<Validator> | undefined;
+
+function compilePatchValidator(): Promise<Validator> {
+  // Cast through `unknown`: TypeScript gives each object of the imported JSON
+  // the keys of its siblings as `undefined`, which no schema keyword is.
+  registerSchema(patchSchema as unknown as SchemaObject);
+  return validate(patchSchema.$id);
+}
+
+/** The keyword of the schema an error is about: the last step of its location. */
+function ruleOf(error: OutputUnit): string {
+  return error.absoluteKeywordLocation.split('/').at(-1) ?? '';
+}
+
+/**
+ * The error to report. An action's branch that fails evaluates none of its
+ * fields, and the schema then calls every one of them unevaluated too: that
+ * is only the answer when nothing else failed, which is an entry with a field
+ * of another action. (`apply` orders its errors the same way.)
+ */
+function tellingError(errors: OutputUnit[]): OutputUnit {
+  return errors.find((error) => ruleOf(error) !== 'unevaluatedProperties') ?? errors[0];
+}
+
+/**
+ * The value of the keyword an error is about, read off the schema by the
+ * error's location. The steps are taken as they are: no key on the way to a
+ * keyword of this schema needs a JSON pointer's unescaping.
+ */
+function keywordValue(error: OutputUnit): unknown {
+  const steps = error.absoluteKeywordLocation.split('#/')[1].split('/');
+  return steps.reduce<unknown>(
+    (node, step) => (node as Record<string, unknown>)[step],
+    patchSchema,
+  );
+}
+
+/**
+ * The field(s) of `entry` an error is about: the one it was found at, or — a
+ * `required` is found at the entry itself — the ones that are missing.
+ */
+function fieldsOf(error: OutputUnit, entry: Record<string, unknown>): string {
+  if (ruleOf(error) !== 'required') return error.instanceLocation.slice('#/'.length);
+  const required = keywordValue(error) as string[];
+  return required.filter((field) => !Object.hasOwn(entry, field)).join(', ');
+}
+
+/** What breaks names/curate-patch.schema.json in `entry`, or undefined. */
+async function schemaProblem(entry: Record<string, unknown>): Promise<string | undefined> {
+  patchValidator ??= compilePatchValidator();
+  const output = (await patchValidator)(entry as Json, BASIC);
+  if (output.valid) return undefined;
+  const error = tellingError(output.errors ?? []);
+  const fields = fieldsOf(error, entry);
+  return `${fields && `${fields}: `}breaks ${ruleOf(error)} (curate-patch.schema.json)`;
+}
+
 /**
  * Buffers the request body, capped at MAX_BODY. Past the cap it answers 413
  * itself and destroys the request (otherwise the client keeps streaming into
@@ -173,123 +241,159 @@ export interface CuratePaths {
   https?: boolean;
 }
 
+/** Answers one endpoint; what it throws is `failRequest`'s. */
+type RouteHandler = (
+  req: IncomingMessage,
+  res: ServerResponse,
+  paths: CuratePaths,
+) => Promise<void>;
+
+/** `GET /__curate/worklist`: the worklist `frasch curate export` wrote. */
+async function sendWorklist(
+  _req: IncomingMessage,
+  res: ServerResponse,
+  { worklistPath }: CuratePaths,
+): Promise<void> {
+  let text: string;
+  try {
+    text = await readFile(worklistPath, 'utf8');
+  } catch (err) {
+    if (!isMissing(err)) throw err;
+    sendJson(res, 404, { error: 'run frasch curate export' });
+    return;
+  }
+  // Passed through verbatim: the exporter owns the schema.
+  res.statusCode = 200;
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store');
+  res.end(text);
+}
+
+/** `GET /__curate/patch`: every entry stored so far. */
+async function sendPatch(
+  _req: IncomingMessage,
+  res: ServerResponse,
+  { patchPath }: CuratePaths,
+): Promise<void> {
+  let text = '';
+  try {
+    text = await readFile(patchPath, 'utf8');
+  } catch (err) {
+    // No picks yet is the normal first-run state, not an error.
+    if (!isMissing(err)) throw err;
+  }
+  sendJson(res, 200, { entries: parsePatch(text) });
+}
+
+/**
+ * The JSON object a POST carries. A request without one it answers itself
+ * (415, 413, 400) and resolves `undefined`: the response is already sent.
+ */
+async function readPostedObject(
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<Record<string, unknown> | undefined> {
+  // Rejecting anything but the one media type a CORS "simple request" cannot
+  // set is what forces a cross-origin POST through a preflight; see
+  // hasJsonContentType.
+  if (!hasJsonContentType(req)) {
+    sendJson(res, 415, { error: 'Content-Type must be application/json' });
+    return undefined;
+  }
+  const body = await readBody(req, res);
+  // undefined means readBody already answered (413) and closed the
+  // connection; nothing left to do.
+  if (body === undefined) return undefined;
+  let posted: unknown;
+  try {
+    posted = JSON.parse(body);
+  } catch {
+    sendJson(res, 400, { error: 'body is not JSON' });
+    return undefined;
+  }
+  if (!posted || typeof posted !== 'object' || Array.isArray(posted)) {
+    sendJson(res, 400, { error: 'body must be a JSON object' });
+    return undefined;
+  }
+  return posted as Record<string, unknown>;
+}
+
+/** `POST /__curate/patch`: appends the posted entry, if it keeps the contract. */
+async function appendEntry(
+  req: IncomingMessage,
+  res: ServerResponse,
+  { patchPath }: CuratePaths,
+): Promise<void> {
+  const entry = await readPostedObject(req, res);
+  if (entry === undefined) return;
+  // Only known fields survive, and the server's clock — not whatever `at` a
+  // caller may have sent — is the one `apply` can trust; see PATCH_ENTRY_KEYS
+  // and pickKnownFields.
+  const stored = { ...pickKnownFields(entry), at: new Date().toISOString() };
+  // What is stored is what `apply` reads, so that is what must keep the
+  // contract: `apply` refuses a line that does not.
+  const problem = await schemaProblem(stored);
+  if (problem !== undefined) {
+    sendJson(res, 400, { error: problem });
+    return;
+  }
+  // `appendFile` creates the file on first pick, and O_APPEND keeps concurrent
+  // tabs from interleaving half lines.
+  await appendFile(patchPath, `${JSON.stringify(stored)}\n`, 'utf8');
+  sendJson(res, 200, { ok: true, entry: stored });
+}
+
+/** The endpoints under BASE, by method and route. */
+const ROUTES = new Map<string, RouteHandler>([
+  ['GET worklist', sendWorklist],
+  ['GET patch', sendPatch],
+  ['POST patch', appendEntry],
+]);
+
+/** Whether the request is turned away (403) before any endpoint sees it. */
+function isForbidden(req: IncomingMessage, https: boolean): boolean {
+  // LAN safety net, checked before anything else and for every route
+  // (including the read-only GETs): `vite --host` can expose this server
+  // beyond localhost, and none of it is meant for another machine.
+  if (!isLoopbackAddress(req.socket.remoteAddress)) return true;
+  // Browser same-origin check. Applied to every route, not just the POST
+  // that writes: the panel's own GETs are same-origin too, so this costs
+  // it nothing, and a page on another site has no business reading the
+  // worklist or the patch log either.
+  return isCrossOrigin(req, https);
+}
+
+function failRequest(res: ServerResponse, err: unknown): void {
+  // The message can hold an absolute filesystem path; that goes to the
+  // server log only, never into the response.
+  console.error('[curate] request failed', err);
+  sendJson(res, 500, { error: 'internal error' });
+}
+
 /**
  * Builds the request handler, kept separate from `curate()` so tests can
  * drive it directly with fake req/res objects instead of a real Vite dev
  * server. `curate()`'s `configureServer` is the only real caller.
  */
 export function createCurateMiddleware(paths: CuratePaths): Connect.NextHandleFunction {
-  const { worklistPath, patchPath, https = false } = paths;
-
   return (req, res, next) => {
     const url = req.url ?? '';
     if (!url.startsWith(BASE)) {
       next();
       return;
     }
+    if (isForbidden(req, paths.https ?? false)) {
+      sendJson(res, 403, { error: 'forbidden' });
+      return;
+    }
     // Strip a query string / hash; these endpoints take none.
     const route = url.slice(BASE.length).split(/[?#]/)[0];
-
-    // LAN safety net, checked before anything else and for every route
-    // (including the read-only GETs): `vite --host` can expose this server
-    // beyond localhost, and none of it is meant for another machine.
-    if (!isLoopbackAddress(req.socket.remoteAddress)) {
-      sendJson(res, 403, { error: 'forbidden' });
+    const handle = ROUTES.get(`${req.method} ${route}`);
+    if (!handle) {
+      sendJson(res, 404, { error: `unknown endpoint ${BASE}${route}` });
       return;
     }
-
-    // Browser same-origin check. Applied to every route, not just the POST
-    // that writes: the panel's own GETs are same-origin too, so this costs
-    // it nothing, and a page on another site has no business reading the
-    // worklist or the patch log either.
-    if (isCrossOrigin(req, https)) {
-      sendJson(res, 403, { error: 'forbidden' });
-      return;
-    }
-
-    void (async () => {
-      try {
-        if (route === 'worklist' && req.method === 'GET') {
-          let text: string;
-          try {
-            text = await readFile(worklistPath, 'utf8');
-          } catch (err) {
-            if (!isMissing(err)) throw err;
-            sendJson(res, 404, { error: 'run frasch curate export' });
-            return;
-          }
-          // Passed through verbatim: the exporter owns the schema.
-          res.statusCode = 200;
-          res.setHeader('Content-Type', 'application/json; charset=utf-8');
-          res.setHeader('Cache-Control', 'no-store');
-          res.end(text);
-          return;
-        }
-
-        if (route === 'patch' && req.method === 'GET') {
-          let text = '';
-          try {
-            text = await readFile(patchPath, 'utf8');
-          } catch (err) {
-            // No picks yet is the normal first-run state, not an error.
-            if (!isMissing(err)) throw err;
-          }
-          sendJson(res, 200, { entries: parsePatch(text) });
-          return;
-        }
-
-        if (route === 'patch' && req.method === 'POST') {
-          // Rejecting anything but the one media type a CORS "simple
-          // request" cannot set is what forces a cross-origin POST through
-          // a preflight; see hasJsonContentType.
-          if (!hasJsonContentType(req)) {
-            sendJson(res, 415, { error: 'Content-Type must be application/json' });
-            return;
-          }
-          const body = await readBody(req, res);
-          // undefined means readBody already answered (413) and closed the
-          // connection; nothing left to do.
-          if (body === undefined) return;
-          let entry: Record<string, unknown>;
-          try {
-            entry = JSON.parse(body) as Record<string, unknown>;
-          } catch {
-            sendJson(res, 400, { error: 'body is not JSON' });
-            return;
-          }
-          if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
-            sendJson(res, 400, { error: 'body must be a JSON object' });
-            return;
-          }
-          // The row's id is how `apply` finds the row; the line is only
-          // there for its messages.
-          if (typeof entry.id !== 'string' || !entry.id) {
-            sendJson(res, 400, { error: 'id must be the row id, a non-empty string' });
-            return;
-          }
-          if (typeof entry.action !== 'string' || !ACTIONS.has(entry.action)) {
-            sendJson(res, 400, { error: `action must be one of ${[...ACTIONS].join(', ')}` });
-            return;
-          }
-          // Only known fields survive, and the server's clock — not
-          // whatever `at` a caller may have sent — is the one `apply` can
-          // trust; see PATCH_ENTRY_KEYS and pickKnownFields.
-          const stored = { ...pickKnownFields(entry), at: new Date().toISOString() };
-          // `appendFile` creates the file on first pick, and O_APPEND keeps
-          // concurrent tabs from interleaving half lines.
-          await appendFile(patchPath, `${JSON.stringify(stored)}\n`, 'utf8');
-          sendJson(res, 200, { ok: true, entry: stored });
-          return;
-        }
-
-        sendJson(res, 404, { error: `unknown endpoint ${BASE}${route}` });
-      } catch (err) {
-        // The message can hold an absolute filesystem path; that goes to
-        // the server log only, never into the response.
-        console.error('[curate] request failed', err);
-        sendJson(res, 500, { error: 'internal error' });
-      }
-    })();
+    handle(req, res, paths).catch((err: unknown) => failRequest(res, err));
   };
 }
 

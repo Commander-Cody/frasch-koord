@@ -6,12 +6,14 @@ from __future__ import annotations
 import csv
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
-from frasch import dialects, files, update
+from frasch import dialects, files, patch, update
 from frasch.__main__ import main
 from frasch.errors import PipelineError, Problem
+from frasch.paths import StrPath
 from conftest import AREA_LIST, REGISTRY_CSV, TOFTUM_NODE, path_options, places_text
 from conftest import workspace as workspace_of
 from conftest import write_sh_extract
@@ -92,6 +94,14 @@ def test_rows_left_for_review_go_to_the_curation_worklist(workspace: Path) -> No
     assert [r["id"] for r in worklist["rows"]] == ["hesbel"]
 
 
+def test_the_run_says_what_the_worklist_export_wrote(
+    workspace: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    write_places(workspace, HESBEL)
+    run(workspace)
+    assert "== curation worklist\nwrote 1 rows to " in capsys.readouterr().out
+
+
 def test_an_ambiguous_row_goes_to_the_curation_worklist_with_its_candidates(
     workspace: Path,
 ) -> None:
@@ -133,6 +143,23 @@ def test_a_refused_curation_decision_does_not_stop_the_run(
     index = json.loads(index_file(workspace).read_text(encoding="utf-8"))
     assert [e["id"] for e in index["places"]] == ["toftem"]
     assert "refused" in capsys.readouterr().out
+
+
+def test_a_curation_apply_that_fails_says_what_became_of_the_patch(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    write_places(workspace, TOFTEM)
+    decisions = workspace / "work" / "curate-patch.jsonl"
+    decisions.write_text(json.dumps({"id": "toftem", "action": "skip"}) + "\n", encoding="utf-8")
+    read_patch = patch.read_patch
+
+    def while_a_spreadsheet_saves(path: StrPath, *args: Any) -> list[patch.PatchLine]:
+        write_places(workspace, TOFTEM, HESBEL)
+        return read_patch(path, *args)
+
+    monkeypatch.setattr(patch, "read_patch", while_a_spreadsheet_saves)
+    run(workspace)
+    assert f"nothing applied -- {decisions} restored\n" in capsys.readouterr().err
 
 
 def test_a_curation_apply_that_cannot_run_stops_the_run(

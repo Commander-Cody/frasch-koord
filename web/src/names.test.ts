@@ -433,7 +433,7 @@ describe('osmUrl', () => {
 // The schema also takes the empty string (an empty cell), which wikidataUrl
 // turns away before it tests, so the samples are all non-empty.
 describe('WIKIDATA_ID', () => {
-  const schema = new RegExp(patchSchema.properties.wikidata.pattern);
+  const schema = new RegExp(patchSchema.$defs.wikidata.pattern);
 
   it.each(['Q1', 'Q42', 'Q559369', 'q42', 'Q', 'Q4a', ' Q42', 'P31', 'Q-1'])(
     'takes %j exactly when the patch schema does',

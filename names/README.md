@@ -403,7 +403,10 @@ place OSM does not have. A decision replaces all three cells: nothing of what
 the matcher had given the row stays beside it — not its Wikidata item when
 you pick another object, and no reference at all on a row you skip. It touches only the rows `frasch match` owns and refuses
 the rest, as it does a decision for an object or Wikidata item another row
-already claims. It renames the patch file before reading it (`--keep` leaves it), so
+already claims. Which fields a decision has is the schema's to say
+(`curate-patch.schema.json`: one branch per action — what it needs, and the
+only other fields it may carry); the dev server stores no entry that breaks
+it, and `apply` refuses a line that does. It renames the patch file before reading it (`--keep` leaves it), so
 decisions made while it runs go to a fresh patch; refused entries are appended
 back to it. Re-run `frasch match` afterwards and export again.
 
@@ -695,7 +698,7 @@ references: coordinates and tag fixes belong in `curation.csv` and the build.
 | `REPORT.md` | generated, **committed**: the matcher's worklist, stamped with what it was written from |
 | `work/` | git-ignored caches (candidates, the last run's `matches.jsonl`, Wikidata lookups) and the curation view's `curate.json` / `curate-patch.jsonl` |
 | `bootstrap/` | the original sheet export (`sheet-export.csv`) |
-| `curate-patch.schema.json` | the JSON Schema of one line of `work/curate-patch.jsonl`: the contract between the curation view, the Vite dev server and `frasch curate apply` |
+| `curate-patch.schema.json` | the JSON Schema of one line of `work/curate-patch.jsonl`, with a branch per action: the contract between the curation view, the Vite dev server and `frasch curate apply`, both of which check an entry against it |
 | `curate-worklist.schema.json` | the JSON Schema of `work/curate.json`: the contract between `frasch curate export` and the curation view |
 | `search-index.schema.json` | the JSON Schema of `web/public/data/names.json`: the contract between `frasch build index` and the web app |
 | `dialect-area-parts.schema.json` | the JSON Schema of `dialect_areas_parts.geojson`: the contract between `frasch build areas` and the `?areas` review view |
@@ -740,7 +743,11 @@ default is the repository's layout, whatever the working directory.
 
 Library code raises (`frasch.errors`: a `ValidationError` lists every
 `Problem` — file, line, message — a reader found in a hand-edited file); only
-a command's `main()` turns that into a message and exit status 1. Nothing is read at import: whatever needs the dialect registry takes
+a command's `main()` turns that into a message and exit status 1. It does
+not print either: what it has to say it returns (`curate.apply` an
+`ApplyReport`, `worklist.export` an `ExportReport`) or, on its way out with
+an error, adds to it as a note; a command prints both (`cli.say`,
+`errors.text`). Nothing is read at import: whatever needs the dialect registry takes
 it as a parameter, and every command reads it from `--dialects`.
 
 Everything is typed and checked by `mypy --strict` in CI (tests included).
@@ -755,7 +762,7 @@ references of their `osm` cell.
 |---|---|
 | `__main__` | the command table: which module's `main()` each command runs |
 | `paths` | `Workspace`, one attribute per file of the pipeline; `Workspace.default()` is the repository's layout |
-| `errors`, `cli` | what library code raises; the `main()` wrapper that turns it into an exit status; `add_workspace_options`, the path flags above |
+| `errors`, `cli` | what library code raises; the `main()` wrapper that turns it into an exit status; `say`, which prints what a library call reports; `add_workspace_options`, the path flags above |
 | `files` | atomic writes, the fingerprints that notice a file someone else saved meanwhile, and the lock that keeps `match` and `curate apply` apart |
 | `tables` | the one parser and writer of the four hand-edited CSV files: byte order mark, `;`-separated export, the header's columns, the cell count and line of every row |
 | `dialects` | the dialect registry: the one reader of `dialects.csv`, its export for the frontend, `frasch dialects` |
@@ -763,7 +770,7 @@ references of their `osm` cell.
 | `namecell` | the grammar of a name cell: variants, the primary one, remarks |
 | `kinds` | the kinds of the name list, one `KindRule` each: which OSM objects can be one, which of them is the feature and carries the name, the default `place=` of a local reference, the review order |
 | `placelist` | the name list `places.csv`: its columns, its rows, the state each is in (`state`) and what they claim (`claims`, `on_map`), the `Reference` the matcher and `curate apply` write, ids, reading it as a `PlaceList` and writing it back |
-| `curationlist` | the one reader of `curation.csv`, and appending to it |
+| `curationlist` | the one reader of `curation.csv`, and appending to it (`read_for_appending`: read once, the new rows land after the bytes that were checked) |
 | `dialect_areas` | which dialect is spoken where: the one reader of `dialect_areas.csv` (`area_rows`), the area lookup (`AreaIndex`) and `dialect_at`, the dialect where an object lies |
 | `objects` | the objects file `osm_objects.json`: what it records, reading and writing it |
 | `placeobjects` | the objects of the name list's rows: which references the file is located for, the one message for a reference it has no object for, the object a row's entry stands for (`for_row`) |
@@ -771,16 +778,19 @@ references of their `osm` cell.
 | `geo` | the North Frisia box, its centre, haversine, and what an unknown distance counts as |
 | `osmtags` | the OSM tags the pipeline reads, each list once: the name tags and their ranks, the class tags, the `place` values of a settlement and of an island |
 | `osmscan`, `osmgeom` | the id-filtered passes over an extract; ring assembly and polygons |
-| `candidates`, `nameindex`, `hints` | the candidates file, the matcher's index of them by name, location hints |
+| `candidates`, `nameindex`, `hints` | the candidates file, the source a candidate is from (`source`) and which one is Schleswig-Holstein (`is_sh`); the matcher's index of the candidates by name; location hints |
 | `clusters` | which candidates describe one feature (`cluster`, `same_feature`), and where a feature lies against a hint and North Frisia |
 | `wikidata` | the Wikidata items of countries by German name: the API lookup and its cache |
 | `matchresult` | what the matcher makes of a row: `MatchResult`, its `Outcome`, a `RankedCandidate` |
 | `matchfile` | `work/matches.jsonl`, the result of every row the matcher owns: writing it (`frasch match`) and reading it (`frasch curate export`) |
 | `matchreport` | `REPORT.md`: rendering it, its stamp, the warning for candidates from another set of extracts |
+| `worklist` | `work/curate.json`, the rows left for the curation view: its types and `export` (`frasch curate export`) |
+| `patch` | `work/curate-patch.jsonl`, the curation view's decisions: reading it (the last line per row), checking a line against its schema, taking the file out of the browser's way and putting it back |
+| `decisions` | what a decision makes of its row: `ACTIONS`, one entry per action of the patch schema — the row's new `Reference`, a local place's curation row, the log text — and `owner_problem` |
 | `searchindex` | builds and writes the search index |
 | `provenance` | `Stamp`, what a generated file was built from: making one, reading it from any stamped file, comparing two; printing the tiles' (`frasch provenance`) |
 | `locate` | locates the name list's objects in the extracts, for `frasch build objects` |
 | `pipeline` | the table of the generated files (`OUTPUTS`): what builds each, from what, and when it is stale; `frasch build` |
 | `check_inputs`, `check_outputs` | `frasch check-inputs` and `check-outputs` |
 | `match` | the matcher's decision for a row (`match_row`), what other rows hold (`Claimed`), and the `frasch match` command, which reads and writes through the modules above |
-| the rest | the commands' own modules: `update`, `build_candidates`, `curate`, `build_dialect_areas` (`areas`), `inject_names` (`inject`), `check_tiles` (`check-tiles`) |
+| the rest | the commands' own modules: `update`, `build_candidates`, `curate` (with `apply`, the transaction that writes the decisions), `build_dialect_areas` (`areas`), `inject_names` (`inject`), `check_tiles` (`check-tiles`) |

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from collections.abc import Iterator, Sequence
 from typing import TypedDict
 
@@ -21,15 +22,29 @@ from frasch.provenance import BuiltFrom, ExtractStamp, Stamp, unstamped
 from frasch.refs import OsmRef
 
 
-# The extract (`src` of a candidate) the tiles are built from: only its
-# objects can carry an injected name, so it is what "in Schleswig-Holstein"
-# means for the curation view.  An object near the border can come from both.
-SH_SRC = "schleswig-holstein"
+# Geofabrik's file of a region ends in the day it is of: `-latest`, or the
+# day of a snapshot (`-260923`, see tiles/fetch.sh)
+_DAY = re.compile(r"-(?:latest|\d{6})$")
+_SH = "schleswig-holstein"
+
+
+def source(extract: StrPath) -> str:
+    """The `src` of the candidates found in an extract: its region, as
+    Geofabrik's file names it, whatever day the file is of --
+    `schleswig-holstein` for `schleswig-holstein-latest.osm.pbf`."""
+    return _DAY.sub("", os.path.basename(extract).split(".")[0])
+
+
+def is_sh(src: str) -> bool:
+    """Whether a source is the Schleswig-Holstein extract: what the curation
+    view's "select all in Schleswig-Holstein" goes by (`in_sh` of a
+    candidate in the worklist)."""
+    return src == _SH
 
 
 class Candidate(TypedDict):
-    """One candidate record.  `src` is the extract it was found in (its
-    file name up to `-latest`); `lon`/`lat` are None for an object the scan
+    """One candidate record.  `src` is the extract it was found in
+    (`source`); `lon`/`lat` are None for an object the scan
     could not place; `tags` are those of its tags the pipeline reads
     (frasch.osmtags.KEPT_KEYS)."""
 

@@ -286,9 +286,8 @@ def run(ws: Workspace, pbfs: Sequence[str], index: str = "flex_mem") -> None:
             json.dumps(candidates.header(osmscan.extract_stamps(pbfs)), ensure_ascii=False) + "\n"
         )
         for p in pbfs:
-            src = os.path.basename(p).split("-latest")[0].split(".")[0]
             print(f"scanning {p} ...", file=sys.stderr)
-            process(p, src, fh, counts, index)
+            process(p, candidates.source(p), fh, counts, index)
 
     print(f"\nwrote {counts['_total']:,} candidates to {ws.candidates} in {time.time() - t0:.0f}s")
     print(

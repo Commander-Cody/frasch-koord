@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import patchSchema from '../../../names/curate-patch.schema.json';
+import { PATCH_FIELDS } from '../../vite-plugins/patchFields.ts';
 import { decidedRows, singleWikidataId, type PatchEntry } from './curatePatch';
 
 function decision(
@@ -83,7 +84,7 @@ describe('PatchEntry', () => {
       note: true,
       at: true,
     };
-    expect(Object.keys(fields).sort()).toEqual(Object.keys(patchSchema.properties).sort());
+    expect(Object.keys(fields).sort()).toEqual([...PATCH_FIELDS].sort());
   });
 
   it('has exactly the actions of the patch schema', () => {

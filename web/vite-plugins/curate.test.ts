@@ -5,7 +5,8 @@
  * Content-Type / Origin / Sec-Fetch-Site / loopback gates on `/__curate/`,
  * the known-field allowlist on a stored patch entry, the oversized-body 413,
  * and that a 500 never echoes the underlying error (which can hold an
- * absolute filesystem path).
+ * absolute filesystem path). And that an entry is stored only if it keeps the
+ * patch contract (names/curate-patch.schema.json).
  */
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -15,6 +16,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createCurateMiddleware } from './curate.ts';
+import { PATCH_FIELDS } from './patchFields.ts';
 import patchSchema from '../../names/curate-patch.schema.json' with { type: 'json' };
 
 /** A response, as seen by whoever called `.end()` on it. */
@@ -117,6 +119,14 @@ describe('createCurateMiddleware', () => {
     de: 'Alkersum',
     action: 'skip',
   };
+  const localEntry = { ...validEntry, action: 'local', slug: 'alkersem', lat: 54.7, lon: 8.5 };
+  /** A valid entry per action of the schema, with every field the action may carry. */
+  const fullEntries: Record<string, Record<string, unknown>> = {
+    osm: { ...validEntry, action: 'osm', osm: 'way/1', wikidata: 'Q559369', note: 'the church' },
+    local: { ...localEntry, polygon_km2: 2, note: 'gone since 1634' },
+    skip: { ...validEntry, note: 'not a place' },
+    clear: { ...validEntry, action: 'clear' },
+  };
   const jsonHeaders = { 'content-type': 'application/json' };
 
   it('rejects a non-JSON Content-Type with 415, and appends nothing', async () => {
@@ -152,7 +162,7 @@ describe('createCurateMiddleware', () => {
   });
 
   it('accepts a same-origin JSON POST, storing only the known fields', async () => {
-    const entry = { ...validEntry, osm: 'node/1', evil: 'dropped' };
+    const entry = { ...validEntry, action: 'osm', osm: 'node/1', evil: 'dropped' };
     const res = await post(
       { ...jsonHeaders, host: 'localhost:5173', origin: 'http://localhost:5173' },
       JSON.stringify(entry),
@@ -173,26 +183,62 @@ describe('createCurateMiddleware', () => {
     );
   });
 
-  it('keeps every field the patch schema defines, and sets `at` itself', async () => {
-    // One value per schema property, whatever its type: the whitelist is
-    // about names, and the schema is what `apply` validates against.
-    const entry: Record<string, unknown> = Object.fromEntries(
-      Object.keys(patchSchema.properties).map((key) => [key, `${key}-value`]),
-    );
-    const res = await post(jsonHeaders, JSON.stringify({ ...entry, ...validEntry, at: 'forged' }));
-    expect(res.status).toBe(200);
+  it('keeps every field the patch schema defines', async () => {
+    // No entry has them all, each action having its own: the fields are
+    // those of the entries together.
+    for (const entry of Object.values(fullEntries)) {
+      await post(jsonHeaders, JSON.stringify(entry));
+    }
+    const stored = (await readPatchEntries()).flatMap((entry) => Object.keys(entry));
+    expect([...new Set(stored)].sort()).toEqual([...PATCH_FIELDS].sort());
+  });
+
+  it('sets `at` itself, whatever the caller sent', async () => {
+    await post(jsonHeaders, JSON.stringify({ ...validEntry, at: 'forged' }));
     const [stored] = await readPatchEntries();
-    expect(Object.keys(stored).sort()).toEqual(Object.keys(patchSchema.properties).sort());
     expect(stored.at).not.toBe('forged');
   });
 
   it.each(patchSchema.properties.action.enum)('accepts the schema action %s', async (action) => {
-    const res = await post(jsonHeaders, JSON.stringify({ ...validEntry, action }));
+    const res = await post(jsonHeaders, JSON.stringify(fullEntries[action]));
     expect(res.status).toBe(200);
   });
 
   it('rejects an action the schema does not list with 400', async () => {
     const res = await post(jsonHeaders, JSON.stringify({ ...validEntry, action: 'delete' }));
+    expect(res.status).toBe(400);
+    expect(await readPatchEntries()).toEqual([]);
+  });
+
+  it('rejects a local entry of zero area with 400, and appends nothing', async () => {
+    const res = await post(jsonHeaders, JSON.stringify({ ...localEntry, polygon_km2: 0 }));
+    expect(res.status).toBe(400);
+    expect(await readPatchEntries()).toEqual([]);
+  });
+
+  it('names the field and the rule of the schema it breaks', async () => {
+    const res = await post(jsonHeaders, JSON.stringify({ ...localEntry, polygon_km2: 0 }));
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'polygon_km2: breaks exclusiveMinimum (curate-patch.schema.json)',
+    });
+  });
+
+  it('rejects an entry without a field its action requires with 400', async () => {
+    const res = await post(jsonHeaders, JSON.stringify({ ...localEntry, lon: undefined }));
+    expect(res.status).toBe(400);
+    expect(await readPatchEntries()).toEqual([]);
+  });
+
+  it('names the field an entry lacks', async () => {
+    // the schema finds a missing field at the entry, not at the field
+    const res = await post(jsonHeaders, JSON.stringify({ ...localEntry, lon: undefined }));
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'lon: breaks required (curate-patch.schema.json)',
+    });
+  });
+
+  it('rejects an entry with a field of another action with 400', async () => {
+    const res = await post(jsonHeaders, JSON.stringify({ ...fullEntries.osm, polygon_km2: 2 }));
     expect(res.status).toBe(400);
     expect(await readPatchEntries()).toEqual([]);
   });

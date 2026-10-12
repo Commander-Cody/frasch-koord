@@ -1,5 +1,5 @@
 """names/work/matches.jsonl -- what the last `frasch match` made of every row
-it owns, as frasch.match writes it and the curation export (frasch.curate)
+it owns, as frasch.match writes it and the curation export (frasch.worklist)
 reads it.  Git-ignored: it says what a run did, a dry run included, and is
 thrown away with the next.
 
@@ -44,7 +44,7 @@ from frasch.paths import StrPath
 #           an object without a position
 #   lon, lat, tags
 #           where it is, and its decisive tags (`osmtags.decisive`)
-#   in_sh   whether it is in the extract the tiles are built from
+#   in_sh   whether it is in the Schleswig-Holstein extract
 #   rank    how good the name hit is that found it (lower = better)
 #   wikidata
 #           its `wikidata` tag, left out when it has none
@@ -113,7 +113,7 @@ def _listed(c: RankedCandidate, index: NameIndex) -> ListedCandidate:
         "lon": c["lon"],
         "lat": c["lat"],
         "tags": osmtags.decisive(tags),
-        "in_sh": candidates.SH_SRC in index.sources.get(osm_key(c), ()),
+        "in_sh": any(map(candidates.is_sh, index.sources.get(osm_key(c), ()))),
         "rank": c["rank"],
     }
     if tags.get(osmtags.ITEM_KEY):

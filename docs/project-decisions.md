@@ -1044,6 +1044,82 @@ cell, which the export parsed back before reading the candidates file again.
   id. After the change, `curate export` needs one `frasch match` run: it does
   not read an old `work/matches.csv`.
 
+## Decided 2026-10-12: curation by concern, one action table, the rules of an action in the schema (issue #99)
+
+`curate.py` was four modules. A patch action was told apart in four places,
+what it requires was checked by hand in Python and not at all by the dev
+server, which stored entries that `apply` then refused.
+
+| was | is |
+|---|---|
+| `curate.WorkRow`, `WorkCandidate`, `Worklist`, `export` | `frasch/worklist.py` |
+| `curate.PatchEntry`, `EntryLine`, `RefusedLine`, `read_patch`, `patch_lines`, `schema_problem`, `_take_snapshot`, `append_back`, `restore_patch` | `frasch/patch.py` |
+| `curate.owner_problem`, `decide`, `decide_local`, `_decide_entry`, `_decide_row`, `decision_text`, `curation_name` | `frasch/decisions.py`: `owner_problem`, `ACTIONS`, `Decision`, `curation_name` |
+| `curate.apply`, `_apply` (56 lines), the command | `frasch/curate.py`: the command, and `apply` as a transaction of short steps |
+| `curationlist.read_bytes`, `appended` | `curationlist.read_for_appending` → `Appendable` |
+| `candidates.SH_SRC`, the `-latest` split in `build_candidates` | `candidates.source`, `candidates.is_sh` |
+
+- **An action's fields are stated once, in the schema.**
+  `curate-patch.schema.json` has a branch per action that names the fields
+  the action needs and the only others it may carry (owner's choice: its own
+  fields only — an `osm` entry with a `polygon_km2` is refused, a `clear`
+  carries nothing):
+
+  | action | needs | may carry |
+  |---|---|---|
+  | `osm` | `osm` | `wikidata`, `note` |
+  | `local` | `slug`, `lat`, `lon` | `polygon_km2`, `note` |
+  | `skip` | | `note` |
+  | `clear` | | |
+
+  The branches are `allOf` of `if` / `then`, not the `oneOf` the issue
+  named: against a `oneOf` every validator tried answers "matches none of
+  the branches" instead of the rule that is broken. An action no `if` knows
+  matches none, so the `action` enum stays. A branch that fails evaluates
+  none of its fields, and `unevaluatedProperties` then reports them all as
+  well; `patch.schema_problem` and the dev server both name that error only
+  when there is no other.
+- **One table tells the actions apart.** `decisions.ACTIONS` maps an action
+  to what it makes of an entry for its row: the row's new `Reference`, the
+  curation row of a local place, the remark of its log line. It writes
+  nothing; `apply` does. `clear` is `None`: reading the patch has withdrawn
+  the decision already. A new action is one entry of the table, its name in
+  the schema's enum and its branch. What `apply` still checks is what needs
+  the lists: the row is the matcher's, the slug is free, nobody else holds
+  the object, and `osm` names an OSM object.
+- **The dev server refuses what `apply` would refuse by the schema.**
+  `POST /__curate/patch` validates the entry as it stores it against the
+  same schema file and answers 400 with the reason. It checked `id` and
+  `action` by hand before and let `polygon_km2: 0` through, which the view
+  then showed as done. The validator is `@hyperjump/json-schema`, a dev
+  dependency of `web/` (owner's choice; Ajv was turned down for its
+  maintenance, `json-schema-library` got one of eleven probe entries
+  wrong). The view's own form is unchanged: it shows the refusal.
+- **Library code returns what it has to say** (as the matcher since #98).
+  `curate.apply` returns an `ApplyReport` — rows applied, refusals with
+  their reasons, the log, the warnings — and `worklist.export` an
+  `ExportReport` (owner's choice: export too); `frasch curate` and `frasch
+  update` print them with `cli.say`. An apply that fails has no report to
+  return: what it had to say until then -- its warnings, the decisions, what
+  became of `curation.csv` and of the patch -- are notes on the error it
+  lets pass (`add_note`), which a command prints under the message
+  (`errors.text`). The printed text is what it was, but for that: the lines
+  of a failed apply come after the error and as errors, no longer before it
+  on the standard output.
+- **Smaller.** `curate.json` replaces the old file in one step; the dev
+  server may be handing it out. `curation.csv` is read once by `apply`, as
+  its comment said while the code read it twice. Candidates of a snapshot
+  extract (`schleswig-holstein-260923.osm.pbf`) marked nothing `in_sh`: the
+  source was the file name up to `-latest`.
+- **Names.** Of the seven things called "decide", the four of the curation
+  are gone: two into the table, and `apply` enters a patch line into its
+  row (`_enter_patch`, `_enter_line`). `match._decide`, `match._decide_by_rank` and the
+  detail view's `decide` callback keep their names (owner's choice): each is
+  the only one of its file.
+- **No generated file is part of the change**, and nothing `apply` took
+  before is refused now but a line with a field of another action, which
+  the view never wrote.
+
 ## Remaining open questions
 1. Hosting provider for the site (R2 + Pages proposed, nothing set up yet); the tiles are GitHub release assets for now (issue #28).
 2. When to do the planet build (needs the VM; only after the North Frisia build looks right).

@@ -1,6 +1,6 @@
 """What the matcher makes of a row: the result of `frasch.match`'s decision,
 as the matches file (frasch.matchfile), the report (frasch.matchreport) and
-the curation export (frasch.curate) read it."""
+the curation export (frasch.worklist) read it."""
 
 from __future__ import annotations
 

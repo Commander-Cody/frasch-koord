@@ -5,7 +5,7 @@ it is, and the `place` values of a settlement and of an island.
 The candidate scan (frasch.build_candidates) keeps exactly these tags of an
 object, the name index (frasch.nameindex) and the kind rules (frasch.kinds)
 read them, and the curation view gets the lists with its worklist
-(frasch.curate).
+(frasch.worklist).
 """
 
 from __future__ import annotations
