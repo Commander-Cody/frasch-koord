@@ -1,6 +1,5 @@
 """names/work/candidates.jsonl -- every OSM object that could be a place,
-as frasch.build_candidates writes it and frasch.match and the curation
-export (frasch.curate) read it.
+as frasch.build_candidates writes it and frasch.match reads it.
 
   first line  {"header": {"extracts": [{"file", "replication_timestamp"}, ...]}}
               -- the stamp of the extracts it was built from
@@ -12,12 +11,20 @@ export (frasch.curate) read it.
 from __future__ import annotations
 
 import json
+import os
 from collections.abc import Iterator, Sequence
 from typing import TypedDict
 
+from frasch.errors import PipelineError, rebuild
 from frasch.paths import StrPath
-from frasch.provenance import BuiltFrom, ExtractStamp, Stamp
+from frasch.provenance import BuiltFrom, ExtractStamp, Stamp, unstamped
 from frasch.refs import OsmRef
+
+
+# The extract (`src` of a candidate) the tiles are built from: only its
+# objects can carry an injected name, so it is what "in Schleswig-Holstein"
+# means for the curation view.  An object near the border can come from both.
+SH_SRC = "schleswig-holstein"
 
 
 class Candidate(TypedDict):
@@ -41,6 +48,17 @@ class HeaderLine(TypedDict):
 def header(extracts: Sequence[ExtractStamp]) -> HeaderLine:
     """The first line of candidates.jsonl: the extracts, in the order read."""
     return {"header": Stamp.of({}, extracts).as_json()}
+
+
+def extracts(path: StrPath) -> Sequence[ExtractStamp]:
+    """The extracts a candidates.jsonl was built from, as its header names
+    them.  Stops when there is no file, or it does not name its extracts."""
+    if not os.path.exists(path):
+        raise PipelineError(f"{path} not found -- build it with {rebuild('candidates')}")
+    stamp = Stamp.read(path)
+    if stamp is None:
+        raise unstamped(path, "candidates")
+    return stamp.extracts or []
 
 
 def read_records(path: StrPath) -> Iterator[Candidate]:

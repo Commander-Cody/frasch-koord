@@ -18,7 +18,7 @@ names/curation.csv       per-OSM-object map tuning (hand-edited, in git)
         |  frasch build areas    ->  names/dialect_areas.geojson (in git)
         v
 names/REPORT.md          generated worklist: what is still unmatched (in git)
-names/work/matches.csv   generated details of the last match run (git-ignored)
+names/work/matches.jsonl generated details of the last match run (git-ignored)
         |
         |  frasch build index     ->  web/public/data/names.json (in git)
         |  frasch build dialects  ->  web/src/generated/dialects.json (in git)
@@ -59,7 +59,7 @@ are gone from the tree; `git show b602a3f:names/bootstrap/` lists them.
 | `wikidata` | Wikidata item. The injector also tags every place-like OSM object (`place`, `boundary`, `natural`, `water`, `waterway`) with this `wikidata` tag; for the countries, which have no `osm`, it is the only key. Empty for a `local/` row. |
 | `status` | `auto` — `frasch match` filled `osm`/`wikidata` and will recompute them next run. `ok` — a human checked the row. `skip` — never put on the map. Empty — nothing decided yet (or, with `osm` filled by hand, simply yours). |
 | `note` | free text for you. `frasch match` never writes here. The import put `uncertain` here for names the sheet marked with `?`. |
-| `id` | the row's own key, e.g. `naibel`, `schorkewarw-2`: lowercase ascii letters, digits, hyphens, unique. Everything else names the row by it — `work/matches.csv`, `REPORT.md`, the curation worklist and patch, the search index (`?place=` links) and the tiles (`frasch:ref`) — so adding, deleting or moving rows, or correcting a name, never changes another row's identity. **Leave it empty on a new row** and run `frasch check-inputs --fix`, which fills it from the Frisian name (German, then Danish, when there is none; `-2`, `-3` on repeats). Never change an id once written: it would break the share links to that place. |
+| `id` | the row's own key, e.g. `naibel`, `schorkewarw-2`: lowercase ascii letters, digits, hyphens, unique. Everything else names the row by it — `work/matches.jsonl`, `REPORT.md`, the curation worklist and patch, the search index (`?place=` links) and the tiles (`frasch:ref`) — so adding, deleting or moving rows, or correcting a name, never changes another row's identity. **Leave it empty on a new row** and run `frasch check-inputs --fix`, which fills it from the Frisian name (German, then Danish, when there is none; `-2`, `-3` on repeats). Never change an id once written: it would break the share links to that place. |
 
 The sheet's other columns (inhabitant adjectives, Low German, South Jutish,
 old names, sources) were deliberately not imported: the map does not use them.
@@ -318,7 +318,7 @@ a later run gets candidates from another set of extract files than the
 report names (a newer download of the same extract is fine).
 
 `frasch match --dry-run` shows what a run would do and writes only the
-git-ignored `work/matches.csv` — neither `places.csv` nor `REPORT.md`.
+git-ignored `work/matches.jsonl` — neither `places.csv` nor `REPORT.md`.
 `REPORT.md` carries no date, so a real run on unchanged inputs leaves it
 unchanged too. Its last line is a comment with the stamp of what it was
 written from: `places.csv` as the run left it, `dialects.csv` and the
@@ -345,9 +345,13 @@ What a row is follows from its cells alone, and one function says it
 | `auto` | was filled by the matcher | auto |
 | `open` | has nothing in it yet | ambiguous / not found |
 
-The matcher owns the `auto` and the `open` rows. `work/matches.csv` gives, in
-`result`, what the run made of a row it owns (`matched`, `ambiguous`,
-`not_found`, `lookup_failed`) and the state of any other.
+The matcher owns the `auto` and the `open` rows. `work/matches.jsonl` has one
+line (a JSON object) for each of them: in `result` what the run made of the
+row (`matched`, `ambiguous`, `not_found`, `lookup_failed`), in `why` the
+matcher's remark, the reference a matched row gets — also after a
+`--dry-run`, which writes it nowhere else — where the row's hint points, and
+every candidate a reviewer should see, with its position and tags
+(`frasch/matchfile.py` lists the keys).
 
 A country row is matched through Wikidata (answers cached in
 `work/wikidata-countries.json`). If the lookup fails, or `--offline` finds no
@@ -357,7 +361,7 @@ damaged cache file stops the run (delete it to query again).
 `frasch match` and `frasch curate apply` write `places.csv` in one step, so an
 interrupted run never leaves it half written, and they refuse to write when
 the file changed on disk while they ran (a spreadsheet saved it, say):
-`places.csv` stays as it was, re-run. `frasch match` writes `work/matches.csv`
+`places.csv` stays as it was, re-run. `frasch match` writes `work/matches.jsonl`
 (in one step too) before `places.csv`, so a run that cannot write it leaves
 `places.csv` alone. They also take `work/.lock`, so only one of them runs at
 a time.
@@ -367,7 +371,12 @@ and the *not found* rows with near misses. Resolve a row by writing the right
 `osm` reference into `places.csv` (and `ok` into `status` if you like), or
 `skip` if it should never appear. When the list has a place twice, the first
 of the two rows gets the object and the second is *not found*, with
-"… is taken by line N" as its note: `skip` one of them.
+"… is taken by row `<id>`" as its note: `skip` one of them. That holds for
+the whole feature, not only the one object: the second row gets neither the
+ways of a river whose relation the first got, nor the municipality of a
+village whose node it got. Only an object the second row finds by a mere
+`alt_name` or `old_name` does not stand in its way, unless a human gave it to
+the other row.
 
 **Review on the map** — the same worklist as pins, which is usually faster
 than looking every candidate up on openstreetmap.org:
@@ -380,7 +389,8 @@ uv run frasch curate apply
 ```
 
 `export` writes every ambiguous and not-found row the matcher still owns, with
-its candidates' positions and its location hint, to `work/curate.json`
+its candidates' positions and its location hint — as the matcher left them in
+`work/matches.jsonl`; it reads no candidates itself — to `work/curate.json`
 (`curate-worklist.schema.json` says what is in it); rows
 deleted from `places.csv` since the match run are dropped with a note (re-run
 `frasch match`). In the browser you pick a candidate, drop a point of your own, or
@@ -683,7 +693,7 @@ references: coordinates and tag fixes belong in `curation.csv` and the build.
 | `dialect_areas.geojson` | generated, **committed**: one polygon set per dialect — the lookup file |
 | `dialect_areas_parts.geojson` | generated, **committed**: one polygon per municipality with its `note`, plus the unassigned ones; for the `?areas` review view only, never read by Python |
 | `REPORT.md` | generated, **committed**: the matcher's worklist, stamped with what it was written from |
-| `work/` | git-ignored caches (candidates, matches, Wikidata lookups) and the curation view's `curate.json` / `curate-patch.jsonl` |
+| `work/` | git-ignored caches (candidates, the last run's `matches.jsonl`, Wikidata lookups) and the curation view's `curate.json` / `curate-patch.jsonl` |
 | `bootstrap/` | the original sheet export (`sheet-export.csv`) |
 | `curate-patch.schema.json` | the JSON Schema of one line of `work/curate-patch.jsonl`: the contract between the curation view, the Vite dev server and `frasch curate apply` |
 | `curate-worklist.schema.json` | the JSON Schema of `work/curate.json`: the contract between `frasch curate export` and the curation view |
@@ -706,7 +716,7 @@ the commands.
 | `build` | `just rebuild <name>`: builds one generated file of the table — `candidates`, `report`, `objects` (OSM extracts → `osm_objects.json`: where each object of the name list is), `areas`, `dialects` (→ `web/src/generated/dialects.json`) or `index` (`places.csv` + `osm_objects.json` + `dialect_areas.geojson` → `web/public/data/names.json`: every dialect name, the local form, OSM's Low Saxon name, German, Danish, the QID; keyed by the row `id`, the same string the tiles carry as `frasch:ref`; stamped with `built_from`) |
 | `check-inputs` | `just check-inputs`: checks the hand-edited files, every problem with its line (`--fix` gives new rows an id) |
 | `candidates` | OSM extract(s) → `work/candidates.jsonl`, with the scan's own options |
-| `match` | fills `osm`/`wikidata` in `places.csv`; writes `work/matches.csv` and `REPORT.md` (`--dry-run`: only `work/matches.csv`) |
+| `match` | fills `osm`/`wikidata` in `places.csv`; writes `work/matches.jsonl` and `REPORT.md` (`--dry-run`: only `work/matches.jsonl`) |
 | `curate` | the review worklist as pins on the map: `export` → `work/curate.json`, `apply` writes the browser's decisions back into `places.csv` / `curation.csv` |
 | `areas` | `dialect_areas.csv` + OSM extract → `dialect_areas.geojson` + `dialect_areas_parts.geojson`, with the build's own options |
 | `dialects` | prints the registry; `--tags` for Planetiler |
@@ -761,10 +771,16 @@ references of their `osm` cell.
 | `geo` | the North Frisia box, its centre, haversine, and what an unknown distance counts as |
 | `osmtags` | the OSM tags the pipeline reads, each list once: the name tags and their ranks, the class tags, the `place` values of a settlement and of an island |
 | `osmscan`, `osmgeom` | the id-filtered passes over an extract; ring assembly and polygons |
-| `candidates`, `nameindex`, `hints` | the candidates file, the name index of the matcher and the curation export, location hints |
+| `candidates`, `nameindex`, `hints` | the candidates file, the matcher's index of them by name, location hints |
+| `clusters` | which candidates describe one feature (`cluster`, `same_feature`), and where a feature lies against a hint and North Frisia |
+| `wikidata` | the Wikidata items of countries by German name: the API lookup and its cache |
+| `matchresult` | what the matcher makes of a row: `MatchResult`, its `Outcome`, a `RankedCandidate` |
+| `matchfile` | `work/matches.jsonl`, the result of every row the matcher owns: writing it (`frasch match`) and reading it (`frasch curate export`) |
+| `matchreport` | `REPORT.md`: rendering it, its stamp, the warning for candidates from another set of extracts |
 | `searchindex` | builds and writes the search index |
 | `provenance` | `Stamp`, what a generated file was built from: making one, reading it from any stamped file, comparing two; printing the tiles' (`frasch provenance`) |
 | `locate` | locates the name list's objects in the extracts, for `frasch build objects` |
 | `pipeline` | the table of the generated files (`OUTPUTS`): what builds each, from what, and when it is stale; `frasch build` |
 | `check_inputs`, `check_outputs` | `frasch check-inputs` and `check-outputs` |
-| the rest | the commands' own modules: `update`, `build_candidates`, `match`, `curate`, `build_dialect_areas` (`areas`), `inject_names` (`inject`), `check_tiles` (`check-tiles`) |
+| `match` | the matcher's decision for a row (`match_row`), what other rows hold (`Claimed`), and the `frasch match` command, which reads and writes through the modules above |
+| the rest | the commands' own modules: `update`, `build_candidates`, `curate`, `build_dialect_areas` (`areas`), `inject_names` (`inject`), `check_tiles` (`check-tiles`) |

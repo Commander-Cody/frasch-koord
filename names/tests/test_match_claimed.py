@@ -10,8 +10,7 @@ import json
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 
-from frasch import placelist
-from frasch import match
+from frasch import match, matchfile, placelist
 from frasch.candidates import Candidate
 from conftest import REGISTRY, cand, places_text, workspace, write_candidates
 
@@ -29,6 +28,13 @@ def run_match(
     write_candidates(world / "work" / "candidates.jsonl", *candidates)
     assert match.run(workspace(world), REGISTRY, offline=True) == 0
     return placelist.read(str(places), REGISTRY).rows
+
+
+def why(world: Path, row_id: str) -> str:
+    """The matcher's remark on a row of the last run."""
+    return next(
+        m["why"] for m in matchfile.read(world / "work" / "matches.jsonl") if m["id"] == row_id
+    )
 
 
 def test_an_unclaimed_object_is_matched(world: Path) -> None:
@@ -81,8 +87,7 @@ def test_the_rest_of_a_river_a_human_gave_in_part_to_another_row_is_not_matched(
     second = {"kind": "water", "mooring": "Äarlou", "de": "Arlau"}
     _, row = run_match(world, [checked, second], pieces)
     assert (row["osm"], row["status"]) == ("", "")
-    matches = (world / "work" / "matches.csv").read_text(encoding="utf-8")
-    assert "way/44051131 is taken by line 2" in matches
+    assert why(world, "row-2") == "way/44051131 is taken by row row-1"
 
 
 def test_a_river_whose_relation_a_human_gave_to_another_row_is_not_matched(world: Path) -> None:
@@ -112,8 +117,7 @@ def test_a_river_whose_relation_a_human_gave_to_another_row_is_not_matched(world
     second = {"kind": "water", "mooring": "e Smeerle", "de": "Schmale"}
     _, row = run_match(world, [checked, second], schmale)
     assert (row["osm"], row["status"]) == ("", "")
-    matches = (world / "work" / "matches.csv").read_text(encoding="utf-8")
-    assert "relation/18140519 is taken by line 2" in matches
+    assert why(world, "row-2") == "relation/18140519 is taken by row row-1"
 
 
 # ------------------------------------------------- two rows of the matcher ---
@@ -133,29 +137,119 @@ def test_of_two_rows_for_one_place_the_second_is_left_unmatched(world: Path) -> 
 
 def test_the_second_row_for_a_place_says_which_row_took_its_object(world: Path) -> None:
     run_match(world, [LUNGEDIK, LUNGDIIK], [LANGERDEICH])
-    matches = (world / "work" / "matches.csv").read_text(encoding="utf-8")
-    assert "way/28330569 is taken by line 2" in matches
+    assert why(world, "row-2") == "way/28330569 is taken by row row-1"
+
+
+# the Arlau as a relation that is tagged as the river itself, and its ways
+ARLAU_RELATION = cand("r", 2389612, 9.0, 54.62, name="Arlau", type="waterway", waterway="river")
+ARLAU_WAYS = [cand("w", i, 9.0, 54.6 + 0.01 * i, name="Arlau", waterway="river") for i in (1, 2, 3)]
+ARLOU = {"kind": "water", "mooring": "Arlou", "de": "Arlau"}
+
+
+def test_of_two_rows_for_one_river_the_second_gets_no_other_object_of_it(world: Path) -> None:
+    # the first row gets the relation; the river's ways are not free for a second name
+    _, second = run_match(
+        world, [ARLOU, ARLOU | {"mooring": "Äarlou"}], [ARLAU_RELATION, *ARLAU_WAYS]
+    )
+    assert (second["osm"], second["status"]) == ("", "")
+
+
+def test_the_second_row_for_a_river_says_which_row_took_it(world: Path) -> None:
+    run_match(world, [ARLOU, ARLOU | {"mooring": "Äarlou"}], [ARLAU_RELATION, *ARLAU_WAYS])
+    assert why(world, "row-2") == "relation/2389612 is taken by row row-1"
+
+
+def test_of_two_rows_for_one_village_the_second_gets_no_other_object_of_it(world: Path) -> None:
+    # the first row gets the place node; its municipality is the same village
+    holm = [
+        cand("n", 240102263, 8.866668, 54.833305, name="Holm", place="village"),
+        cand(
+            "r",
+            1420394,
+            8.857041,
+            54.831964,
+            name="Holm",
+            boundary="administrative",
+            admin_level="8",
+        ),
+    ]
+    hulm = {"kind": "settlement", "mooring": "Hulm", "de": "Holm"}
+    _, second = run_match(world, [hulm, hulm | {"mooring": "Holem"}], holm)
+    assert (second["osm"], second["status"]) == ("", "")
+
+
+# the dyke lies at the hamlet and carries its name as `alt_name`
+DEEZBUELL_DYKE = cand(
+    "w",
+    55824588,
+    8.806919,
+    54.762135,
+    man_made="dyke",
+    name="Deezbüll Deich",
+    alt_name="Deezbülleck",
+)
+DEEZBUELLECK = cand("n", 10158150149, 8.800352, 54.763511, place="hamlet", name="Deezbülleck")
+DEESBELJARN = {"kind": "warft", "mooring": "Deesbeljarn", "de": "Deezbülleck"}
 
 
 def test_a_row_keeps_its_object_next_to_one_the_matcher_gave_another_row(world: Path) -> None:
-    # the dyke lies at the hamlet and carries its name as `alt_name`: the row
-    # of the dyke takes the dyke, not the whole place
-    dyke = cand(
-        "w",
-        55824588,
-        8.806919,
-        54.762135,
-        man_made="dyke",
-        name="Deezbüll Deich",
-        alt_name="Deezbülleck",
-    )
-    hamlet = cand("n", 10158150149, 8.800352, 54.763511, place="hamlet", name="Deezbülleck")
-    rows = [
-        {"kind": "warft", "mooring": "Deesbeldik", "de": "Deezbüll Deich"},
-        {"kind": "warft", "mooring": "Deesbeljarn", "de": "Deezbülleck"},
-    ]
-    _, second = run_match(world, rows, [dyke, hamlet])
+    # the row of the dyke takes the dyke, not the whole place
+    dyke_row = {"kind": "warft", "mooring": "Deesbeldik", "de": "Deezbüll Deich"}
+    _, second = run_match(world, [dyke_row, DEESBELJARN], [DEEZBUELL_DYKE, DEEZBUELLECK])
     assert (second["osm"], second["status"]) == ("node/10158150149", "auto")
+
+
+def test_a_dyke_a_human_gave_to_another_row_holds_the_hamlet_it_also_names(world: Path) -> None:
+    # the word of a row a human decided reaches over its whole feature, by
+    # whatever name the second row finds the object
+    checked = {"kind": "warft", "mooring": "Deesbeldik", "de": "Deezbüll Deich"} | {
+        "osm": "way/55824588",
+        "status": "ok",
+    }
+    run_match(world, [checked, DEESBELJARN], [DEEZBUELL_DYKE, DEEZBUELLECK])
+    assert why(world, "row-2") == "way/55824588 is taken by row row-1"
+
+
+def test_an_object_found_by_an_annotated_name_of_its_own_holds_its_feature(world: Path) -> None:
+    # `Klockries (NF)` is the village's own short name, though the hit on it
+    # ranks no better than one on an `alt_name`
+    klockries = [
+        cand(
+            "n", 1, 8.83, 54.75, place="village", name="Klockries-Dorf", short_name="Klockries (NF)"
+        ),
+        cand("r", 2, 8.84, 54.755, name="Klockries", boundary="administrative", admin_level="8"),
+    ]
+    rows = [
+        {"kind": "settlement", "mooring": "Klookriis-Toorp", "de": "Klockries-Dorf"},
+        {"kind": "settlement", "mooring": "Klookriis", "de": "Klockries"},
+    ]
+    run_match(world, rows, klockries)
+    assert why(world, "row-2") == "node/1 is taken by row row-1"
+
+
+def test_an_object_one_of_a_rows_names_finds_by_a_name_of_its_own_holds_its_feature(
+    world: Path,
+) -> None:
+    # the second row's `Holm` is the village's own name; that its `Holme`
+    # finds the village only as an `alt_name` takes nothing from that
+    holm = [
+        cand("n", 240102263, 8.866668, 54.833305, name="Holm", alt_name="Holme", place="village"),
+        cand(
+            "r",
+            1420394,
+            8.857041,
+            54.831964,
+            name="Holm",
+            boundary="administrative",
+            admin_level="8",
+        ),
+    ]
+    rows = [
+        {"kind": "settlement", "mooring": "Hulm", "de": "Holm"},
+        {"kind": "settlement", "mooring": "Holem", "de": "Holm; Holme"},
+    ]
+    run_match(world, rows, holm)
+    assert why(world, "row-2") == "node/240102263 is taken by row row-1"
 
 
 def test_a_matched_row_that_lost_its_frisian_name_keeps_its_object(world: Path) -> None:
@@ -216,8 +310,7 @@ def test_the_second_country_row_for_an_item_says_which_row_took_it(world: Path) 
     cache.write_text(json.dumps({"Dänemark": "Q35"}), encoding="utf-8")
     denmark = {"kind": "country", "mooring": "Däänemark", "de": "Dänemark"}
     run_match(world, [denmark, denmark | {"mooring": "Dånmark"}], [])
-    matches = (world / "work" / "matches.csv").read_text(encoding="utf-8")
-    assert "Q35 is taken by line 2" in matches
+    assert why(world, "row-2") == "Q35 is taken by row row-1"
 
 
 def test_a_row_written_without_another_rows_item_says_which_row_holds_it(world: Path) -> None:
@@ -228,8 +321,7 @@ def test_a_row_written_without_another_rows_item_says_which_row_holds_it(world: 
     island = {"kind": "island", "mooring": "Pälweerm", "de": "Pellworm"}
     village = {"kind": "settlement", "mooring": "Pälweerm", "de": "Pellworm"}
     run_match(world, [island, village], pellworm)
-    matches = (world / "work" / "matches.csv").read_text(encoding="utf-8")
-    assert "Q21044 is taken by line 2" in matches
+    assert why(world, "row-2") == "Q21044 is taken by row row-1"
 
 
 def test_a_row_whose_object_carries_another_rows_item_keeps_the_object_without_it(

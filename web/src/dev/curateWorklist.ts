@@ -14,10 +14,10 @@ export interface CurateCandidate {
   class: string;
   /** Distance from the centre of North Frisia in km, as `frasch match` computed it; null without a position. */
   km: number | null;
-  /** null when candidates.jsonl had no position for the object. */
+  /** null when the candidate scan could not place the object. */
   lon: number | null;
   lat: number | null;
-  /** Decisive tags as one string, e.g. "place=hamlet"; empty when candidates.jsonl no longer has the object. */
+  /** Decisive tags as one string, e.g. "place=hamlet". */
   tags: string;
   /** In the Schleswig-Holstein extract the tiles are built from. */
   in_sh: boolean;
@@ -45,7 +45,7 @@ export interface CurateRow {
   da: string;
   hint: string;
   note: string;
-  /** Why the matcher gave up (matches.csv `note`). */
+  /** Why the matcher gave up (matches.jsonl `why`). */
   why: string;
   /** [lon, lat, radius_km] of the location hint, or null. */
   hint_point: [number, number, number] | null;

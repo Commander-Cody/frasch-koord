@@ -1,4 +1,4 @@
-"""match.py and the extracts behind candidates.jsonl (#24): its readers skip
+"""match.py and the extracts behind candidates.jsonl (#24): its reader skips
 the header, and a run warns when the set of extracts changed since the last
 one -- dropping the Denmark extract clears every `auto` row only it has."""
 
@@ -10,7 +10,6 @@ from pathlib import Path
 
 import pytest
 
-from frasch import curate
 from frasch import match
 from frasch import placelist
 from frasch.errors import PipelineError
@@ -50,12 +49,6 @@ def test_the_index_skips_the_header(tmp_path: Path) -> None:
         read_records(str(write_candidates(tmp_path / "c.jsonl", TOFTUM, extracts=[SH])))
     )
     assert [r["id"] for r in index.recs] == [240044107]
-
-
-def test_the_curation_export_skips_the_header(tmp_path: Path) -> None:
-    path = write_candidates(tmp_path / "c.jsonl", TOFTUM, extracts=[SH])
-    kept = curate.stream_records(str(path), {("n", 240044107)}, set())
-    assert [r["id"] for r in kept] == [240044107]
 
 
 # ------------------------------------------------------------ extract set ---

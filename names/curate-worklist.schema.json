@@ -113,7 +113,7 @@
         "hint": { "description": "The row's location hint, raw.", "type": "string" },
         "note": { "description": "The row's note.", "type": "string" },
         "why": {
-          "description": "Why the matcher gave up (the `note` of work/matches.csv).",
+          "description": "Why the matcher gave up (the `why` of work/matches.jsonl).",
           "type": "string"
         },
         "hint_point": {
@@ -141,7 +141,7 @@
           "type": "string",
           "pattern": "^(node|way|relation)/[0-9]+$"
         },
-        "name": { "description": "Its OSM name, cut to 40 characters.", "type": "string" },
+        "name": { "description": "Its OSM `name`, else its `name:de`; empty when it has neither.", "type": "string" },
         "class": {
           "description": "What it is, in one word: the value of its `place` tag, else of the next tag that says (`natural`, `boundary`, ...), else `-`.",
           "type": "string"
@@ -151,12 +151,12 @@
           "type": ["integer", "null"]
         },
         "lon": {
-          "description": "null when work/candidates.jsonl no longer has the object (rebuilt since the match), or has no position for it.",
+          "description": "null when the candidate scan could not place the object.",
           "type": ["number", "null"]
         },
         "lat": { "description": "As `lon`.", "type": ["number", "null"] },
         "tags": {
-          "description": "The tags that say what kind of thing it is, `place=hamlet;boundary=administrative`. Empty when work/candidates.jsonl no longer has the object.",
+          "description": "The tags that say what kind of thing it is, `place=hamlet;boundary=administrative`.",
           "type": "string"
         },
         "in_sh": {

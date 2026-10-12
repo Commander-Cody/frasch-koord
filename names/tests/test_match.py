@@ -1,5 +1,5 @@
-"""match.py: clustering, and the decision `match_row` makes for a row
-(README "Matching rules (v1)").
+"""match.py: the decision `match_row` makes for a row (README "Matching
+rules (v1)").
 
 `match_row` runs against a real `NameIndex` built from a tiny candidates.jsonl
 in build_candidates.py's format.  The records are real OSM objects (ids,
@@ -16,7 +16,9 @@ from frasch import match
 from frasch import placelist
 from frasch.nameindex import NameIndex
 from frasch.hints import HintResolver
-from frasch.candidates import Candidate, read_records
+from frasch.candidates import Candidate, osm_key, read_records
+from frasch.matchresult import MatchResult, Outcome
+from frasch.refs import OsmRef
 from conftest import REGISTRY, cand, write_candidates
 
 
@@ -29,9 +31,14 @@ def row(**cells: str) -> placelist.PlaceRow:
     return placelist.PlaceRow({c: "" for c in placelist.columns(REGISTRY)} | cells, 2)
 
 
-def run(tmp_path: Path, r: placelist.PlaceRow, *recs: Candidate) -> match.MatchResult:
+def run(tmp_path: Path, r: placelist.PlaceRow, *recs: Candidate) -> MatchResult:
     index = make_index(tmp_path, *recs)
     return match.match_row(r, index, HintResolver(index), REGISTRY)
+
+
+def listed(out: MatchResult) -> list[OsmRef]:
+    """The candidates a result lists for a reviewer, in its order."""
+    return [osm_key(c) for c in out.candidates]
 
 
 # real objects -------------------------------------------------------------
@@ -177,53 +184,11 @@ OCKHOLM = cand(
 )
 
 
-# ---------------------------------------------------------------- cluster ---
-def test_two_village_nodes_two_km_apart_are_two_villages() -> None:
-    a = cand("n", 1, 8.80, 54.80, name="Holm", place="village")
-    b = cand("n", 2, 8.80, 54.818, name="Holm", place="hamlet")  # 2.0 km north
-    assert len(match.cluster([a, b])) == 2
-
-
-def test_village_node_and_nearby_dwelling_way_are_one_feature() -> None:
-    # only two *settlement nodes* are kept apart; a way within 3 km merges
-    a = cand("n", 1, 8.80, 54.80, name="Holm", place="village")
-    b = cand("w", 2, 8.80, 54.818, name="Holm", landuse="residential")
-    assert len(match.cluster([a, b])) == 1
-
-
-def test_point_features_further_apart_than_three_km_stay_apart() -> None:
-    a = cand("w", 1, 8.80, 54.80, name="Holm", landuse="residential")
-    b = cand("w", 2, 8.80, 54.836, name="Holm", landuse="residential")  # 4.0 km
-    assert len(match.cluster([a, b])) == 2
-
-
-def test_pieces_of_a_river_twenty_km_apart_are_one_river() -> None:
-    a = cand("w", 1, 9.00, 54.60, name="Arlau", waterway="river")
-    b = cand("w", 2, 9.00, 54.78, name="Arlau", waterway="river")  # 20 km
-    assert len(match.cluster([a, b])) == 1
-
-
-def test_cluster_position_is_the_mean_of_its_members() -> None:
-    a = cand("n", 1, 8.80, 54.80, name="Holm", place="village")
-    b = cand("w", 2, 8.82, 54.81, name="Holm", landuse="residential")
-    (cl,) = match.cluster([a, b])
-    assert cl["lon"] == pytest.approx(8.81)
-    assert cl["lat"] == pytest.approx(54.805)
-
-
-def test_a_record_without_location_is_a_cluster_of_its_own() -> None:
-    a = cand("n", 1, 8.80, 54.80, name="Holm", place="village")
-    b = cand("r", 2, None, None, name="Holm", boundary="administrative", admin_level="8")
-    clusters = match.cluster([a, b])
-    assert len(clusters) == 2
-    assert clusters[1]["lon"] is None
-
-
 # -------------------------------------------------------------- match_row ---
 def test_one_candidate_is_matched(tmp_path: Path) -> None:
     out = run(tmp_path, row(kind="settlement", solring="Muasem", de="Morsum"), MORSUM_SYLT)
-    assert out["status"] == "matched"
-    assert (out["osm_type"], out["osm_id"], out["wikidata"]) == ("node", "310191124", "Q20629")
+    assert out.result is Outcome.MATCHED
+    assert (out.refs, out.wikidata) == ((("n", 310191124),), "Q20629")
 
 
 def test_a_hit_on_name_outranks_a_hit_on_name_de(tmp_path: Path) -> None:
@@ -232,27 +197,27 @@ def test_a_hit_on_name_outranks_a_hit_on_name_de(tmp_path: Path) -> None:
     Clustered as equals they would be two villages and the row ambiguous; the
     hit on the OSM `name` wins instead."""
     out = run(tmp_path, row(kind="settlement", mooring="Hulm", de="Holm"), HOLME_DK, HOLM_NF)
-    assert out["status"] == "matched"
-    assert (out["osm_type"], out["osm_id"], out["wikidata"]) == ("node", "240102263", "Q559369")
+    assert out.result is Outcome.MATCHED
+    assert (out.refs, out.wikidata) == ((("n", 240102263),), "Q559369")
 
 
 def test_only_candidate_in_north_frisia_wins_when_the_rivals_are_far(tmp_path: Path) -> None:
     out = run(tmp_path, row(kind="settlement", mooring="Hulm", de="Holm"), HOLM_HAMBURG, HOLM_NF)
-    assert out["status"] == "matched"
-    assert out["osm_id"] == "240102263"
-    assert out["note"] == "auto: only candidate in North Frisia"
+    assert out.result is Outcome.MATCHED
+    assert out.refs == (("n", 240102263),)
+    assert out.why == "auto: only candidate in North Frisia"
 
 
 def test_a_street_of_the_same_name_is_no_candidate(tmp_path: Path) -> None:
     out = run(tmp_path, row(kind="settlement", mooring="Hulm", de="Holm"), HOLM_STREET, HOLM_NF)
-    assert out["status"] == "matched"
-    assert out["osm_id"] == "240102263"
+    assert out.result is Outcome.MATCHED
+    assert out.refs == (("n", 240102263),)
 
 
 def test_only_streets_of_that_name_is_not_found(tmp_path: Path) -> None:
     out = run(tmp_path, row(kind="settlement", mooring="Hulm", de="Holm"), HOLM_STREET)
-    assert out["status"] == "not_found"
-    assert out["osm_id"] == ""
+    assert out.result is Outcome.NOT_FOUND
+    assert out.refs == ()
 
 
 def test_a_name_nothing_in_osm_carries_is_not_found_with_the_matchers_note(
@@ -260,7 +225,7 @@ def test_a_name_nothing_in_osm_carries_is_not_found_with_the_matchers_note(
 ) -> None:
     owners = row(kind="settlement", mooring="Hulm", de="Holm", note="ask the Heimatverein")
     out = run(tmp_path, owners, MORSUM_SYLT)
-    assert (out["status"], out["note"]) == ("not_found", "no name match in OSM")
+    assert (out.result, out.why) == (Outcome.NOT_FOUND, "no name match in OSM")
 
 
 def test_two_equal_villages_in_north_frisia_are_ambiguous(tmp_path: Path) -> None:
@@ -270,15 +235,14 @@ def test_two_equal_villages_in_north_frisia_are_ambiguous(tmp_path: Path) -> Non
         KIRCHWARFT_HOOGE,
         KIRCHWARFT_OCKHOLM,
     )
-    assert out["status"] == "ambiguous"
-    assert out["osm_id"] == ""
-    assert "n/11711096159:Kirchwarft:hamlet:" in out["candidates"]
-    assert "n/1333738478:Kirchwarft:hamlet:" in out["candidates"]
+    assert out.result is Outcome.AMBIGUOUS
+    assert out.refs == ()
+    assert sorted(listed(out)) == [("n", 1333738478), ("n", 11711096159)]
 
 
-@pytest.mark.parametrize("hint,winner", [("Hooge", "11711096159"), ("Ockholm", "1333738478")])
+@pytest.mark.parametrize("hint,winner", [("Hooge", 11711096159), ("Ockholm", 1333738478)])
 def test_the_hint_picks_one_of_several_places_with_that_name(
-    tmp_path: Path, hint: str, winner: str
+    tmp_path: Path, hint: str, winner: int
 ) -> None:
     out = run(
         tmp_path,
@@ -288,9 +252,9 @@ def test_the_hint_picks_one_of_several_places_with_that_name(
         HOOGE,
         OCKHOLM,
     )
-    assert out["status"] == "matched"
-    assert out["osm_id"] == winner
-    assert out["note"] == "auto: location hint"
+    assert out.result is Outcome.MATCHED
+    assert out.refs == (("n", winner),)
+    assert out.why == "auto: location hint"
 
 
 def test_a_hint_is_binding_even_for_the_only_candidate(tmp_path: Path) -> None:
@@ -304,10 +268,10 @@ def test_a_hint_is_binding_even_for_the_only_candidate(tmp_path: Path) -> None:
         NORDSTRAND_VILLAGE,
         NORDSTRAND_PENINSULA,
     )
-    assert out["status"] == "ambiguous"
-    assert out["osm_id"] == ""
-    assert out["note"] == "location hint 'Nordstrand' matched no cluster"
-    assert out["candidates"].startswith("n/310191124:Morsum:village:")
+    assert out.result is Outcome.AMBIGUOUS
+    assert out.refs == ()
+    assert out.why == "location hint 'Nordstrand' matched no cluster"
+    assert listed(out) == [("n", 310191124)]
 
 
 def test_a_hint_that_fits_confirms_the_only_candidate(tmp_path: Path) -> None:
@@ -317,8 +281,8 @@ def test_a_hint_that_fits_confirms_the_only_candidate(tmp_path: Path) -> None:
         MORSUM_SYLT,
         SYLT,
     )
-    assert out["status"] == "matched"
-    assert out["osm_id"] == "310191124"
+    assert out.result is Outcome.MATCHED
+    assert out.refs == (("n", 310191124),)
 
 
 def test_a_hint_that_names_an_archipelago_reaches_as_far_as_one_that_names_an_island(
@@ -332,7 +296,7 @@ def test_a_hint_that_names_an_archipelago_reaches_as_far_as_one_that_names_an_is
         nine_km_north,
         halligen,
     )
-    assert out["note"] == "auto: location hint"
+    assert out.why == "auto: location hint"
 
 
 def test_a_hint_means_the_island_of_that_name_rather_than_a_nearer_namesake(
@@ -348,7 +312,7 @@ def test_a_hint_means_the_island_of_that_name_rather_than_a_nearer_namesake(
         islet,
         namesake,
     )
-    assert out["note"] == "auto: location hint"
+    assert out.why == "auto: location hint"
 
 
 def test_a_hint_nobody_knows_matches_nothing_and_binds_nothing(tmp_path: Path) -> None:
@@ -358,8 +322,8 @@ def test_a_hint_nobody_knows_matches_nothing_and_binds_nothing(tmp_path: Path) -
         row(kind="settlement", solring="Muasem", de="Morsum", hint="bei Keitum"),
         MORSUM_SYLT,
     )
-    assert out["status"] == "matched"
-    assert out["osm_id"] == "310191124"
+    assert out.result is Outcome.MATCHED
+    assert out.refs == (("n", 310191124),)
 
 
 def test_a_weaker_osm_annotation_hit_beats_a_far_away_hamlet(tmp_path: Path) -> None:
@@ -370,10 +334,10 @@ def test_a_weaker_osm_annotation_hit_beats_a_far_away_hamlet(tmp_path: Path) -> 
     out = run(
         tmp_path, row(kind="settlement", solring="Kaamp", de="Kampen"), KAMPEN_STORMARN, KAMPEN_SYLT
     )
-    assert out["status"] == "matched"
-    assert out["osm_id"] == "240063898"
-    assert out["match_name"] == "Kampen (Sylt)"
-    assert out["note"] == "auto: only candidate in North Frisia (weaker name hit)"
+    assert out.result is Outcome.MATCHED
+    assert out.refs == (("n", 240063898),)
+    assert out.match_name == "Kampen (Sylt)"
+    assert out.why == "auto: only candidate in North Frisia (weaker name hit)"
 
 
 def test_a_far_away_village_with_a_weaker_hit_in_north_frisia_is_ambiguous(tmp_path: Path) -> None:
@@ -387,11 +351,10 @@ def test_a_far_away_village_with_a_weaker_hit_in_north_frisia_is_ambiguous(tmp_p
         OSTENFELD_RENDSBURG,
         OSTENFELD_HUSUM,
     )
-    assert out["status"] == "ambiguous"
-    assert (out["osm_id"], out["wikidata"]) == ("", "")
-    assert "n/240062575:Ostenfeld:village:" in out["candidates"]
-    assert "n/240104163:Ostenfeld (Husum):village:" in out["candidates"]
-    assert out["note"] == (
+    assert out.result is Outcome.AMBIGUOUS
+    assert (out.refs, out.wikidata) == ((), "")
+    assert listed(out) == [("n", 240062575), ("n", 240104163)]
+    assert out.why == (
         "best name hit is 71 km from North Frisia, a weaker one lies inside -- verify by hand"
     )
 
@@ -407,9 +370,9 @@ def test_a_hint_confirms_a_far_away_village_over_a_weaker_hit_in_north_frisia(
         OSTENFELD_HUSUM,
         RENDSBURG,
     )
-    assert out["status"] == "matched"
-    assert out["osm_id"] == "240062575"
-    assert out["note"] == "auto: location hint"
+    assert out.result is Outcome.MATCHED
+    assert out.refs == (("n", 240062575),)
+    assert out.why == "auto: location hint"
 
 
 def test_a_candidate_two_names_find_keeps_its_best_hit(tmp_path: Path) -> None:
@@ -417,8 +380,8 @@ def test_a_candidate_two_names_find_keeps_its_best_hit(tmp_path: Path) -> None:
     name and only a `name:de` hit for the second -- it keeps the `name` hit
     and is the village Holm's equal: two clusters inside North Frisia."""
     out = run(tmp_path, row(kind="settlement", mooring="Hulm", de="Holme; Holm"), HOLME_DK, HOLM_NF)
-    assert out["status"] == "ambiguous"
-    assert out["note"] == "2 plausible candidates"
+    assert out.result is Outcome.AMBIGUOUS
+    assert out.why == "2 plausible candidates"
 
 
 def test_a_far_away_hamlet_stays_for_review_when_the_weaker_hits_are_far_too(
@@ -432,55 +395,54 @@ def test_a_far_away_hamlet_stays_for_review_when_the_weaker_hits_are_far_too(
         KAMPEN_STORMARN,
         kampen_lippe,
     )
-    assert out["status"] == "ambiguous"
-    assert out["note"] == "only match is 115 km from North Frisia (settlement) -- verify by hand"
-    assert out["candidates"].startswith("n/6694657313:Kampen:hamlet:")
-    assert "n/1:Kampen (Lippe):hamlet:" in out["candidates"]
+    assert out.result is Outcome.AMBIGUOUS
+    assert out.why == "only match is 115 km from North Frisia (settlement) -- verify by hand"
+    assert listed(out) == [("n", 6694657313), ("n", 1)]
 
 
 def test_a_far_away_hamlet_alone_is_left_for_review(tmp_path: Path) -> None:
     out = run(tmp_path, row(kind="settlement", solring="Kaamp", de="Kampen"), KAMPEN_STORMARN)
-    assert out["status"] == "ambiguous"
-    assert out["osm_id"] == ""
-    assert "verify by hand" in out["note"]
+    assert out.result is Outcome.AMBIGUOUS
+    assert out.refs == ()
+    assert "verify by hand" in out.why
 
 
 def test_a_warft_outside_north_frisia_is_left_for_review(tmp_path: Path) -> None:
     # a Warft exists only in North Frisia, however clear the name hit
     far = cand("n", 1, 10.5, 54.3, name="Kirchwarft", place="hamlet")
     out = run(tmp_path, row(kind="warft", mooring="Schörkewärw", de="Kirchwarft"), far)
-    assert out["status"] == "ambiguous"
-    assert "verify by hand" in out["note"]
+    assert out.result is Outcome.AMBIGUOUS
+    assert "verify by hand" in out.why
 
 
 def test_a_match_the_scan_could_not_place_is_left_for_review_as_such(tmp_path: Path) -> None:
     unplaced = cand("r", 1, None, None, name="Neuer Koog", place="polder")
     out = run(tmp_path, row(kind="koog", mooring="Naie Kuuch", de="Neuer Koog"), unplaced)
-    assert out["note"] == "only match has no known position (koog) -- verify by hand"
+    assert out.why == "only match has no known position (koog) -- verify by hand"
 
 
 def test_danish_name_is_used_when_there_is_no_german_one(tmp_path: Path) -> None:
     out = run(tmp_path, row(kind="settlement", mooring="Hulm", da="Holme"), HOLME_DK)
-    assert out["status"] == "matched"
-    assert out["osm_id"] == "2716731633"
+    assert out.result is Outcome.MATCHED
+    assert out.refs == (("n", 2716731633),)
 
 
 def test_row_without_frisian_name_is_not_matched(tmp_path: Path) -> None:
     out = run(tmp_path, row(kind="settlement", de="Morsum"), MORSUM_SYLT)
-    assert out["status"] == "not_found"
-    assert out["osm_id"] == ""
+    assert out.result is Outcome.NOT_FOUND
+    assert out.refs == ()
 
 
 def test_row_without_german_or_danish_name_is_not_matched(tmp_path: Path) -> None:
     out = run(tmp_path, row(kind="settlement", solring="Muasem"), MORSUM_SYLT)
-    assert out["status"] == "not_found"
+    assert out.result is Outcome.NOT_FOUND
 
 
 def test_any_dialect_column_counts_as_a_frisian_name(tmp_path: Path) -> None:
     # README: which dialect it is does not matter for matching
     out = run(tmp_path, row(kind="hallig", hallig="de Huuge", de="Hooge"), HOOGE)
-    assert out["status"] == "matched"
-    assert (out["osm_type"], out["osm_id"]) == ("way", "1472528450")
+    assert out.result is Outcome.MATCHED
+    assert out.refs == (("w", 1472528450),)
 
 
 def test_the_place_node_wins_over_the_boundary_relation(tmp_path: Path) -> None:
@@ -495,8 +457,8 @@ def test_the_place_node_wins_over_the_boundary_relation(tmp_path: Path) -> None:
         wikidata="Q559369",
     )
     out = run(tmp_path, row(kind="settlement", mooring="Hulm", de="Holm"), relation, HOLM_NF)
-    assert out["status"] == "matched"
-    assert (out["osm_type"], out["osm_id"]) == ("node", "240102263")
+    assert out.result is Outcome.MATCHED
+    assert out.refs == (("n", 240102263),)
 
 
 def test_the_boundary_relation_lends_its_wikidata_to_the_place_node(tmp_path: Path) -> None:
@@ -508,8 +470,8 @@ def test_the_boundary_relation_lends_its_wikidata_to_the_place_node(tmp_path: Pa
         KAMPEN_SYLT_MUNICIPALITY,
         KAMPEN_SYLT,
     )
-    assert out["status"] == "matched"
-    assert (out["osm_type"], out["osm_id"], out["wikidata"]) == ("node", "240063898", "Q27332")
+    assert out.result is Outcome.MATCHED
+    assert (out.refs, out.wikidata) == ((("n", 240063898),), "Q27332")
 
 
 def test_a_far_away_namesake_boundary_lends_no_wikidata(tmp_path: Path) -> None:
@@ -521,8 +483,8 @@ def test_a_far_away_namesake_boundary_lends_no_wikidata(tmp_path: Path) -> None:
         DRAGE_ELBE_MUNICIPALITY,
         DRAGE_STEINBURG,
     )
-    assert out["status"] == "matched"
-    assert (out["osm_type"], out["osm_id"], out["wikidata"]) == ("node", "240054933", "")
+    assert out.result is Outcome.MATCHED
+    assert (out.refs, out.wikidata) == ((("n", 240054933),), "")
 
 
 def test_of_two_municipalities_nearby_the_nearer_lends_its_wikidata(tmp_path: Path) -> None:
@@ -544,8 +506,8 @@ def test_of_two_municipalities_nearby_the_nearer_lends_its_wikidata(tmp_path: Pa
         DRAGE_STEINBURG_MUNICIPALITY,
         DRAGE_STEINBURG,
     )
-    assert out["status"] == "matched"
-    assert (out["osm_id"], out["wikidata"]) == ("240054933", "Q634156")
+    assert out.result is Outcome.MATCHED
+    assert (out.refs, out.wikidata) == ((("n", 240054933),), "Q634156")
 
 
 def test_the_municipality_lends_its_wikidata_rather_than_the_nearer_amt(tmp_path: Path) -> None:
@@ -559,8 +521,8 @@ def test_the_municipality_lends_its_wikidata_rather_than_the_nearer_amt(tmp_path
         SCHAFFLUND_MUNICIPALITY,
         SCHAFFLUND_NO_QID,
     )
-    assert out["status"] == "matched"
-    assert (out["osm_type"], out["osm_id"], out["wikidata"]) == ("node", "240090603", "Q551483")
+    assert out.result is Outcome.MATCHED
+    assert (out.refs, out.wikidata) == ((("n", 240090603),), "Q551483")
 
 
 def test_all_pieces_of_a_river_are_matched(tmp_path: Path) -> None:
@@ -569,6 +531,5 @@ def test_all_pieces_of_a_river_are_matched(tmp_path: Path) -> None:
         for i in (44051133, 44051131, 44051132)
     ]
     out = run(tmp_path, row(kind="water", mooring="Arlou", de="Arlau"), *pieces)
-    assert out["status"] == "matched"
-    assert out["osm_type"] == "way"
-    assert out["osm_id"] == "44051131;44051132;44051133"
+    assert out.result is Outcome.MATCHED
+    assert out.refs == (("w", 44051131), ("w", 44051132), ("w", 44051133))

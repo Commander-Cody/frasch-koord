@@ -124,8 +124,8 @@ def point_name(row: Row, reg: Registry) -> str:
 
 class RowState(enum.Enum):
     """What a row is to the pipeline, by its cells (`state`).  A row is in
-    the first of these that holds for it; the value is how work/matches.csv
-    spells the state, `label` how the matcher's report does."""
+    the first of these that holds for it; `label` is how the matcher's
+    report spells the state."""
 
     NOT_A_PLACE = "not_a_place"  # a dictionary-only row
     SKIP = "skip"  # the owner keeps it off the map

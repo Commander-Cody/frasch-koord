@@ -33,6 +33,7 @@ from frasch import (
     dialects,
     locate,
     match,
+    matchreport,
     osmscan,
     provenance,
     searchindex,
@@ -228,7 +229,7 @@ def _report_stamp(run: Run, _extracts: object) -> Stamp:
     extracts, they count only in a run that has extracts at hand -- the
     candidates are scratch files, and must not decide what CI's check says."""
     candidates = Stamp.read(run.ws.candidates) if run.extracts else None
-    return match.stamp(run.ws, candidates.extracts if candidates else None)
+    return matchreport.stamp(run.ws, candidates.extracts if candidates else None)
 
 
 def _match(run: Run, _extracts: Sequence[str]) -> None:

@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from frasch import build_dialect_areas, check_outputs, dialects, locate, match
+from frasch import build_dialect_areas, check_outputs, dialects, locate, matchreport
 from frasch import searchindex
 from frasch.__main__ import main
 from frasch.objects import Objects, objects_json
@@ -60,7 +60,7 @@ def write_objects(ws: Workspace, objects: Objects) -> None:
 def write_report(ws: Workspace) -> None:
     """Write a report stamped as the matcher would stamp it now."""
     Path(ws.report).write_text(
-        f"# Name matching report\n\n{match.stamp(ws, []).as_comment()}\n", encoding="utf-8"
+        f"# Name matching report\n\n{matchreport.stamp(ws, []).as_comment()}\n", encoding="utf-8"
     )
 
 
