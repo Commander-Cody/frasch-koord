@@ -113,7 +113,7 @@ def _listed(c: RankedCandidate, index: NameIndex) -> ListedCandidate:
         "lon": c["lon"],
         "lat": c["lat"],
         "tags": osmtags.decisive(tags),
-        "in_sh": candidates.SH_SRC in index.sources.get(osm_key(c), ()),
+        "in_sh": any(map(candidates.is_sh, index.sources.get(osm_key(c), ()))),
         "rank": c["rank"],
     }
     if tags.get(osmtags.ITEM_KEY):
