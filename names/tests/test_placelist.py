@@ -265,7 +265,7 @@ QIDS = ["Q35", "Q21003", "Q1", "q35", "Q", "35", "Q35;Q36", "Q3 5", "QQ35"]
 
 @pytest.mark.parametrize("text", SLUGS)
 def test_the_patch_schema_takes_the_slugs_the_name_list_takes(text: str) -> None:
-    # curate.py apply checks a slug by the schema and writes `local/<slug>`,
+    # `frasch curate apply` checks a slug by the schema and writes `local/<slug>`,
     # which placelist.read checks by SLUG: the two must never disagree
     schema = _schema()["$defs"]["slug"]["pattern"]
     assert bool(re.search(schema, text)) == bool(refs.SLUG.fullmatch(text))

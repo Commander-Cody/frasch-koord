@@ -1,5 +1,5 @@
 """names/work/matches.jsonl -- what the last `frasch match` made of every row
-it owns, as frasch.match writes it and the curation export (frasch.curate)
+it owns, as frasch.match writes it and the curation export (frasch.worklist)
 reads it.  Git-ignored: it says what a run did, a dry run included, and is
 thrown away with the next.
 
