@@ -539,7 +539,9 @@ the worklist first — `frasch curate export` writes `names/work/curate.json`
 `apply: 'serve'` (`vite-plugins/curate.ts`, `GET /__curate/worklist`,
 `GET`/`POST /__curate/patch`), and `src/main.tsx` only loads the view under
 `vite dev` (`import.meta.env.DEV`), so a production build has neither the
-endpoints nor the panel: `?curate` there is just the public map. English only on purpose: it
+endpoints nor the panel: `?curate` there is just the public map. The `POST` stores only an
+entry that keeps [`names/curate-patch.schema.json`](../names/curate-patch.schema.json) and answers
+400 with the reason otherwise. English only on purpose: it
 is a tool for the name list, not part of the map.
 
 Every pick (an OSM reference, a local reference, or a skip) is appended to
