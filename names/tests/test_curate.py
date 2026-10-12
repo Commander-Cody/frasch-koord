@@ -89,19 +89,29 @@ def test_same_row_at_another_line_is_the_same_decision(tmp_path: Path) -> None:
     assert e.get("action") == "clear"
 
 
-def test_broken_and_blank_lines_are_ignored(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    p = tmp_path / "curate-patch.jsonl"
+def with_a_broken_line(path: Path) -> None:
+    """A patch whose third line is no JSON, and its second blank."""
     write_patch(
-        p,
+        path,
         entry(2, "Mursem", "Morsum", action="skip"),
         "",
         '{"line": 3, "kind": "sett',
         entry(4, "Hoonebel", "Hunnebüll", action="skip"),
     )
+
+
+def test_broken_and_blank_lines_are_ignored(tmp_path: Path) -> None:
+    p = tmp_path / "curate-patch.jsonl"
+    with_a_broken_line(p)
     assert [e.get("line") for e in read_entries(p)] == [2, 4]
-    assert ":3: not JSON" in capsys.readouterr().err
+
+
+def test_a_line_that_is_no_json_is_handed_to_the_caller(tmp_path: Path) -> None:
+    p = tmp_path / "curate-patch.jsonl"
+    with_a_broken_line(p)
+    broken: list[int] = []
+    curate.read_patch(p, lambda number, error: broken.append(number))
+    assert broken == [3]
 
 
 def test_each_entry_knows_its_line_in_the_patch(tmp_path: Path) -> None:

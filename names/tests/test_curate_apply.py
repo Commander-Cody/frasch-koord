@@ -12,11 +12,19 @@ from typing import Any, NoReturn
 import pytest
 
 from frasch import curate
+from frasch.__main__ import main
 from frasch import match
 from frasch import placelist
 from frasch.errors import PipelineError
 from frasch.paths import StrPath, Workspace
-from conftest import CURATION_HEADER, REGISTRY, places_text, workspace, write_candidates
+from conftest import (
+    CURATION_HEADER,
+    REGISTRY,
+    path_options,
+    places_text,
+    workspace,
+    write_candidates,
+)
 
 ROWS = [
     {"id": "taarep", "kind": "settlement", "mooring": "Taarep", "de": "Dorf"},  # line 2
@@ -66,8 +74,8 @@ class World:
     patch: Path
     ws: Workspace
 
-    def apply(self, dry_run: bool = False, keep: bool = False) -> int:
-        """Apply the patch; -> how many of its decisions were refused."""
+    def apply(self, dry_run: bool = False, keep: bool = False) -> curate.ApplyReport:
+        """Apply the patch; -> what apply reports."""
         return curate.apply(self.ws, REGISTRY, dry_run=dry_run, keep=keep)
 
 
@@ -88,11 +96,16 @@ def during_read(monkeypatch: pytest.MonkeyPatch, action: Callable[[], object]) -
     moment the dev server's next append can arrive."""
     real = curate.read_patch
 
-    def hooked(path: StrPath) -> list[curate.PatchLine]:
+    def hooked(path: StrPath, *args: Any) -> list[curate.PatchLine]:
         action()
-        return real(path)
+        return real(path, *args)
 
     monkeypatch.setattr(curate, "read_patch", hooked)
+
+
+def said(report: curate.ApplyReport) -> str:
+    """The log of an apply, as the command prints it."""
+    return "".join(line + "\n" for line in report.log)
 
 
 def archived(w: World) -> list[Path]:
@@ -101,7 +114,7 @@ def archived(w: World) -> list[Path]:
 
 def test_applies_and_archives(w: World) -> None:
     append(w.patch, entry(2, action="osm", osm="node/1"))
-    assert w.apply() == 0
+    assert w.apply().refused == []
     assert "node/1" in w.places.read_text(encoding="utf-8")
     assert not w.patch.exists()
     assert len(archived(w)) == 1
@@ -113,7 +126,7 @@ def test_entry_appended_during_apply_stays_pending(
     append(w.patch, entry(2, action="osm", osm="node/1"))
     late = entry(3, action="skip")
     during_read(monkeypatch, lambda: append(w.patch, late))
-    assert w.apply() == 0
+    assert w.apply().refused == []
     assert lines(w.patch) == [late]  # not archived, not truncated
     assert "skip" not in w.places.read_text(encoding="utf-8")
     assert [e["line"] for e in lines(archived(w)[0])] == [2]
@@ -124,7 +137,7 @@ def test_refused_entries_are_appended_back(w: World, monkeypatch: pytest.MonkeyP
     append(w.patch, entry(2, action="osm", osm="node/1"), refused)
     late = entry(3, action="skip")
     during_read(monkeypatch, lambda: append(w.patch, late))
-    assert w.apply() == 1
+    assert len(w.apply().refused) == 1
     assert lines(w.patch) == [late, refused]
 
 
@@ -135,7 +148,7 @@ def test_refused_entry_redecided_meanwhile_is_not_appended_back(
     append(w.patch, refused)
     newer = entry(4, action="clear")
     during_read(monkeypatch, lambda: append(w.patch, newer))
-    assert w.apply() == 1
+    assert len(w.apply().refused) == 1
     assert lines(w.patch) == [newer]  # the newer decision wins
 
 
@@ -148,7 +161,7 @@ def test_a_newer_decision_is_found_whatever_characters_its_note_has(
     append(w.patch, refused)
     newer = entry(4, action="skip", note="erst\u2028dann")
     during_read(monkeypatch, lambda: append(w.patch, newer))
-    assert w.apply() == 1
+    assert len(w.apply().refused) == 1
     assert lines(w.patch) == [newer]
 
 
@@ -220,7 +233,7 @@ def test_failed_places_write_removes_a_new_curation_csv(
 
 
 def test_curation_csv_edited_during_rollback_is_left_alone(
-    w: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    w: World, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     append(w.patch, entry(2, action="local", slug="taarep", lat=54.6, lon=8.9))
     theirs = CURATION_HEADER + "local/nai,Neu,54.7,8.8,,,,,by hand\n"
@@ -230,15 +243,15 @@ def test_curation_csv_edited_during_rollback_is_left_alone(
         raise OSError("disk full")
 
     monkeypatch.setattr(placelist.PlaceList, "write", failing_write)
-    with pytest.raises(OSError):
+    with pytest.raises(OSError) as failed:
         w.apply()
     assert w.curation.read_text(encoding="utf-8") == theirs
-    assert "delete the rows for local/taarep by hand" in capsys.readouterr().err
+    assert "delete the rows for local/taarep by hand" in failed.value.__notes__[0]
 
 
 def test_local_decision_writes_both_files(w: World) -> None:
     append(w.patch, entry(2, action="local", slug="taarep", lat=54.6, lon=8.9, note="by the dyke"))
-    assert w.apply() == 0
+    assert w.apply().refused == []
     assert "local/taarep" in w.places.read_text(encoding="utf-8")
     assert w.curation.read_text(encoding="utf-8") == (
         CURATION_HEADER + "local/taarep,Dorf,54.6,8.9,,,,,by the dyke\n"
@@ -269,7 +282,7 @@ def test_a_withdrawn_decision_stays_withdrawn_whatever_line_it_was_sent_with(w: 
         entry(2, action="osm", osm="node/1") | {"line": 11},
         entry(2, action="clear") | {"line": 12},
     )
-    assert w.apply() == 0
+    assert w.apply().refused == []
     assert (rows_by_id(w)["taarep"]["osm"], rows_by_id(w)["taarep"]["status"]) == ("", "")
 
 
@@ -325,7 +338,7 @@ def test_a_curation_session_survives_hand_edits_to_the_list(w: World) -> None:
     ]
     w.places.write_text(places_text(edited), encoding="utf-8")
 
-    assert w.apply() == 0
+    assert w.apply().refused == []
     rows = rows_by_id(w)
     assert sorted(decided) == sorted(r["id"] for r in SESSION)
     assert {i: rows[i]["osm"] for i in decided} == decided
@@ -342,28 +355,25 @@ def test_lines_without_an_id_are_each_refused_and_kept(w: World) -> None:
     # take the earlier one's place
     nameless = [without_id(2), without_id(3)]
     append(w.patch, *nameless)
-    assert w.apply() == 2
+    assert len(w.apply().refused) == 2
     assert lines(w.patch) == nameless
 
 
-def test_a_line_without_an_id_is_refused_with_what_the_schema_says(
-    w: World, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_a_line_without_an_id_is_refused_with_what_the_schema_says(w: World) -> None:
     append(w.patch, without_id(2))
-    w.apply()
-    assert "'id' is a required property (curate-patch.schema.json)" in capsys.readouterr().out
+    report = w.apply()
+    assert "'id' is a required property (curate-patch.schema.json)" in said(report)
 
 
-def test_an_entry_that_breaks_the_patch_schema_is_refused_and_kept(
-    w: World, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_an_entry_that_breaks_the_patch_schema_is_refused_and_kept(w: World) -> None:
     # names/curate-patch.schema.json is the contract with the browser; a
     # hand-edited or foreign line must not crash apply or reach the list
     broken = entry(2, action="local", slug="taarep", lat=54.6, lon=8.9, note=42)
     append(w.patch, broken)
     before = w.places.read_bytes()
-    assert w.apply() == 1
-    assert "42 is not of type 'string'" in capsys.readouterr().out
+    report = w.apply()
+    assert len(report.refused) == 1
+    assert "42 is not of type 'string'" in said(report)
     assert w.places.read_bytes() == before
     assert lines(w.patch) == [broken]
 
@@ -375,7 +385,7 @@ def test_a_refused_line_with_keys_the_schema_does_not_know_comes_back_unchanged(
     # hand-edited line with keys of its own is kept as written
     foreign = entry(2, action="skip") | {"_raw": "x", "_patch_line": 7}
     append(w.patch, foreign)
-    assert w.apply() == 1
+    assert len(w.apply().refused) == 1
     assert lines(w.patch) == [foreign]
 
 
@@ -394,29 +404,29 @@ def test_a_line_that_is_no_patch_entry_is_refused_and_kept_not_a_crash(
     # itself must not trip over it
     good = entry(2, action="skip")
     append(w.patch, good, broken)
-    assert w.apply() == 1
+    assert len(w.apply().refused) == 1
     assert rows_by_id(w)["taarep"]["status"] == "skip"
     assert lines(w.patch) == [broken]
 
 
-def test_a_broken_line_about_a_row_holds_back_its_earlier_decision(
-    w: World, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_a_broken_line_about_a_row_holds_back_its_earlier_decision(w: World) -> None:
     # the newest line about a row is what counts, broken or not: a broken
     # `clear` must not let the decision it meant to withdraw through
     decided = entry(2, action="skip")
     broken_clear = {"id": "taarep", "action": "clear", "line": "2"}
     append(w.patch, decided, broken_clear)
-    assert w.apply() == 1
-    assert "line: '2' is not of type 'integer'" in capsys.readouterr().out
+    report = w.apply()
+    assert len(report.refused) == 1
+    assert "line: '2' is not of type 'integer'" in said(report)
     assert rows_by_id(w)["taarep"]["status"] == ""
     assert lines(w.patch) == [broken_clear]
 
 
-def test_a_line_that_is_no_object_says_so(w: World, capsys: pytest.CaptureFixture[str]) -> None:
+def test_a_line_that_is_no_object_says_so(w: World) -> None:
     append(w.patch, [1, 2])
-    assert w.apply() == 1
-    assert "not a JSON object" in capsys.readouterr().out
+    report = w.apply()
+    assert len(report.refused) == 1
+    assert "not a JSON object" in said(report)
 
 
 # ------------------------------------------------------- what apply prints ---
@@ -431,11 +441,65 @@ def mixed_patch(w: World) -> None:
     )
 
 
-def test_apply_logs_each_decision_and_sums_up(w: World, capsys: pytest.CaptureFixture[str]) -> None:
+def test_apply_prints_nothing(w: World, capsys: pytest.CaptureFixture[str]) -> None:
+    # it is called as a library too (`frasch update`): the command prints
     mixed_patch(w)
-    assert w.apply() == 2
-    (snapshot,) = archived(w)
+    w.apply()
+    assert capsys.readouterr() == ("", "")
+
+
+def test_apply_warns_of_a_line_that_is_no_json(w: World) -> None:
+    w.patch.write_text("nonsense\n", encoding="utf-8")
+    assert w.apply(keep=True).warnings == [
+        f"{w.patch}:1: not JSON (Expecting value: line 1 column 1 (char 0)) -- ignored"
+    ]
+
+
+def apply_command(w: World, *options: str) -> int:
+    """Run `frasch curate apply` on the world; -> its exit status."""
+    files = path_options(w.ws, "names", "dialects", "curation", "patch", "work")
+    return main(["curate", "apply", *files, *options])
+
+
+def test_the_command_prints_the_log(w: World, capsys: pytest.CaptureFixture[str]) -> None:
+    append(w.patch, entry(3, action="osm", osm="node/1", wikidata="Q5"))
+    apply_command(w, "--keep")
     assert capsys.readouterr().out == (
+        f"  {w.places}:3 Uurd (Ort): osm = node/1, wikidata = Q5, status = ok\n"
+        f"1 row(s) written to {w.places}, 0 appended to {w.curation}, 0 refused\n"
+    )
+
+
+def test_the_command_prints_the_warnings_as_errors(
+    w: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    w.patch.write_text("{\n", encoding="utf-8")
+    apply_command(w, "--keep")
+    assert capsys.readouterr().err.startswith(f"{w.patch}:1: not JSON")
+
+
+@pytest.mark.parametrize("refused,status", [("uurd", 0), ("hus", 1)])
+def test_the_command_fails_when_a_decision_is_refused(w: World, refused: str, status: int) -> None:
+    append(w.patch, {"id": refused, "action": "skip"})
+    assert apply_command(w) == status
+
+
+def test_the_command_says_what_became_of_the_patch_when_apply_fails(
+    w: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    append(w.patch, entry(2, action="skip"))
+    theirs = places_text(ROWS + [{"kind": "settlement", "mooring": "Nai", "de": "Neu"}])
+    during_read(monkeypatch, lambda: w.places.write_text(theirs, encoding="utf-8"))
+    apply_command(w)
+    assert capsys.readouterr().err.endswith(f"nothing applied -- {w.patch} restored\n")
+
+
+def test_apply_logs_each_decision_and_sums_up(w: World) -> None:
+    mixed_patch(w)
+    report = w.apply()
+    assert len(report.refused) == 2
+    (snapshot,) = archived(w)
+    assert said(report) == (
         # an entry without a `line` comes first
         f"  refused patch line 4 (None / None): no row with id 'nai' in {w.places} "
         "(deleted since the export?)\n"
@@ -453,67 +517,65 @@ def test_apply_logs_each_decision_and_sums_up(w: World, capsys: pytest.CaptureFi
     )
 
 
-def test_dry_run_says_what_would_change(w: World, capsys: pytest.CaptureFixture[str]) -> None:
+def test_dry_run_says_what_would_change(w: World) -> None:
     mixed_patch(w)
-    assert w.apply(dry_run=True) == 2
-    out = capsys.readouterr().out
-    assert out.endswith(
+    *decisions, total = w.apply(dry_run=True).log
+    assert total == (
         "dry run: 2 row(s) would change, 1 curation row(s) would be appended, "
-        "2 refused -- nothing written\n"
+        "2 refused -- nothing written"
     )
-    assert out.count("\n") == 5  # the four decisions above, then the sum
+    assert len(decisions) == 4
 
 
-def test_keep_applies_without_archiving_or_appending_back(
-    w: World, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_keep_applies_without_archiving_or_appending_back(w: World) -> None:
     mixed_patch(w)
     patch_before = w.patch.read_bytes()
-    assert w.apply(keep=True) == 2
-    assert capsys.readouterr().out.splitlines()[-1] == (
+    report = w.apply(keep=True)
+    assert len(report.refused) == 2
+    assert said(report).splitlines()[-1] == (
         f"2 row(s) written to {w.places}, 1 appended to {w.curation}, 2 refused"
     )
     assert w.patch.read_bytes() == patch_before
 
 
 def test_a_refused_entry_decided_again_meanwhile_is_counted_apart(
-    w: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    w: World, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     append(w.patch, entry(4, action="osm", osm="node/5"), {"id": "nai", "action": "skip"})
     during_read(monkeypatch, lambda: append(w.patch, entry(4, action="clear")))
-    assert w.apply() == 2
+    report = w.apply()
+    assert len(report.refused) == 2
     assert (
         f"1 refused entry kept in {w.patch} (1 decided again in the browser meanwhile)\n"
-        in capsys.readouterr().out
+        in said(report)
     )
 
 
-def test_a_local_slug_of_another_row_is_taken(w: World, capsys: pytest.CaptureFixture[str]) -> None:
+def test_a_local_slug_of_another_row_is_taken(w: World) -> None:
     koog = {"id": "koog", "kind": "koog", "mooring": "Kuuch", "osm": "local/taarep"}
     w.places.write_text(places_text(ROWS + [koog]), encoding="utf-8")
     append(w.patch, entry(2, action="local", slug="taarep", lat=54.6, lon=8.9))
-    assert w.apply() == 1
-    assert "local/taarep is already taken" in capsys.readouterr().out
+    report = w.apply()
+    assert len(report.refused) == 1
+    assert "local/taarep is already taken" in said(report)
     assert w.curation.read_text(encoding="utf-8") == CURATION_HEADER
 
 
-def test_an_object_another_row_claims_is_refused(
-    w: World, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_an_object_another_row_claims_is_refused(w: World) -> None:
     # node/9 is the object of `hus`, line 4: the list would be refused (#94)
     append(w.patch, entry(2, action="osm", osm="node/9"))
-    assert w.apply() == 1
-    assert "node/9 is already claimed by line 4" in capsys.readouterr().out
+    report = w.apply()
+    assert len(report.refused) == 1
+    assert "node/9 is already claimed by line 4" in said(report)
 
 
-def test_a_wikidata_item_another_row_claims_is_refused(
-    w: World, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_a_wikidata_item_another_row_claims_is_refused(w: World) -> None:
     denmark = {"id": "daanemark", "kind": "country", "mooring": "Däänemark", "wikidata": "Q35"}
     w.places.write_text(places_text(ROWS + [denmark]), encoding="utf-8")
     append(w.patch, entry(2, action="osm", osm="node/1", wikidata="Q35"))
-    assert w.apply() == 1
-    assert "Q35 is already claimed by line 5" in capsys.readouterr().out
+    report = w.apply()
+    assert len(report.refused) == 1
+    assert "Q35 is already claimed by line 5" in said(report)
 
 
 def test_of_two_decisions_for_one_object_the_first_is_applied(w: World) -> None:
@@ -526,19 +588,18 @@ def test_of_two_decisions_for_one_object_the_first_is_applied(w: World) -> None:
     }
 
 
-def test_a_decision_that_names_one_object_twice_is_refused(
-    w: World, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_a_decision_that_names_one_object_twice_is_refused(w: World) -> None:
     append(w.patch, entry(2, action="osm", osm="node/1; node/1"))
-    assert w.apply() == 1
-    assert "node/1 twice in `osm`" in capsys.readouterr().out
+    report = w.apply()
+    assert len(report.refused) == 1
+    assert "node/1 twice in `osm`" in said(report)
 
 
 def test_a_row_may_be_given_the_object_it_holds_already(w: World) -> None:
     matched = ROWS[0] | {"osm": "node/1", "status": "auto"}
     w.places.write_text(places_text([matched] + ROWS[1:]), encoding="utf-8")
     append(w.patch, entry(2, action="osm", osm="node/1"))
-    assert w.apply() == 0
+    assert w.apply().refused == []
 
 
 def reference(w: World, ident: str) -> tuple[str, str, str]:
@@ -567,35 +628,30 @@ def test_a_skip_decision_leaves_nothing_of_a_match_nobody_checked(w: World) -> N
     assert reference(w, "taarep") == ("", "", "skip")
 
 
-def test_a_decision_for_a_row_that_lost_its_frisian_name_is_refused(
-    w: World, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_a_decision_for_a_row_that_lost_its_frisian_name_is_refused(w: World) -> None:
     nameless = ROWS[0] | {"mooring": ""}
     w.places.write_text(places_text([nameless] + ROWS[1:]), encoding="utf-8")
     append(w.patch, entry(2, action="osm", osm="node/1"))
-    assert w.apply() == 1
+    report = w.apply()
+    assert len(report.refused) == 1
     assert (
         f"{w.places}:2 is not the matcher's to fill (no Frisian name: status=empty, osm=-)\n"
-        in capsys.readouterr().out
+        in said(report)
     )
 
 
-def test_the_log_of_a_skip_shows_the_reference_it_leaves_empty(
-    w: World, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_the_log_of_a_skip_shows_the_reference_it_leaves_empty(w: World) -> None:
     with_an_auto_match(w)
     append(w.patch, entry(2, action="skip"))
-    w.apply(dry_run=True)
-    assert "Taarep (Dorf): osm = -, wikidata = -, status = skip\n" in capsys.readouterr().out
+    report = w.apply(dry_run=True)
+    assert "Taarep (Dorf): osm = -, wikidata = -, status = skip\n" in said(report)
 
 
-def test_the_log_of_a_pick_shows_the_wikidata_item_it_leaves_empty(
-    w: World, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_the_log_of_a_pick_shows_the_wikidata_item_it_leaves_empty(w: World) -> None:
     with_an_auto_match(w)
     append(w.patch, entry(2, action="osm", osm="way/5"))
-    w.apply(dry_run=True)
-    assert "Taarep (Dorf): osm = way/5, wikidata = -, status = ok\n" in capsys.readouterr().out
+    report = w.apply(dry_run=True)
+    assert "Taarep (Dorf): osm = way/5, wikidata = -, status = ok\n" in said(report)
 
 
 def test_no_patch_is_an_error(w: World) -> None:
@@ -609,11 +665,11 @@ def test_no_patch_is_an_error(w: World) -> None:
 
 
 def test_a_failed_apply_says_the_patch_is_restored(
-    w: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    w: World, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     append(w.patch, entry(2, action="skip"))
     theirs = places_text(ROWS + [{"kind": "settlement", "mooring": "Nai", "de": "Neu"}])
     during_read(monkeypatch, lambda: w.places.write_text(theirs, encoding="utf-8"))
-    with pytest.raises(PipelineError, match="changed on disk"):
+    with pytest.raises(PipelineError, match="changed on disk") as failed:
         w.apply()
-    assert capsys.readouterr().err == f"nothing applied -- {w.patch} restored\n"
+    assert failed.value.__notes__ == [f"nothing applied -- {w.patch} restored"]

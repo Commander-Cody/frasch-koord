@@ -317,7 +317,9 @@ def patch_key(value: object) -> str | None:
     return ident if isinstance(ident, str) and ident else None
 
 
-def read_patch(path: StrPath) -> list[PatchLine]:
+def read_patch(
+    path: StrPath, not_json: Callable[[int, ValueError], object] = lambda n, exc: None
+) -> list[PatchLine]:
     """-> the last entry per row, in line order.  The browser appends, never
     rewrites, so a row decided twice simply has two lines; `clear` withdraws,
     whatever line either was sent with.
@@ -325,11 +327,8 @@ def read_patch(path: StrPath) -> list[PatchLine]:
     A line that breaks the patch schema counts like any other: apply
     refuses and keeps it, and as the newest line about its row it holds
     back the row's earlier decision.  A line without a usable id is a
-    decision of its own, never swallowed by a later one."""
-
-    def not_json(n: int, exc: ValueError) -> None:
-        print(f"{path}:{n}: not JSON ({exc}) -- ignored", file=sys.stderr)
-
+    decision of its own, never swallowed by a later one.  A line that is no
+    JSON is left out and goes to `not_json` with its number."""
     last: dict[str | tuple[str, int], PatchLine] = {}
     with open(path, encoding="utf-8") as fh:
         for line in patch_lines(fh, not_json):
@@ -491,73 +490,88 @@ def fmt_deg(v: float) -> str:
     return f"{v:.6f}".rstrip("0").rstrip(".")
 
 
-def apply(ws: Workspace, reg: Registry, *, dry_run: bool = False, keep: bool = False) -> int:
+@final
+@dataclasses.dataclass(frozen=True)
+class Refusal:
+    """A line of the patch apply refused, and why."""
+
+    line: PatchLine
+    why: str
+
+
+@dataclasses.dataclass
+class ApplyReport:
+    """What an apply made of the patch, for the command to print."""
+
+    applied: int = 0  # the rows it wrote -- on a dry run, would write
+    # the lines it refused: they stay in the patch
+    refused: list[Refusal] = dataclasses.field(default_factory=list)
+    # what it did, a line each: every decision, then where the patch went
+    log: list[str] = dataclasses.field(default_factory=list)
+    # the lines of the patch it could not read
+    warnings: list[str] = dataclasses.field(default_factory=list)
+
+    def refuse(self, line: PatchLine, why: str) -> None:
+        self.refused.append(Refusal(line, why))
+        self.log.append(f"  refused patch line {line.number} ({_names_of(line)}): {why}")
+
+
+def apply(
+    ws: Workspace, reg: Registry, *, dry_run: bool = False, keep: bool = False
+) -> ApplyReport:
     """Write the decisions of the workspace's patch into its name list and
-    curation (see the module docstring); -> how many it refused.  Those stay
-    in the patch; a problem that stops the whole apply raises.  `dry_run`:
-    say what would change and write nothing.  `keep`: leave the patch file
-    where it is."""
+    curation (see the module docstring); -> what it did.  The decisions it
+    refused stay in the patch; a problem that stops the whole apply raises,
+    with what became of the files as the error's notes.  `dry_run`: say what
+    would change and write nothing.  `keep`: leave the patch file where it
+    is."""
     with files.lock(ws.lock):
         return _apply(ws, reg, dry_run, keep)
 
 
-def _apply(ws: Workspace, reg: Registry, dry_run: bool, keep: bool) -> int:
-    names, curation, patch = ws.names, ws.curation, ws.patch
+def _apply(ws: Workspace, reg: Registry, dry_run: bool, keep: bool) -> ApplyReport:
     # Everything that can refuse the whole run is checked before the patch is
     # touched: the name list, and curation.csv (read once, kept as bytes, so
     # the rows appended to it land after exactly what was checked).
-    lists = _read_lists(names, curation, reg)
-    if not os.path.exists(patch):
+    lists = _read_lists(ws.names, ws.curation, reg)
+    if not os.path.exists(ws.patch):
         raise PipelineError(
-            f"{patch} not found -- decide some rows in the browser first (web/, `?curate`)"
+            f"{ws.patch} not found -- decide some rows in the browser first (web/, `?curate`)"
         )
     # Take the patch out of the browser's way first, then read it: the dev
     # server appends with O_APPEND, so a decision made from now on starts
     # a fresh patch file instead of landing in one that is being archived.
-    snapshot = None if dry_run or keep else _take_snapshot(patch)
-
-    cur_written: str | None = None  # digest of the curation.csv apply wrote
-    decisions = _Decisions()
+    snapshot = None if dry_run or keep else _take_snapshot(ws.patch)
     try:
-        for line in read_patch(snapshot or patch):
-            _decide_entry(line, lists, decisions)
-
-        if dry_run:
-            print(
-                f"dry run: {decisions.applied} row(s) would change, "
-                f"{len(decisions.new_curation)} curation row(s) would be appended, "
-                f"{decisions.refused} refused -- nothing written"
-            )
-            return decisions.refused
-
-        if decisions.applied:
-            # curation.csv first, places.csv last: when the places.csv write
-            # fails (a spreadsheet saved it meanwhile, say), the curation rows
-            # come out again, so a `local/<slug>` row never lands without its
-            # position and a failed apply leaves both files as they were
-            if decisions.new_curation:
-                cur_text = curationlist.appended(
-                    lists.cur_data, lists.cur_fields, decisions.new_curation
-                )
-                files.atomic_write(curation, cur_text, expect=lists.cur_digest)
-                cur_written = files.digest(cur_text)
-            lists.places.write()
-    except BaseException:
-        if cur_written:
-            added = [c["osm"] for c in decisions.new_curation]
-            unwrite_curation(curation, lists.cur_data, cur_written, added)
+        decisions = _decide_all(snapshot or ws.patch, lists)
+        if not dry_run:
+            _write(lists, decisions)
+    except BaseException as failed:
         if snapshot:
-            restore_patch(snapshot, patch)
-            print(f"nothing applied -- {patch} restored", file=sys.stderr)
+            restore_patch(snapshot, ws.patch)
+            failed.add_note(f"nothing applied -- {ws.patch} restored")
         raise
-
+    report = decisions.report
     if snapshot:
-        _keep_refused(snapshot, patch, decisions.kept_back)
-    print(
-        f"{decisions.applied} row(s) written to {names}, "
-        f"{len(decisions.new_curation)} appended to {curation}, {decisions.refused} refused"
+        report.log += _keep_refused(snapshot, ws.patch, [r.line for r in report.refused])
+    report.log.append(_sum(decisions, lists, dry_run))
+    return report
+
+
+def _sum(decisions: _Decisions, lists: _Lists, dry_run: bool) -> str:
+    """The last line of the log: how many rows changed, were appended and refused."""
+    applied, refused = decisions.report.applied, len(decisions.report.refused)
+    appended = len(decisions.new_curation)
+    if dry_run:
+        return (
+            f"dry run: {applied} row(s) would change, "
+            f"{appended} curation row(s) would be appended, "
+            f"{refused} refused -- nothing written"
+        )
+    return (
+        f"{applied} row(s) written to {lists.places.path}, "
+        f"{appended} appended to {lists.curation}, {refused} refused"
     )
-    return decisions.refused
 
 
 @dataclasses.dataclass
@@ -608,31 +622,35 @@ def _take_snapshot(patch: str) -> str:
 class _Decisions:
     """What apply made of the patch's entries."""
 
-    applied: int = 0
+    report: ApplyReport = dataclasses.field(default_factory=ApplyReport)
     new_curation: list[dict[str, str]] = dataclasses.field(default_factory=list)
-    # refused entries survive the archiving
-    kept_back: list[PatchLine] = dataclasses.field(default_factory=list)
 
-    @property
-    def refused(self) -> int:
-        return len(self.kept_back)
 
-    def refuse(self, line: PatchLine, why: str) -> None:
-        self.kept_back.append(line)
-        print(f"  refused patch line {line.number} ({_names_of(line)}): {why}")
+def _decide_all(patch: str, lists: _Lists) -> _Decisions:
+    """Write every entry of the patch file `patch` into its row of the lists
+    (in memory), or refuse it."""
+    decisions = _Decisions()
+
+    def not_json(n: int, exc: ValueError) -> None:
+        decisions.report.warnings.append(f"{patch}:{n}: not JSON ({exc}) -- ignored")
+
+    for line in read_patch(patch, not_json):
+        _decide_entry(line, lists, decisions)
+    return decisions
 
 
 def _decide_entry(line: PatchLine, lists: _Lists, decisions: _Decisions) -> None:
     """Write one entry of the patch into its row, or refuse it."""
+    report = decisions.report
     if isinstance(line, RefusedLine):
-        decisions.refuse(line, line.problem)
+        report.refuse(line, line.problem)
         return
     e = line.entry
     if e["action"] == "clear":
         return  # withdrawn in the browser
     row = lists.by_id.get(e["id"])
     if row is None:
-        decisions.refuse(
+        report.refuse(
             line, f"no row with id {e['id']!r} in {lists.places.path} (deleted since the export?)"
         )
         return
@@ -640,13 +658,13 @@ def _decide_entry(line: PatchLine, lists: _Lists, decisions: _Decisions) -> None
     if why is None:
         why = _decide_row(e, row, lists, decisions.new_curation)
     if why:
-        decisions.refuse(line, why)
+        report.refuse(line, why)
         return
-    print(
+    report.log.append(
         f"  {lists.places.path}:{row.line} {placelist.describe(row, lists.places.reg)}: "
         f"{decision_text(e, row, lists.curation)}"
     )
-    decisions.applied += 1
+    report.applied += 1
 
 
 def _decide_row(
@@ -663,15 +681,44 @@ def _decide_row(
     return why
 
 
-def _keep_refused(snapshot: str, patch: str, kept_back: Sequence[PatchLine]) -> None:
-    """Say where the applied patch went, and append what apply refused back
-    to the live one."""
-    print(f"patch applied, moved to {snapshot}")
+def _write(lists: _Lists, decisions: _Decisions) -> None:
+    """Write what the decisions changed: curation.csv first, places.csv
+    last.  When the places.csv write fails (a spreadsheet saved it meanwhile,
+    say), the curation rows come out again, so a `local/<slug>` row never
+    lands without its position and a failed apply leaves both files as they
+    were."""
+    if not decisions.report.applied:
+        return
+    written = _append_curation(lists, decisions.new_curation)
+    try:
+        lists.places.write()
+    except BaseException as failed:
+        if written:
+            added = [c["osm"] for c in decisions.new_curation]
+            failed.add_note(unwrite_curation(lists.curation, lists.cur_data, written, added))
+        raise
+
+
+def _append_curation(lists: _Lists, new_rows: Sequence[Mapping[str, str]]) -> str | None:
+    """Append the rows to curation.csv, if it still is what apply checked;
+    -> the digest of the file as written, None when there was nothing to
+    append."""
+    if not new_rows:
+        return None
+    text = curationlist.appended(lists.cur_data, lists.cur_fields, new_rows)
+    files.atomic_write(lists.curation, text, expect=lists.cur_digest)
+    return files.digest(text)
+
+
+def _keep_refused(snapshot: str, patch: str, kept_back: Sequence[PatchLine]) -> list[str]:
+    """Append what apply refused back to the live patch; -> where the
+    applied patch went and what was kept, for the log."""
+    said = [f"patch applied, moved to {snapshot}"]
     if kept_back:
         # a refused decision is not lost: it goes back into the patch (and
         # so stays "done" in the browser) until fixed or cleared
         n = append_back(patch, kept_back)
-        print(
+        said.append(
             f"{n} refused entr{'y' if n == 1 else 'ies'} kept in {patch}"
             + (
                 f" ({len(kept_back) - n} decided again in the browser meanwhile)"
@@ -679,6 +726,7 @@ def _keep_refused(snapshot: str, patch: str, kept_back: Sequence[PatchLine]) -> 
                 else ""
             )
         )
+    return said
 
 
 def append_back(path: str, refused: Iterable[PatchLine]) -> int:
@@ -730,11 +778,11 @@ def restore_patch(snapshot: str, path: str) -> None:
         os.unlink(newer)
 
 
-def unwrite_curation(path: str, old: bytes | None, written: str, added: Sequence[str]) -> None:
+def unwrite_curation(path: str, old: bytes | None, written: str, added: Sequence[str]) -> str:
     """Undo apply's curation.csv write after the places.csv write failed: put
     back `old` (its bytes before; None = there was no file), unless someone
     changed the file after apply wrote it (`written`, its digest) -- then say
-    which rows to take out by hand."""
+    which rows to take out by hand.  -> what became of the file."""
     try:
         if old is not None:
             files.atomic_write(path, old, expect=written)
@@ -743,14 +791,12 @@ def unwrite_curation(path: str, old: bytes | None, written: str, added: Sequence
         else:
             raise errors.Conflict(f"{path} changed on disk meanwhile")
     except (OSError, errors.PipelineError) as exc:
-        print(
+        return (
             f"error: could not take the new rows out of {path} again ({exc}) "
             f"-- delete the rows for {', '.join(added)} by hand before the next "
-            f"apply",
-            file=sys.stderr,
+            f"apply"
         )
-    else:
-        print(f"{path} put back as it was", file=sys.stderr)
+    return f"{path} put back as it was"
 
 
 # ------------------------------------------------------------------- main ---
@@ -763,9 +809,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     ws = cli.workspace(args)
     reg = dialects.read(ws.dialects)
     if args.cmd == "apply":
-        return 1 if apply(ws, reg, dry_run=args.dry_run, keep=args.keep) else 0
+        report = apply(ws, reg, dry_run=args.dry_run, keep=args.keep)
+        say_applied(report)
+        return 1 if report.refused else 0
     export(ws, reg)
     return 0
+
+
+def say_applied(report: ApplyReport) -> None:
+    """Print what an apply did."""
+    for warning in report.warnings:
+        print(warning, file=sys.stderr)
+    for line in report.log:
+        print(line)
 
 
 def with_subcommand(

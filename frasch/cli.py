@@ -15,7 +15,7 @@ import sys
 from collections.abc import Sequence
 from typing import Protocol
 
-from frasch import paths
+from frasch import errors, paths
 from frasch.errors import PipelineError
 from frasch.paths import Workspace
 
@@ -95,7 +95,7 @@ def command(main: Command) -> Command:
         try:
             return main(argv)
         except PipelineError as exc:
-            print(exc, file=sys.stderr)
+            print(errors.text(exc), file=sys.stderr)
             return 1
 
     return run

@@ -37,7 +37,7 @@ import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 
-from frasch import check_inputs, check_outputs, cli, curate, files, pipeline
+from frasch import check_inputs, check_outputs, cli, curate, errors, files, pipeline
 from frasch.dialects import Registry
 from frasch.errors import PipelineError
 from frasch.paths import Workspace
@@ -117,7 +117,7 @@ def steps(inputs: Inputs) -> list[Step]:
         Step("ids and input check", inputs.check),
         Step(
             "curation decisions",
-            unless(lambda: curate.apply(ws, inputs.reg), Outcome.WARNED),
+            lambda: apply_decisions(ws, inputs.reg),
             needed=lambda: os.path.exists(ws.patch),
             skipped="none made",
         ),
@@ -129,6 +129,14 @@ def steps(inputs: Inputs) -> list[Step]:
             unless(lambda: check_outputs.run(Run(ws, inputs.reg)), Outcome.FAILED),
         ),
     ]
+
+
+def apply_decisions(ws: Workspace, reg: Registry) -> Outcome:
+    """Write the curation view's decisions back and say what became of
+    them; one that is refused is something to look at."""
+    report = curate.apply(ws, reg)
+    curate.say_applied(report)
+    return Outcome.WARNED if report.refused else Outcome.DONE
 
 
 def build_step(output: Output, inputs: Inputs) -> Step:
@@ -174,7 +182,7 @@ def attempt(step: Step) -> Outcome:
     try:
         return step.run()
     except PipelineError as stop:
-        print(stop, file=sys.stderr)
+        print(errors.text(stop), file=sys.stderr)
         return Outcome.FAILED
 
 

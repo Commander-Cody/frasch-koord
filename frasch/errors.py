@@ -13,6 +13,13 @@ class PipelineError(Exception):
     file someone else is writing -- as opposed to a bug."""
 
 
+def text(error: BaseException) -> str:
+    """What an error says: its message, and under it its notes -- what
+    became of the files, as the code it passed through on its way up added
+    it (`add_note`)."""
+    return "\n".join([str(error), *getattr(error, "__notes__", ())])
+
+
 def rebuild(output: str) -> str:
     """How to rebuild a generated file, for a message that says so: the
     recipe of the output with this name in the pipeline's table
