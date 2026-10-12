@@ -389,11 +389,20 @@ def patch_validator() -> jsonschema.Draft202012Validator:
 
 def schema_problem(entry: object) -> str | None:
     """What breaks names/curate-patch.schema.json in one entry, or None."""
-    error = next(iter(sorted(patch_validator().iter_errors(entry), key=str)), None)
+    error = min(patch_validator().iter_errors(entry), key=_telling_first, default=None)
     if error is None:
         return None
     where = "/".join(map(str, error.absolute_path))
     return f"{where + ': ' if where else ''}{error.message} (curate-patch.schema.json)"
+
+
+def _telling_first(error: jsonschema.ValidationError) -> tuple[bool, str]:
+    """Orders the errors of an entry: a field no branch of the schema
+    evaluated comes last.  That is the problem of an entry with a field of
+    another action -- but an action's branch that fails for another reason
+    evaluates none of its fields, and the schema then calls them all
+    unexpected too."""
+    return error.validator == "unevaluatedProperties", str(error)
 
 
 def owner_problem(row: PlaceRow, names: PlaceList) -> str | None:

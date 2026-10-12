@@ -378,6 +378,28 @@ def test_an_entry_that_breaks_the_patch_schema_is_refused_and_kept(w: World) -> 
     assert lines(w.patch) == [broken]
 
 
+def test_a_decision_without_a_field_its_action_needs_is_refused_with_what_the_schema_says(
+    w: World,
+) -> None:
+    append(w.patch, entry(2, action="local", slug="taarep", lat=54.6))
+    assert "'lon' is a required property (curate-patch.schema.json)" in said(w.apply())
+
+
+def test_a_decision_with_a_field_of_another_action_is_refused(w: World) -> None:
+    # an area label is a `local` decision's: OSM's own object has its shape
+    append(w.patch, entry(2, action="osm", osm="node/1", polygon_km2=1.5))
+    assert "'polygon_km2' was unexpected" in said(w.apply())
+
+
+def test_a_bad_value_is_what_the_schema_says_of_an_entry_not_the_fields_it_then_misses(
+    w: World,
+) -> None:
+    # a branch that fails evaluates none of its fields: the schema then also
+    # calls every one of them unexpected, which is not the problem
+    append(w.patch, entry(2, action="local", slug="taarep", lat=[54.6], lon=8.9))
+    assert "): lat: [54.6] is not of type 'number'" in said(w.apply())
+
+
 def test_a_refused_line_with_keys_the_schema_does_not_know_comes_back_unchanged(
     w: World,
 ) -> None:
