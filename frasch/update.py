@@ -37,7 +37,7 @@ import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 
-from frasch import check_inputs, check_outputs, cli, curate, errors, files, pipeline
+from frasch import check_inputs, check_outputs, cli, curate, errors, files, pipeline, worklist
 from frasch.dialects import Registry
 from frasch.errors import PipelineError
 from frasch.paths import Workspace
@@ -122,7 +122,7 @@ def steps(inputs: Inputs) -> list[Step]:
             skipped="none made",
         ),
         *(build_step(output, inputs) for output in pipeline.OUTPUTS),
-        Step("curation worklist", done(lambda: curate.export(ws, inputs.reg))),
+        Step("curation worklist", done(lambda: worklist.export(ws, inputs.reg))),
         # without the extracts: with them, the check would scan them again
         Step(
             "output check",

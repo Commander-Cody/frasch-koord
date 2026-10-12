@@ -12,9 +12,11 @@ from typing import Any, NoReturn
 import pytest
 
 from frasch import curate
+from frasch import patch
 from frasch.__main__ import main
 from frasch import match
 from frasch import placelist
+from frasch import worklist
 from frasch.errors import PipelineError
 from frasch.paths import StrPath, Workspace
 from conftest import (
@@ -94,13 +96,13 @@ def w(world: Path) -> World:
 def during_read(monkeypatch: pytest.MonkeyPatch, action: Callable[[], object]) -> None:
     """Run `action` just before apply reads its snapshot of the patch -- the
     moment the dev server's next append can arrive."""
-    real = curate.read_patch
+    real = patch.read_patch
 
-    def hooked(path: StrPath, *args: Any) -> list[curate.PatchLine]:
+    def hooked(path: StrPath, *args: Any) -> list[patch.PatchLine]:
         action()
         return real(path, *args)
 
-    monkeypatch.setattr(curate, "read_patch", hooked)
+    monkeypatch.setattr(patch, "read_patch", hooked)
 
 
 def said(report: curate.ApplyReport) -> str:
@@ -310,10 +312,10 @@ def test_a_curation_session_survives_hand_edits_to_the_list(w: World) -> None:
     w.places.write_text(places_text(SESSION), encoding="utf-8")
     write_candidates(w.work / "candidates.jsonl")
     assert match.run(w.ws, REGISTRY, offline=True) == 0
-    worklist = w.work / "curate.json"
-    curate.export(w.ws, REGISTRY)
+    worklist_file = w.work / "curate.json"
+    worklist.export(w.ws, REGISTRY)
     # the browser decides every row of it, one object each
-    exported = json.loads(worklist.read_text(encoding="utf-8"))["rows"]
+    exported = json.loads(worklist_file.read_text(encoding="utf-8"))["rows"]
     decided = {row["id"]: f"node/{n}" for n, row in enumerate(exported, start=1)}
     append(
         w.patch,
@@ -615,6 +617,11 @@ def test_a_decision_that_names_one_object_twice_is_refused(w: World) -> None:
     report = w.apply()
     assert len(report.refused) == 1
     assert "node/1 twice in `osm`" in said(report)
+
+
+def test_an_osm_decision_that_names_no_object_is_refused(w: World) -> None:
+    append(w.patch, entry(2, action="osm", osm=" ; "))
+    assert "`osm` names no object" in said(w.apply())
 
 
 def test_a_row_may_be_given_the_object_it_holds_already(w: World) -> None:
