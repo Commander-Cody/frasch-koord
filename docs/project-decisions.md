@@ -1099,17 +1099,21 @@ server, which stored entries that `apply` then refused.
   `curate.apply` returns an `ApplyReport` — rows applied, refusals with
   their reasons, the log, the warnings — and `worklist.export` an
   `ExportReport` (owner's choice: export too); `frasch curate` and `frasch
-  update` print them with `cli.say`. What a failed apply did to the patch
-  and to `curation.csv` is a note on the error it lets pass (`add_note`),
-  which a command prints under the message (`errors.text`). The printed text
-  is what it was.
+  update` print them with `cli.say`. An apply that fails has no report to
+  return: what it had to say until then -- its warnings, the decisions, what
+  became of `curation.csv` and of the patch -- are notes on the error it
+  lets pass (`add_note`), which a command prints under the message
+  (`errors.text`). The printed text is what it was, but for that: the lines
+  of a failed apply come after the error and as errors, no longer before it
+  on the standard output.
 - **Smaller.** `curate.json` replaces the old file in one step; the dev
   server may be handing it out. `curation.csv` is read once by `apply`, as
   its comment said while the code read it twice. Candidates of a snapshot
   extract (`schleswig-holstein-260923.osm.pbf`) marked nothing `in_sh`: the
   source was the file name up to `-latest`.
 - **Names.** Of the seven things called "decide", the four of the curation
-  are gone into the table. `match._decide`, `match._decide_by_rank` and the
+  are gone: two into the table, and `apply` enters a patch line into its
+  row (`_enter_patch`, `_enter_line`). `match._decide`, `match._decide_by_rank` and the
   detail view's `decide` callback keep their names (owner's choice): each is
   the only one of its file.
 - **No generated file is part of the change**, and nothing `apply` took

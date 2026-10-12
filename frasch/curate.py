@@ -78,7 +78,9 @@ class Refusal:
 
 @dataclasses.dataclass
 class ApplyReport:
-    """What an apply made of the patch, for the command to print."""
+    """What an apply made of the patch, for the command to print.  An apply
+    that fails raises instead: the warnings and the log are then the notes of
+    its error."""
 
     applied: int = 0  # the rows it wrote -- on a dry run, would write
     # the lines it refused: they stay in the patch
@@ -99,9 +101,9 @@ def apply(
     """Write the decisions of the workspace's patch into its name list and
     curation (see the module docstring); -> what it did.  The decisions it
     refused stay in the patch; a problem that stops the whole apply raises,
-    with what became of the files as the error's notes.  `dry_run`: say what
-    would change and write nothing.  `keep`: leave the patch file where it
-    is."""
+    and its report goes with the error as notes: what it had to say until
+    then, and what became of the files.  `dry_run`: say what would change and
+    write nothing.  `keep`: leave the patch file where it is."""
     with files.lock(ws.lock):
         return _apply(ws, reg, dry_run, keep)
 
@@ -119,16 +121,20 @@ def _apply(ws: Workspace, reg: Registry, dry_run: bool, keep: bool) -> ApplyRepo
     # server appends with O_APPEND, so a decision made from now on starts
     # a fresh patch file instead of landing in one that is being archived.
     snapshot = None if dry_run or keep else patch.take_snapshot(ws.patch)
+    decisions = _Decisions()
+    report = decisions.report
     try:
-        decisions = _decide_all(snapshot or ws.patch, lists)
+        _enter_patch(snapshot or ws.patch, lists, decisions)
         if not dry_run:
             _write(lists, decisions)
     except BaseException as failed:
         if snapshot:
             patch.restore_patch(snapshot, ws.patch)
-            failed.add_note(f"nothing applied -- {ws.patch} restored")
+            report.log.append(f"nothing applied -- {ws.patch} restored")
+        # the report is lost with the error: what it says goes with that
+        for line in (*report.warnings, *report.log):
+            failed.add_note(line)
         raise
-    report = decisions.report
     if snapshot:
         report.log += _keep_refused(snapshot, ws.patch, [r.line for r in report.refused])
     report.log.append(_sum(decisions, lists, dry_run))
@@ -201,21 +207,19 @@ class _Decisions:
         )
 
 
-def _decide_all(patch_file: str, lists: _Lists) -> _Decisions:
-    """Write every entry of the patch file into its row of the lists (in
+def _enter_patch(patch_file: str, lists: _Lists, decisions: _Decisions) -> None:
+    """Enter every entry of the patch file into its row of the lists (in
     memory), or refuse it."""
-    decisions = _Decisions()
 
     def not_json(n: int, exc: ValueError) -> None:
         decisions.report.warnings.append(f"{patch_file}:{n}: not JSON ({exc}) -- ignored")
 
     for line in patch.read_patch(patch_file, not_json):
-        _decide_entry(line, lists, decisions)
-    return decisions
+        _enter_line(line, lists, decisions)
 
 
-def _decide_entry(line: PatchLine, lists: _Lists, decisions: _Decisions) -> None:
-    """Write one entry of the patch into its row, or refuse it."""
+def _enter_line(line: PatchLine, lists: _Lists, decisions: _Decisions) -> None:
+    """Enter one line of the patch into its row, or refuse it."""
     if isinstance(line, RefusedLine):
         decisions.report.refuse(line, line.problem)
         return
@@ -236,16 +240,16 @@ def _write(lists: _Lists, decisions: _Decisions) -> None:
     last.  When the places.csv write fails (a spreadsheet saved it meanwhile,
     say), the curation rows come out again, so a `local/<slug>` row never
     lands without its position and a failed apply leaves both files as they
-    were."""
+    were -- what became of curation.csv then goes into the log."""
     if not decisions.report.applied:
         return
     written = _append_curation(lists.curation, decisions.new_curation)
     try:
         lists.places.write()
-    except BaseException as failed:
+    except BaseException:
         if written:
             added = [c["osm"] for c in decisions.new_curation]
-            failed.add_note(unwrite_curation(lists.curation, written, added))
+            decisions.report.log.append(unwrite_curation(lists.curation, written, added))
         raise
 
 

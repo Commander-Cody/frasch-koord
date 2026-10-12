@@ -248,7 +248,7 @@ def test_curation_csv_edited_during_rollback_is_left_alone(
     with pytest.raises(OSError) as failed:
         w.apply()
     assert w.curation.read_text(encoding="utf-8") == theirs
-    assert "delete the rows for local/taarep by hand" in failed.value.__notes__[0]
+    assert "delete the rows for local/taarep by hand" in failed.value.__notes__[1]
 
 
 def test_local_decision_writes_both_files(w: World) -> None:
@@ -701,4 +701,33 @@ def test_a_failed_apply_says_the_patch_is_restored(
     during_read(monkeypatch, lambda: w.places.write_text(theirs, encoding="utf-8"))
     with pytest.raises(PipelineError, match="changed on disk") as failed:
         w.apply()
-    assert failed.value.__notes__ == [f"nothing applied -- {w.patch} restored"]
+    assert failed.value.__notes__[-1] == f"nothing applied -- {w.patch} restored"
+
+
+def test_a_failed_apply_still_says_what_it_made_of_the_patch(
+    w: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # its report is lost with the error: what it had to say goes with that
+    w.patch.write_text("nonsense\n", encoding="utf-8")
+    append(w.patch, entry(2, action="skip"), entry(4, action="skip"))
+    theirs = places_text(ROWS + [{"kind": "settlement", "mooring": "Nai", "de": "Neu"}])
+    during_read(monkeypatch, lambda: w.places.write_text(theirs, encoding="utf-8"))
+    with pytest.raises(PipelineError, match="changed on disk") as failed:
+        w.apply(keep=True)
+    assert failed.value.__notes__ == [
+        f"{w.patch}:1: not JSON (Expecting value: line 1 column 1 (char 0)) -- ignored",
+        f"  {w.places}:2 Taarep (Dorf): osm = -, wikidata = -, status = skip",
+        f"  refused patch line 3 (Hüs / Haus): {w.places}:4 is not the matcher's "
+        "to fill (by hand: status=ok, osm=node/9)",
+    ]
+
+
+def test_a_failed_apply_says_what_became_of_curation_csv_after_what_it_decided(
+    w: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    append(w.patch, entry(2, action="local", slug="taarep", lat=54.6, lon=8.9))
+    theirs = places_text(ROWS + [{"kind": "settlement", "mooring": "Nai", "de": "Neu"}])
+    during_read(monkeypatch, lambda: w.places.write_text(theirs, encoding="utf-8"))
+    with pytest.raises(PipelineError, match="changed on disk") as failed:
+        w.apply(keep=True)
+    assert failed.value.__notes__[1:] == [f"{w.curation} put back as it was"]

@@ -22,7 +22,7 @@ import json
 import os
 import time
 from collections.abc import Callable, Iterable, Iterator
-from typing import Any, Literal, NotRequired, TypedDict, final
+from typing import Any, NotRequired, TypedDict, final
 
 import jsonschema
 
@@ -34,7 +34,7 @@ class PatchEntry(TypedDict):
     """One line of the patch, as names/curate-patch.schema.json allows it."""
 
     id: str
-    action: Literal["osm", "local", "skip", "clear"]
+    action: str  # one of the schema's enum: an entry of `decisions.ACTIONS`
     line: NotRequired[int]
     kind: NotRequired[str]
     name: NotRequired[str]

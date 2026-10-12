@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/Commander-Cody/frasch-koord/names/curate-worklist.schema.json",
   "title": "Curation worklist",
-  "description": "names/work/curate.json: the rows of names/places.csv the last `frasch match` left for a human, with their candidates. `frasch curate export` writes it (frasch/curate.py), the curation view (web `?curate`, web/src/dev/curateWorklist.ts) reads it through the Vite dev server. It carries every rule of the name list the view needs, so that the browser reads no cell of places.csv itself.",
+  "description": "names/work/curate.json: the rows of names/places.csv the last `frasch match` left for a human, with their candidates. `frasch curate export` writes it (frasch/worklist.py), the curation view (web `?curate`, web/src/dev/curateWorklist.ts) reads it through the Vite dev server. It carries every rule of the name list the view needs, so that the browser reads no cell of places.csv itself.",
   "type": "object",
   "required": [
     "bbox",
