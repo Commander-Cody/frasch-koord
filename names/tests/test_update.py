@@ -92,6 +92,14 @@ def test_rows_left_for_review_go_to_the_curation_worklist(workspace: Path) -> No
     assert [r["id"] for r in worklist["rows"]] == ["hesbel"]
 
 
+def test_the_run_says_what_the_worklist_export_wrote(
+    workspace: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    write_places(workspace, HESBEL)
+    run(workspace)
+    assert "== curation worklist\nwrote 1 rows to " in capsys.readouterr().out
+
+
 def test_an_ambiguous_row_goes_to_the_curation_worklist_with_its_candidates(
     workspace: Path,
 ) -> None:

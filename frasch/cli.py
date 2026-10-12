@@ -12,7 +12,7 @@ import dataclasses
 import functools
 import os
 import sys
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from typing import Protocol
 
 from frasch import errors, paths
@@ -78,6 +78,16 @@ def workspace(args: argparse.Namespace) -> Workspace:
         found = found.with_work(work)
     named = {name: getattr(args, name, None) for name in WORKSPACE_FILES}
     return dataclasses.replace(found, **{k: v for k, v in named.items() if v is not None})
+
+
+def say(log: Iterable[str], warnings: Iterable[str] = ()) -> None:
+    """Print what a library call reports: its log, a line each, and what it
+    warns of as errors.  The library returns its report; only a command
+    prints it."""
+    for warning in warnings:
+        print(warning, file=sys.stderr)
+    for line in log:
+        print(line)
 
 
 class Command(Protocol):

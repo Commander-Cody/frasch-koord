@@ -21,7 +21,7 @@ import os
 from collections.abc import Iterable
 from typing import NotRequired, TypedDict
 
-from frasch import geo, kinds, matchfile, namecell, osmtags, placelist
+from frasch import files, geo, kinds, matchfile, namecell, osmtags, placelist
 from frasch.dialects import Registry
 from frasch.matchresult import Outcome
 from frasch.paths import Workspace
@@ -77,13 +77,23 @@ class Worklist(TypedDict):
     rows: list[WorkRow]
 
 
-def export(ws: Workspace, reg: Registry) -> None:
+@dataclasses.dataclass(frozen=True)
+class ExportReport:
+    """What an export wrote, for the command to print."""
+
+    rows: int  # the rows of the worklist
+    unowned: int  # left out: decided by hand since the match
+    stale: int  # left out: deleted from places.csv since the match
+    log: list[str]  # what it wrote and what it left out, a line each
+
+
+def export(ws: Workspace, reg: Registry) -> ExportReport:
     """Write the worklist for the browser: the rows the last match left for
-    a human, with their candidates."""
+    a human, with their candidates; -> what it wrote."""
     work = _read_work(ws, reg)
-    out = _work_rows(work.matches, reg)
-    _write_worklist(ws.worklist, out)
-    _print_export_summary(ws, out, work)
+    rows = _work_rows(work.matches, reg)
+    _write_worklist(ws.worklist, rows)
+    return ExportReport(len(rows), work.unowned, work.stale, _summary(ws, rows, work))
 
 
 @dataclasses.dataclass
@@ -170,12 +180,12 @@ def _write_worklist(path: str, rows: list[WorkRow]) -> None:
         "results": list(RESULTS),
         "rows": rows,
     }
-    with open(path, "w", encoding="utf-8") as fh:
-        json.dump(worklist, fh, ensure_ascii=False, indent=1)
-        fh.write("\n")
+    # in one step: the dev server may be reading the file
+    files.atomic_write(path, json.dumps(worklist, ensure_ascii=False, indent=1) + "\n")
 
 
-def _print_export_summary(ws: Workspace, rows: list[WorkRow], work: _Work) -> None:
+def _summary(ws: Workspace, rows: list[WorkRow], work: _Work) -> list[str]:
+    """What the export wrote and what it left out, a line each."""
     path = ws.worklist
     # as the docs name the file: `work/matches.jsonl`, next to the name list
     matches = os.path.relpath(ws.matches, os.path.dirname(ws.names))
@@ -183,19 +193,20 @@ def _print_export_summary(ws: Workspace, rows: list[WorkRow], work: _Work) -> No
     # a candidate has no position when the scan could not place its object
     n_pos = sum(c["lon"] is not None for r in rows for c in r["candidates"])
     n_hint = sum(r["hint_point"] is not None for r in rows)
-    print(
+    said = [
         f"wrote {len(rows)} rows to {path} "
         f"({os.path.getsize(path) / 1e3:.0f} kB): "
         f"{cnt['ambiguous']} ambiguous, {cnt['not_found']} not found; "
         f"{n_pos} candidates with a position, {n_hint} rows with a hint point"
-    )
+    ]
     if work.unowned:
-        print(
+        said.append(
             f"note: {work.unowned} row(s) have been decided by hand since "
             f"{matches} was written -- not exported"
         )
     if work.stale:
-        print(
+        said.append(
             f"note: {work.stale} row(s) of {matches} "
             f"are no longer in places.csv (stale, re-run `frasch match`)"
         )
+    return said

@@ -122,7 +122,7 @@ def steps(inputs: Inputs) -> list[Step]:
             skipped="none made",
         ),
         *(build_step(output, inputs) for output in pipeline.OUTPUTS),
-        Step("curation worklist", done(lambda: worklist.export(ws, inputs.reg))),
+        Step("curation worklist", done(lambda: cli.say(worklist.export(ws, inputs.reg).log))),
         # without the extracts: with them, the check would scan them again
         Step(
             "output check",
@@ -135,7 +135,7 @@ def apply_decisions(ws: Workspace, reg: Registry) -> Outcome:
     """Write the curation view's decisions back and say what became of
     them; one that is refused is something to look at."""
     report = curate.apply(ws, reg)
-    curate.say_applied(report)
+    cli.say(report.log, report.warnings)
     return Outcome.WARNED if report.refused else Outcome.DONE
 
 

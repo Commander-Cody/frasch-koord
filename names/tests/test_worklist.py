@@ -76,17 +76,17 @@ EXPORT_PLACES = [
 ]
 
 
-def export(world: Path, *matches: matchfile.Entry) -> None:
+def export(world: Path, *matches: matchfile.Entry) -> worklist.ExportReport:
     """Export the worklist of a name list `matches` is the matches file of."""
     matchfile.write(str(world / "work" / "matches.jsonl"), matches)
-    worklist.export(workspace(world), REGISTRY)
+    return worklist.export(workspace(world), REGISTRY)
 
 
-def export_the_review_rows(world: Path) -> Path:
+def report_of_the_review_rows(world: Path) -> worklist.ExportReport:
     """Export EXPORT_PLACES after a match that left three of its rows for
-    review, a decided and a deleted one, and one it matched; -> the worklist."""
+    review, a decided and a deleted one, and one it matched; -> the report."""
     (world / "places.csv").write_text(places_text(EXPORT_PLACES), encoding="utf-8")
-    export(
+    return export(
         world,
         left("kirchwarft", "not_found", "no candidate"),
         left("kampen", "ambiguous", "2 clusters", KAMPEN, KAMPEN_DK, hint_point=[8.3, 54.9, 25.0]),
@@ -95,17 +95,22 @@ def export_the_review_rows(world: Path) -> Path:
         MATCHED,  # not for the worklist
         left("bol", "not_found", "too far", hint_point=[9.02, 54.8, 15.0]),
     )
+
+
+def export_the_review_rows(world: Path) -> Path:
+    """Export as `report_of_the_review_rows`; -> the worklist."""
+    report_of_the_review_rows(world)
     return world / "work" / "curate.json"
 
 
 def test_the_exported_worklist_keeps_its_schema(world: Path) -> None:
-    worklist = json.loads(export_the_review_rows(world).read_text(encoding="utf-8"))
-    assert schema_problems(worklist, "curate-worklist") == []
+    exported = json.loads(export_the_review_rows(world).read_text(encoding="utf-8"))
+    assert schema_problems(exported, "curate-worklist") == []
 
 
 def test_the_worklist_names_the_class_tags_the_most_telling_first(world: Path) -> None:
-    worklist = json.loads(export_the_review_rows(world).read_text(encoding="utf-8"))
-    assert worklist["class_keys"] == [
+    exported = json.loads(export_the_review_rows(world).read_text(encoding="utf-8"))
+    assert exported["class_keys"] == [
         "place",
         "natural",
         "boundary",
@@ -119,8 +124,8 @@ def test_the_worklist_names_the_class_tags_the_most_telling_first(world: Path) -
 
 
 def test_the_worklist_names_the_place_values_of_a_settlement(world: Path) -> None:
-    worklist = json.loads(export_the_review_rows(world).read_text(encoding="utf-8"))
-    assert worklist["settlement_places"] == [
+    exported = json.loads(export_the_review_rows(world).read_text(encoding="utf-8"))
+    assert exported["settlement_places"] == [
         "borough",
         "city",
         "farm",
@@ -137,8 +142,8 @@ def test_the_worklist_names_the_place_values_of_a_settlement(world: Path) -> Non
 
 
 def test_the_worklist_offers_the_results_of_its_schema(world: Path) -> None:
-    worklist = json.loads(export_the_review_rows(world).read_text(encoding="utf-8"))
-    assert worklist["results"] == read_schema("curate-worklist")["$defs"]["result"]["enum"]
+    exported = json.loads(export_the_review_rows(world).read_text(encoding="utf-8"))
+    assert exported["results"] == read_schema("curate-worklist")["$defs"]["result"]["enum"]
 
 
 def test_a_row_is_exported_with_its_primary_german_and_danish_names(world: Path) -> None:
@@ -150,21 +155,28 @@ def test_a_row_is_exported_with_its_primary_german_and_danish_names(world: Path)
     assert (row["name_de"], row["name_da"]) == ("Ripen", "Ribe")
 
 
-def test_export_writes_the_worklist_and_reports_what_it_left_out(
-    world: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    out = export_the_review_rows(world)
-    assert capsys.readouterr().out == (
-        f"wrote 3 rows to {out} (2 kB): 1 ambiguous, 2 not found; "
-        f"2 candidates with a position, 2 rows with a hint point\n"
+def test_export_prints_nothing(world: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    # it is called as a library too (`frasch update`): the command prints
+    export_the_review_rows(world)
+    assert capsys.readouterr() == ("", "")
+
+
+def test_export_reports_what_it_wrote_and_what_it_left_out(world: Path) -> None:
+    assert report_of_the_review_rows(world).log == [
+        f"wrote 3 rows to {world / 'work' / 'curate.json'} (2 kB): 1 ambiguous, 2 not found; "
+        f"2 candidates with a position, 2 rows with a hint point",
         "note: 1 row(s) have been decided by hand since work/matches.jsonl "
-        "was written -- not exported\n"
+        "was written -- not exported",
         "note: 1 row(s) of work/matches.jsonl are no longer in places.csv "
-        "(stale, re-run `frasch match`)\n"
-    )
-    worklist = json.loads(out.read_text(encoding="utf-8"))
-    assert worklist["bbox"] == [7.8, 54.15, 9.55, 55.12]
-    assert worklist["kind_order"] == [
+        "(stale, re-run `frasch match`)",
+    ]
+
+
+def test_export_writes_the_worklist(world: Path) -> None:
+    out = export_the_review_rows(world)
+    exported = json.loads(out.read_text(encoding="utf-8"))
+    assert exported["bbox"] == [7.8, 54.15, 9.55, 55.12]
+    assert exported["kind_order"] == [
         "settlement",
         "island",
         "hallig",
@@ -179,7 +191,7 @@ def test_export_writes_the_worklist_and_reports_what_it_left_out(
         "warft",
         "not_a_place",
     ]
-    assert sorted(worklist["polygon_kinds"]) == [
+    assert sorted(exported["polygon_kinds"]) == [
         "hallig",
         "harde",
         "island",
@@ -188,7 +200,7 @@ def test_export_writes_the_worklist_and_reports_what_it_left_out(
         "sand",
     ]
     # settlements before the warft, each kind in places.csv order
-    kampen, bol, warft = worklist["rows"]
+    kampen, bol, warft = exported["rows"]
     assert [kampen["id"], bol["id"], warft["id"]] == ["kampen", "bol", "kirchwarft"]
     assert kampen == {
         "id": "kampen",
@@ -232,6 +244,15 @@ def test_export_writes_the_worklist_and_reports_what_it_left_out(
     assert (bol["names"], bol["da"], bol["why"]) == ({"mooring": "Bol"}, "Bøl", "too far")
     assert bol["hint_point"] == [9.02, 54.8, 15.0]
     assert (warft["result"], warft["hint_point"], warft["candidates"]) == ("not_found", None, [])
+
+
+def test_an_export_does_not_cut_off_who_is_reading_the_worklist(world: Path) -> None:
+    # the dev server hands the file out while `frasch update` exports again
+    out = export_the_review_rows(world)
+    before = out.read_text(encoding="utf-8")
+    with open(out, encoding="utf-8") as reader:
+        export(world)  # a match that left nothing: another, shorter worklist
+        assert reader.read() == before
 
 
 def test_a_candidate_named_with_a_semicolon_and_a_colon_reaches_the_worklist(world: Path) -> None:

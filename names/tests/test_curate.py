@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from frasch import matchfile
 from frasch.__main__ import main
 from conftest import path_options, places_text, workspace
 
@@ -35,3 +36,13 @@ def test_options_without_a_subcommand_mean_export(
     files = path_options(workspace(world), "names", "dialects", "work")
     assert main(["curate", *files]) == 1
     assert "run `frasch match` first" in capsys.readouterr().err
+
+
+def test_the_export_command_prints_what_it_wrote(
+    world: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (world / "places.csv").write_text(places_text([]), encoding="utf-8")
+    matchfile.write(str(world / "work" / "matches.jsonl"), [])
+    files = path_options(workspace(world), "names", "dialects", "matches", "worklist", "work")
+    main(["curate", "export", *files])
+    assert capsys.readouterr().out.startswith("wrote 0 rows to ")

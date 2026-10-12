@@ -312,18 +312,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     reg = dialects.read(ws.dialects)
     if args.cmd == "apply":
         report = apply(ws, reg, dry_run=args.dry_run, keep=args.keep)
-        say_applied(report)
+        cli.say(report.log, report.warnings)
         return 1 if report.refused else 0
-    worklist.export(ws, reg)
+    cli.say(worklist.export(ws, reg).log)
     return 0
-
-
-def say_applied(report: ApplyReport) -> None:
-    """Print what an apply did."""
-    for warning in report.warnings:
-        print(warning, file=sys.stderr)
-    for line in report.log:
-        print(line)
 
 
 def with_subcommand(
