@@ -110,11 +110,14 @@ if [ "${REFRESH:-}" = "1" ] || [ ! -f "$SRC" ]; then
   fetch_geofabrik_verified "$SRC_URL" "$SRC"
 fi
 
-echo "== injecting names + areas + curation into $SRC"
 workspace_options names dialects areas objects curation
+# the stamp first: it stops on a name file that is not there, before the
+# minutes of injecting
+BUILT_FROM=$("$FRASCH" provenance "${WORKSPACE_OPTIONS[@]}")
+
+echo "== injecting names + areas + curation into $SRC"
 "$FRASCH" inject "$SRC" "$INJECTED_TMP" "${WORKSPACE_OPTIONS[@]}"
 mv "$INJECTED_TMP" "$INJECTED"
-BUILT_FROM=$("$FRASCH" provenance "${WORKSPACE_OPTIONS[@]}")
 
 echo "== building $OUT"
 # NAME_TAG_OPTIONS:  which name:* and frasch:* tags end up in the tiles
