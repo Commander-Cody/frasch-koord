@@ -11,6 +11,7 @@ frasch.placenames' rule.
 from __future__ import annotations
 
 import json
+import os
 from collections.abc import Collection, Mapping
 from typing import TypedDict
 
@@ -18,7 +19,7 @@ from shapely.geometry.base import BaseGeometry
 
 from frasch import refs, tables
 from frasch.dialects import Registry
-from frasch.errors import Invalid, PipelineError, Problem
+from frasch.errors import Invalid, PipelineError, Problem, rebuild
 from frasch.objects import LocatedObject
 from frasch.refs import OsmRef
 
@@ -120,6 +121,8 @@ class AreaIndex:
     def from_geojson(cls, path: str) -> AreaIndex:
         from shapely.geometry import shape
 
+        if not os.path.exists(path):
+            raise PipelineError(f"{path} not found -- build it with {rebuild('areas')}")
         with open(path, encoding="utf-8") as fh:
             fc = json.load(fh)
         polygons: list[tuple[str, BaseGeometry]] = []
