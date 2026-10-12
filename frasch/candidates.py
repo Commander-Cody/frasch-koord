@@ -36,10 +36,9 @@ def source(extract: StrPath) -> str:
 
 
 def is_sh(src: str) -> bool:
-    """Whether a source is the extract the tiles are built from: only its
-    objects can carry an injected name, so it is what "in Schleswig-Holstein"
-    means for the curation view.  An object near the border can come from
-    both extracts."""
+    """Whether a source is the Schleswig-Holstein extract: what the curation
+    view's "select all in Schleswig-Holstein" goes by (`in_sh` of a
+    candidate in the worklist)."""
     return src == _SH
 
 

@@ -160,7 +160,7 @@
           "type": "string"
         },
         "in_sh": {
-          "description": "Whether it is in the Schleswig-Holstein extract the tiles are built from: only such an object can carry an injected name.",
+          "description": "Whether it is in the Schleswig-Holstein extract: what the view's \"select all in Schleswig-Holstein\" goes by.",
           "type": "boolean"
         },
         "wikidata": {

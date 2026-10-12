@@ -44,7 +44,7 @@ from frasch.paths import StrPath
 #           an object without a position
 #   lon, lat, tags
 #           where it is, and its decisive tags (`osmtags.decisive`)
-#   in_sh   whether it is in the extract the tiles are built from
+#   in_sh   whether it is in the Schleswig-Holstein extract
 #   rank    how good the name hit is that found it (lower = better)
 #   wikidata
 #           its `wikidata` tag, left out when it has none
