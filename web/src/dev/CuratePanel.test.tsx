@@ -175,6 +175,12 @@ async function listedItem(osmRef: string): Promise<HTMLElement> {
   return (await screen.findByText(osmRef)).closest('li') as HTMLElement;
 }
 
+/** Types `text` into the form for an OSM reference by hand; -> its button. */
+function typeReference(text: string): HTMLButtonElement {
+  fireEvent.change(screen.getByLabelText('osm reference'), { target: { value: text } });
+  return screen.getByRole<HTMLButtonElement>('button', { name: 'Pick reference' });
+}
+
 function selectedHeading(): string {
   return screen.getByRole('heading', { level: 2, name: /places\.csv line/ }).textContent ?? '';
 }
@@ -218,6 +224,29 @@ describe('CuratePanel', () => {
     await openRow('Naibel');
 
     expect(screen.getByLabelText<HTMLInputElement>('slug').value).toBe('niebull');
+  });
+
+  it('saves the references typed by hand, a pasted OSM URL among them, as one cell', async () => {
+    await renderPanel();
+    await openRow('Naibel');
+
+    fireEvent.click(typeReference('https://www.openstreetmap.org/way/177387348, Node/123'));
+
+    expect(posts[0].entry.osm).toBe('way/177387348; node/123');
+  });
+
+  it('saves none of the references typed by hand when one names no OSM object', async () => {
+    await renderPanel();
+    await openRow('Naibel');
+
+    expect(typeReference('way/177387348; local/naibel').disabled).toBe(true);
+  });
+
+  it('saves no reference typed by hand before there is one', async () => {
+    await renderPanel();
+    await openRow('Naibel');
+
+    expect(typeReference('  ').disabled).toBe(true);
   });
 
   it('offers the area of a local reference for a kind the worklist says can be a polygon', async () => {

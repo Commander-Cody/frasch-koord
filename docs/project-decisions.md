@@ -1268,7 +1268,7 @@ browser read an `osm` cell in four places and built the OSM URL in two, and
 |---|---|
 | `slugify`, `SLUG_CHARS` in `web/src/dev/curateWorklist.ts` | `slug_suggestion` of a worklist row, computed by `placelist.slug` in `frasch/worklist.py`; the browser folds no name |
 | the folding described nowhere | `$defs.slug` of `names/curate-patch.schema.json` |
-| `names.osmUrl`, `AreaPanel.osmRefs` and its URL template, the splits in `entryLookup` and `parseRefs` | `web/src/osmRef.ts`: `osmRefs(cell)`, `osmUrl(ref)`, `parseOsmRef(text)` |
+| `names.osmUrl`, `AreaPanel.osmRefs` and its URL template, the split in `entryLookup`, the reference patterns in `parseRefs` | `web/src/osmRef.ts`: `osmRefs(cell)`, `osmUrl(ref)`, `parseOsmRef(text)`; `parseRefs` keeps the split of typed text, which also separates by newline and comma |
 | `split(";")` / `startswith("local/")` in `check_tiles`, a retyped type table in `test_consistency.py` | `refs.parse`, `refs.local_of`, `refs.format` |
 | `/^Q\d+$/` in `names.ts`; `^(Q[0-9]+)?$` in the patch schema, with an `id &&` beside it | `names.ts` reads the pattern of `search-index.schema.json`, `curatePatch.ts` that of the patch schema, both `^Q[0-9]+$`; a decision without an id leaves the field out |
 | `Q\d+` and `(node\|way\|relation)/\d+` in Python, which also take non-ASCII digits | `[0-9]+` in `placelist.WIKIDATA_ID` and `refs.parse` |
