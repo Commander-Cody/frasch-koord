@@ -5,7 +5,8 @@ import { useTranslation } from 'react-i18next';
 import { DIALECTS, dialect, dialectLabelKey } from '../config';
 import type { DialectEntry } from '../config';
 import type { PlaceSelection } from '../names';
-import { cardEntry, osmUrl, placeOsmRef, resolveName, wikidataUrl } from '../names';
+import { cardEntry, placeOsmRef, resolveName, wikidataUrl } from '../names';
+import { osmUrl } from '../osmRef';
 import CloseButton from './CloseButton';
 import './PlaceCard.css';
 

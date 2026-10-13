@@ -27,6 +27,7 @@ import pytest
 from frasch import check_tiles
 from frasch import inject_names
 from frasch import locate
+from frasch import refs
 from frasch import searchindex
 from frasch.check_tiles import Label
 from frasch.geo import LonLat
@@ -144,7 +145,7 @@ def injected_features(pbf: Path) -> list[Label]:
         if "frasch:ref" not in o.tags:
             continue
         feature: Label = {
-            "osm": f"{ {'n': 'node', 'w': 'way', 'r': 'relation'}[o.type_str()] }/{o.id}",
+            "osm": refs.format([(o.type_str(), o.id)]),
             "props": dict(o.tags),
         }
         if isinstance(o, osmium.osm.Node):

@@ -51,6 +51,7 @@ def test_a_reference_is_either_an_osm_object_or_a_local_slug(
     "cell",
     [
         "way/abc",  # not an id
+        "way/１２",  # digits, but not the ASCII ones of an OSM id
         "Way/12",  # types are lowercase
         "w/12",  # the short type letter is internal only
         "https://www.openstreetmap.org/way/177387348",

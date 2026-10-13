@@ -81,9 +81,9 @@
       "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
     },
     "wikidata": {
-      "description": "A Wikidata id, or empty for none.",
+      "description": "A Wikidata id; an entry without one leaves the field out.",
       "type": "string",
-      "pattern": "^(Q[0-9]+)?$"
+      "pattern": "^Q[0-9]+$"
     },
     "note": {
       "description": "Free text about the decision; a `local` decision's goes into its curation row.",

@@ -4,6 +4,7 @@
 // contract itself is names/curate-worklist.schema.json; curateWorklist.test.ts
 // pins the types below to it.
 
+import { parseOsmRef } from '../osmRef';
 import type { PatchEntry } from './curatePatch';
 
 /** One candidate of a worklist row. */
@@ -157,13 +158,6 @@ export function parseRefs(text: string): string[] | null {
     .map((p) => p.trim())
     .filter(Boolean);
   if (parts.length === 0) return null;
-  const refs: string[] = [];
-  for (const part of parts) {
-    const url = part.match(/openstreetmap\.org\/(node|way|relation)\/(\d+)/i);
-    const plain = part.match(/^(node|way|relation)\/(\d+)$/i);
-    const hit = url ?? plain;
-    if (!hit) return null;
-    refs.push(`${hit[1].toLowerCase()}/${hit[2]}`);
-  }
-  return refs;
+  const refs = parts.map(parseOsmRef);
+  return refs.every((ref) => ref !== null) ? refs : null;
 }

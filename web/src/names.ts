@@ -4,8 +4,10 @@
 
 import { useEffect, useState } from 'react';
 
+import indexSchema from '../../names/search-index.schema.json';
 import { DIALECTS, siteUrl } from './config';
 import { labelChain } from './labelChain';
+import { osmRefs } from './osmRef';
 import type { BuiltFrom } from './provenance';
 
 /**
@@ -182,8 +184,7 @@ export type EntryLookup = (ref: string) => NameEntry | undefined;
 export function entryLookup(entries: NameEntry[]): EntryLookup {
   const byRef = new Map(entries.map((e) => [e.id, e]));
   for (const e of entries) {
-    const refs = (e.osm ?? '').split(';').map((ref) => ref.trim());
-    for (const ref of [...refs, e.wikidata]) {
+    for (const ref of [...osmRefs(e.osm), e.wikidata]) {
       if (ref && !byRef.has(ref)) byRef.set(ref, e);
     }
   }
@@ -336,24 +337,12 @@ export function cardEntry(selection: PlaceSelection): CardEntry {
 
 // --------------------------------------------------------------- links ----
 
-const OSM_TYPES = new Set(['node', 'way', 'relation']);
-
 /**
- * The OSM object of a reference (`node/240042766`; the first of several), or
- * null for one that is not an OSM object: our own `local/<slug>` places.
+ * A Wikidata item id (`Q42`), as the contract of names.json spells it; the
+ * patch contract (names/curate-patch.schema.json) and frasch/placelist.py
+ * take the same shape.
  */
-export function osmUrl(ref: string | undefined): string | null {
-  if (!ref) return null;
-  const [type, rest] = ref.split(';')[0].trim().split('/');
-  if (!OSM_TYPES.has(type) || !/^\d+$/.test(rest ?? '')) return null;
-  return `https://www.openstreetmap.org/${type}/${rest}`;
-}
-
-/**
- * A Wikidata item id (`Q42`), the shape the patch contract
- * (names/curate-patch.schema.json) and frasch/placelist.py take too.
- */
-export const WIKIDATA_ID = /^Q\d+$/;
+export const WIKIDATA_ID = new RegExp(indexSchema.$defs.place.properties.wikidata.pattern);
 
 export function wikidataUrl(qid: string | undefined): string | null {
   return qid && WIKIDATA_ID.test(qid) ? `https://www.wikidata.org/wiki/${qid}` : null;
@@ -377,7 +366,10 @@ export function osmRefFromFeatureId(id: string | number | undefined): string | n
   return type ? `${type}/${(n - (n % 10)) / 10}` : null;
 }
 
-/** The OSM reference of what the card is showing, for the link at its foot. */
+/**
+ * The OSM reference of what the card is showing, for the link at its foot:
+ * the first of the row's, else the clicked feature's object.
+ */
 export function placeOsmRef(selection: PlaceSelection): string | null {
-  return selection.entry?.osm ?? osmRefFromFeatureId(selection.featureId);
+  return osmRefs(selection.entry?.osm)[0] ?? osmRefFromFeatureId(selection.featureId);
 }

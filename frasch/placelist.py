@@ -65,7 +65,7 @@ def columns(reg: Registry) -> list[str]:
 AUTO, OK, SKIP = "auto", "ok", "skip"  # the values of `status`, beside the empty one
 STATUSES = {"", AUTO, OK, SKIP}
 
-WIKIDATA_ID = re.compile(r"Q\d+")
+WIKIDATA_ID = re.compile(r"Q[0-9]+")
 
 # A row's cells, column -> stripped text: what the functions that only read a
 # row take, so that a row built by hand (a test, a patch) will do as well.

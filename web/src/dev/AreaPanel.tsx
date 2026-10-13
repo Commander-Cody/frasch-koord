@@ -36,6 +36,7 @@ import {
   layerSpecs,
 } from './areaLayers';
 import { DIALECTS, dialect } from '../config';
+import { osmRefs, osmUrl } from '../osmRef';
 import { replaceQueryParams } from '../queryParams';
 import DevPanel from './DevPanel';
 import { FIT_PADDING } from './panelLayout';
@@ -118,14 +119,6 @@ function bboxOf(geometry: { coordinates: unknown }): Bounds | null {
 /** A dialect's name as the registry has it. */
 function dialectLabel(tag: string): string {
   return dialect(tag)?.label ?? tag;
-}
-
-/** "relation/1420394; way/123" -> ["relation/1420394", "way/123"]: one link each, and the deep-link keys. */
-function osmRefs(osm: string): string[] {
-  return osm
-    .split(';')
-    .map((part) => part.trim())
-    .filter(Boolean);
 }
 
 export interface AreaPanelProps {
@@ -511,7 +504,7 @@ export default function AreaPanel({ mapRef }: AreaPanelProps) {
                   <a
                     key={ref}
                     className="dev-panel-mono"
-                    href={`https://www.openstreetmap.org/${ref}`}
+                    href={osmUrl(ref) ?? undefined}
                     target="_blank"
                     rel="noopener"
                   >
