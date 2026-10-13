@@ -6,10 +6,15 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
+from shapely.geometry import box, shape
+from shapely.geometry.base import BaseGeometry
 
 from frasch import build_dialect_areas as bda
+from frasch import refs
+from frasch.dialect_areas import AreaRow
 from frasch.__main__ import main
 from frasch.errors import PipelineError, ValidationError
 from frasch import dialect_areas
@@ -38,6 +43,71 @@ def test_an_osm_reference_on_two_rows_is_refused(tmp_path: Path) -> None:
         bda.read_areas(str(areas), REGISTRY)
 
 
+# ------------------------------------------------------------------ build ---
+SOURCE = bda.Source("dialect_areas.csv", {"extracts": []})
+
+
+def _row(line: int, dialect: str, osm: str, name: str = "", note: str = "") -> AreaRow:
+    """A row of the area list as `read_areas` gives it."""
+    named = refs.osm_only(refs.parse(osm))
+    return {"line": line, "dialect": dialect, "name": name, "note": note, "osm": osm, "refs": named}
+
+
+def _area(feature: bda.Feature[Any]) -> BaseGeometry:
+    return shape(cast(dict[str, Any], feature["geometry"]))
+
+
+def test_a_dialect_is_the_dissolved_polygons_of_its_rows() -> None:
+    rows = [_row(2, "frr-x-mooring", "way/1"), _row(3, "frr-x-mooring", "way/2")]
+    found = bda.Scan({("w", 1): box(8.0, 54.0, 8.1, 54.1), ("w", 2): box(8.1, 54.0, 8.2, 54.1)})
+
+    areas = bda.build(rows, REGISTRY, found, SOURCE)
+
+    (feature,) = areas.dialects["features"]
+    assert _area(feature).equals(box(8.0, 54.0, 8.2, 54.1))
+
+
+def test_a_build_says_nothing_itself(capsys: pytest.CaptureFixture[str]) -> None:
+    rows = [_row(2, "frr-x-mooring", "way/1"), _row(3, "frr-x-mooring", "way/999", "Missing")]
+    found = bda.Scan({("w", 1): box(8.0, 54.0, 8.1, 54.1)}, problems=["way/999: a problem"])
+
+    bda.build(rows, REGISTRY, found, SOURCE)
+
+    assert capsys.readouterr() == ("", "")
+
+
+def test_the_report_of_a_build_lists_the_references_without_geometry() -> None:
+    rows = [_row(2, "frr-x-mooring", "way/1"), _row(3, "frr-x-solring", "way/999", "Missing")]
+    found = bda.Scan({("w", 1): box(8.0, 54.0, 8.1, 54.1)})
+
+    areas = bda.build(rows, REGISTRY, found, SOURCE)
+
+    assert areas.report[-3:] == [
+        "",
+        "1 object(s) not found in the extract(s):",
+        "  way/999  Missing (frr-x-solring)",
+    ]
+
+
+def test_a_municipality_no_row_claims_is_a_part_without_a_dialect() -> None:
+    rows = [_row(2, "frr-x-mooring", "way/1", "Existing")]
+    found = bda.Scan(
+        {("w", 1): box(8.0, 54.0, 8.1, 54.1)},
+        {("r", 200): bda.Municipality("Freetown", box(8.1, 54.0, 8.2, 54.1))},
+    )
+
+    parts = bda.build(rows, REGISTRY, found, SOURCE).parts
+
+    assert parts is not None
+    assert parts.fc["features"][1]["properties"] == {
+        "fid": 2,
+        "assigned": False,
+        "name": "Freetown",
+        "osm": "relation/200",
+        "km2": 72.8,  # 0.1 x 0.1 degrees at 54.05 N: 11.132 km x 6.535 km
+    }
+
+
 # ------------------------------------------------------------------- run ---
 # A tiny triangle way stands in for a whole municipality.
 def _write_fixture(ws: Workspace, csv_rows: str, timestamp: str | None = None) -> Path:
@@ -56,13 +126,9 @@ def test_a_missing_reference_stops_the_build_and_nothing_is_written(ws: Workspac
     out.write_bytes(b"stale-out")
     parts_out.write_bytes(b"stale-parts")
 
-    with pytest.raises(PipelineError) as stop:
+    with pytest.raises(PipelineError):
         bda.run(ws, REGISTRY, [pbf], bda.Options(unassigned_ags=None))
 
-    message = str(stop.value)
-    assert "way/999" in message
-    assert "Missing" in message
-    assert "frr-x-mooring" in message
     # nothing was written -- neither file changed
     assert out.read_bytes() == b"stale-out"
     assert parts_out.read_bytes() == b"stale-parts"
@@ -271,12 +337,12 @@ def test_a_build_without_the_parts_skips_the_unassigned_scan(
     )
 
 
-def test_a_build_refuses_with_the_report_of_what_is_missing(
+def test_a_refused_build_has_listed_what_is_missing(
     ws: Workspace, capsys: pytest.CaptureFixture[str]
 ) -> None:
     first, _second = _write_district(ws)
 
-    with pytest.raises(PipelineError) as stop:
+    with pytest.raises(PipelineError):
         bda.run(ws, REGISTRY, [first])
 
     assert _printed(capsys)[0].endswith(
@@ -285,13 +351,18 @@ def test_a_build_refuses_with_the_report_of_what_is_missing(
         "1 object(s) not found in the extract(s):\n"
         "  way/8  Second (frr-x-solring)\n"
     )
+
+
+def test_a_refused_build_points_at_the_list_without_repeating_it(ws: Workspace) -> None:
+    first, _second = _write_district(ws)
+
+    with pytest.raises(PipelineError) as stop:
+        bda.run(ws, REGISTRY, [first])
+
     assert str(stop.value) == (
-        "1 object(s) not found in the extract(s):\n"
-        "  way/8  Second (frr-x-solring)\n"
-        "\n"
+        "1 object(s) of dialect_areas.csv not found in the extract(s), listed above -- "
         "run with --allow-missing to build anyway; nothing was written"
     )
-    assert not Path(ws.areas).exists()
 
 
 def test_a_build_refuses_when_no_reference_produced_any_geometry(ws: Workspace) -> None:

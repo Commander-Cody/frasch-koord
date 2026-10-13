@@ -103,3 +103,7 @@ def test_format_normalises_the_separator() -> None:
         refs.format(refs.parse("way/1347936331;node/1332249790"))
         == "way/1347936331; node/1332249790"
     )
+
+
+def test_ids_of_are_the_ids_of_the_references_of_one_type() -> None:
+    assert refs.ids_of([("w", 1), ("r", 2), ("w", 3), ("n", 4)], "w") == {1, 3}

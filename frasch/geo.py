@@ -12,6 +12,8 @@ NF_BBOX = (7.8, 54.15, 9.55, 55.12)
 NF_CENTRE = (8.9, 54.7)  # lon, lat
 
 EARTH_RADIUS_KM = 6371.0
+# a degree of latitude; one of longitude is this times the cosine of the latitude
+KM_PER_DEGREE = 111.32
 # What an unknown distance counts as where only a near one matters: further
 # than anything.
 FAR = math.inf

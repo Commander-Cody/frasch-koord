@@ -20,7 +20,8 @@ area there is.
 A reference from dialect_areas.csv that produced no geometry at all (wrong
 extract, a typo'd id, an object deleted upstream) stops the run before either
 file is written -- a *silently smaller* dialect area is worse than a build
-that fails, since nothing else would ever notice the gap.  `--allow-missing`
+that fails, since nothing else would ever notice the gap.  The report lists
+those references.  `--allow-missing`
 builds anyway, the same way a partial/unclosed ring already only warns: that
 ring's object did produce *some* geometry, just not all of it. Both outputs
 are written atomically (`files.atomic_write`) and only once every
@@ -51,13 +52,17 @@ cannot disagree:
   `dialect` property at all, which makes AreaIndex refuse the file outright
   rather than quietly loading it.
 
-How it stays within a few hundred MB of RAM: instead of letting pyosmium build
-every area of the file (which needs a location cache for the whole extract),
-it walks the file three times with an id filter -- the wanted relations, then
-their member ways, then those ways' nodes.  Rings are assembled here; the
-polygons of one dialect are unioned, simplified (0.0005 deg, ~50 m -- these
-are label-lookup areas, not a cadastre) and written as one Feature per
-dialect with coordinates rounded to 5 decimals.
+How the geometry is read: not by letting pyosmium build every area of the
+file (which takes a location cache for the whole extract), but in the three
+id-filtered passes of osmscan.read_geometry -- the wanted relations, then
+their member ways, then those ways' nodes.  The rings are assembled by
+frasch.osmgeom; the polygons of one dialect are unioned, simplified
+(0.0005 deg, ~50 m -- these are label-lookup areas, not a cadastre) and
+written as one Feature per dialect with coordinates rounded to 5 decimals.
+
+The steps are apart: `scan` reads the extracts, `build` makes both files'
+contents of what it found -- a pure function, which reads nothing, writes
+nothing and prints nothing -- and `run` prints the report and writes.
 """
 
 from __future__ import annotations
@@ -67,19 +72,21 @@ import json
 import math
 import os
 import time
-from collections.abc import Container, Mapping, Sequence
+from collections.abc import Collection, Container, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import NamedTuple, NotRequired, TypedDict
 
 import osmium
+from shapely.geometry import mapping
 from shapely.geometry.base import BaseGeometry
+from shapely.ops import unary_union
 
 from frasch import cli, dialect_areas, dialects, files, osmgeom, osmscan, refs
 from frasch.dialect_areas import AreaRow
 from frasch.dialects import Dialect, Registry
 from frasch.errors import PipelineError, ValidationError
-from frasch.geo import LonLat
-from frasch.osmscan import Rings
+from frasch.geo import KM_PER_DEGREE
+from frasch.osmscan import Geometry
 from frasch.paths import StrPath, Workspace
 from frasch.provenance import BuiltFrom, ExtractStamp, Stamp
 from frasch.refs import OsmRef
@@ -90,7 +97,8 @@ SIMPLIFY_DEG = 0.0005  # ~50 m
 # a ~50 m crack between two areas that actually touch -- 2-3 px at the zoom the
 # review happens at.  0.0001 is sub-pixel below z16.
 PARTS_SIMPLIFY_DEG = 0.0001  # ~11 m
-ROUND = 5
+# the decimals of a coordinate in both GeoJSON files (~1 m)
+GEOJSON_DECIMALS = 5
 
 # German municipality key, used to scope the "not assigned to any dialect"
 # features.  Every admin_level=8 relation in the Schleswig-Holstein extract
@@ -110,19 +118,25 @@ class DialectProperties(TypedDict):
     label: str
 
 
-class PartProperties(TypedDict):
-    """A feature of --parts, as names/dialect-area-parts.schema.json defines
-    it: one municipality; one that no row assigns (`assigned` false) has no
-    dialect and no row."""
+class PartIdentity(TypedDict):
+    """What a feature of --parts is the area of: the row of the area list
+    that assigns it, or a municipality no row assigns (`assigned` false) --
+    one without a dialect and without a row."""
 
-    fid: int
     assigned: bool
     name: str
     osm: str
-    km2: float
     dialect: NotRequired[str]
     note: NotRequired[str]
     line: NotRequired[int]
+
+
+class PartProperties(PartIdentity):
+    """A feature of --parts, as names/dialect-area-parts.schema.json defines
+    it: one municipality."""
+
+    fid: int
+    km2: float
 
 
 class Feature[P](TypedDict):
@@ -149,74 +163,40 @@ class FeatureCollection[P](TypedDict):
     features: list[Feature[P]]
 
 
-def read_areas(
-    path: str, reg: Registry
-) -> tuple[dict[OsmRef, str], dict[OsmRef, str], list[AreaRow]]:
-    """-> ({(type, id): dialect_tag}, {(type, id): label}, [row]) in file order.
-
-    The rows are those of `dialect_areas.area_rows` -- {"line", "dialect", "name",
-    "note", "osm", "refs"} -- for the per-municipality parts output.  The two
-    indexes stay keyed by OSM reference because that is what the dissolve
-    loop and the "not in the extract" report need.
-    """
+def read_areas(path: str, reg: Registry) -> list[AreaRow]:
+    """The rows of the dialect area list in file order, as
+    `dialect_areas.area_rows` reads them -- {"line", "dialect", "name",
+    "note", "osm", "refs"}; stops on a row that breaks the list's rules."""
     if not os.path.exists(path):
         raise PipelineError(f"dialect area list not found: {path}")
     rows, problems = dialect_areas.area_rows(path, reg)
     if problems:
         raise ValidationError(problems)
-    by_ref = {ref: row["dialect"] for row in rows for ref in row["refs"]}
-    labels = {ref: row["name"] for row in rows for ref in row["refs"]}
-    return by_ref, labels, rows
-
-
-def read_admin_relations(
-    path: str, ags_prefix: str, skip: Container[int]
-) -> tuple[dict[int, Rings], dict[int, str]]:
-    """Municipality relations of one district that no dialect claims.
-
-    -> ({rel_id: {'outer': [...], 'inner': [...]}}, {rel_id: name})
-
-    Scans every relation rather than filtering by id, because the whole point
-    is to find the ones nobody has written down yet.  The filter is the German
-    municipality key (`de:regionalschluessel`), not a bounding box: a box would
-    also catch the neighbouring Kreise, which are not part of the dialect map
-    at all and would read as gaps in it.  `skip` holds the relation ids the
-    CSV already assigns.
-    """
-    rings: dict[int, Rings] = {}
-    names: dict[int, str] = {}
-    fp = osmium.FileProcessor(path, osmium.osm.RELATION)
-    for r in fp:
-        if not isinstance(r, osmium.osm.Relation):
-            continue
-        tags = r.tags
-        if tags.get("boundary") != "administrative":
-            continue
-        if tags.get("admin_level") != "8":
-            continue
-        if r.id in skip:
-            continue
-        key = next((tags[k] for k in AGS_KEYS if k in tags), "")
-        if not key.startswith(ags_prefix):
-            continue
-        rings[r.id] = osmscan.rings_of(r)
-        names[r.id] = tags.get("name") or ""
-    return rings, names
+    return rows
 
 
 def km2(geom: BaseGeometry) -> float:
     """Rough area in km² (equirectangular around the geometry's centre) --
     for the report only."""
     lat = geom.centroid.y
-    return geom.area * (111.32**2) * math.cos(math.radians(lat))
+    return geom.area * (KM_PER_DEGREE**2) * math.cos(math.radians(lat))
 
 
-def round_geojson(obj: object, nd: int = ROUND) -> object:
+def round_geojson(obj: object) -> object:
     if isinstance(obj, (list, tuple)):
-        return [round_geojson(o, nd) for o in obj]
+        return [round_geojson(o) for o in obj]
     if isinstance(obj, float):
-        return round(obj, nd)
+        return round(obj, GEOJSON_DECIMALS)
     return obj
+
+
+def simplified(geom: BaseGeometry, tol: float) -> BaseGeometry:
+    """`geom` simplified to `tol`, kept valid."""
+    if tol:
+        geom = geom.simplify(tol, preserve_topology=True)
+    if not geom.is_valid:
+        geom = geom.buffer(0)
+    return geom
 
 
 def stamp(ws: Workspace, extracts: Sequence[ExtractStamp] | None) -> Stamp:
@@ -234,11 +214,41 @@ class Options:
     # the municipality-key prefix of the district whose unclaimed
     # municipalities join the parts; None: none do
     unassigned_ags: str | None = DEFAULT_UNASSIGNED_AGS
-    allow_missing: bool = False  # build although a reference gave no geometry
+    allow_missing: bool = False  # write although a reference gave no geometry
     parts: bool = True  # build the per-municipality file too
+
+    @property
+    def scanned_ags(self) -> str | None:
+        """The district the scan looks for unclaimed municipalities in:
+        none when the parts, the only file that shows them, are not built."""
+        return self.unassigned_ags if self.parts else None
 
 
 USUAL = Options()
+
+
+class Source(NamedTuple):
+    """What both files record of where they come from."""
+
+    name: str  # the area list's file name
+    built_from: BuiltFrom
+
+
+class Municipality(NamedTuple):
+    """A municipality of the district that no row of the area list claims."""
+
+    name: str
+    polygon: BaseGeometry
+
+
+@dataclass
+class Scan:
+    """What the extracts hold of the areas, over every extract read."""
+
+    claimed: dict[OsmRef, BaseGeometry] = field(default_factory=dict)  # by the area list
+    unclaimed: dict[OsmRef, Municipality] = field(default_factory=dict)
+    problems: list[str] = field(default_factory=list)  # with the rings of a claimed area
+    report: list[str] = field(default_factory=list)  # a line per extract read
 
 
 class Parts(NamedTuple):
@@ -250,42 +260,83 @@ class Parts(NamedTuple):
 
 
 class Areas(NamedTuple):
-    """What one build gives: the contents of both files."""
+    """What one build gives: the contents of both files, and what there is
+    to say about them."""
 
     dialects: FeatureCollection[DialectProperties]
     polygons: int
     parts: Parts | None
+    report: list[str]
+    missing: int  # references that gave no geometry, listed in the report
 
 
-def build(ws: Workspace, reg: Registry, pbfs: Sequence[StrPath], options: Options = USUAL) -> Areas:
-    """The dialect areas of the workspace's area list, from the extracts
-    `pbfs`.  Says what it finds as it goes -- a scan takes its time -- and
-    writes nothing."""
-    by_ref, labels, rows = read_areas(ws.area_list, reg)
-    unassigned_ags = options.unassigned_ags if options.parts else None
-    print(
-        f"area list : {ws.area_list} -> {len(by_ref)} OSM objects, "
-        f"{len(set(by_ref.values()))} dialects"
+def scan(pbfs: Iterable[StrPath], claimed: Collection[OsmRef], unassigned_ags: str | None) -> Scan:
+    """Read out of the extracts `pbfs` the polygons of the references
+    `claimed` and -- unless `unassigned_ags` is None -- of that district's
+    municipalities that are none of them.  An extract is asked only for the
+    references no earlier one held."""
+    found = Scan()
+
+    def read(pbf: StrPath, wanted: set[OsmRef]) -> dict[OsmRef, BaseGeometry]:
+        started = time.time()
+        # The unclaimed municipalities ride along in the same way/node
+        # passes: their member ways are mostly the *same* ways, since
+        # neighbours share a boundary.
+        loose = _unclaimed_relations(pbf, unassigned_ags, {*claimed, *found.unclaimed})
+        geometry = osmscan.read_geometry(pbf, wanted, loose)
+        found.report.append(_extract_line(pbf, wanted, geometry, len(loose), time.time() - started))
+        found.unclaimed.update(_municipalities(loose, geometry))
+        return _polygons(sorted(wanted), geometry, found.problems)
+
+    found.claimed = osmscan.across(pbfs, claimed, read)
+    return found
+
+
+def build(
+    rows: Sequence[AreaRow], reg: Registry, found: Scan, source: Source, options: Options = USUAL
+) -> Areas:
+    """The dialect areas of the rows of the area list, from what a scan
+    `found` of them.  Pure: it reads no file, writes none and prints
+    nothing -- what there is to say is the `report` of the result."""
+    dissolved = _dissolved(rows, reg, found.claimed, options.simplify)
+    if not dissolved:
+        raise PipelineError("no geometry found -- is the extract the right region?")
+    missing = [(ref, row) for row in rows for ref in row["refs"] if ref not in found.claimed]
+    report = [
+        *map(_dialect_line, dissolved),
+        *(f"  ! {problem}" for problem in found.problems),
+        *_missing_lines(missing),
+    ]
+    return Areas(
+        dialects=_dialect_fc(source, options.simplify, dissolved),
+        polygons=sum(_polygon_count(d.area) for d in dissolved),
+        parts=build_parts(rows, found, source, options) if options.parts else None,
+        report=report,
+        missing=len(missing),
     )
 
-    scan = _Scan()
-    for path in pbfs:
-        _scan_extract(os.fspath(path), by_ref, unassigned_ags, scan)
 
-    features, total = _dialect_features(reg, by_ref, scan.geoms, options.simplify)
-    if not features:
-        raise PipelineError("no geometry found -- is the extract the right region?")
-
-    for p in scan.problems:
-        print(f"  ! {p}")
-    missing = [ref for ref in by_ref if ref not in scan.geoms]
-    if missing:
-        _report_missing(missing, by_ref, labels, options.allow_missing)
-
-    built_from = stamp(ws, osmscan.extract_stamps(pbfs)).as_json()
-    source = os.path.basename(ws.area_list)
-    parts = build_parts(source, options, rows, scan, built_from) if options.parts else None
-    return Areas(_dialect_fc(source, options.simplify, features, built_from), total, parts)
+def build_parts(rows: Sequence[AreaRow], found: Scan, source: Source, options: Options) -> Parts:
+    """The --parts FeatureCollection -- one Feature per municipality, see the
+    module docstring for why this is a separate file from --areas -- with the
+    count of rows without geometry (the report lists their references)."""
+    assigned = _assigned_parts(rows, found.claimed)
+    parts = [*assigned, *_unassigned_parts(found.unclaimed)]
+    fc: FeatureCollection[PartProperties] = {
+        "type": "FeatureCollection",
+        "properties": {
+            "source": source.name,
+            "simplify_deg": options.parts_simplify,
+            "unit": "one feature per municipality",
+            "unassigned_ags": (options.unassigned_ags or "") if found.unclaimed else "",
+            "built_from": source.built_from,
+        },
+        "features": [
+            _part_feature(fid, about, polygons, options.parts_simplify)
+            for fid, (about, polygons) in enumerate(parts, start=1)
+        ],
+    }
+    return Parts(fc, skipped=len(rows) - len(assigned), unassigned=len(found.unclaimed))
 
 
 def write(areas: Areas, ws: Workspace) -> None:
@@ -298,8 +349,30 @@ def write(areas: Areas, ws: Workspace) -> None:
 
 
 def run(ws: Workspace, reg: Registry, pbfs: Sequence[StrPath], options: Options = USUAL) -> None:
-    """Build the dialect areas and write them."""
-    write(build(ws, reg, pbfs, options), ws)
+    """Build the dialect areas, say what the scan and the build found, and
+    write them -- unless a reference gave no geometry and
+    `options.allow_missing` is off: a dialect area silently missing a
+    reference is worse than a stopped build, nothing downstream would ever
+    notice the gap."""
+    rows = read_areas(ws.area_list, reg)
+    claimed = [ref for row in rows for ref in row["refs"]]
+    print(
+        f"area list : {ws.area_list} -> {len(claimed)} OSM objects, "
+        f"{len({row['dialect'] for row in rows})} dialects"
+    )
+    found = scan(pbfs, claimed, options.scanned_ags)
+    cli.say(found.report)
+    source = Source(
+        os.path.basename(ws.area_list), stamp(ws, osmscan.extract_stamps(pbfs)).as_json()
+    )
+    areas = build(rows, reg, found, source, options)
+    cli.say(areas.report)
+    if areas.missing and not options.allow_missing:
+        raise PipelineError(
+            f"{areas.missing} object(s) of {source.name} not found in the extract(s), listed "
+            "above -- run with --allow-missing to build anyway; nothing was written"
+        )
+    write(areas, ws)
 
 
 @cli.command
@@ -307,9 +380,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     a = _parse_args(argv)
     ws = cli.workspace(a)
     options = Options(
-        simplify=a.simplify,
-        parts_simplify=a.parts_simplify,
-        unassigned_ags=None if a.no_unassigned else a.unassigned_ags,
+        unassigned_ags=None if a.no_unassigned else DEFAULT_UNASSIGNED_AGS,
         allow_missing=a.allow_missing,
         parts=not a.no_parts,
     )
@@ -322,31 +393,9 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     ap.add_argument("pbf", nargs="+", help="OSM extract(s) holding the areas")
     cli.add_workspace_options(ap, "area_list", "dialects", "areas", "parts")
     ap.add_argument(
-        "--simplify",
-        type=float,
-        default=SIMPLIFY_DEG,
-        help=f"tolerance in degrees (default {SIMPLIFY_DEG})",
-    )
-    ap.add_argument(
         "--no-parts",
         action="store_true",
         help="leave the per-municipality areas of the review overlay (--parts) unwritten",
-    )
-    ap.add_argument(
-        "--parts-simplify",
-        type=float,
-        default=PARTS_SIMPLIFY_DEG,
-        help=f"tolerance for --parts (default "
-        f"{PARTS_SIMPLIFY_DEG}); finer than --simplify because "
-        f"neighbours are simplified independently and must not "
-        f"drift apart",
-    )
-    ap.add_argument(
-        "--unassigned-ags",
-        default=DEFAULT_UNASSIGNED_AGS,
-        help=f"municipality-key prefix whose unclaimed "
-        f"municipalities go into --parts "
-        f"(default {DEFAULT_UNASSIGNED_AGS} = Kreis Nordfriesland)",
     )
     ap.add_argument(
         "--no-unassigned",
@@ -364,172 +413,184 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     return ap.parse_args(argv)
 
 
-@dataclass
-class _Scan:
-    """The polygons found so far, over every extract read."""
-
-    geoms: dict[OsmRef, list[BaseGeometry]] = field(default_factory=dict)  # assigned by the CSV
-    free: dict[OsmRef, list[BaseGeometry]] = field(default_factory=dict)  # municipality, no dialect
-    free_names: dict[OsmRef, str] = field(default_factory=dict)  # ref -> municipality name
-    problems: list[str] = field(default_factory=list)
-
-
-class _Geometry(NamedTuple):
-    """What one extract holds of the objects asked for: relation rings,
-    way node lists and node locations."""
-
-    rel: dict[int, Rings]
-    ways: dict[int, list[int]]
-    nodes: dict[int, LonLat]
-
-
-def _scan_extract(
-    path: str, by_ref: Mapping[OsmRef, str], unassigned_ags: str | None, scan: _Scan
-) -> None:
-    """Add to `scan` the polygons of the references not found yet, and --
-    unless `unassigned_ags` is None -- those of the district's unclaimed
-    municipalities."""
-    t0 = time.time()
-    want = {ref for ref in by_ref if ref not in scan.geoms}
-    rel_ids = {i for t, i in want if t == "r"}
-    way_ids = {i for t, i in want if t == "w"}
-    rel = {i: r["rings"] for i, r in osmscan.relations(path, rel_ids).items()}
-    # The unclaimed municipalities ride along in the same way/node passes:
-    # their member ways are mostly the *same* ways, since neighbours share
-    # a boundary.
-    loose: dict[int, Rings] = {}
-    loose_names: dict[int, str] = {}
-    if unassigned_ags is not None:
-        loose, loose_names = _unclaimed_relations(path, unassigned_ags, by_ref, scan.free)
-        rel.update(loose)
-    geometry = _read_geometry(path, rel, way_ids)
-    print(
-        f"{os.path.basename(path)}: {len(rel) - len(loose)}/{len(rel_ids)} "
-        f"relations, {len(geometry.ways):,} ways, {len(geometry.nodes):,} nodes"
-        f"{f', {len(loose)} unclaimed municipalities' if loose else ''} "
-        f"({time.time() - t0:.0f}s)"
-    )
-    for ref in sorted(want):
-        polys = osmgeom.polygons_for(ref, *geometry, scan.problems)
-        if polys:
-            scan.geoms[ref] = polys
-    for rel_id in sorted(loose):
-        ref = ("r", rel_id)
-        # Their own problems are noise: nobody has claimed these, so a
-        # broken ring means "not reviewable", not "the data is wrong".
-        polys = osmgeom.polygons_for(ref, *geometry, [])
-        if polys:
-            scan.free[ref] = polys
-            scan.free_names[ref] = loose_names.get(rel_id, "")
-
-
 def _unclaimed_relations(
-    path: str, ags_prefix: str, by_ref: Mapping[OsmRef, str], free: Container[OsmRef]
-) -> tuple[dict[int, Rings], dict[int, str]]:
-    """`read_admin_relations` without the municipalities an earlier extract
-    already yielded."""
-    claimed = {i for t, i in by_ref if t == "r"}
-    loose, loose_names = read_admin_relations(path, ags_prefix, claimed)
-    loose = {i: r for i, r in loose.items() if ("r", i) not in free}
-    return loose, loose_names
+    pbf: StrPath, ags_prefix: str | None, skip: Container[OsmRef]
+) -> dict[int, osmscan.Relation]:
+    """The municipality relations of one district (None: of none) that are
+    not among `skip` -- those a row claims or an earlier extract held.
+
+    Scans every relation rather than filtering by id, because the whole point
+    is to find the ones nobody has written down yet.  The filter is the German
+    municipality key (`de:regionalschluessel`), not a bounding box: a box would
+    also catch the neighbouring Kreise, which are not part of the dialect map
+    at all and would read as gaps in it."""
+    if ags_prefix is None:
+        return {}
+    found = osmscan.relations_where(pbf, lambda tags: _is_municipality_of(tags, ags_prefix))
+    return {i: relation for i, relation in found.items() if ("r", i) not in skip}
 
 
-def _read_geometry(path: str, rel: dict[int, Rings], way_ids: set[int]) -> _Geometry:
-    """The relations `rel`, plus the ways `way_ids` and every member way of
-    `rel`, with the locations of all their nodes."""
-    member_ids = {w for r in rel.values() for w in r["outer"] + r["inner"]}
-    ways = {i: w["nodes"] for i, w in osmscan.ways(path, way_ids | member_ids).items()}
-    node_ids = {n for w in ways.values() for n in w}
-    nodes = {i: n["loc"] for i, n in osmscan.nodes(path, node_ids).items()}
-    return _Geometry(rel, ways, nodes)
-
-
-def _dialect_features(
-    reg: Registry,
-    by_ref: Mapping[OsmRef, str],
-    geoms: Mapping[OsmRef, Sequence[BaseGeometry]],
-    tol: float,
-) -> tuple[list[Feature[DialectProperties]], int]:
-    """-> (features, polygon count): one Feature per dialect that has any
-    geometry, in registry order, each reported as it is built."""
-    features: list[Feature[DialectProperties]] = []
-    total = 0
-    for d in reg:
-        refs = [r for r in by_ref if by_ref[r] == d["tag"] and r in geoms]
-        if not refs:
-            continue
-        feature, n_poly = _dialect_feature(d, refs, geoms, tol)
-        features.append(feature)
-        total += n_poly
-    return features, total
-
-
-def _dialect_feature(
-    d: Dialect,
-    refs: Sequence[OsmRef],
-    geoms: Mapping[OsmRef, Sequence[BaseGeometry]],
-    tol: float,
-) -> tuple[Feature[DialectProperties], int]:
-    """-> (feature, polygon count): the polygons of `refs` dissolved into
-    dialect `d`'s Feature, simplified to `tol`."""
-    from shapely.geometry import mapping
-    from shapely.ops import unary_union
-
-    geom = unary_union([p for ref in refs for p in geoms[ref]])
-    geom = geom.simplify(tol, preserve_topology=True)
-    if not geom.is_valid:
-        geom = geom.buffer(0)
-    n_poly = len(getattr(geom, "geoms", [geom]))
-    n_pts = len(json.dumps(mapping(geom)).split(","))
-    print(
-        f"  {d['tag']:<15} {len(refs):>2} object(s) -> {n_poly:>2} polygon(s), "
-        f"{km2(geom):8.1f} km², valid={geom.is_valid}, ~{n_pts} coords"
+def _is_municipality_of(tags: osmium.osm.TagList, ags_prefix: str) -> bool:
+    key = next((tags[k] for k in AGS_KEYS if k in tags), "")
+    return (
+        tags.get("boundary") == "administrative"
+        and tags.get("admin_level") == "8"
+        and key.startswith(ags_prefix)
     )
-    feature: Feature[DialectProperties] = {
-        "type": "Feature",
-        "properties": {"dialect": d["tag"], "label": d["label"]},
-        "geometry": round_geojson(mapping(geom)),
+
+
+def _extract_line(
+    pbf: StrPath, wanted: Collection[OsmRef], geometry: Geometry, unclaimed: int, seconds: float
+) -> str:
+    """What one extract held of the references `wanted`, for the report."""
+    return (
+        f"{os.path.basename(pbf)}: {len(geometry.relations) - unclaimed}"
+        f"/{len(refs.ids_of(wanted, 'r'))} "
+        f"relations, {len(geometry.ways):,} ways, {len(geometry.nodes):,} nodes"
+        f"{f', {unclaimed} unclaimed municipalities' if unclaimed else ''} "
+        f"({seconds:.0f}s)"
+    )
+
+
+def _polygons(
+    wanted: Iterable[OsmRef], geometry: Geometry, problems: list[str]
+) -> dict[OsmRef, BaseGeometry]:
+    """-> {ref: polygon} for the references `geometry` holds a polygon of."""
+    found = {ref: osmgeom.polygon_of(ref, geometry, problems) for ref in wanted}
+    return {ref: polygon for ref, polygon in found.items() if polygon is not None}
+
+
+def _municipalities(
+    loose: Mapping[int, osmscan.Relation], geometry: Geometry
+) -> dict[OsmRef, Municipality]:
+    """The unclaimed municipalities `loose` that have a polygon, by id."""
+    # Their own problems are noise: nobody has claimed these, so a
+    # broken ring means "not reviewable", not "the data is wrong".
+    polygons = _polygons((("r", i) for i in sorted(loose)), geometry, [])
+    return {
+        ref: Municipality(loose[ref[1]]["tags"].get("name", ""), polygon)
+        for ref, polygon in polygons.items()
     }
-    return feature, n_poly
 
 
-def _report_missing(
-    missing: Sequence[OsmRef],
-    by_ref: Mapping[OsmRef, str],
-    labels: Mapping[OsmRef, str],
-    allow_missing: bool,
-) -> None:
-    """Print the references that produced no geometry; stop the build
-    unless `allow_missing`."""
-    lines = [f"{len(missing)} object(s) not found in the extract(s):"]
-    lines += [
-        f"  {refs.format([ref])}  {labels.get(ref) or '?'} ({by_ref[ref]})"
-        for ref in sorted(missing)
-    ]
-    report = "\n".join(lines)
-    print(f"\n{report}")
-    if not allow_missing:
-        # A dialect area silently missing a reference is worse than a
-        # stopped build -- nothing downstream would ever notice the gap.
-        # Nothing may be written past this point (see the module
-        # docstring): both --areas and --parts are still untouched.
-        raise PipelineError(
-            f"{report}\n\nrun with --allow-missing to build anyway; nothing was written"
+class _Dissolved(NamedTuple):
+    """A dialect's area: the polygons of its references as one."""
+
+    dialect: Dialect
+    objects: int  # the references it is made of
+    area: BaseGeometry
+
+
+def _dissolved(
+    rows: Iterable[AreaRow], reg: Registry, claimed: Mapping[OsmRef, BaseGeometry], tol: float
+) -> list[_Dissolved]:
+    """The area of every dialect that has any geometry, in registry order,
+    simplified to `tol`."""
+    polygons: dict[str, list[BaseGeometry]] = {}
+    for row in rows:
+        polygons.setdefault(row["dialect"], []).extend(
+            claimed[ref] for ref in row["refs"] if ref in claimed
         )
+    return [
+        _Dissolved(d, len(polygons[d["tag"]]), simplified(unary_union(polygons[d["tag"]]), tol))
+        for d in reg
+        if polygons.get(d["tag"])
+    ]
+
+
+def _dialect_line(d: _Dissolved) -> str:
+    n_pts = len(json.dumps(mapping(d.area)).split(","))
+    return (
+        f"  {d.dialect['tag']:<15} {d.objects:>2} object(s) -> "
+        f"{_polygon_count(d.area):>2} polygon(s), "
+        f"{km2(d.area):8.1f} km², valid={d.area.is_valid}, ~{n_pts} coords"
+    )
+
+
+def _polygon_count(geom: BaseGeometry) -> int:
+    return len(getattr(geom, "geoms", [geom]))
+
+
+def _missing_lines(missing: Sequence[tuple[OsmRef, AreaRow]]) -> list[str]:
+    """The references that gave no geometry, each with its row's name and
+    dialect; nothing when there are none."""
+    if not missing:
+        return []
+    return [
+        "",
+        f"{len(missing)} object(s) not found in the extract(s):",
+        *(
+            f"  {refs.format([ref])}  {row['name'] or '?'} ({row['dialect']})"
+            for ref, row in sorted(missing, key=lambda found: found[0])
+        ),
+    ]
+
+
+def _feature[P](geom: BaseGeometry, properties: P) -> Feature[P]:
+    return {"type": "Feature", "properties": properties, "geometry": round_geojson(mapping(geom))}
 
 
 def _dialect_fc(
-    source: str,
-    simplify: float,
-    features: list[Feature[DialectProperties]],
-    built_from: BuiltFrom,
+    source: Source, simplify: float, dissolved: Iterable[_Dissolved]
 ) -> FeatureCollection[DialectProperties]:
     """The --areas FeatureCollection: one Feature per dialect."""
     return {
         "type": "FeatureCollection",
-        "properties": {"source": source, "simplify_deg": simplify, "built_from": built_from},
-        "features": features,
+        "properties": {
+            "source": source.name,
+            "simplify_deg": simplify,
+            "built_from": source.built_from,
+        },
+        "features": [
+            _feature(d.area, {"dialect": d.dialect["tag"], "label": d.dialect["label"]})
+            for d in dissolved
+        ],
     }
+
+
+def _assigned_parts(
+    rows: Iterable[AreaRow], claimed: Mapping[OsmRef, BaseGeometry]
+) -> list[tuple[PartIdentity, list[BaseGeometry]]]:
+    """A part per row that has any geometry, with the polygons of its
+    references."""
+    parts: list[tuple[PartIdentity, list[BaseGeometry]]] = []
+    for row in rows:
+        polygons = [claimed[ref] for ref in row["refs"] if ref in claimed]
+        if not polygons:
+            continue
+        about: PartIdentity = {
+            "assigned": True,
+            "dialect": row["dialect"],
+            "name": row["name"],
+            "note": row["note"],
+            "osm": row["osm"],
+            "line": row["line"],
+        }
+        parts.append((about, polygons))
+    return parts
+
+
+def _unassigned_parts(
+    unclaimed: Mapping[OsmRef, Municipality],
+) -> list[tuple[PartIdentity, list[BaseGeometry]]]:
+    """A part per municipality no row claims, by name."""
+    # No `dialect` key on these on purpose: it is what stops AreaIndex from
+    # ever loading this file (see the module docstring).
+    return [
+        ({"assigned": False, "name": found.name, "osm": refs.format([ref])}, [found.polygon])
+        for ref, found in sorted(unclaimed.items(), key=lambda item: item[1].name)
+    ]
+
+
+def _part_feature(
+    fid: int, about: PartIdentity, polygons: Sequence[BaseGeometry], tol: float
+) -> Feature[PartProperties]:
+    """The Feature of one part, assigned or not: its polygons as one,
+    simplified to `tol`."""
+    # also of a single polygon: the union says where its rings start, and
+    # that decides which vertices simplifying keeps
+    area = simplified(unary_union(polygons), tol)
+    return _feature(area, {"fid": fid, **about, "km2": round(km2(area), 1)})
 
 
 def _write_dialects(path: str, fc: FeatureCollection[DialectProperties], total: int) -> None:
@@ -550,92 +611,6 @@ def write_geojson(path: str, fc: Mapping[str, object]) -> None:
     data = json.dumps(fc, ensure_ascii=False, separators=(",", ":")) + "\n"
     os.makedirs(os.path.dirname(path), exist_ok=True)
     files.atomic_write(path, data)
-
-
-def simplified(geom: BaseGeometry, tol: float) -> BaseGeometry:
-    """`geom` simplified to `tol`, kept valid."""
-    if tol:
-        geom = geom.simplify(tol, preserve_topology=True)
-    if not geom.is_valid:
-        geom = geom.buffer(0)
-    return geom
-
-
-def build_parts(
-    source: str,
-    options: Options,
-    rows: Sequence[AreaRow],
-    scan: _Scan,
-    built_from: BuiltFrom,
-) -> Parts:
-    """The --parts FeatureCollection -- one Feature per municipality, see the
-    module docstring for why this is a separate file from --areas -- with the
-    count of rows without geometry (already in the `missing` report).  Pure:
-    building it does not touch disk, so it can run to completion before
-    anything is written (see `write`)."""
-    geoms, free, free_names = scan.geoms, scan.free, scan.free_names
-    from shapely.geometry import mapping
-    from shapely.ops import unary_union
-
-    features: list[Feature[PartProperties]] = []
-    skipped, fid = 0, 0
-
-    for row in rows:
-        polys = [p for ref in row["refs"] for p in geoms.get(ref, [])]
-        if not polys:
-            skipped += 1  # already in the `missing` report
-            continue
-        geom = simplified(unary_union(polys), options.parts_simplify)
-        fid += 1
-        features.append(
-            {
-                "type": "Feature",
-                "properties": {
-                    "fid": fid,
-                    "assigned": True,
-                    "dialect": row["dialect"],
-                    "name": row["name"],
-                    "note": row["note"],
-                    "osm": row["osm"],
-                    "line": row["line"],
-                    "km2": round(km2(geom), 1),
-                },
-                "geometry": round_geojson(mapping(geom)),
-            }
-        )
-
-    # No `dialect` key on these on purpose: it is what stops AreaIndex from
-    # ever loading this file (see the module docstring).
-    for ref in sorted(free, key=lambda r: free_names.get(r, "")):
-        geom = simplified(unary_union(free[ref]), options.parts_simplify)
-        fid += 1
-        features.append(
-            {
-                "type": "Feature",
-                "properties": {
-                    "fid": fid,
-                    "assigned": False,
-                    "name": free_names.get(ref, ""),
-                    "osm": refs.format([ref]),
-                    "km2": round(km2(geom), 1),
-                },
-                "geometry": round_geojson(mapping(geom)),
-            }
-        )
-
-    fc: FeatureCollection[PartProperties]
-    fc = {
-        "type": "FeatureCollection",
-        "properties": {
-            "source": source,
-            "simplify_deg": options.parts_simplify,
-            "unit": "one feature per municipality",
-            "unassigned_ags": (options.unassigned_ags or "") if free else "",
-            "built_from": built_from,
-        },
-        "features": features,
-    }
-    return Parts(fc, skipped, len(free))
 
 
 def write_parts(path: str, parts: Parts) -> None:

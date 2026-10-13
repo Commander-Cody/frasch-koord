@@ -86,6 +86,12 @@ def osm_only(refs: Iterable[Ref]) -> list[OsmRef]:
     return [osm for ref in refs if (osm := as_osm_ref(ref))]
 
 
+def ids_of(refs: Iterable[OsmRef], type_letter: str) -> set[int]:
+    """The ids of the references of one type (`"n"`, `"w"` or `"r"`) among
+    `refs`."""
+    return {i for t, i in refs if t == type_letter}
+
+
 def local_of(refs: Iterable[Ref]) -> str | None:
     """The slug when `refs` are a local reference (`local/<slug>`), else None.
 
