@@ -1,142 +1,96 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { RefObject } from 'react';
-import type { LngLat, MapGeoJSONFeature } from 'maplibre-gl';
 
 import type { MapViewHandle } from '../components/Map';
-import { PHONE_MEDIA } from '../layout';
-import type { EntryLookup, NameEntry, PlaceSelection, TileProps } from '../names';
-import { displayName } from '../names';
+import type { NamesData } from '../names';
+import { mapMove, selectionOf } from '../placeSelection';
+import type { CloseMeans, PlacePick, PlaceSelection } from '../placeSelection';
+import { linkedPlace, writePlace } from '../url/linkState';
+import { sheetInset } from './useSheetHeight';
 
-/** Target zoom per feature kind: large areas get a wider view than villages. */
-const ZOOM_BY_KIND: Record<string, number> = {
-  landscape: 10,
-  island: 11,
-  koog: 12,
-  water: 12,
-  sand: 12,
-  hallig: 13,
-  helgoland: 13,
-  settlement: 14,
-  warft: 15,
-};
-const DEFAULT_TARGET_ZOOM = 14;
-
-/**
- * What was clicked or picked: the name-list reference, and for a map click
- * the tile feature. The entry itself is looked up on every render, so a card
- * opened before the name list has loaded gets it once the list is there.
- */
-interface PickedPlace {
-  ref?: string;
-  props?: TileProps;
-  featureId?: string | number;
-}
-
-function selectionOf({ ref, props, featureId }: PickedPlace, find: EntryLookup): PlaceSelection {
-  return { entry: ref === undefined ? undefined : find(ref), props, featureId };
-}
-
-/** A map move given how many pixels at the bottom of the map the card covers. */
-type Move = (inset: number) => void;
-
-/**
- * Schedules a map move that has to wait for the card: on a phone the card is
- * a bottom sheet, and where the place should land depends on its height. A
- * scheduled move runs (once) as soon as the card of the next selection is
- * laid out — before paint, so the map starts moving in the same frame the
- * sheet shows.
- */
-function useMoveAfterCard(cardRef: RefObject<HTMLElement | null>, picked: PickedPlace | null) {
-  const pendingMove = useRef<Move | null>(null);
-  useLayoutEffect(() => {
-    const move = pendingMove.current;
-    pendingMove.current = null;
-    if (!move) return;
-    const card = cardRef.current;
-    move(card && window.matchMedia(PHONE_MEDIA).matches ? card.offsetHeight : 0);
-  }, [cardRef, picked]);
-  return useCallback((move: Move) => {
-    pendingMove.current = move;
-  }, []);
+/** What a selection reaches for: the map it moves, and where keyboard focus goes. */
+export interface SelectionTargets {
+  map: RefObject<MapViewHandle | null>;
+  card: RefObject<HTMLElement | null>;
+  /** The card's headline. */
+  heading: RefObject<HTMLElement | null>;
+  searchField: RefObject<HTMLElement | null>;
 }
 
 export interface PlaceSelectionState {
   /** The place whose card is open, from a map click, a search result or a link. */
   selection: PlaceSelection | null;
-  /** A search result: fly there. `name` is its display name, for the marker. */
-  selectEntry: (entry: NameEntry, name: string) => void;
-  /** A map click on a place label, or on none (`null`), which closes the card. */
-  selectFeature: (feature: MapGeoJSONFeature | null, at: LngLat) => void;
-  /** A linked place (see useLinkedPlace): fly there, unless the link says where to look. */
-  openLinked: (entry: NameEntry, hasViewport: boolean) => void;
-  close: () => void;
+  select: (pick: PlacePick) => void;
+  /**
+   * Closes the card, if one is open: a linked place whose list still loads
+   * has none, and stays to be opened. From the keyboard, with focus in the
+   * card, focus goes back to the search field rather than dropping to the
+   * page. A pointer close leaves focus alone: on a phone, focus in the field
+   * is a keyboard popping up.
+   */
+  close: (means: CloseMeans) => void;
 }
 
 /**
- * Which place's card is open, and moving the map to it. `find` is the name
- * list's lookup; `view` only names the marker of a linked place.
+ * Moves the map for a selection and, for a search pick, focus to its card's
+ * headline, which also has screen readers announce it: the pick leaves the
+ * field it was made in. Once per pick, when its card is laid out and before
+ * paint, so the map starts moving in the frame the card shows: on a phone the
+ * card is a bottom sheet, and where the place should land depends on its
+ * height.
+ */
+function useShowPick(
+  selection: PlaceSelection | null,
+  { map, card, heading }: SelectionTargets,
+): void {
+  // The selection of a pick changes again when the name list arrives after
+  // a click, which is no reason to move the map twice.
+  const shown = useRef<PlacePick | null>(null);
+  useLayoutEffect(() => {
+    if (!selection || shown.current === selection.pick) return;
+    shown.current = selection.pick;
+    const { to, zoom } = mapMove(selection);
+    const inset = sheetInset(card.current);
+    if (zoom === undefined) map.current?.reveal(to, inset);
+    else map.current?.flyTo(to, zoom, inset);
+    if (selection.pick.via === 'search') heading.current?.focus();
+  }, [selection, map, card, heading]);
+}
+
+/** The pick the page opens with, when its link names a place. */
+function linkPick(): PlacePick | null {
+  const linked = linkedPlace();
+  return linked ? { via: 'link', ...linked } : null;
+}
+
+/**
+ * Which place's card is open. Starts with the place the page's link names;
+ * its card opens once the name list has it, unless another was picked by
+ * then. Keeps the link's `?place=` the open card's place: the entry's id, or,
+ * while the list is not there to look it up in, what was picked.
  */
 export function usePlaceSelection(
-  mapRef: RefObject<MapViewHandle | null>,
-  cardRef: RefObject<HTMLElement | null>,
-  find: EntryLookup,
-  view: string,
+  { status, find }: NamesData,
+  targets: SelectionTargets,
 ): PlaceSelectionState {
-  const [picked, setPicked] = useState<PickedPlace | null>(null);
-  const selection = useMemo(() => picked && selectionOf(picked, find), [picked, find]);
-  const moveAfterCard = useMoveAfterCard(cardRef, picked);
+  const [pick, select] = useState<PlacePick | null>(linkPick);
+  const selection = useMemo(() => pick && selectionOf(pick, find), [pick, find]);
+  useShowPick(selection, targets);
 
-  const selectEntry = (entry: NameEntry, name: string) => {
-    const zoom = ZOOM_BY_KIND[entry.kind] ?? DEFAULT_TARGET_ZOOM;
-    moveAfterCard((inset) =>
-      mapRef.current?.flyTo([entry.lon, entry.lat], zoom, { title: name }, inset),
-    );
-    setPicked({ ref: entry.id });
-  };
+  const place = selection?.entry?.id ?? (status === 'ready' ? undefined : pick?.ref);
+  useEffect(() => writePlace(place), [place]);
 
-  const close = useCallback(() => {
-    setPicked(null);
-    mapRef.current?.clearMarker();
-  }, [mapRef]);
-
-  /**
-   * `frasch:ref` is the id of the feature's row in the name list
-   * (frasch/inject_names.py writes it, frasch/searchindex.py uses it as
-   * the entry id; tiles built before the row ids carry the row's OSM
-   * reference, which `find` knows too); a feature without one, or one the
-   * list does not have, still gets a card — from the tile's own attributes.
-   */
-  const selectFeature = useCallback(
-    (feature: MapGeoJSONFeature | null, at: LngLat) => {
-      if (!feature) {
-        close();
-        return;
-      }
-      // A label tapped in the lower half of a phone would end up under the
-      // sheet that is about to open.
-      moveAfterCard((inset) => mapRef.current?.reveal(at, inset));
-      const props = feature.properties as TileProps;
-      const ref = props['frasch:ref'];
-      setPicked({ ref: typeof ref === 'string' ? ref : undefined, props, featureId: feature.id });
-      // The label the user just clicked says where the place is; a search
-      // marker from before would only sit somewhere else.
-      mapRef.current?.clearMarker();
+  const { card, searchField } = targets;
+  const cardOpen = selection !== null;
+  const close = useCallback(
+    (means: CloseMeans) => {
+      if (!cardOpen) return;
+      const focusInCard = card.current?.contains(document.activeElement) ?? false;
+      select(null);
+      if (means === 'keyboard' && focusInCard) searchField.current?.focus();
     },
-    [close, mapRef, moveAfterCard],
+    [cardOpen, card, searchField],
   );
 
-  const openLinked = (entry: NameEntry, hasViewport: boolean) => {
-    const name = displayName(entry, view);
-    if (!hasViewport) {
-      selectEntry(entry, name);
-      return;
-    }
-    setPicked({ ref: entry.id });
-    mapRef.current?.showMarker([entry.lon, entry.lat], { title: name });
-    // The link keeps its viewport, but a desktop sharer never had the
-    // phone's sheet in the way.
-    moveAfterCard((inset) => mapRef.current?.reveal([entry.lon, entry.lat], inset));
-  };
-
-  return { selection, selectEntry, selectFeature, openLinked, close };
+  return { selection, select, close };
 }

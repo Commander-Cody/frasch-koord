@@ -4,6 +4,7 @@ import './index.css';
 import './i18n';
 import App from './App.tsx';
 import type { DevTool } from './dev/DevApp.tsx';
+import { hasQueryParam } from './url/queryParams.ts';
 
 /**
  * `?curate` opens the name-list curation review, `?areas` the dialect-area
@@ -14,9 +15,8 @@ import type { DevTool } from './dev/DevApp.tsx';
  */
 function devTool(): DevTool | null {
   if (!import.meta.env.DEV) return null;
-  const params = new URLSearchParams(window.location.search);
-  if (params.has('curate')) return 'curate';
-  if (params.has('areas')) return 'areas';
+  if (hasQueryParam('curate')) return 'curate';
+  if (hasQueryParam('areas')) return 'areas';
   return null;
 }
 

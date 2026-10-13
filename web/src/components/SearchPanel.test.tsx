@@ -36,7 +36,7 @@ it('hands a picked result on as the whole name-list entry', () => {
   fireEvent.change(screen.getByPlaceholderText(/./), { target: { value: 'Naibel' } });
   fireEvent.click(within(screen.getByRole('listbox')).getByText('Naibel'));
 
-  expect(onSelect).toHaveBeenCalledWith(entry, 'Naibel');
+  expect(onSelect).toHaveBeenCalledWith(entry);
 });
 
 it("finds a place by OSM's generic name, which the local view labels it with", () => {

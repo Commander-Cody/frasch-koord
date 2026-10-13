@@ -13,7 +13,8 @@ function place(fields: Partial<NameEntry>): NameEntry {
 }
 
 function renderCard(entry: NameEntry) {
-  render(<PlaceCard selection={{ entry }} view={LOCAL_TAG} onClose={() => {}} />);
+  const pick = { via: 'search', ref: entry.id } as const;
+  render(<PlaceCard selection={{ pick, entry }} view={LOCAL_TAG} onClose={() => {}} />);
 }
 
 it("labels OSM's generic name in the local view with the language it is the name in", () => {

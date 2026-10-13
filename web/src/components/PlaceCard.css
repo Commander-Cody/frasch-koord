@@ -44,7 +44,7 @@
 }
 
 /* The headline takes focus only so that a card a search opens is announced
-   (hooks/useCardFocus.ts); it is nothing to operate, so it gets no ring. */
+   (hooks/usePlaceSelection.ts); it is nothing to operate, so it gets no ring. */
 .place-card-name:focus {
   outline: none;
 }

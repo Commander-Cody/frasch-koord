@@ -78,16 +78,6 @@ export interface CardEntry extends NameEntry {
 /** Properties of a clicked vector-tile feature (source-layer `place`). */
 export type TileProps = Record<string, unknown>;
 
-/** What the place card is showing. */
-export interface PlaceSelection {
-  /** The name-list entry, when the place has one. */
-  entry?: NameEntry;
-  /** Tile properties of the clicked feature; absent when the search opened the card. */
-  props?: TileProps;
-  /** Tile feature id of the clicked feature, see `osmRefFromFeatureId`. */
-  featureId?: string | number;
-}
-
 /**
  * A name together with where it came from: a dialect tag, or `local`, `frr`,
  * `nds`, `de`, `da`, or `osm` for OSM's generic name in no known language.
@@ -306,10 +296,13 @@ export function entryFromTile(props: TileProps): CardEntry {
  * not have. The exceptions are what depends on the clicked object itself:
  * its local name with the dialect area it lies in, and OSM's own names.
  * Without an entry the tile alone carries the card.
+ *
+ * `entry` is the place's name-list entry, when it has one; `props` are the
+ * tile properties of the clicked feature, absent when no click opened the
+ * card.
  */
-export function cardEntry(selection: PlaceSelection): CardEntry {
-  const tile = selection.props ? entryFromTile(selection.props) : undefined;
-  const entry = selection.entry;
+export function cardEntry(entry: NameEntry | undefined, props?: TileProps): CardEntry {
+  const tile = props ? entryFromTile(props) : undefined;
   if (!entry) return tile ?? { id: '', names: {}, name_de: '', lon: 0, lat: 0, kind: '' };
   if (!tile) return entry;
   return {
@@ -368,8 +361,12 @@ export function osmRefFromFeatureId(id: string | number | undefined): string | n
 
 /**
  * The OSM reference of what the card is showing, for the link at its foot:
- * the first of the row's, else the clicked feature's object.
+ * the first of the row's, else the clicked feature's object (`featureId` is
+ * its tile feature id).
  */
-export function placeOsmRef(selection: PlaceSelection): string | null {
-  return osmRefs(selection.entry?.osm)[0] ?? osmRefFromFeatureId(selection.featureId);
+export function placeOsmRef(
+  entry: NameEntry | undefined,
+  featureId?: string | number,
+): string | null {
+  return osmRefs(entry?.osm)[0] ?? osmRefFromFeatureId(featureId);
 }

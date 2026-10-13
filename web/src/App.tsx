@@ -1,5 +1,6 @@
-import { useRef } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { LngLat, MapGeoJSONFeature } from 'maplibre-gl';
 
 import CloseButton from './components/CloseButton';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -7,14 +8,12 @@ import MapView from './components/Map';
 import type { MapViewHandle } from './components/Map';
 import PlaceCard from './components/PlaceCard';
 import SearchPanel from './components/SearchPanel';
-import { useCardFocus } from './hooks/useCardFocus';
 import { useCloseOnEscape } from './hooks/useCloseOnEscape';
-import { useLinkedPlace } from './hooks/useLinkedPlace';
 import { usePlaceSelection } from './hooks/usePlaceSelection';
 import { useSheetHeight } from './hooks/useSheetHeight';
-import { useUrlSync } from './hooks/useUrlSync';
 import { useView } from './hooks/useView';
 import { useNames } from './names';
+import { mapPick, markerOf } from './placeSelection';
 import { useProvenanceCheck } from './provenance';
 import './App.css';
 
@@ -25,29 +24,29 @@ function App() {
   const cardHeadingRef = useRef<HTMLHeadingElement | null>(null);
   const searchFieldRef = useRef<HTMLInputElement | null>(null);
   // One fetch of the name list for both the search index and the card.
-  const { status: namesStatus, entries, find, builtFrom } = useNames();
-  useProvenanceCheck(builtFrom);
+  const names = useNames();
+  useProvenanceCheck(names.builtFrom);
   const [view, changeView] = useView();
-  const { selection, selectEntry, selectFeature, openLinked, close } = usePlaceSelection(
-    mapRef,
-    cardRef,
-    find,
-    view,
-  );
-  const { focusNextCard, closeByKeyboard } = useCardFocus(
-    { card: cardRef, heading: cardHeadingRef, searchField: searchFieldRef },
-    selection,
-    close,
-  );
-  const linkedPlace = useLinkedPlace(namesStatus, find, openLinked);
+  const { selection, select, close } = usePlaceSelection(names, {
+    map: mapRef,
+    card: cardRef,
+    heading: cardHeadingRef,
+    searchField: searchFieldRef,
+  });
+  const marker = useMemo(() => markerOf(selection, view), [selection, view]);
   const cardOpen = selection !== null;
   useSheetHeight(appRef, cardRef, cardOpen);
-  useUrlSync({ view, place: selection?.entry?.id ?? linkedPlace });
-  useCloseOnEscape(cardOpen, closeByKeyboard);
+  useCloseOnEscape(cardOpen, close);
+  // A click on a place label opens its card; one that hits none closes it.
+  const clickMap = useCallback(
+    (feature: MapGeoJSONFeature | null, at: LngLat) =>
+      feature ? select(mapPick(feature, at)) : close('pointer'),
+    [select, close],
+  );
 
   return (
     <div ref={appRef} className="app">
-      <MapView ref={mapRef} view={view} onSelectFeature={selectFeature} />
+      <MapView ref={mapRef} view={view} marker={marker} onSelectFeature={clickMap} />
       {/* The side panel only: a card that trips over a malformed entry must
           not unmount the map with it. */}
       <ErrorBoundary
@@ -56,7 +55,7 @@ function App() {
           <div className="side-panel">
             <PanelError
               onClose={() => {
-                close();
+                close('pointer');
                 reset();
               }}
             />
@@ -66,14 +65,11 @@ function App() {
         <div className="side-panel">
           <SearchPanel
             ref={searchFieldRef}
-            entries={entries}
-            status={namesStatus}
+            entries={names.entries}
+            status={names.status}
             view={view}
             onViewChange={changeView}
-            onSelect={(entry, name) => {
-              focusNextCard();
-              selectEntry(entry, name);
-            }}
+            onSelect={(entry) => select({ via: 'search', ref: entry.id })}
           />
           {selection && (
             <PlaceCard
@@ -81,7 +77,7 @@ function App() {
               headingRef={cardHeadingRef}
               selection={selection}
               view={view}
-              onClose={(byKeyboard) => (byKeyboard ? closeByKeyboard() : close())}
+              onClose={close}
             />
           )}
         </div>

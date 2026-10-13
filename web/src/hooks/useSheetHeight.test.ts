@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderHook } from '@testing-library/react';
 
-import { useSheetHeight } from './useSheetHeight';
+import { sheetInset, useSheetHeight } from './useSheetHeight';
 
 /** jsdom lays nothing out: a card of a given height, and a way to change it. */
 function cardOf(height: number) {
@@ -68,5 +68,22 @@ describe('useSheetHeight', () => {
     cardRef.current = null;
     rerender(false);
     expect(app.style.getPropertyValue('--sheet-height')).toBe('');
+  });
+});
+
+describe('sheetInset', () => {
+  it('is the height of the card where it is the bottom sheet of a phone', () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: true }));
+    expect(sheetInset(cardOf(240).card)).toBe(240);
+  });
+
+  it('is nothing on a desktop, where the card sits beside the map', () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: false }));
+    expect(sheetInset(cardOf(240).card)).toBe(0);
+  });
+
+  it('is nothing without a card', () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: true }));
+    expect(sheetInset(null)).toBe(0);
   });
 });

@@ -11,7 +11,8 @@ import { useRef, useState } from 'react';
 
 import MapView from '../components/Map';
 import type { MapViewHandle } from '../components/Map';
-import { initialView } from '../urlState';
+import { useUiLanguage } from '../hooks/useView';
+import { initialView } from '../url/linkState';
 import AreaPanel from './AreaPanel';
 import CuratePanel from './CuratePanel';
 import '../App.css';
@@ -21,6 +22,7 @@ export type DevTool = 'curate' | 'areas';
 export default function DevApp({ tool }: { tool: DevTool }) {
   const mapRef = useRef<MapViewHandle | null>(null);
   const [view] = useState(initialView);
+  useUiLanguage(view);
   // Neither view offers the label selector: they are about which OSM object a
   // row means, and which dialect an area is, not about how the map reads, so
   // they stay in the view the page opened in. Both bring their own click

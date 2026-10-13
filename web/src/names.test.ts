@@ -255,19 +255,19 @@ describe('resolveName', () => {
 describe('cardEntry', () => {
   it('is exactly the name-list entry when there is no clicked tile', () => {
     const e = entry({ name_de: 'Niebüll' });
-    expect(cardEntry({ entry: e })).toBe(e);
+    expect(cardEntry(e)).toBe(e);
   });
 
   it('is built from the tile alone when the place has no name-list entry', () => {
     const props = { 'name:de': 'Niebüll', 'frasch:ref': 'node/1' };
-    const result = cardEntry({ props });
+    const result = cardEntry(undefined, props);
     expect(result.id).toBe('node/1');
     expect(result.name_de).toBe('Niebüll');
   });
 
   it("does not take a tile's generic name for its German one", () => {
     // North of the border OSM's `name` is Danish; the card must not list it as German.
-    const result = cardEntry({ props: { name: 'Ribe' } });
+    const result = cardEntry(undefined, { name: 'Ribe' });
     expect(result.name_osm).toBe('Ribe');
     expect(result.name_de).toBe('');
   });
@@ -287,7 +287,7 @@ describe('cardEntry', () => {
       'name:da': 'TileDA',
       'frasch:kind': 'tile-kind',
     };
-    const result = cardEntry({ entry: e, props });
+    const result = cardEntry(e, props);
     expect(result.names['frr-x-mooring']).toBe('EntryMooring');
     expect(result.variety).toBe('EntryVariety');
     expect(result.name_de).toBe('EntryDE');
@@ -305,7 +305,7 @@ describe('cardEntry', () => {
       'name:da': 'TileDA',
       'frasch:kind': 'tile-kind',
     };
-    const result = cardEntry({ entry: e, props });
+    const result = cardEntry(e, props);
     expect(result.local).toBe('TileLocal');
     expect(result.dialect).toBe('tile-dialect');
     expect(result.variety).toBe('TileVariety');
@@ -317,50 +317,50 @@ describe('cardEntry', () => {
   it('takes the local name from the tile even when the entry has one, since the tile is what the clicked label showed', () => {
     const e = entry({ local: 'EntryLocal' });
     const props = { 'frasch:local': 'TileLocal' };
-    expect(cardEntry({ entry: e, props }).local).toBe('TileLocal');
+    expect(cardEntry(e, props).local).toBe('TileLocal');
   });
 
   it('takes the dialect area from the tile together with its local name', () => {
     const e = entry({ local: 'EntryLocal', dialect: 'entry-dialect' });
     const props = { 'frasch:local': 'TileLocal', 'frasch:dialect': 'tile-dialect' };
-    expect(cardEntry({ entry: e, props }).dialect).toBe('tile-dialect');
+    expect(cardEntry(e, props).dialect).toBe('tile-dialect');
   });
 
   it("keeps the entry's dialect area when the tile has no local name", () => {
     const e = entry({ local: 'EntryLocal', dialect: 'entry-dialect' });
     const props = { 'frasch:dialect': 'tile-dialect' };
-    expect(cardEntry({ entry: e, props }).dialect).toBe('entry-dialect');
+    expect(cardEntry(e, props).dialect).toBe('entry-dialect');
   });
 
   it("falls back to the entry's local name when the tile has none", () => {
     const e = entry({ local: 'EntryLocal' });
-    expect(cardEntry({ entry: e, props: { name: 'TileOSM' } }).local).toBe('EntryLocal');
+    expect(cardEntry(e, { name: 'TileOSM' }).local).toBe('EntryLocal');
   });
 
   it('takes name_nds from the tile even when the entry has one, since the tile is what the clicked label showed', () => {
     const e = entry({ name_nds: 'EntryNDS' });
     const props = { 'name:nds': 'TileNDS' };
-    expect(cardEntry({ entry: e, props }).name_nds).toBe('TileNDS');
+    expect(cardEntry(e, props).name_nds).toBe('TileNDS');
   });
 
   it('takes name_osm from the tile even when the entry has one, since the tile is what the clicked label showed', () => {
     const e = entry({ name_osm: 'EntryOSM' });
-    expect(cardEntry({ entry: e, props: { name: 'TileOSM' } }).name_osm).toBe('TileOSM');
+    expect(cardEntry(e, { name: 'TileOSM' }).name_osm).toBe('TileOSM');
   });
 
   it("falls back to the entry's name_osm when the tile has none", () => {
     const e = entry({ name_osm: 'EntryOSM' });
-    expect(cardEntry({ entry: e, props: { 'name:de': 'TileDE' } }).name_osm).toBe('EntryOSM');
+    expect(cardEntry(e, { 'name:de': 'TileDE' }).name_osm).toBe('EntryOSM');
   });
 
   it('fills name_osm from the tile when the entry has none', () => {
-    expect(cardEntry({ entry: entry(), props: { name: 'TileOSM' } }).name_osm).toBe('TileOSM');
+    expect(cardEntry(entry(), { name: 'TileOSM' }).name_osm).toBe('TileOSM');
   });
 
   it("falls back to the entry's name_nds when the tile has none", () => {
     const e = entry({ name_nds: 'EntryNDS' });
     const props = { 'name:de': 'TileDE' }; // no name:nds on this tile
-    expect(cardEntry({ entry: e, props }).name_nds).toBe('EntryNDS');
+    expect(cardEntry(e, props).name_nds).toBe('EntryNDS');
   });
 });
 
@@ -442,20 +442,18 @@ describe('entryLookup', () => {
 
 describe('placeOsmRef', () => {
   it("is the name-list entry's OSM reference", () => {
-    expect(
-      placeOsmRef({ entry: entry({ id: 'naibel', osm: 'node/240042766' }), featureId: 33525413 }),
-    ).toBe('node/240042766');
+    expect(placeOsmRef(entry({ id: 'naibel', osm: 'node/240042766' }), 33525413)).toBe(
+      'node/240042766',
+    );
   });
 
   it('is the first of the several references of a row', () => {
-    expect(
-      placeOsmRef({ entry: entry({ id: 'nordwarw', osm: 'way/1347936331; node/1332249790' }) }),
-    ).toBe('way/1347936331');
+    expect(placeOsmRef(entry({ id: 'nordwarw', osm: 'way/1347936331; node/1332249790' }))).toBe(
+      'way/1347936331',
+    );
   });
 
   it("is the clicked feature's object when the name list does not have the place", () => {
-    expect(placeOsmRef({ props: { name: 'Bredstedt' }, featureId: 2400427661 })).toBe(
-      'node/240042766',
-    );
+    expect(placeOsmRef(undefined, 2400427661)).toBe('node/240042766');
   });
 });

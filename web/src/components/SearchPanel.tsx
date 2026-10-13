@@ -34,9 +34,8 @@ export interface SearchPanelProps {
   /** Selected label option tag (a dialect, or LOCAL_TAG). */
   view: string;
   onViewChange: (view: string) => void;
-  /** `name` is the entry's display name in the current view (for the map marker). */
-  onSelect: (entry: NameEntry, name: string) => void;
-  /** The search field: App returns focus there when the card closes (see useCardFocus). */
+  onSelect: (entry: NameEntry) => void;
+  /** The search field: focus returns there when the card closes (see usePlaceSelection). */
   ref?: Ref<HTMLInputElement>;
 }
 
@@ -102,12 +101,11 @@ export default function SearchPanel({
   const showList = open && !failed && query.trim().length > 0;
 
   const select = (entry: NameEntry) => {
-    const name = displayName(entry, view);
-    setQuery(name);
+    setQuery(displayName(entry, view));
     setOpen(false);
     setPicked(true);
-    // The card this opens takes focus (see useCardFocus).
-    onSelect(entry, name);
+    // The card this opens takes focus (see usePlaceSelection).
+    onSelect(entry);
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {

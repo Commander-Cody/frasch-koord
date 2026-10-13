@@ -2,6 +2,7 @@
 // The tiles URL is the ONLY place the frontend depends on how/where tiles are hosted.
 
 import registry from './generated/dialects.json';
+import { resolvedOnPage } from './url/queryParams';
 
 /**
  * Absolute URL of `path` (no leading slash, e.g. "data/names.json") under the
@@ -17,10 +18,8 @@ import registry from './generated/dialects.json';
  */
 export function siteUrl(path: string): string {
   const base = import.meta.env.BASE_URL;
-  // A relative base (`./`) is relative to the page; outside a browser there is
-  // no page to resolve against, so the base is used as it is.
-  const root = typeof window !== 'undefined' ? new URL(base, window.location.href).href : base;
-  return `${root}${path}`;
+  // A relative base (`./`) is relative to the page.
+  return `${resolvedOnPage(base)}${path}`;
 }
 
 /**
