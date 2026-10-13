@@ -1,11 +1,14 @@
 """osmscan.py: the id-filtered passes over an extract -- only the objects
-asked for, never a location cache for the whole file."""
+asked for, and what their geometry takes."""
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from frasch import osmscan
+from frasch.paths import StrPath
+from frasch.refs import OsmRef
 from osm_fixture import write_extract
 
 
@@ -106,3 +109,87 @@ def test_an_extract_is_named_by_its_file_and_replication_timestamp(tmp_path: Pat
 def test_an_extract_without_a_timestamp_says_so(tmp_path: Path) -> None:
     pbf = write_extract(tmp_path / "x.osm.pbf", nodes={1: ((8.5, 55.0), {})})
     assert osmscan.extract_stamp(pbf)["replication_timestamp"] == ""
+
+
+# ---------------------------------------------------------- read_geometry ---
+def test_a_relation_is_read_with_its_member_ways_and_their_nodes(tmp_path: Path) -> None:
+    geometry = osmscan.read_geometry(extract(tmp_path), {("r", 21)})
+    assert (set(geometry.relations), set(geometry.ways), set(geometry.nodes)) == (
+        {21},
+        {11},
+        {2, 3},
+    )
+
+
+def test_a_referenced_way_is_read_with_its_nodes(tmp_path: Path) -> None:
+    geometry = osmscan.read_geometry(extract(tmp_path), {("w", 11)})
+    assert (set(geometry.ways), set(geometry.nodes)) == ({11}, {2, 3})
+
+
+def test_a_referenced_node_is_read(tmp_path: Path) -> None:
+    geometry = osmscan.read_geometry(extract(tmp_path), {("n", 4)})
+    assert geometry.nodes == {4: {"loc": (8.05, 54.05), "tags": {"place": "village"}}}
+
+
+def test_the_label_node_of_a_relation_is_read_too(tmp_path: Path) -> None:
+    geometry = osmscan.read_geometry(extract(tmp_path), {("r", 20)})
+    assert 4 in geometry.nodes
+
+
+def test_relations_read_before_ride_along_with_their_ways_and_nodes(tmp_path: Path) -> None:
+    path = extract(tmp_path)
+    geometry = osmscan.read_geometry(path, {("n", 1)}, osmscan.relations(path, {21}))
+    assert (set(geometry.relations), set(geometry.ways), set(geometry.nodes)) == (
+        {21},
+        {11},
+        {1, 2, 3},
+    )
+
+
+# ------------------------------------------------------- relations_where ---
+def test_relations_where_are_those_whose_tags_the_predicate_picks(tmp_path: Path) -> None:
+    waterways = osmscan.relations_where(extract(tmp_path), lambda tags: "type" in tags)
+    assert waterways == {
+        22: {
+            "rings": {"outer": [11, 10, 12], "inner": []},
+            "member_ways": [11, 10, 12],
+            "label": None,
+            "tags": {"type": "waterway"},
+        }
+    }
+
+
+# ----------------------------------------------------------------- across ---
+def two_extracts(tmp_path: Path) -> list[Path]:
+    """Node 1 is in both, under another name in the second; node 2 in the
+    second alone; node 3 in neither."""
+    sh = write_extract(tmp_path / "sh.osm.pbf", nodes={1: ((8.8, 54.8), {"name": "Naibel"})})
+    dk = write_extract(
+        tmp_path / "dk.osm.pbf",
+        nodes={1: ((8.8, 54.8), {"name": "again"}), 2: ((8.4, 55.4), {"name": "Fanø"})},
+    )
+    return [sh, dk]
+
+
+class NodeNames:
+    """A read of one extract -- the names of the nodes asked for -- which
+    notes what each extract was asked for."""
+
+    def __init__(self) -> None:
+        self.asked: dict[str, set[OsmRef]] = {}
+
+    def __call__(self, pbf: StrPath, refs: set[OsmRef]) -> dict[OsmRef, str]:
+        self.asked[os.path.basename(pbf)] = refs
+        found = osmscan.nodes(pbf, {i for _, i in refs})
+        return {("n", i): node["tags"]["name"] for i, node in found.items()}
+
+
+def test_what_several_extracts_hold_is_found_in_the_first_that_holds_it(tmp_path: Path) -> None:
+    found = osmscan.across(two_extracts(tmp_path), {("n", 1), ("n", 2), ("n", 3)}, NodeNames())
+    assert found == {("n", 1): "Naibel", ("n", 2): "Fanø"}
+
+
+def test_a_later_extract_is_asked_only_for_what_the_earlier_ones_lacked(tmp_path: Path) -> None:
+    read = NodeNames()
+    osmscan.across(two_extracts(tmp_path), {("n", 1), ("n", 2), ("n", 3)}, read)
+    assert read.asked["dk.osm.pbf"] == {("n", 2), ("n", 3)}

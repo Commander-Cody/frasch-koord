@@ -1,21 +1,22 @@
-"""An OSM object's polygon(s), built from what frasch.osmscan read.
+"""An OSM object's polygon, built from what frasch.osmscan read.
 
-pyosmium could assemble the areas itself, but only with a location cache for
-the whole extract (see osmscan); so the rings are joined here, from the
-member ways and node locations of the objects asked for.  The dialect areas
+pyosmium could assemble the areas itself, but only of the whole extract and
+with a location cache for it (see osmscan); so the rings are joined here,
+from the member ways and node locations of the objects asked for.  The dialect areas
 and a place's point inside its own polygon (frasch.locate) both use this,
 so a place and the areas it is compared against are read out of OSM the
 same way."""
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Sequence
 
+from shapely.geometry import Polygon
 from shapely.geometry.base import BaseGeometry
+from shapely.ops import unary_union
 
 from frasch import refs
-from frasch.geo import LonLat
-from frasch.osmscan import Rings
+from frasch.osmscan import Geometry
 from frasch.refs import OsmRef
 
 
@@ -57,54 +58,39 @@ def _chain(cur: list[int], segments: list[list[int]]) -> list[int]:
     return cur
 
 
-def polygons_for(
-    ref: OsmRef,
-    rel: Mapping[int, Rings],
-    ways: Mapping[int, Sequence[int]],
-    nodes: Mapping[int, LonLat],
-    problems: list[str],
-) -> list[BaseGeometry]:
-    """The shapely polygon(s) of one referenced object: a way's own ring, a
-    relation's outer rings minus its inner ones.
+def polygon_of(ref: OsmRef, geometry: Geometry, problems: list[str]) -> BaseGeometry | None:
+    """The shapely polygon of one referenced object, of what `geometry`
+    (osmscan.read_geometry) holds of it: a way's own ring, a relation's
+    outer rings minus its inner ones.  None when the extract lacks the
+    object or no outer ring of it closes.
 
-    rel       {relation id: {"outer": [way ids], "inner": [way ids]}}
-    ways      {way id: [node ids]}
-    nodes     {node id: (lon, lat)}
     problems  gets a message for every member way or node the extract
               lacks, and every ring that does not close"""
-    from shapely.ops import unary_union
-
-    if ref[0] == "w":
-        return _polygons(ref, [ref[1]], "outer", ways, nodes, problems) if ref[1] in ways else []
-    rings = rel.get(ref[1])
-    if rings is None:
-        return []
-    outer = _polygons(ref, rings["outer"], "outer", ways, nodes, problems)
-    inner = _polygons(ref, rings["inner"], "inner", ways, nodes, problems)
+    kind, i = ref
+    if kind == "w":
+        own = _polygons(ref, [i], "outer", geometry, problems) if i in geometry.ways else []
+        return own[0] if own else None
+    relation = geometry.relations.get(i) if kind == "r" else None
+    if relation is None:
+        return None
+    outer = _polygons(ref, relation["rings"]["outer"], "outer", geometry, problems)
+    inner = _polygons(ref, relation["rings"]["inner"], "inner", geometry, problems)
     if not outer:
-        return []
-    geom = unary_union(outer)
-    if inner:
-        geom = geom.difference(unary_union(inner))
-    return [geom]
+        return None
+    area = unary_union(outer)
+    return area.difference(unary_union(inner)) if inner else area
 
 
 def _polygons(
-    ref: OsmRef,
-    way_ids: Iterable[int],
-    what: str,
-    ways: Mapping[int, Sequence[int]],
-    nodes: Mapping[int, LonLat],
-    problems: list[str],
+    ref: OsmRef, way_ids: Iterable[int], what: str, geometry: Geometry, problems: list[str]
 ) -> list[BaseGeometry]:
     """The valid polygons of the closed rings the ways `way_ids` form."""
-    from shapely.geometry import Polygon
-
+    ways, nodes = geometry.ways, geometry.nodes
     where = refs.format([ref])
     missing = [w for w in way_ids if w not in ways]
     if missing:
         problems.append(f"{where}: {len(missing)} {what} way(s) not in the file")
-    rings, unclosed = assemble_rings([ways[w] for w in way_ids if w in ways])
+    rings, unclosed = assemble_rings([ways[w]["nodes"] for w in way_ids if w in ways])
     if unclosed:
         problems.append(f"{where}: {len(unclosed)} unclosed {what} ring(s) -- skipped")
     out: list[BaseGeometry] = []
@@ -112,6 +98,6 @@ def _polygons(
         if any(n not in nodes for n in ring):
             problems.append(f"{where}: a {what} ring has nodes that are not in the file -- skipped")
             continue
-        poly = Polygon([nodes[n] for n in ring])
+        poly = Polygon([nodes[n]["loc"] for n in ring])
         out.append(poly if poly.is_valid else poly.buffer(0))
     return out

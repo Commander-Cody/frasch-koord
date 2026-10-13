@@ -15,11 +15,13 @@ from __future__ import annotations
 import os
 from collections.abc import Collection, Iterable, Mapping, Sequence
 
+from shapely.errors import GEOSException
+
 from frasch import files, osmgeom, osmscan, placelist, placeobjects, refs
 from frasch.dialects import Registry
 from frasch.geo import LonLat
 from frasch.objects import Facts, LocatedObject, Objects, Point, objects_json
-from frasch.osmscan import Rings
+from frasch.osmscan import Geometry
 from frasch.paths import StrPath, Workspace
 from frasch.provenance import Stamp
 from frasch.refs import OsmRef
@@ -28,50 +30,35 @@ from frasch.refs import OsmRef
 def locate(pbfs: Iterable[StrPath], refs: Collection[OsmRef]) -> dict[OsmRef, LocatedObject]:
     """-> {ref: object} for the references found in the extract(s); an
     object found in an earlier extract is not looked up again."""
-    found: dict[OsmRef, LocatedObject] = {}
-    for pbf in pbfs:
-        todo = {ref for ref in refs if ref not in found}
-        if todo:
-            found.update(locate_in(str(pbf), todo))
-    return found
+    return osmscan.across(pbfs, refs, locate_in)
 
 
 def locate_in(pbf: StrPath, refs: Collection[OsmRef]) -> dict[OsmRef, LocatedObject]:
-    """One extract: three id-filtered passes (the relations, their and the
-    referenced ways, all their nodes) -- never a location cache for the
-    whole file, which the dev machine has no memory for."""
-    relations = osmscan.relations(pbf, {i for t, i in refs if t == "r"})
-    way_ids = {i for t, i in refs if t == "w"}
-    for rel in relations.values():
-        way_ids |= set(rel["rings"]["outer"]) | set(rel["rings"]["inner"])
-    ways = osmscan.ways(pbf, way_ids)
-    node_ids = {i for t, i in refs if t == "n"}
-    node_ids |= {r["label"] for r in relations.values() if r["label"] is not None}
-    for way in ways.values():
-        node_ids |= set(way["nodes"])
-    nodes = osmscan.nodes(pbf, node_ids)
-    locs = {i: n["loc"] for i, n in nodes.items()}
-    rel_rings = {i: r["rings"] for i, r in relations.items()}
-    way_nodes = {i: way["nodes"] for i, way in ways.items()}
+    """One extract: where each of `refs` it holds is, with the object's
+    facts.  Read in id-filtered passes (osmscan.read_geometry)."""
+    geometry = osmscan.read_geometry(pbf, refs)
     found: dict[OsmRef, LocatedObject] = {}
     for ref in refs:
-        t, i = ref
-        scanned: osmscan.Node | osmscan.Relation | osmscan.Way | None
-        obj: Point | None = None
-        if t == "n":
-            scanned = nodes.get(i)
-            obj = _node_object(scanned)
-        elif t == "r":
-            scanned = relations.get(i)
-            if scanned is not None:
-                obj = _area_object(ref, scanned["label"], rel_rings, way_nodes, locs)
-        else:
-            scanned = ways.get(i)
-            if scanned is not None:
-                obj = _area_object(ref, None, rel_rings, way_nodes, locs)
-        if obj is not None and scanned is not None:
-            found[ref] = {**obj, **object_facts(scanned["tags"])}
+        point, tags = _located(ref, geometry)
+        if point is not None:
+            found[ref] = {**point, **object_facts(tags)}
     return found
+
+
+def _located(ref: OsmRef, geometry: Geometry) -> tuple[Point | None, Mapping[str, str]]:
+    """-> (where the object is, its tags); (None, {}) for one `geometry`
+    does not hold or has no position for."""
+    kind, i = ref
+    if kind == "n":
+        node = geometry.nodes.get(i)
+        return (None, {}) if node is None else (_node_object(node), node["tags"])
+    if kind == "r":
+        relation = geometry.relations.get(i)
+        if relation is None:
+            return None, {}
+        return _area_object(ref, relation["label"], geometry), relation["tags"]
+    way = geometry.ways.get(i)
+    return (None, {}) if way is None else (_area_object(ref, None, geometry), way["tags"])
 
 
 def object_facts(tags: Mapping[str, str]) -> Facts:
@@ -101,25 +88,17 @@ def object_facts(tags: Mapping[str, str]) -> Facts:
     return facts
 
 
-def _node_object(node: osmscan.Node | None) -> Point | None:
-    if node is None:
-        return None
+def _node_object(node: osmscan.Node) -> Point:
     lon, lat = node["loc"]
     return {"lon": lon, "lat": lat}
 
 
-def _area_object(
-    ref: OsmRef,
-    label: int | None,
-    rel_rings: Mapping[int, Rings],
-    way_nodes: Mapping[int, Sequence[int]],
-    locs: Mapping[int, LonLat],
-) -> Point | None:
+def _area_object(ref: OsmRef, label: int | None, geometry: Geometry) -> Point | None:
     """A way or relation: inside its polygon if it closes into one, else at
     its outline point; the outline point is kept for the dialect lookup.
     `label`: a relation's label node (osmscan.relations)."""
-    outline = _outline_point(ref, label, rel_rings, way_nodes, locs)
-    inside = _inside_point(ref, rel_rings, way_nodes, locs)
+    outline = _outline_point(ref, label, geometry)
+    inside = _inside_point(ref, geometry)
     point = inside or outline
     if point is None:
         return None
@@ -129,46 +108,34 @@ def _area_object(
     return obj
 
 
-def _inside_point(
-    ref: OsmRef,
-    rel_rings: Mapping[int, Rings],
-    way_nodes: Mapping[int, Sequence[int]],
-    locs: Mapping[int, LonLat],
-) -> LonLat | None:
+def _inside_point(ref: OsmRef, geometry: Geometry) -> LonLat | None:
     """A point inside the object's own polygon, or None when it does not
     close.  Ring assembly is frasch.osmgeom's, so a place and the areas it
     is compared against are read out of OSM the same way."""
-    for geom in osmgeom.polygons_for(ref, rel_rings, way_nodes, locs, []):
-        if geom.is_empty:
-            continue
-        try:
-            p = geom.representative_point()
-        except Exception:  # a ring OSM leaves in a state shapely
-            continue  # cannot make a point of
-        return p.x, p.y
-    return None
+    polygon = osmgeom.polygon_of(ref, geometry, [])
+    if polygon is None or polygon.is_empty:
+        return None
+    try:
+        p = polygon.representative_point()
+    except GEOSException:  # a ring OSM leaves in a state GEOS cannot make a point of
+        return None
+    return p.x, p.y
 
 
-def _outline_point(
-    ref: OsmRef,
-    label: int | None,
-    rel_rings: Mapping[int, Rings],
-    way_nodes: Mapping[int, Sequence[int]],
-    locs: Mapping[int, LonLat],
-) -> LonLat | None:
+def _outline_point(ref: OsmRef, label: int | None, geometry: Geometry) -> LonLat | None:
     """The relation's `label` / `admin_centre` member node, else the first
     vertex of its first outer way the extract holds (of a way: its own first
     vertex).  An extract holds a sea or a large area only in part: the North
     Sea's label node lies offshore, outside every extract but a planet."""
-    t, i = ref
-    if label is not None and label in locs:
-        return locs[label]
-    first = (
-        way_nodes.get(i)
-        if t == "w"
-        else next((way_nodes[w] for w in rel_rings[i]["outer"] if w in way_nodes), None)
-    )
-    return locs.get(first[0]) if first else None
+    kind, i = ref
+    ways, nodes = geometry.ways, geometry.nodes
+    if label is not None and label in nodes:
+        return nodes[label]["loc"]
+    own = [i] if kind == "w" else geometry.relations[i]["rings"]["outer"]
+    first = next((ways[w]["nodes"] for w in own if w in ways), None)
+    if first is None or first[0] not in nodes:
+        return None
+    return nodes[first[0]]["loc"]
 
 
 def wanted_refs(ws: Workspace, reg: Registry) -> set[OsmRef]:

@@ -1,5 +1,5 @@
 """osmgeom.py: an OSM object's ways and nodes, read out of an extract by
-frasch.osmscan, become its polygon(s).  The dialect areas and the objects
+frasch.osmscan, become its polygon.  The dialect areas and the objects
 file (a place's point inside its own polygon) both rest on it, so a place
 and the areas it is compared against are read out of OSM the same way.
 
@@ -12,7 +12,8 @@ from __future__ import annotations
 import pytest
 
 from frasch import osmgeom
-from frasch.osmscan import Rings
+from frasch.osmscan import Geometry, Rings
+from frasch.refs import OsmRef
 
 
 def same_ring(a: list[int], b: list[int]) -> bool:
@@ -78,7 +79,7 @@ def test_the_input_ways_are_not_modified() -> None:
     assert ways == [[1, 2, 3], [3, 4, 1]]
 
 
-# ----------------------------------------------------------- polygons_for ---
+# ------------------------------------------------------------- polygon_of ---
 SQUARE = {
     1: (8.0, 54.0),
     2: (8.4, 54.0),
@@ -91,28 +92,49 @@ SQUARE = {
 }
 
 
+def geometry(ways: dict[int, list[int]], relations: dict[int, Rings] | None = None) -> Geometry:
+    """What an extract with the nodes of SQUARE holds: `ways` {id: [node
+    ids]} and `relations` {id: rings}."""
+    return Geometry(
+        {
+            i: {"rings": rings, "member_ways": [], "label": None, "tags": {}}
+            for i, rings in (relations or {}).items()
+        },
+        {i: {"nodes": nodes, "tags": {}} for i, nodes in ways.items()},
+        {i: {"loc": loc, "tags": {}} for i, loc in SQUARE.items()},
+    )
+
+
 def test_a_closed_way_is_its_polygon() -> None:
-    (poly,) = osmgeom.polygons_for(("w", 10), {}, {10: [1, 2, 3, 4, 1]}, SQUARE, [])
-    assert poly.area == pytest.approx(0.16)
+    poly = osmgeom.polygon_of(("w", 10), geometry({10: [1, 2, 3, 4, 1]}), [])
+    assert poly is not None and poly.area == pytest.approx(0.16)
 
 
 def test_a_relation_is_its_outer_rings_minus_its_inner_ones() -> None:
-    rel: dict[int, Rings] = {20: {"outer": [10, 11], "inner": [12]}}
-    ways = {10: [1, 2, 3], 11: [3, 4, 1], 12: [5, 6, 7, 8, 5]}
-    (poly,) = osmgeom.polygons_for(("r", 20), rel, ways, SQUARE, [])
-    assert poly.area == pytest.approx(0.16 - 0.01)
+    held = geometry(
+        {10: [1, 2, 3], 11: [3, 4, 1], 12: [5, 6, 7, 8, 5]},
+        {20: {"outer": [10, 11], "inner": [12]}},
+    )
+    poly = osmgeom.polygon_of(("r", 20), held, [])
+    assert poly is not None and poly.area == pytest.approx(0.16 - 0.01)
 
 
 def test_a_member_way_the_extract_lacks_is_reported() -> None:
     problems: list[str] = []
-    rel: dict[int, Rings] = {20: {"outer": [10, 11], "inner": []}}
-    assert osmgeom.polygons_for(("r", 20), rel, {10: [1, 2, 3]}, SQUARE, problems) == []
+    osmgeom.polygon_of(
+        ("r", 20), geometry({10: [1, 2, 3]}, {20: {"outer": [10, 11], "inner": []}}), problems
+    )
     assert problems == [
         "relation/20: 1 outer way(s) not in the file",
         "relation/20: 1 unclosed outer ring(s) -- skipped",
     ]
 
 
-def test_an_object_the_extract_lacks_has_no_polygon() -> None:
-    assert osmgeom.polygons_for(("w", 10), {}, {}, SQUARE, []) == []
-    assert osmgeom.polygons_for(("r", 20), {}, {}, SQUARE, []) == []
+def test_a_relation_whose_outline_does_not_close_has_no_polygon() -> None:
+    held = geometry({10: [1, 2, 3]}, {20: {"outer": [10], "inner": []}})
+    assert osmgeom.polygon_of(("r", 20), held, []) is None
+
+
+@pytest.mark.parametrize("ref", [("w", 10), ("r", 20)])
+def test_an_object_the_extract_lacks_has_no_polygon(ref: OsmRef) -> None:
+    assert osmgeom.polygon_of(ref, geometry({}), []) is None

@@ -29,7 +29,7 @@ from frasch.curationlist import LocalPoint, Square
 from frasch.dialect_areas import AreaIndex
 from frasch.dialects import Registry
 from frasch.errors import PipelineError
-from frasch.geo import LonLat
+from frasch.geo import KM_PER_DEGREE, LonLat
 from frasch.inject.stats import AddedPoint, AddedSquare, Stats
 from frasch.inject.writer import Writer
 from frasch.placelist import PlaceRow
@@ -46,7 +46,6 @@ from frasch.refs import OsmRef, Ref
 # what a square around a node of the extract takes over from the node, with
 # its `name` and every `name:*`
 INHERITED_KEYS = ("name", DIALECT_KEY, LOCAL_KEY, VARIETY_KEY, REF_KEY)
-KM_PER_DEGREE = 111.32
 
 
 def square_around(lon: float, lat: float, km2: float) -> list[LonLat]:

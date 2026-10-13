@@ -46,7 +46,8 @@ from frasch.errors import PipelineError, rebuild
 from frasch.provenance import Stamp, unstamped
 from frasch.refs import OsmRef, Ref
 
-ROUND = 6
+# the decimals of a coordinate in the objects file (~0.1 m)
+COORDINATE_DECIMALS = 6
 
 
 class Facts(TypedDict, total=False):
@@ -144,9 +145,9 @@ def ref_order(ref: OsmRef) -> tuple[int, int]:
 def _rounded(obj: LocatedObject) -> dict[str, object]:
     return {
         k: (
-            round(v, ROUND)
+            round(v, COORDINATE_DECIMALS)
             if isinstance(v, float)
-            else [round(x, ROUND) for x in v]
+            else [round(x, COORDINATE_DECIMALS) for x in v]
             if isinstance(v, list)
             else v
         )
