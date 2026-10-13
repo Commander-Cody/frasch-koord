@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { createPropertyExpression, latest } from '@maplibre/maplibre-gl-style-spec';
 
 import { DIALECTS, LOCAL_TAG } from './config';
-import { cardEntry, resolveName, type NameEntry, type TileProps } from './names';
+import { cardEntry, type TileProps } from './names/card';
+import type { NameEntry } from './names/entry';
+import { resolveName } from './names/resolveName';
 import { nameExpression } from './style/localize';
 
 // Issue #16: the place card once showed German while the map label showed

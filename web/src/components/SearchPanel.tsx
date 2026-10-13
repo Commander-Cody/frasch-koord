@@ -4,8 +4,9 @@ import { useTranslation } from 'react-i18next';
 import MiniSearch from 'minisearch';
 
 import { LABEL_OPTIONS } from '../config';
-import type { NameEntry, NamesData } from '../names';
-import { displayName } from '../names';
+import type { NameEntry } from '../names/entry';
+import type { NamesData } from '../names/load';
+import { displayName } from '../names/resolveName';
 import ShareButton from './ShareButton';
 
 /**

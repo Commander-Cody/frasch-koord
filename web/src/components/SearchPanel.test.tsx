@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
 import i18n from '../i18n';
-import type { NameEntry } from '../names';
+import type { NameEntry } from '../names/entry';
 import SearchPanel from './SearchPanel';
 
 afterEach(() => {

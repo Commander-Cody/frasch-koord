@@ -12,7 +12,7 @@ import { useCloseOnEscape } from './hooks/useCloseOnEscape';
 import { usePlaceSelection } from './hooks/usePlaceSelection';
 import { useSheetHeight } from './hooks/useSheetHeight';
 import { useView } from './hooks/useView';
-import { useNames } from './names';
+import { useNames } from './names/load';
 import { mapPick, markerOf } from './placeSelection';
 import { useProvenanceCheck } from './provenance';
 import './App.css';

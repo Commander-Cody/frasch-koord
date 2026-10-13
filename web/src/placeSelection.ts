@@ -4,8 +4,10 @@
 import type { LngLat, LngLatLike, MapGeoJSONFeature } from 'maplibre-gl';
 
 import type { MapMarker } from './components/Map';
-import type { EntryLookup, NameEntry, TileProps } from './names';
-import { displayName } from './names';
+import type { TileProps } from './names/card';
+import type { NameEntry } from './names/entry';
+import type { EntryLookup } from './names/load';
+import { displayName } from './names/resolveName';
 
 /** A click on a place label of the map. */
 export interface MapPick {

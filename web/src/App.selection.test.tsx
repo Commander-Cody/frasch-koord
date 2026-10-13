@@ -6,7 +6,7 @@ import type { LngLat, MapGeoJSONFeature } from 'maplibre-gl';
 import i18n from './i18n';
 import { LOCAL_TAG } from './config';
 import type { MapViewProps } from './components/Map';
-import type { NameEntry } from './names';
+import type { NameEntry } from './names/entry';
 import { holdNames, stubLayout } from './testing/appHarness';
 import App from './App';
 

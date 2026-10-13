@@ -4,7 +4,9 @@ import { useTranslation } from 'react-i18next';
 
 import { DIALECTS, dialect, dialectLabelKey } from '../config';
 import type { DialectEntry } from '../config';
-import { cardEntry, placeOsmRef, resolveName, wikidataUrl } from '../names';
+import { cardEntry } from '../names/card';
+import { placeOsmRef, wikidataUrl } from '../names/links';
+import { resolveName } from '../names/resolveName';
 import { osmUrl } from '../osmRef';
 import type { CloseMeans, PlaceSelection } from '../placeSelection';
 import CloseButton from './CloseButton';

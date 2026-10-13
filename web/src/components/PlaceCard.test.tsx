@@ -3,7 +3,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 
 import i18n from '../i18n';
 import { LOCAL_TAG } from '../config';
-import type { NameEntry } from '../names';
+import type { NameEntry } from '../names/entry';
 import PlaceCard from './PlaceCard';
 
 afterEach(cleanup);

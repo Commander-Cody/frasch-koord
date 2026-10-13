@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { RefObject } from 'react';
 
 import type { MapViewHandle } from '../components/Map';
-import type { NamesData } from '../names';
+import type { NamesData } from '../names/load';
 import { mapMove, selectionOf } from '../placeSelection';
 import type { CloseMeans, PlacePick, PlaceSelection } from '../placeSelection';
 import { linkedPlace, writePlace } from '../url/linkState';
