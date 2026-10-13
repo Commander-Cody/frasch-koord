@@ -233,7 +233,7 @@ def test_a_place_osm_does_not_have_gets_the_generic_name_of_its_map_point(
         "osm": "local/westerheide-amrum",
         "status": "ok",
     }
-    # the German name, as the injector names the point it adds (inject_names.point_tags)
+    # the German name, as the injector names the point it adds (inject.synthetic.point_tags)
     assert export([waasterhias])["waasterhias"]["name_osm"] == "Westerheide"
 
 

@@ -1,5 +1,6 @@
-"""inject_names.py: an absent curation file, the tags an object gets, and a
-whole `run()` over a tiny extract written here with pyosmium.
+"""inject_names.py and its parts (frasch/inject/): the tags an object gets,
+a missing input file, and a whole `run()` over a tiny extract written here
+with pyosmium.
 
 The extract mirrors real places (ids and positions from the
 Schleswig-Holstein extract; ring nodes made up): the village Holm, the
@@ -30,7 +31,8 @@ from frasch import placelist
 from frasch import refs
 from frasch.__main__ import main
 from frasch.geo import LonLat
-from frasch.inject_names import Use
+from frasch.inject import claims, synthetic
+from frasch.inject.report import Report
 from frasch.objects import Objects, objects_json
 from frasch.provenance import Stamp
 from conftest import REGISTRY, curation_file, flat_workspace, path_options
@@ -41,34 +43,23 @@ from osm_fixture import Nodes, write_extract as write_osm
 def test_square_at_the_equator() -> None:
     # 4 km² -> 1 km from the centre to each side; 1 km = 1/111.32 degree
     d = 1 / 111.32
-    corners = inject_names.square_around(0.0, 0.0, 4.0)
+    corners = synthetic.square_around(0.0, 0.0, 4.0)
     assert corners == pytest.approx([(-d, -d), (d, -d), (d, d), (-d, d)])
 
 
 def test_square_at_sixty_degrees_is_twice_as_wide_in_longitude() -> None:
     # cos 60° = 1/2: a kilometre spans twice the degrees of longitude
     d = 1 / 111.32
-    (w, s), (e, _), (_, n), _ = inject_names.square_around(8.0, 60.0, 4.0)
+    (w, s), (e, _), (_, n), _ = synthetic.square_around(8.0, 60.0, 4.0)
     assert (w, e) == pytest.approx((8.0 - 2 * d, 8.0 + 2 * d))
     assert (s, n) == pytest.approx((60.0 - d, 60.0 + d))
 
 
 def test_square_is_centred_on_the_node() -> None:
     # Planetiler labels a polygon at its interior point: that must be the node
-    corners = inject_names.square_around(8.865286, 54.487378, 50.0)
+    corners = synthetic.square_around(8.865286, 54.487378, 50.0)
     assert sum(x for x, _ in corners) / 4 == pytest.approx(8.865286)
     assert sum(y for _, y in corners) / 4 == pytest.approx(54.487378)
-
-
-# ------------------------------------------------------------- load_curation ---
-# (the file's rules are frasch.curationlist's, see names/tests/test_curationlist.py)
-def test_missing_curation_file_is_nothing_curated(tmp_path: Path) -> None:
-    assert inject_names.load_curation(str(tmp_path / "absent.csv")) == ({}, {}, {})
-
-
-def test_missing_curation_file_named_explicitly_stops(tmp_path: Path) -> None:
-    with pytest.raises(PipelineError, match="not found"):
-        inject_names.load_curation(str(tmp_path / "absent.csv"), required=True)
 
 
 # ------------------------------------------------------------ a whole run() ---
@@ -345,56 +336,85 @@ def places_csv(rows: Iterable[Mapping[str, str]]) -> str:
     return buf.getvalue()
 
 
-def inject(
-    d: Path, *, areas: Use = Use.OFF, curation: Use = Use.OFF, dry_run: bool = False
-) -> None:
+NO_AREAS = {"type": "FeatureCollection", "features": []}
+
+
+def run(d: Path, *, dry_run: bool = False) -> Report:
     """Inject the name files of `d` into its in.osm.pbf, as out.osm.pbf."""
-    inject_names.run(
+    return inject_names.run(
         flat_workspace(d),
         REGISTRY,
         str(d / "in.osm.pbf"),
         str(d / "out.osm.pbf"),
         dry_run=dry_run,
-        areas=areas,
-        curation=curation,
     )
 
 
-def locate_objects(d: Path) -> None:
-    """Write the objects file of `d` from its in.osm.pbf."""
-    locate.run(flat_workspace(d), REGISTRY, [d / "in.osm.pbf"])
+def locate_objects(d: Path, *more: Path) -> None:
+    """Write the objects file of `d` from its in.osm.pbf, and the extracts
+    `more`."""
+    with contextlib.redirect_stdout(io.StringIO()):
+        locate.run(flat_workspace(d), REGISTRY, [d / "in.osm.pbf", *more])
 
 
-def normalized(report: str, directory: Path) -> str:
-    """`report` with the run's directory as `<dir>` and its time as `0s`."""
-    return re.sub(r" in \d+s\n", " in 0s\n", report.replace(str(directory), "<dir>"))
+def fill_in(d: Path) -> None:
+    """Write what a test has not written of the files a run needs besides
+    the name list and the extract: no dialect areas, nothing curated, the
+    objects located in the extract."""
+    if not (d / "areas.geojson").exists():
+        (d / "areas.geojson").write_text(json.dumps(NO_AREAS), encoding="utf-8")
+    if not (d / "curation.csv").exists():
+        curation_file(d)
+    if not (d / "osm_objects.json").exists():
+        locate_objects(d)
+
+
+def inject(d: Path, *, dry_run: bool = False) -> Report:
+    """`run`, with the inputs the test has not written filled in (`fill_in`)."""
+    fill_in(d)
+    return run(d, dry_run=dry_run)
+
+
+def extracts(d: Path) -> list[str]:
+    """The extract a command reads in `d` and the one it writes."""
+    return [str(d / "in.osm.pbf"), str(d / "out.osm.pbf")]
+
+
+def input_options(d: Path) -> list[str]:
+    """What points `frasch inject` at the name files of `d`."""
+    return path_options(flat_workspace(d), "names", "dialects", "areas", "objects", "curation")
+
+
+def normalized(text: str, directory: Path) -> str:
+    """`text` with the run's directory as `<dir>` and its time as `0s`."""
+    return re.sub(r" in \d+s$", " in 0s", text.replace(str(directory), "<dir>"), flags=re.M)
+
+
+def log_lines(report: Report, directory: Path) -> list[str]:
+    """The lines of a run's log, normalized."""
+    return normalized("\n".join(report.log), directory).splitlines()
 
 
 @pytest.fixture(scope="module")
-def injected_run(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, str]:
-    """-> (the run's directory, the report it printed)"""
+def injected_run(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, list[str]]:
+    """-> (the run's directory, the lines of its log)"""
     d = tmp_path_factory.mktemp("inject")
     (d / "places.csv").write_text(places_csv(PLACES), encoding="utf-8")
     curation_file(d, *CURATION)
     (d / "areas.geojson").write_text(json.dumps(AREAS), encoding="utf-8")
     write_extract(d / "in.osm.pbf")
-    locate_objects(d)
-    report = io.StringIO()
-    with contextlib.redirect_stdout(report):
-        inject(d, areas=Use.IF_PRESENT, curation=Use.IF_PRESENT)
-    return d, normalized(report.getvalue(), d)
+    return d, log_lines(inject(d), d)
 
 
 @pytest.fixture(scope="module")
-def injected(injected_run: tuple[Path, str]) -> Injected:
+def injected(injected_run: tuple[Path, list[str]]) -> Injected:
     d, _ = injected_run
     objs = read_extract(d / "out.osm.pbf")
     return objs, {(t, i): (tags, extra) for t, i, tags, extra in objs}
 
 
-def test_report_of_a_run(injected_run: tuple[Path, str]) -> None:
-    _, report = injected_run
-    lines = report.splitlines()
+def test_report_of_a_run(injected_run: tuple[Path, list[str]]) -> None:
+    _, lines = injected_run
     assert lines[1].startswith("dialects  : <dir>/dialects.csv -> ")
     assert lines[:1] + lines[2:] == [
         "name list : <dir>/places.csv",
@@ -405,7 +425,7 @@ def test_report_of_a_run(injected_run: tuple[Path, str]) -> None:
         "synthetic : 1 polygon(s) to add around nodes",
         "local     : 1 local reference(s) positioned in <dir>/curation.csv",
         "objects   : <dir>/osm_objects.json -> 4 located object(s)",
-        "name:frr  : 4 object(s) in a dialect area have one in OSM",
+        "name:frr  : 2 object(s) in a dialect area that no row holds by reference have one in OSM",
         "",
         "scanned 24 objects in 0s",
         "tagged  5 objects: 2 nodes, 1 ways, 2 relations "
@@ -427,13 +447,13 @@ def test_report_of_a_run(injected_run: tuple[Path, str]) -> None:
         "frasch:local=Waasterhias, frasch:ref=waasterhias, place=hamlet",
         "",
         "curated 3 objects: 2 nodes, 0 ways, 1 relations",
-        f"  n/{NORDSTRAND}  Nordstrand (village node): frasch:minzoom=12, "
+        f"  node/{NORDSTRAND}  Nordstrand (village node): frasch:minzoom=12, "
         "frasch:ref=relation/1420555, name:frr-x-mooring=e Strönj",
-        f"  n/{TAMMENSIEL}  Tammensiel: frasch:minzoom=10",
-        f"  r/{HAMBURGER_HALLIG}  Hamburger Hallig: frasch:minzoom=12, place=island",
+        f"  node/{TAMMENSIEL}  Tammensiel: frasch:minzoom=10",
+        f"  relation/{HAMBURGER_HALLIG}  Hamburger Hallig: frasch:minzoom=12, place=island",
         "",
         "added 1 synthetic polygon(s):",
-        f"  way/{MAX_WAY + 1} (nodes {MAX_NODE + 2}..{MAX_NODE + 5})  "
+        f"  way/{MAX_WAY + 1} (node/{MAX_NODE + 2}..node/{MAX_NODE + 5})  "
         "Nordstrand (synthetic island polygon): 50 km²",
         "",
         "wrote <dir>/out.osm.pbf (0.0 MB)",
@@ -550,7 +570,7 @@ def test_an_object_nobody_located_stops_the_build(tmp_path: Path) -> None:
     )
     write_extract(tmp_path / "in.osm.pbf")
     with pytest.raises(PipelineError, match=f"node/{HOLM} is not located yet"):
-        inject(tmp_path, areas=Use.IF_PRESENT)
+        inject(tmp_path)
     assert not (tmp_path / "out.osm.pbf").exists()
 
 
@@ -760,35 +780,44 @@ def write_report_extract(path: Path) -> None:
     )
 
 
-def report_run(
-    d: Path,
-    places: Iterable[Mapping[str, str]],
-    curation: Iterable[Mapping[str, str]],
-    areas: Use = Use.OFF,
+def write_report_inputs(
+    d: Path, places: Iterable[Mapping[str, str]], curation: Iterable[Mapping[str, str]]
 ) -> None:
-    """A dry run over the report extract, without dialect areas unless `areas` says so."""
+    """The name list, the curation and the report extract.  The objects are
+    located in that extract and in a second one, which holds Bredstedt: the
+    row that names it is in the objects file, its object not in the extract
+    the run tags."""
     (d / "places.csv").write_text(places_csv(places), encoding="utf-8")
     write_report_extract(d / "in.osm.pbf")
     curation_file(d, *curation)
-    inject(d, areas=areas, curation=Use.IF_PRESENT, dry_run=True)
+    elsewhere = write_osm(
+        d / "elsewhere.osm.pbf", nodes={99: ((8.97, 54.62), {"place": "town", "name": "Bredstedt"})}
+    )
+    locate_objects(d, elsewhere)
 
 
-def test_report_of_rows_and_curation_rows_that_do_not_fit(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    report_run(tmp_path, REPORT_PLACES, REPORT_CURATION)
-    lines = normalized(capsys.readouterr().out, tmp_path).splitlines()
+def report_run(
+    d: Path, places: Iterable[Mapping[str, str]], curation: Iterable[Mapping[str, str]]
+) -> Report:
+    """A dry run over the report extract, without dialect areas unless the
+    test has written some."""
+    write_report_inputs(d, places, curation)
+    return inject(d, dry_run=True)
+
+
+def test_report_of_rows_and_curation_rows_that_do_not_fit(tmp_path: Path) -> None:
+    lines = log_lines(report_run(tmp_path, REPORT_PLACES, REPORT_CURATION), tmp_path)
     assert lines[1].startswith("dialects  : <dir>/dialects.csv -> ")
     assert lines[:1] + lines[2:] == [
         "name list : <dir>/places.csv",
         "usable    : 5 rows -> 3 OSM ids + 2 wikidata QIDs + 1 local reference(s)",
-        "areas     : off (no frasch:dialect; frasch:local only from the `local` column). "
-        "Build it with `just rebuild areas`",
+        "areas     : <dir>/areas.geojson -> 0 polygon(s): ",
         "curation  : <dir>/curation.csv -> 2 OSM ids (2 with frasch:minzoom, 0 with frasch:maxzoom)",
         "synthetic : 1 polygon(s) to add around nodes",
         "local     : 2 local reference(s) positioned in <dir>/curation.csv",
         "  ! local/nowhere (Nowhere) is positioned in <dir>/curation.csv but no row of "
         "<dir>/places.csv uses it -- nothing added",
+        "objects   : <dir>/osm_objects.json -> 3 located object(s)",
         "waterways : 2 member ways of matched waterway relations",
         "",
         "scanned 9 objects in 0s",
@@ -797,36 +826,54 @@ def test_report_of_rows_and_curation_rows_that_do_not_fit(
         "names written per dialect:",
         "  name:frr-x-mooring       5  Mooring",
         "  frasch:local             0  local form",
+        "objects per dialect area:",
+        "  (none -- no tagged object lies in a dialect area)",
         "",
         "1 rows reference ids that are not in in.osm.pbf:",
         "  node/99  Bräist",
         "",
         "1 objects carry a QID of the list but are not place-like -- not tagged:",
-        "  n/6  Rosen-Huus: Q559369 (Hulm)",
+        "  node/6  Rosen-Huus: Q559369 (Hulm)",
         "",
         "curated 1 objects: 1 nodes, 0 ways, 0 relations",
-        "  n/1  Holm: frasch:minzoom=11",
+        "  node/1  Holm: frasch:minzoom=11",
         "",
         "1 curation rows reference ids that are not in in.osm.pbf:",
-        "  n/98  Gone",
+        "  node/98  Gone",
         "",
         "added 1 synthetic polygon(s):",
-        "  way/12 (nodes 7..10)  Sophien-Koog: 2 km²",
-        "  ! n/97 Gone island: node not in in.osm.pbf, no polygon added",
+        "  way/12 (node/7..node/10)  Sophien-Koog: 2 km²",
+        "  ! node/97 Gone island: node not in in.osm.pbf, no polygon added",
         "",
         "(dry run -- nothing written)",
     ]
 
 
-def test_report_names_a_curation_file_without_osm_ids(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_the_report_spells_no_reference_by_its_type_letter(tmp_path: Path) -> None:
+    # node/6, not n/6: the one form the cells of the lists have
+    log = report_run(tmp_path, REPORT_PLACES, REPORT_CURATION).log
+    assert [line for line in log if re.search(r"\b[nwr]/\d", line)] == []
+
+
+def test_report_names_a_curation_file_without_osm_ids(tmp_path: Path) -> None:
     # only the Sophien-Koog's label square
-    report_run(tmp_path, REPORT_PLACES[4:], REPORT_CURATION[3:4])
-    lines = normalized(capsys.readouterr().out, tmp_path).splitlines()
+    lines = log_lines(report_run(tmp_path, REPORT_PLACES[4:], REPORT_CURATION[3:4]), tmp_path)
     assert (
         "curation  : <dir>/curation.csv -> 0 OSM ids (0 with frasch:minzoom, 0 with frasch:maxzoom)"
     ) in lines
+
+
+def test_a_run_prints_nothing(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    report_run(tmp_path, REPORT_PLACES, REPORT_CURATION)
+    assert capsys.readouterr().out == ""
+
+
+def test_the_command_prints_the_report(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    (tmp_path / "places.csv").write_text(places_csv(REPORT_PLACES[:1]), encoding="utf-8")
+    write_report_extract(tmp_path / "in.osm.pbf")
+    fill_in(tmp_path)
+    main(["inject", *extracts(tmp_path), *input_options(tmp_path), "--dry-run"])
+    assert capsys.readouterr().out.endswith("\n(dry run -- nothing written)\n")
 
 
 def test_dry_run_writes_nothing(tmp_path: Path) -> None:
@@ -844,43 +891,62 @@ def test_a_local_reference_without_a_position_stops_the_build(tmp_path: Path) ->
     )
 
 
-def test_a_named_dialect_area_file_must_exist(tmp_path: Path) -> None:
+# a file the run needs, and what it says when the file is not there
+MISSING_INPUTS = [
+    ("areas.geojson", "<dir>/areas.geojson not found -- build it with `just rebuild areas`"),
+    (
+        "osm_objects.json",
+        "<dir>/osm_objects.json not found -- build it with `just rebuild objects`",
+    ),
+    ("curation.csv", "curation file not found: <dir>/curation.csv"),
+]
+
+
+def write_inputs_without(d: Path, file: str) -> None:
+    """Every input of a run over the report extract but `file`."""
+    write_report_inputs(d, REPORT_PLACES[:1], [])
+    fill_in(d)
+    (d / file).unlink()
+
+
+@pytest.mark.parametrize(("file", "message"), MISSING_INPUTS)
+def test_a_missing_input_file_stops_the_run_and_is_named(
+    tmp_path: Path, file: str, message: str
+) -> None:
+    write_inputs_without(tmp_path, file)
     with pytest.raises(PipelineError) as exc:
-        report_run(tmp_path, REPORT_PLACES[:1], [], areas=Use.REQUIRED)
-    assert normalized(str(exc.value), tmp_path) == (
-        "dialect area file not found: <dir>/areas.geojson"
-    )
+        run(tmp_path)
+    assert normalized(str(exc.value), tmp_path) == message
 
 
-def test_the_command_stops_when_the_dialect_area_file_its_option_names_is_absent(
+@pytest.mark.parametrize("file", [file for file, _ in MISSING_INPUTS])
+def test_a_run_without_an_input_file_writes_nothing(tmp_path: Path, file: str) -> None:
+    write_inputs_without(tmp_path, file)
+    with pytest.raises(PipelineError):
+        run(tmp_path)
+    assert not (tmp_path / "out.osm.pbf").exists()
+
+
+def test_the_command_stops_on_a_missing_dialect_area_file(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    (tmp_path / "places.csv").write_text(places_csv(REPORT_PLACES[:1]), encoding="utf-8")
-    write_report_extract(tmp_path / "in.osm.pbf")
-    files = path_options(flat_workspace(tmp_path), "names", "dialects", "objects", "areas")
-    extracts = [str(tmp_path / "in.osm.pbf"), str(tmp_path / "out.osm.pbf")]
-    assert main(["inject", *extracts, *files, "--no-curation", "--dry-run"]) == 1
+    write_inputs_without(tmp_path, "areas.geojson")
+    assert main(["inject", *extracts(tmp_path), *input_options(tmp_path)]) == 1
     assert capsys.readouterr().err == (
-        f"dialect area file not found: {tmp_path / 'areas.geojson'}\n"
+        f"{tmp_path / 'areas.geojson'} not found -- build it with `just rebuild areas`\n"
     )
 
 
-def test_report_when_no_object_lies_in_a_dialect_area(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_report_when_no_object_lies_in_a_dialect_area(tmp_path: Path) -> None:
     (tmp_path / "areas.geojson").write_text(json.dumps(AREAS), encoding="utf-8")
-    (tmp_path / "osm_objects.json").write_text(
-        objects_json(Objects({}, Stamp({}, []))), encoding="utf-8"
-    )
     # only the North Sea, found through its QID, far out of every area
-    report_run(tmp_path, REPORT_PLACES[1:2], [], areas=Use.IF_PRESENT)
-    out = capsys.readouterr().out
-    assert out.endswith(
-        "objects per dialect area:\n"
-        "  (none -- no tagged object lies in a dialect area)\n"
-        "\n"
-        "(dry run -- nothing written)\n"
-    )
+    report = report_run(tmp_path, REPORT_PLACES[1:2], [])
+    assert report.log[-4:] == [
+        "objects per dialect area:",
+        "  (none -- no tagged object lies in a dialect area)",
+        "",
+        "(dry run -- nothing written)",
+    ]
 
 
 # ------------------------------------------------------------- waterways ---
@@ -904,7 +970,7 @@ def test_the_member_ways_of_a_matched_waterway_relation_are_found(tmp_path: Path
         },
     )
     claimed: list[refs.Ref] = [("r", 20), ("r", 21)]
-    assert inject_names.scan_waterways(str(path), claimed) == {
+    assert claims.scan_waterways(str(path), claimed) == {
         ("w", 10): (("r", 20), "Arlau"),
         ("w", 11): (("r", 20), "Arlau"),
     }
@@ -928,9 +994,7 @@ def test_a_member_way_inherits_the_frisian_name_of_its_waterway_relation(tmp_pat
         },
     )
     curation_file(tmp_path)
-    with contextlib.redirect_stdout(io.StringIO()):
-        locate_objects(tmp_path)
-        inject(tmp_path, areas=Use.IF_PRESENT, curation=Use.IF_PRESENT)
+    inject(tmp_path)
     tags = {(o[0], o[1]): o[2] for o in read_extract(tmp_path / "out.osm.pbf")}
     assert tags[("w", 10)]["frasch:local"] == "Arluu"
 
@@ -950,9 +1014,7 @@ def carrier_tags_after_run(tmp_path: Path, t: str, tags: dict[str, str]) -> dict
     ways = {10: ([1, 2], tags)} if t == "w" else {}
     relations = {20: ([("n", 1, "")], tags)} if t == "r" else {}
     write_osm(tmp_path / "in.osm.pbf", nodes=nodes, ways=ways, relations=relations)
-    curation_file(tmp_path)
-    with contextlib.redirect_stdout(io.StringIO()):
-        inject(tmp_path, curation=Use.IF_PRESENT)
+    inject(tmp_path)
     out = {(o[0], o[1]): o[2] for o in read_extract(tmp_path / "out.osm.pbf")}
     return out[(t, {"n": 1, "w": 10, "r": 20}[t])]
 
@@ -977,18 +1039,14 @@ def test_a_place_like_qid_carrier_gets_the_rows_names(
     assert carrier_tags_after_run(tmp_path, t, tags)["name:frr-x-mooring"] == "Nordsiie"
 
 
-def test_a_qid_counts_as_present_whatever_matched_its_carrier(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_a_qid_counts_as_present_whatever_matched_its_carrier(tmp_path: Path) -> None:
     # Holm is matched by its id and carries its row's QID; no object
     # carries the North Sea's
     hulm = REPORT_PLACES[0] | {"osm": "node/1"}
     (tmp_path / "places.csv").write_text(places_csv([hulm, NORDSIIE]), encoding="utf-8")
     holm = {"place": "village", "name": "Holm", "wikidata": "Q559369"}
     write_osm(tmp_path / "in.osm.pbf", nodes={1: ((8.9, 54.6), holm)})
-    curation_file(tmp_path)
-    inject(tmp_path, curation=Use.IF_PRESENT, dry_run=True)
-    lines = capsys.readouterr().out.splitlines()
+    lines = inject(tmp_path, dry_run=True).log
     assert (
         "tagged  1 objects: 1 nodes, 0 ways, 0 relations "
         "(of these 0 matched by wikidata: 1 of 2 QIDs present)"
@@ -1002,15 +1060,10 @@ def test_a_node_found_by_its_qid_is_asked_for_its_own_frisian_name(tmp_path: Pat
     hulm = dict(id="hulm", kind="settlement", mooring="Hulm", de="Holm", wikidata="Q559369")
     (tmp_path / "places.csv").write_text(places_csv([hulm]), encoding="utf-8")
     (tmp_path / "areas.geojson").write_text(json.dumps(AREAS), encoding="utf-8")
-    (tmp_path / "osm_objects.json").write_text(
-        objects_json(Objects({}, Stamp({}, []))), encoding="utf-8"
-    )
     holm = {"place": "village", "name": "Holm", "name:frr": "Hoolm", "wikidata": "Q559369"}
     # in the Nordergoesharde box of AREAS
     write_osm(tmp_path / "in.osm.pbf", nodes={1: ((8.85, 54.66), holm)})
-    curation_file(tmp_path)
-    with contextlib.redirect_stdout(io.StringIO()):
-        inject(tmp_path, areas=Use.IF_PRESENT, curation=Use.IF_PRESENT)
+    inject(tmp_path)
     ((_, _, tags, _),) = read_extract(tmp_path / "out.osm.pbf")
     assert tags["frasch:local"] == "Hoolm"
 

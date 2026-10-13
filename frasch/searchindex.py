@@ -58,7 +58,6 @@ from frasch import (
     provenance,
 )
 from frasch.dialects import Registry
-from frasch.errors import PipelineError, rebuild
 from frasch.objects import read_objects
 from frasch.paths import Workspace
 from frasch.placelist import PlaceRow
@@ -80,8 +79,6 @@ def entry_refs(rows: Iterable[PlaceRow]) -> dict[OsmRef, PlaceRow]:
 
 def build(ws: Workspace, reg: Registry) -> SearchIndex:
     """The search index, `{"built_from", "places"}`, from its input files."""
-    if not os.path.exists(ws.areas):
-        raise PipelineError(f"{ws.areas} not found -- build it with {rebuild('areas')}")
     areas = dialect_areas.AreaIndex.from_geojson(ws.areas)
     objects = read_objects(ws.objects)
     local_points = curationlist.local_points(ws.curation)

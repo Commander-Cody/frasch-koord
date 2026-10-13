@@ -1120,6 +1120,75 @@ server, which stored entries that `apply` then refused.
   before is refused now but a line with a field of another action, which
   the view never wrote.
 
+## Decided 2026-10-12: the injector by concern, every input required, a report that is returned (issue #100)
+
+`inject_names.py` was six modules in one file, and its `Injector` had five
+jobs and fifteen counters that seven print functions read from outside. A
+build without the dialect areas warned, injected for minutes, moved the
+result into place and then died in `frasch provenance` on the missing file.
+
+| was | is |
+|---|---|
+| `inject_names.NameList`, `load_names`, `scan_waterways`, `is_place_like`; `Injector._row_for`, `_member_row`, `_qid_row`, `_note_qid` | `frasch/inject/claims.py`: `Claims.row_for` → `Claim` (the row, and the object whose position says where the claimed one lies) |
+| `inject_names.square_around`, `point_tags`, `check_local`, `_PendingSquare`, `_square_with_names`; `Injector.flush`, `_add_local_points`, `_add_point_node`, `_add_square_nodes`, `_add_square_ways` | `frasch/inject/synthetic.py`: `local_places`, `SyntheticObjects` |
+| `inject_names._Inputs`, `load_curation`, `_read_curation`, `_load_areas`, `_load_objects`, `_check_local_refs`, `scan_osm_local` | `frasch/inject/inputs.py`: `Inputs`, `load_inputs` |
+| the counter and record attributes of `Injector`; the tuples `added_points`, `created`, `skipped_carriers` | `frasch/inject/stats.py`: `Stats`, `AddedPoint`, `AddedSquare`, `SkippedCarrier` |
+| `inject_names._print_report` and the seven `_print_*` | `frasch/inject/report.py`: `input_lines`, `result_lines`, `Report` |
+| `writer is None` for a dry run, asked in six places | `frasch/inject/writer.py`: `copy_of` → the writer, or a `DryRun` that writes nowhere |
+| `inject_names.Use`, `--no-areas`, `--no-curation` | gone |
+
+- **A package, and the command next to it** (owner's choice): `frasch/inject/`
+  is the first sub-package of `frasch`; `frasch/inject_names.py` stays the
+  command (`run`, `main`) and holds `Injector(writer, inputs, stats)`, whose
+  work is `handle`: ask the claims, take the row's tags or OSM's `name:frr`,
+  then the curation's, hand a square to the synthetic objects, write. #98 and
+  #99 chose flat modules; here the parts are of use to the injector alone.
+- **`Stats` has its own module**, not `report.py` as the issue planned: the
+  claims and the synthetic objects write it, the report reads it together
+  with the inputs, and the inputs import the claims. In `report.py` it would
+  make `claims` and `report` import each other.
+- **Every input is required** (owner's decision): the name list, the dialect
+  registry, the dialect areas, the objects file and the curation, the five
+  `frasch provenance` stamps. `load_inputs` stops on a missing one before the
+  extract is read and before the output is opened, and names it. A tile build
+  without dialect areas is not wanted, so "the default file is optional, a
+  named one required" is gone -- it compared a raw string for the curation
+  and an absolute path for the areas, so with `build.sh`'s relative paths the
+  curation was always required and the areas never. `AreaIndex.from_geojson`
+  stops on a missing file itself, as `read_objects` does; the search index
+  dropped its copy of that check. The search index still reads an absent
+  `curation.csv` as "no local places" (`curationlist.local_points`).
+- **`build.sh` stamps before it injects**: `frasch provenance` runs first, so
+  the build ends at once on a missing name file.
+- **`run` returns its report; nothing below `main` prints** (owner's
+  decision, as #98 and #99 for the matcher and the curation):
+  `inject_names.run` returns a `Report` -- the `Stats` and the log, a line
+  each -- and `main` prints it with `cli.say`. The price the owner accepted:
+  the lines about the inputs appear after the scan, no longer before it.
+- **The local places are tagged once, while loading.** `check_local` computed
+  the tags of every local reference without the dialect areas to validate
+  them, and `Injector._add_local_points` computed them again with the areas.
+  `synthetic.local_places` does it once, with the areas, and the result is
+  part of the `Inputs`.
+- **One spelling of a reference in the report**: `node/6`, `way/12`,
+  `relation/20` through `refs.format`, also for the QID carriers, the curated
+  objects, the curation rows the extract lacks and the corner nodes of a
+  square (`n/6` and `nodes 7..10` before).
+- **The `name:frr` pre-pass leaves out what a row holds by reference**: those
+  objects have their `name:frr` in the objects file, and the main pass threw
+  the located copy away. Its line of the report counts the others, "no row
+  holds by reference": 202 on the Schleswig-Holstein extract, of the 397 it
+  located before. 167 of them get the name; the rest a row claims after all,
+  by its QID or as a member way of a river.
+- **The tags written are what they were.** On the Schleswig-Holstein extract
+  of September 2026 (17.3 million objects) the injected file is byte for
+  byte the one the code before the change writes, and the report differs in
+  the lines named here alone.
+- The test seams stay `inject_names.run` and `frasch inject`; the tests of
+  `square_around` and `scan_waterways` moved with their functions. Splitting
+  the two long report tests into statistics and formatter, which `Stats` now
+  allows, is #111.
+
 ## Remaining open questions
 1. Hosting provider for the site (R2 + Pages proposed, nothing set up yet); the tiles are GitHub release assets for now (issue #28).
 2. When to do the planet build (needs the VM; only after the North Frisia build looks right).
