@@ -7,6 +7,7 @@ import i18n from './i18n';
 import { LOCAL_TAG } from './config';
 import type { MapViewProps } from './components/Map';
 import type { NameEntry } from './names';
+import { holdNames, stubLayout } from './testing/appHarness';
 import App from './App';
 
 // How a place gets selected and what the map does about it: the real side
@@ -45,19 +46,6 @@ const feer: NameEntry = {
   kind: 'island',
 };
 
-/** Serves names.json once the test calls the returned function. */
-function holdNames(entries: NameEntry[]): () => Promise<void> {
-  let serve!: () => void;
-  const served = new Promise<void>((resolve) => (serve = resolve));
-  vi.stubGlobal('fetch', async () => {
-    await served;
-    return new Response(JSON.stringify({ built_from: {}, places: entries }), { status: 200 });
-  });
-  return async () => {
-    await act(async () => serve());
-  };
-}
-
 /** The app at `url`, with the name list loaded. */
 async function openApp(url = '/') {
   window.history.replaceState(null, '', url);
@@ -91,17 +79,10 @@ function placeInUrl(): string | null {
 }
 
 beforeEach(() => {
+  window.history.replaceState(null, '', '/');
   map.flyTo.mockClear();
   map.reveal.mockClear();
-  // Browser APIs jsdom has not; a desktop, where no sheet covers the map.
-  vi.stubGlobal('matchMedia', () => ({ matches: false }));
-  vi.stubGlobal(
-    'ResizeObserver',
-    class {
-      observe() {}
-      disconnect() {}
-    },
-  );
+  stubLayout();
 });
 
 afterEach(() => {
@@ -171,7 +152,7 @@ it('does not move the map again when the name list arrives after the click', asy
 });
 
 it('lands a search pick in what the bottom sheet of a phone leaves of the map', async () => {
-  vi.stubGlobal('matchMedia', () => ({ matches: true }));
+  stubLayout({ phone: true });
   vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(240);
   await openApp();
 
@@ -241,6 +222,27 @@ it('does not fly to the linked place once a card was opened by hand', async () =
   await serveNames();
 
   expect(map.flyTo).not.toHaveBeenCalled();
+});
+
+it('opens the linked place although the map was clicked, on no label, while its list loaded', async () => {
+  window.history.replaceState(null, '', '/?place=naibel');
+  const serveNames = holdNames([naibel]);
+  render(<App />);
+  clickMap(null);
+
+  await serveNames();
+
+  expect(screen.getByRole('heading').textContent).toBe('Naibel');
+});
+
+it('keeps the linked place in the address bar when the map is clicked, on no label, while its list loads', () => {
+  window.history.replaceState(null, '', '/?place=naibel');
+  holdNames([naibel]);
+  render(<App />);
+
+  clickMap(null);
+
+  expect(placeInUrl()).toBe('naibel');
 });
 
 it('never takes the linked place out of the address bar while its list loads', async () => {

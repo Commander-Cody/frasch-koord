@@ -1317,7 +1317,9 @@ callbacks re-ran the link's effect on every render.
   public app and the dev panels; the two do not fit. `usePlaceSelection`
   starts with `{via: 'link', ...}`, read at mount, before the map writes a
   hash of its own. There is no card until the name list has the entry, and a
-  pick by hand replaces the pending link for good. `useOpenLinked` (the
+  pick by hand replaces the pending link for good. `close` closes a card
+  and nothing else: a click on the bare map while the list loads leaves the
+  pending link to be opened. `useOpenLinked` (the
   renamed `useDeepLinkParam`) serves the two dev panels alone; their own
   selection handling is #106.
 - **`?place=` has one source**: the entry's id, or, while the list is not

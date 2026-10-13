@@ -30,6 +30,11 @@ describe('useView', () => {
     expect(i18n.language).toBe(labelOption(LOCAL_TAG).uiLanguage);
   });
 
+  it('puts the view the page opens in into the address bar', () => {
+    renderHook(() => useView());
+    expect(window.location.search).toBe(`?view=${DEFAULT_VIEW}`);
+  });
+
   it('keeps the view in the address bar', () => {
     const { result } = renderHook(() => useView());
     act(() => result.current[1](LOCAL_TAG));

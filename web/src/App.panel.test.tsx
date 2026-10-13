@@ -5,6 +5,7 @@ import type { LngLat, MapGeoJSONFeature } from 'maplibre-gl';
 import i18n from './i18n';
 import type { MapViewProps } from './components/Map';
 import type { NameEntry } from './names';
+import { holdNames, stubLayout } from './testing/appHarness';
 import App from './App';
 
 // The side panel as a visitor uses it: the real search panel and place card,
@@ -30,19 +31,6 @@ const naibel: NameEntry = {
   kind: 'settlement',
 };
 
-/** Serves names.json once the test calls the returned function. */
-function holdNames(entries: NameEntry[]): () => Promise<void> {
-  let serve!: () => void;
-  const served = new Promise<void>((resolve) => (serve = resolve));
-  vi.stubGlobal('fetch', async () => {
-    await served;
-    return new Response(JSON.stringify({ built_from: {}, places: entries }), { status: 200 });
-  });
-  return async () => {
-    await act(async () => serve());
-  };
-}
-
 /** A click on the map label of the name-list row `ref`, as the tiles carry it. */
 function clickLabel(ref: string, props: Record<string, string>) {
   const feature = {
@@ -54,15 +42,8 @@ function clickLabel(ref: string, props: Record<string, string>) {
 
 beforeEach(() => {
   window.history.replaceState(null, '', '/');
-  // Browser APIs jsdom has not; the layout they measure is not under test.
-  vi.stubGlobal('matchMedia', () => ({ matches: false }));
-  vi.stubGlobal(
-    'ResizeObserver',
-    class {
-      observe() {}
-      disconnect() {}
-    },
-  );
+  // The layout is not under test.
+  stubLayout();
 });
 
 afterEach(() => {

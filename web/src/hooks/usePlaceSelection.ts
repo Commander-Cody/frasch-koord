@@ -22,10 +22,11 @@ export interface PlaceSelectionState {
   selection: PlaceSelection | null;
   select: (pick: PlacePick) => void;
   /**
-   * Closes the card. From the keyboard, with focus in the card, focus goes
-   * back to the search field rather than dropping to the page. A pointer
-   * close leaves focus alone: on a phone, focus in the field is a keyboard
-   * popping up.
+   * Closes the card, if one is open: a linked place whose list still loads
+   * has none, and stays to be opened. From the keyboard, with focus in the
+   * card, focus goes back to the search field rather than dropping to the
+   * page. A pointer close leaves focus alone: on a phone, focus in the field
+   * is a keyboard popping up.
    */
   close: (means: CloseMeans) => void;
 }
@@ -80,13 +81,15 @@ export function usePlaceSelection(
   useEffect(() => writePlace(place), [place]);
 
   const { card, searchField } = targets;
+  const cardOpen = selection !== null;
   const close = useCallback(
     (means: CloseMeans) => {
+      if (!cardOpen) return;
       const focusInCard = card.current?.contains(document.activeElement) ?? false;
       select(null);
       if (means === 'keyboard' && focusInCard) searchField.current?.focus();
     },
-    [card, searchField],
+    [cardOpen, card, searchField],
   );
 
   return { selection, select, close };
