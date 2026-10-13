@@ -175,6 +175,13 @@ def read_areas(path: str, reg: Registry) -> list[AreaRow]:
     return rows
 
 
+def claimed_by(rows: Iterable[AreaRow]) -> dict[OsmRef, AreaRow]:
+    """-> {reference: the row that names it}, in file order.  A reference
+    is on one row only (`dialect_areas.area_rows`); one written twice there
+    is one all the same."""
+    return {ref: row for row in rows for ref in row["refs"]}
+
+
 def km2(geom: BaseGeometry) -> float:
     """Rough area in km² (equirectangular around the geometry's centre) --
     for the report only."""
@@ -298,10 +305,11 @@ def build(
     """The dialect areas of the rows of the area list, from what a scan
     `found` of them.  Pure: it reads no file, writes none and prints
     nothing -- what there is to say is the `report` of the result."""
-    dissolved = _dissolved(rows, reg, found.claimed, options.simplify)
+    claims = claimed_by(rows)
+    dissolved = _dissolved(claims, reg, found.claimed, options.simplify)
     if not dissolved:
         raise PipelineError("no geometry found -- is the extract the right region?")
-    missing = [(ref, row) for row in rows for ref in row["refs"] if ref not in found.claimed]
+    missing = [(ref, row) for ref, row in claims.items() if ref not in found.claimed]
     report = [
         *map(_dialect_line, dissolved),
         *(f"  ! {problem}" for problem in found.problems),
@@ -355,7 +363,7 @@ def run(ws: Workspace, reg: Registry, pbfs: Sequence[StrPath], options: Options 
     reference is worse than a stopped build, nothing downstream would ever
     notice the gap."""
     rows = read_areas(ws.area_list, reg)
-    claimed = [ref for row in rows for ref in row["refs"]]
+    claimed = claimed_by(rows)
     print(
         f"area list : {ws.area_list} -> {len(claimed)} OSM objects, "
         f"{len({row['dialect'] for row in rows})} dialects"
@@ -482,15 +490,17 @@ class _Dissolved(NamedTuple):
 
 
 def _dissolved(
-    rows: Iterable[AreaRow], reg: Registry, claimed: Mapping[OsmRef, BaseGeometry], tol: float
+    claims: Mapping[OsmRef, AreaRow],
+    reg: Registry,
+    claimed: Mapping[OsmRef, BaseGeometry],
+    tol: float,
 ) -> list[_Dissolved]:
     """The area of every dialect that has any geometry, in registry order,
     simplified to `tol`."""
     polygons: dict[str, list[BaseGeometry]] = {}
-    for row in rows:
-        polygons.setdefault(row["dialect"], []).extend(
-            claimed[ref] for ref in row["refs"] if ref in claimed
-        )
+    for ref, row in claims.items():
+        if ref in claimed:
+            polygons.setdefault(row["dialect"], []).append(claimed[ref])
     return [
         _Dissolved(d, len(polygons[d["tag"]]), simplified(unary_union(polygons[d["tag"]]), tol))
         for d in reg

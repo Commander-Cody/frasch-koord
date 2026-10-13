@@ -89,6 +89,22 @@ def test_the_report_of_a_build_lists_the_references_without_geometry() -> None:
     ]
 
 
+def test_a_reference_written_twice_on_a_row_is_missing_once() -> None:
+    rows = [_row(2, "frr-x-mooring", "way/1"), _row(3, "frr-x-mooring", "way/999; way/999")]
+    found = bda.Scan({("w", 1): box(8.0, 54.0, 8.1, 54.1)})
+
+    assert bda.build(rows, REGISTRY, found, SOURCE).missing == 1
+
+
+def test_a_reference_written_twice_on_a_row_is_one_object_of_its_dialect() -> None:
+    rows = [_row(2, "frr-x-mooring", "way/1; way/1")]
+    found = bda.Scan({("w", 1): box(8.0, 54.0, 8.1, 54.1)})
+
+    (line,) = bda.build(rows, REGISTRY, found, SOURCE).report
+
+    assert line.startswith("  frr-x-mooring    1 object(s) ->  1 polygon(s)")
+
+
 def test_a_municipality_no_row_claims_is_a_part_without_a_dialect() -> None:
     rows = [_row(2, "frr-x-mooring", "way/1", "Existing")]
     found = bda.Scan(

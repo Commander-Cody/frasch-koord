@@ -1236,6 +1236,10 @@ the same functions.
 - **`across` hands every extract the references still missing**, also an
   empty set, which reads nothing. So the scan for unclaimed municipalities
   still runs on every extract.
+- **A reference counts once**: `claimed_by(rows)` is the one mapping from a
+  reference to its row, for the scan, the dialects and the list of what is
+  missing. A reference written twice on one row (`way/1; way/1`, which
+  `area_rows` accepts, #130) is one object, as it was.
 - **A named rounding constant per file**, the values unchanged: the objects
   file and the candidates 6 decimals, the search index and the area GeoJSON
   5. That `round_geojson` rounds nothing is #50.

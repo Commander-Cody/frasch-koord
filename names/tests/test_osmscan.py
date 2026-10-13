@@ -3,6 +3,7 @@ asked for, and what their geometry takes."""
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from frasch import osmscan
@@ -159,26 +160,36 @@ def test_relations_where_are_those_whose_tags_the_predicate_picks(tmp_path: Path
 
 
 # ----------------------------------------------------------------- across ---
-HELD = {"sh.osm.pbf": {("n", 1): "Naibel"}, "dk.osm.pbf": {("n", 1): "again", ("n", 2): "Fanø"}}
+def two_extracts(tmp_path: Path) -> list[Path]:
+    """Node 1 is in both, under another name in the second; node 2 in the
+    second alone; node 3 in neither."""
+    sh = write_extract(tmp_path / "sh.osm.pbf", nodes={1: ((8.8, 54.8), {"name": "Naibel"})})
+    dk = write_extract(
+        tmp_path / "dk.osm.pbf",
+        nodes={1: ((8.8, 54.8), {"name": "again"}), 2: ((8.4, 55.4), {"name": "Fanø"})},
+    )
+    return [sh, dk]
 
 
-class Reads:
-    """A stand-in for a read of one extract, which notes what it was asked for."""
+class NodeNames:
+    """A read of one extract -- the names of the nodes asked for -- which
+    notes what each extract was asked for."""
 
     def __init__(self) -> None:
         self.asked: dict[str, set[OsmRef]] = {}
 
     def __call__(self, pbf: StrPath, refs: set[OsmRef]) -> dict[OsmRef, str]:
-        self.asked[str(pbf)] = refs
-        return {ref: name for ref, name in HELD[str(pbf)].items() if ref in refs}
+        self.asked[os.path.basename(pbf)] = refs
+        found = osmscan.nodes(pbf, {i for _, i in refs})
+        return {("n", i): node["tags"]["name"] for i, node in found.items()}
 
 
-def test_what_several_extracts_hold_is_found_in_the_first_that_holds_it() -> None:
-    found = osmscan.across(["sh.osm.pbf", "dk.osm.pbf"], {("n", 1), ("n", 2), ("n", 3)}, Reads())
+def test_what_several_extracts_hold_is_found_in_the_first_that_holds_it(tmp_path: Path) -> None:
+    found = osmscan.across(two_extracts(tmp_path), {("n", 1), ("n", 2), ("n", 3)}, NodeNames())
     assert found == {("n", 1): "Naibel", ("n", 2): "Fanø"}
 
 
-def test_a_later_extract_is_asked_only_for_what_the_earlier_ones_lacked() -> None:
-    read = Reads()
-    osmscan.across(["sh.osm.pbf", "dk.osm.pbf"], {("n", 1), ("n", 2), ("n", 3)}, read)
+def test_a_later_extract_is_asked_only_for_what_the_earlier_ones_lacked(tmp_path: Path) -> None:
+    read = NodeNames()
+    osmscan.across(two_extracts(tmp_path), {("n", 1), ("n", 2), ("n", 3)}, read)
     assert read.asked["dk.osm.pbf"] == {("n", 2), ("n", 3)}
