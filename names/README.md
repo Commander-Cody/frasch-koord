@@ -59,7 +59,7 @@ are gone from the tree; `git show b602a3f:names/bootstrap/` lists them.
 | `wikidata` | Wikidata item. The injector also tags every place-like OSM object (`place`, `boundary`, `natural`, `water`, `waterway`) with this `wikidata` tag; for the countries, which have no `osm`, it is the only key. Empty for a `local/` row. |
 | `status` | `auto` — `frasch match` filled `osm`/`wikidata` and will recompute them next run. `ok` — a human checked the row. `skip` — never put on the map. Empty — nothing decided yet (or, with `osm` filled by hand, simply yours). |
 | `note` | free text for you. `frasch match` never writes here. The import put `uncertain` here for names the sheet marked with `?`. |
-| `id` | the row's own key, e.g. `naibel`, `schorkewarw-2`: lowercase ascii letters, digits, hyphens, unique. Everything else names the row by it — `work/matches.jsonl`, `REPORT.md`, the curation worklist and patch, the search index (`?place=` links) and the tiles (`frasch:ref`) — so adding, deleting or moving rows, or correcting a name, never changes another row's identity. **Leave it empty on a new row** and run `frasch check-inputs --fix`, which fills it from the Frisian name (German, then Danish, when there is none; `-2`, `-3` on repeats). Never change an id once written: it would break the share links to that place. |
+| `id` | the row's own key, e.g. `naibel`, `schorkewarw-2`: lowercase ascii letters, digits, hyphens, unique. Everything else names the row by it — `work/matches.jsonl`, `REPORT.md`, the curation worklist and patch, the search index (`?place=` links) and the tiles (`frasch:ref`) — so adding, deleting or moving rows, or correcting a name, never changes another row's identity. **Leave it empty on a new row** and run `frasch check-inputs --fix`, which fills it from the Frisian name (German, then Danish, when there is none; `-2`, `-3` on repeats), folded as `$defs.slug` of `curate-patch.schema.json` says (`Schörkewärw` → `schorkewarw`: ü → u, never ue). Never change an id once written: it would break the share links to that place. |
 
 The sheet's other columns (inhabitant adjectives, Low German, South Jutish,
 old names, sources) were deliberately not imported: the map does not use them.
@@ -393,7 +393,9 @@ its candidates' positions and its location hint — as the matcher left them in
 `work/matches.jsonl`; it reads no candidates itself — to `work/curate.json`
 (`curate-worklist.schema.json` says what is in it); rows
 deleted from `places.csv` since the match run are dropped with a note (re-run
-`frasch match`). In the browser you pick a candidate, drop a point of your own, or
+`frasch match`). Each row also carries the slug the view suggests for a
+local reference (`slug_suggestion`: the German name, else the Frisian one,
+folded like a row id). In the browser you pick a candidate, drop a point of your own, or
 `skip` the row; every decision is appended as one line to
 `work/curate-patch.jsonl`, so you can stop and resume. `apply` reads that file
 back — the last entry per row wins, rows are found by their `id`, so hand
@@ -540,7 +542,10 @@ Most of the list is matched to an OSM object. Some places have none — a Harde,
 most Köge, a vanished Hallig, a Warft or a hamlet nobody has mapped
 (*Waasterhias* near Nebel on Amrum was the first). Such a row gets a **local
 reference** instead of an OSM id: `local/<slug>` alone in the `osm` cell
-(e.g. `local/westerheide-amrum`), `wikidata` left empty.
+(e.g. `local/westerheide-amrum`), `wikidata` left empty. The slug is folded
+like a row id (`local/deezbull-burg` for *Deezbüll Burg*) — from the German
+name by default, which is what the curation view suggests — and may say more
+than the name where two places share one.
 
 The position lives in `curation.csv`, not in `places.csv`: a curation row
 keyed by the same local reference carries `lat`/`lon` (decimal degrees, from

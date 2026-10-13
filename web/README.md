@@ -495,6 +495,12 @@ Where the data comes from (`src/names.ts`):
   repeats a name the card already shows. Inside a dialect area the tile
   carries the same name as `frasch:local` (issue #81); the card then shows it
   as the local form (`card.local`), in every view.
+- `src/osmRef.ts` is the one place that reads an `osm` cell: `osmRefs(cell)`
+  splits it, `osmUrl(ref)` links one reference to openstreetmap.org (null for
+  a `local/<slug>` place of our own), `parseOsmRef(text)` takes a typed
+  reference or a pasted OSM URL. The card links the first reference of its
+  row; the dev panels use the same three. The shape of a Wikidata id is the
+  pattern of `names/search-index.schema.json`, read at run time.
 - Low Saxon (`name_nds`) is the same kind of name: the list has no column for
   it, but both chains fall back to `name:nds` before German. A clicked card
   takes it from the tile, one opened from search from `names.json`
@@ -554,6 +560,8 @@ link reopens the same row; ↑/↓ or `j`/`k` walk the list. A place that is
 several OSM objects is picked by ticking candidates and lookup results (or
 shift-clicking their pins) and "Pick N selected": one entry with
 `osm: "a; b; c"`, plus a wikidata id only when the ticked objects agree on one.
+A place OSM does not have gets a `local/<slug>`; the form starts with the
+worklist's `slug_suggestion` — the browser folds no name itself.
 
 The "Nominatim" and "Overpass" lookups are **called from the browser** against
 the public instances (`nominatim.openstreetmap.org`, `overpass-api.de`), bounded
