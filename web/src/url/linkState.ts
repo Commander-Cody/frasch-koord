@@ -14,8 +14,8 @@ import { hasViewport, readQueryParam, replaceQueryParams } from './queryParams';
 const VIEW_PARAM = 'view';
 /**
  * Name-list row id of the place whose card is open, e.g. "naibel". Links from
- * before the row ids name an OSM reference ("node/240042766"), which names.ts
- * `entryLookup` still resolves.
+ * before the row ids name an OSM reference ("node/240042766"), which
+ * names/load.ts `entryLookup` still resolves.
  */
 const PLACE_PARAM = 'place';
 

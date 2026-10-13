@@ -90,9 +90,29 @@ describe('useNames', () => {
     const { result } = renderHook(() => useNames());
     expect(result.current.status).toBe('loading');
     await waitFor(() => expect(result.current.status).toBe('ready'));
-    expect(result.current.entries).toHaveLength(1);
     expect(result.current.find('naibel')?.name_de).toBe('Niebüll');
     expect(result.current.builtFrom).toEqual({ 'places.csv': 'aaa' });
+  });
+
+  it('searches the list once it has loaded', async () => {
+    stubFetch(
+      JSON.stringify({
+        built_from: {},
+        places: [
+          { id: 'naibel', names: {}, name_de: 'Niebüll', lon: 8, lat: 54, kind: 'settlement' },
+        ],
+      }),
+      { status: 200 },
+    );
+    const { result } = renderHook(() => useNames());
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+    expect(result.current.search('Niebüll').map((found) => found.id)).toEqual(['naibel']);
+  });
+
+  it('finds nothing while the list loads', () => {
+    stubFetch('{"built_from": {}, "places": []}', { status: 200 });
+    const { result } = renderHook(() => useNames());
+    expect(result.current.search('Niebüll')).toEqual([]);
   });
 
   it('ends in error on a 404', async () => {
@@ -100,7 +120,6 @@ describe('useNames', () => {
     stubFetch('Not Found', { status: 404 });
     const { result } = renderHook(() => useNames());
     await waitFor(() => expect(result.current.status).toBe('error'));
-    expect(result.current.entries).toEqual([]);
   });
 
   it('ends in error on an SPA fallback (200 text/html)', async () => {
@@ -137,23 +156,25 @@ describe('namesUrl', () => {
 });
 
 describe('entryLookup', () => {
-  // Two rows on one dyke (two spellings), a row claiming two objects, a country.
+  // A row with one object, a row claiming two, a country.
   const lungedik = entry({ id: 'lungedik', osm: 'way/28330569', name_de: 'Langerdeich' });
-  const lungdiik = entry({ id: 'lungdiik', osm: 'way/28330569', name_de: 'Langerdeich' });
   const nordwarw = entry({ id: 'nordwarw', osm: 'way/1347936331; node/1332249790' });
   const danemark = entry({ id: 'danemark', wikidata: 'Q35' });
-  const find = entryLookup([lungedik, lungdiik, nordwarw, danemark]);
+  const find = entryLookup([lungedik, nordwarw, danemark]);
 
   it('finds an entry by its row id', () => {
-    expect(find('lungdiik')).toBe(lungdiik);
+    expect(find('nordwarw')).toBe(nordwarw);
   });
 
-  it('still opens an old ?place=node/… link: the first row on that object', () => {
+  it('still opens an old ?place=way/… link: the row of that object', () => {
     expect(find('way/28330569')).toBe(lungedik);
+  });
+
+  it('still opens an old link to an object that is not the first of its row', () => {
     expect(find('node/1332249790')).toBe(nordwarw);
   });
 
-  it('still opens an old ?place=<ref>#<line> link, at the first row on that object', () => {
+  it('still opens an old ?place=<ref>#<line> link, at the row of that object', () => {
     expect(find('way/28330569#679')).toBe(lungedik);
   });
 
@@ -163,6 +184,5 @@ describe('entryLookup', () => {
 
   it('finds nothing for an unknown reference', () => {
     expect(find('node/1')).toBeUndefined();
-    expect(find('nobody')).toBeUndefined();
   });
 });

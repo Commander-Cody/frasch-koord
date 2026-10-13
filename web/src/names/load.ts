@@ -1,5 +1,5 @@
-// The name list as loaded: public/data/names.json, fetched once, and the
-// lookup of the entry a reference names.
+// The name list as loaded: public/data/names.json, fetched once, with the
+// lookup of the entry a reference names and the search over all of them.
 
 import { useEffect, useState } from 'react';
 
@@ -7,6 +7,7 @@ import { siteUrl } from '../config';
 import { osmRefs } from '../osmRef';
 import type { BuiltFrom } from '../provenance';
 import type { NameEntry } from './entry';
+import { createSearch, type Search } from './search';
 
 export interface NamesData {
   /**
@@ -15,9 +16,10 @@ export interface NamesData {
    * rather than answer every query with "no results".
    */
   status: 'loading' | 'ready' | 'error';
-  entries: NameEntry[];
   /** The entry a `?place=` link or a tile's `frasch:ref` names, see `entryLookup`. */
   find: EntryLookup;
+  /** The entries a typed query finds, see names/search.ts. */
+  search: Search;
   /** What the list was built from, to compare with the tiles' (see provenance.ts). */
   builtFrom?: BuiltFrom;
 }
@@ -29,16 +31,17 @@ export type EntryLookup = (ref: string) => NameEntry | undefined;
  * Looks entries up by the row id — what the tiles carry as `frasch:ref` and a
  * `?place=` link names — and, for what was shared or built before the row
  * ids, by the reference that used to be the id: any of the row's OSM
- * references (or the QID of a row without one), and `<ref>#<csv line>` for a
- * second row on the same object. An object two rows claim opens the first
- * one. Ids are lowercase slugs without a `/`, so they never clash with a
- * reference or a QID.
+ * references, or the QID of a row without one. No two rows have one object
+ * or item (frasch/placelist.py refuses such a list), and ids are lowercase
+ * slugs without a `/`, so they never clash with a reference or a QID. The
+ * `#<csv line>` an old link may end in told two rows on one object apart;
+ * it is ignored.
  */
 export function entryLookup(entries: NameEntry[]): EntryLookup {
-  const byRef = new Map(entries.map((e) => [e.id, e]));
-  for (const e of entries) {
-    for (const ref of [...osmRefs(e.osm), e.wikidata]) {
-      if (ref && !byRef.has(ref)) byRef.set(ref, e);
+  const byRef = new Map<string, NameEntry>();
+  for (const entry of entries) {
+    for (const ref of [entry.id, ...osmRefs(entry.osm), entry.wikidata]) {
+      if (ref) byRef.set(ref, entry);
     }
   }
   return (ref) => byRef.get(ref) ?? byRef.get(ref.split('#')[0]);
@@ -75,9 +78,14 @@ export function parseNames(json: unknown): NameList {
   return { entries, builtFrom };
 }
 
-const nothing: EntryLookup = () => undefined;
-const LOADING: NamesData = { status: 'loading', entries: [], find: nothing };
-const FAILED: NamesData = { status: 'error', entries: [], find: nothing };
+/** The list before it has loaded, or after it failed to: nothing to find. */
+const EMPTY = { find: () => undefined, search: () => [] } satisfies Partial<NamesData>;
+const LOADING: NamesData = { status: 'loading', ...EMPTY };
+const FAILED: NamesData = { status: 'error', ...EMPTY };
+
+function loaded({ entries, builtFrom }: NameList): NamesData {
+  return { status: 'ready', find: entryLookup(entries), search: createSearch(entries), builtFrom };
+}
 
 /** Where the name list is served, under the site's base path. */
 export function namesUrl(): string {
@@ -85,8 +93,8 @@ export function namesUrl(): string {
 }
 
 /**
- * Loads public/data/names.json once. Both consumers (search index and place
- * card) live in App, so the fetch belongs there rather than in either panel.
+ * Loads public/data/names.json once. Both consumers (the search box and the
+ * place card) live in App, so the fetch belongs there rather than in either.
  */
 export function useNames(): NamesData {
   const [data, setData] = useState<NamesData>(LOADING);
@@ -100,9 +108,7 @@ export function useNames(): NamesData {
         return res.json();
       })
       .then((json: unknown) => {
-        const { entries, builtFrom } = parseNames(json);
-        if (!cancelled)
-          setData({ status: 'ready', entries, find: entryLookup(entries), builtFrom });
+        if (!cancelled) setData(loaded(parseNames(json)));
       })
       .catch((err: unknown) => {
         console.error('Failed to load names.json', err);
