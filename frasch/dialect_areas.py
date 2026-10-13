@@ -15,6 +15,8 @@ import os
 from collections.abc import Collection, Mapping
 from typing import TypedDict
 
+from shapely import STRtree
+from shapely.geometry import Point, shape
 from shapely.geometry.base import BaseGeometry
 
 from frasch import refs, tables
@@ -111,16 +113,12 @@ class AreaIndex:
         # polygons: [(tag, shapely polygon)] -- already exploded into single
         # polygons, so "smallest wins" compares the actual island, not the
         # union of every Hallig
-        from shapely import STRtree
-
         self.polygons = polygons
         self.geoms = [g for _, g in polygons]
         self.tree = STRtree(self.geoms) if self.geoms else None
 
     @classmethod
     def from_geojson(cls, path: str) -> AreaIndex:
-        from shapely.geometry import shape
-
         if not os.path.exists(path):
             raise PipelineError(f"{path} not found -- build it with {rebuild('areas')}")
         with open(path, encoding="utf-8") as fh:
@@ -143,8 +141,6 @@ class AreaIndex:
     def lookup(self, lon: float | str, lat: float | str) -> str | None:
         if self.tree is None:
             return None
-        from shapely.geometry import Point
-
         pt = Point(float(lon), float(lat))
         best: tuple[str, float] | None = None
         for i in self.tree.query(pt):

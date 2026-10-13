@@ -51,6 +51,9 @@ MAXZOOM_KEY = "frasch:maxzoom"
 # (its --languages), every other key by name (--extra_name_tags)
 LANGUAGE_PREFIX = "name:"
 
+# the decimals of a coordinate in the search index (~1 m)
+ENTRY_DECIMALS = 5
+
 # field of a search entry (and of `PlaceNames`) -> the tile key it is written
 # under.  The entry's `names` are not in it: one key per dialect, `dialect_key`.
 TILE_KEY = {
@@ -196,8 +199,8 @@ def as_entry(names: PlaceNames, obj: LocatedObject, row: Row) -> SearchEntry:
         "id": names.id,
         "names": names.names,
         "name_de": names.name_de,
-        "lon": round(float(obj["lon"]), 5),
-        "lat": round(float(obj["lat"]), 5),
+        "lon": round(float(obj["lon"]), ENTRY_DECIMALS),
+        "lat": round(float(obj["lat"]), ENTRY_DECIMALS),
         "kind": names.kind,
     }
     if names.local:

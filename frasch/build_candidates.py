@@ -91,6 +91,8 @@ BOUNDARY_KEEP = {
 KEEP_VALUES = {"natural": NATURAL_KEEP, "boundary": BOUNDARY_KEEP}
 # The class tags that make a candidate only inside North Frisia: named roads.
 NF_ONLY_CLASSES = {"highway"}
+# the decimals of a coordinate in the candidates file (~0.1 m)
+COORDINATE_DECIMALS = 6
 # What else makes a named object a candidate, by the name the scan counts it
 # under: nothing a kind matches on, but a near miss a reviewer may still pick.
 ALSO_KEPT: tuple[tuple[str, Callable[[Tags], bool]], ...] = (
@@ -269,8 +271,8 @@ def _record(
         "src": src,
         "t": o.type_str(),  # 'n' | 'w' | 'r'
         "id": o.id,
-        "lon": round(lon, 6) if lon is not None else None,
-        "lat": round(lat, 6) if lat is not None else None,
+        "lon": round(lon, COORDINATE_DECIMALS) if lon is not None else None,
+        "lat": round(lat, COORDINATE_DECIMALS) if lat is not None else None,
         "tags": {key: tags[key] for key in KEPT_KEYS if key in tags},
     }
 

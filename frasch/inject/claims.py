@@ -70,7 +70,7 @@ def scan_waterways(path: str, by_id: Iterable[Ref]) -> Members:
     members carrying the relation's own name, so side arms like "Alte Eider"
     keep theirs)."""
     members: Members = {}
-    rel_ids = {osm[1] for key in by_id if (osm := refs.as_osm_ref(key)) and osm[0] == "r"}
+    rel_ids = refs.ids_of(refs.osm_only(by_id), "r")
     for rel_id, rel in osmscan.relations(path, rel_ids).items():
         tags = rel["tags"]
         if not (tags.get("type") == "waterway" or "waterway" in tags):
