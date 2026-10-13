@@ -36,6 +36,7 @@ function curateRow(id: string, name: string, de: string): CurateRow {
     names: {},
     name_de: de,
     name_da: '',
+    slug_suggestion: '',
     de,
     da: '',
     hint: '',
@@ -207,6 +208,16 @@ describe('CuratePanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
 
     expect(posts[0].entry.de).toBe('Niebüll');
+  });
+
+  it('starts the slug of a local reference with the suggestion of the worklist', async () => {
+    const row = { ...curateRow('naibel', 'Naibel', 'Niebüll'), slug_suggestion: 'niebull' };
+    worklist = { ...WORKLIST, rows: [row] };
+    await renderPanel();
+
+    await openRow('Naibel');
+
+    expect(screen.getByLabelText<HTMLInputElement>('slug').value).toBe('niebull');
   });
 
   it('offers the area of a local reference for a kind the worklist says can be a polygon', async () => {

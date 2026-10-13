@@ -58,6 +58,7 @@ class WorkRow(TypedDict):
     names: dict[str, str]
     name_de: str
     name_da: str
+    slug_suggestion: str
     de: str
     da: str
     hint: str
@@ -133,15 +134,18 @@ def _work_rows(work: Iterable[tuple[PlaceRow, matchfile.Entry]], reg: Registry) 
 def _work_row(row: PlaceRow, m: matchfile.Entry, reg: Registry) -> WorkRow:
     """A row of the worklist: the places.csv row, and what the matcher said
     about it -- why it left it, its candidates and where its hint points."""
+    name = placelist.any_name(row, reg)
+    name_de = namecell.primary(row["de"])
     return {
         "id": row["id"],
         "line": row.line,
         "kind": row["kind"],
         "result": m["result"],
-        "name": placelist.any_name(row, reg),
+        "name": name,
         "names": {c: row[c] for c in placelist.name_columns(reg) if row[c]},
-        "name_de": namecell.primary(row["de"]),
+        "name_de": name_de,
         "name_da": namecell.primary(row["da"]),
+        "slug_suggestion": placelist.slug(name_de or name),
         "de": row["de"],
         "da": row["da"],
         "hint": row["hint"],

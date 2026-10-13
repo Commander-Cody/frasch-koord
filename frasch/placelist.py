@@ -320,7 +320,9 @@ _ASCII_FOLD = str.maketrans(
 def slug(text: str) -> str:
     """`"Schörkewärw"` -> `"schorkewarw"`, `"e Strönj"` -> `"e-stronj"`:
     lowercase ASCII letters and digits, the rest folded or turned into
-    hyphens."""
+    hyphens.  The one folding of a row id and of the slug the worklist
+    suggests for a local reference; `$defs.slug` of
+    names/curate-patch.schema.json spells it out."""
     text = unicodedata.normalize("NFKD", text.translate(_ASCII_FOLD))
     text = text.encode("ascii", "ignore").decode().lower()
     return re.sub(r"[^a-z0-9]+", "-", text).strip("-")

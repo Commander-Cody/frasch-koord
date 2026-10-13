@@ -40,6 +40,8 @@ export interface CurateRow {
   name_de: string;
   /** The primary Danish name, '' when the row has none. */
   name_da: string;
+  /** A slug for a `local/<slug>` reference of the row, folded like a row id; '' when the names give none. */
+  slug_suggestion: string;
   /** The German and Danish cells, raw: every variant with its remarks. */
   de: string;
   da: string;
@@ -143,26 +145,6 @@ export function rowKinds(worklist: CurateWorklist): string[] {
 }
 
 /* ------------------------------------------------------------------- text */
-
-/** Non-ASCII letters this project actually meets, spelled out as the slug wants them. */
-const SLUG_CHARS: Record<string, string> = {
-  ä: 'ae',
-  ö: 'oe',
-  ü: 'ue',
-  ß: 'ss',
-  å: 'aa',
-  ø: 'oe',
-  æ: 'ae',
-};
-
-/** A slug for `text`, in the shape `isValidSlug` checks. */
-export function slugify(text: string): string {
-  let out = '';
-  for (const ch of (text || '').toLowerCase()) out += SLUG_CHARS[ch] ?? ch;
-  // Anything else accented (é, ô, …) loses its mark rather than a whole letter.
-  out = out.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  return out.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-}
 
 /**
  * Accepts `way/123`, several joined by ';', and pasted openstreetmap.org URLs

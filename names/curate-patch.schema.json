@@ -76,7 +76,7 @@
   "unevaluatedProperties": false,
   "$defs": {
     "slug": {
-      "description": "Lowercase ASCII letters and digits, words joined by single hyphens -- the shape of a row id and a local reference.",
+      "description": "Lowercase ASCII letters and digits, words joined by single hyphens -- the shape of a row id and of a local reference. Both are folded from a name by one rule (`frasch.placelist.slug`): a letter loses its diacritic (ä -> a, ö -> o, ü -> u, å -> a; never ae, oe, ue), ß -> ss, æ -> ae, ø -> o, đ -> d, any other non-ASCII character is dropped, the rest is lowercased, and every run of anything but a letter or digit becomes one hyphen: `Schörkewärw` -> `schorkewarw`, `Deezbüll Burg` -> `deezbull-burg`. A slug written by hand keeps the pattern too; a local reference may say more than the name (`westerheide-amrum`).",
       "type": "string",
       "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
     },

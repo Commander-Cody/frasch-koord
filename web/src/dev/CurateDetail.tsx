@@ -18,13 +18,7 @@ import {
   useRowPins,
 } from './curateMapLayers';
 import { isValidSlug, singleWikidataId, type Decision, type PatchEntry } from './curatePatch';
-import {
-  parseRefs,
-  slugify,
-  type Bbox,
-  type CurateCandidate,
-  type CurateRow,
-} from './curateWorklist';
+import { parseRefs, type Bbox, type CurateCandidate, type CurateRow } from './curateWorklist';
 import CurateLookup from './CurateLookup';
 import { useOsmLookup } from './osmLookup';
 import RefItem from './RefItem';
@@ -183,7 +177,7 @@ export default function CurateDetail({
         {checked.length > 0 && <CheckedPick checked={checked} onClear={clear} decide={decide} />}
         <ManualRef decide={decide} />
         <LocalRef
-          initialSlug={slugify(row.name_de || row.name)}
+          initialSlug={row.slug_suggestion}
           canBePolygon={canBePolygon}
           mapRef={mapRef}
           decide={decide}
@@ -407,7 +401,7 @@ function LocalRef({ initialSlug, canBePolygon, mapRef, decide }: LocalRefProps) 
         onChange={(event) => setSlug(event.target.value)}
       />
       {!isValidSlug(slug) && (
-        <p className="dev-panel-error">slug must look like `toftem-emmelsbuell`</p>
+        <p className="dev-panel-error">slug must look like `toftem-emmelsbull`</p>
       )}
       <div className="curate-row">
         <button
