@@ -265,6 +265,22 @@ describe('the card of a clicked label of a listed place', () => {
     });
   });
 
+  it('has no local name where the clicked object has none, whatever its row has', () => {
+    // Issue #89: the second object of the row lies outside every dialect area.
+    const entry = listed({
+      names: { 'frr-x-wieding': 'e Wäsk' },
+      local: 'e Wäsk',
+      dialect: 'frr-x-wieding',
+      name_de: 'Wisch',
+    });
+    const props = { 'name:frr-x-wieding': 'e Wäsk', 'name:de': 'Wisch', name: 'Wisch' };
+
+    expect(cardModel(clicked(props, entry), LOCAL_TAG)).toMatchObject({
+      headline: 'Wisch',
+      lines: [{ source: inDialect('frr-x-wieding'), name: 'e Wäsk' }],
+    });
+  });
+
   // The tile's own value is what the clicked label shows; the entry's comes
   // from the OSM extract the list was matched against, which may be older.
   it("has the tile feature's Low Saxon name rather than the entry's", () => {

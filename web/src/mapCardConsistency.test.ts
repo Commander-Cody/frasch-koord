@@ -185,6 +185,24 @@ const LISTED_SCENARIOS: Record<string, ClickedLabel & { entry: NameEntry }> = {
       name: 'Nordwarft',
     },
   },
+  // Issue #89: the entry stands for the row's first object, which has a
+  // local name; the clicked one lies outside every dialect area and has none.
+  'the second object of a listed row, outside every dialect area': {
+    entry: listed({
+      id: 'e-wask',
+      names: { 'frr-x-wieding': 'e Wäsk' },
+      name_de: 'Wisch',
+      name_osm: 'Wisch',
+      local: 'e Wäsk',
+      dialect: 'frr-x-wieding',
+    }),
+    props: {
+      'frasch:ref': 'e-wask',
+      'name:frr-x-wieding': 'e Wäsk',
+      'name:de': 'Wisch',
+      name: 'Wisch',
+    },
+  },
 };
 
 const CASES = [

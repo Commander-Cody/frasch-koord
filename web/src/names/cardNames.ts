@@ -16,12 +16,12 @@ function mergedNames(entry: NameEntry, tile: CardNames): CardNames {
   return {
     ...entry,
     names: { ...tile.names, ...entry.names },
-    // The tile's own local name first, and with it the tile's dialect area:
-    // the entry lies where the first object of its row lies, and the clicked
-    // one may be another object of that row, in another dialect area and
-    // with another local name (Nordwarft).
-    local: tile.local ?? entry.local,
-    dialect: tile.local ? tile.dialect : (entry.dialect ?? tile.dialect),
+    // The tile's own local name and dialect area, never the entry's: the
+    // entry lies where the first object of its row lies, and the clicked one
+    // may be another object of that row, in another dialect area and with
+    // another local name (Nordwarft) or outside every area, with none (Wisch).
+    local: tile.local,
+    dialect: tile.dialect,
     variety: entry.variety ?? tile.variety,
     name_frr: tile.name_frr,
     // The tile's own value first: it is what the label the user just clicked
