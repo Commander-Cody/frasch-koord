@@ -1189,6 +1189,65 @@ result into place and then died in `frasch provenance` on the missing file.
   the two long report tests into statistics and formatter, which `Stats` now
   allows, is #111.
 
+## Decided 2026-10-13: one geometry read; the dialect areas are a pure build (issue #101)
+
+`locate` and `build_dialect_areas` shared `osmscan` and `osmgeom`, but each
+wrote the read itself: relations by id, their ways and the referenced ones,
+all their nodes, projected to three mappings that travelled as three
+positional arguments. `build_dialect_areas` computed, printed and wrote in
+the same functions.
+
+| was | is |
+|---|---|
+| the three passes in `locate.locate_in` and in `build_dialect_areas._scan_extract` / `_read_geometry`; `_Geometry` | `osmscan.read_geometry(pbf, refs, extra_relations)` → `Geometry(relations, ways, nodes)`, the records with their tags |
+| "ask the next extract for what is still missing" in `locate.locate` and in `build_dialect_areas` | `osmscan.across(pbfs, refs, read)` |
+| `build_dialect_areas.read_admin_relations`, a raw `FileProcessor` scan | `osmscan.relations_where(pbf, wanted)` |
+| `osmgeom.polygons_for(ref, rel, ways, nodes, problems)` → a list of 0 or 1 | `osmgeom.polygon_of(ref, geometry, problems)` → the polygon or None |
+| `build_dialect_areas.build(ws, reg, pbfs, options)`, which read, scanned, printed and built | `scan(pbfs, claimed, unassigned_ags)` → `Scan`; `build(rows, reg, found, source, options)` → `Areas`, pure; `run` prints and writes |
+| `read_areas` → two indexes by reference and the rows | the rows |
+| `--simplify`, `--parts-simplify`, `--unassigned-ags` | gone (owner's decision: nothing passed them); the values stay fields of `Options` |
+| `{i for t, i in refs if t == "r"}` in four places | `refs.ids_of(refs, "r")` |
+| `111.32` in the injector and in `build_dialect_areas` | `geo.KM_PER_DEGREE` |
+
+- **`build` is pure**: it reads no file, writes none and prints nothing. What
+  there is to say is the `report` of its result; `scan` gives a line per
+  extract the same way. `run` prints both with `cli.say` and writes, as
+  `locate.run` and `searchindex.run` do for the other outputs of the
+  pipeline's table.
+- **The references without geometry are listed once** (owner's decision):
+  on stdout, in the report. A refused build's error is one line that points
+  at the list and names `--allow-missing`; before, the list was printed and
+  then raised again with the same text.
+- **Every part goes through one helper**, assigned or not (`_part_feature`),
+  and through the same union of its polygons -- also a municipality no row
+  claims, which has only one. The union says where a polygon's rings start,
+  and that decides which vertices simplifying keeps: without it 13 of the 71
+  unassigned municipalities of the parts file came out differently.
+- **The files are what they were.** On the Schleswig-Holstein and Denmark
+  extracts of September 2026 `dialect_areas.geojson`,
+  `dialect_areas_parts.geojson` and `osm_objects.json` are byte for byte the
+  ones the code before the change writes. The scan's line counts a few more
+  nodes, the label nodes of the relations, which `read_geometry` reads for
+  `locate`.
+- **`across` hands every extract the references still missing**, also an
+  empty set, which reads nothing. So the scan for unclaimed municipalities
+  still runs on every extract.
+- **A named rounding constant per file**, the values unchanged: the objects
+  file and the candidates 6 decimals, the search index and the area GeoJSON
+  5. That `round_geojson` rounds nothing is #50.
+- **What the comments claim about memory**: `osmscan` and `locate` said the
+  dev machine has no memory for a location cache of a whole extract, while
+  `build_candidates` builds one in the same `update`. They now say what is
+  known: the three passes take neither such a cache nor pyosmium building
+  every area. Nobody measured what a cache would cost.
+- `locate._inside_point` catches shapely's `GEOSException`, no longer
+  `Exception`; shapely is imported at the top of `dialect_areas`, `osmgeom`
+  and `build_dialect_areas`.
+- The test seams: `osmscan.read_geometry`, `relations_where` and `across`
+  on small written extracts, `osmgeom.polygon_of` on a `Geometry` in memory,
+  `build_dialect_areas.build` on a `Scan` of shapely polygons; the tests of
+  `build_dialect_areas.run`, `frasch areas` and `locate.run` stay.
+
 ## Remaining open questions
 1. Hosting provider for the site (R2 + Pages proposed, nothing set up yet); the tiles are GitHub release assets for now (issue #28).
 2. When to do the planet build (needs the VM; only after the North Frisia build looks right).

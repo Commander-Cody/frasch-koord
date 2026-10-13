@@ -777,9 +777,9 @@ references of their `osm` cell.
 | `objects` | the objects file `osm_objects.json`: what it records, reading and writing it |
 | `placeobjects` | the objects of the name list's rows: which references the file is located for, the one message for a reference it has no object for, the object a row's entry stands for (`for_row`) |
 | `placenames` | which names and attributes a place gets (`resolve`), as tile tags (`as_tags`) and as a search entry (`as_entry`); the tile keys and `TILE_KEY`, the table entry field → tile key; `frasch tile-keys` |
-| `geo` | the North Frisia box, its centre, haversine, and what an unknown distance counts as |
+| `geo` | the North Frisia box, its centre, haversine, kilometres per degree, and what an unknown distance counts as |
 | `osmtags` | the OSM tags the pipeline reads, each list once: the name tags and their ranks, the class tags, the `place` values of a settlement and of an island |
-| `osmscan`, `osmgeom` | the id-filtered passes over an extract; ring assembly and polygons |
+| `osmscan`, `osmgeom` | the id-filtered passes over an extract, the one read of what a set of references is made of (`read_geometry` → `Geometry`) and the loop over several extracts (`across`); ring assembly and an object's polygon (`polygon_of`) |
 | `candidates`, `nameindex`, `hints` | the candidates file, the source a candidate is from (`source`) and which one is Schleswig-Holstein (`is_sh`); the matcher's index of the candidates by name; location hints |
 | `clusters` | which candidates describe one feature (`cluster`, `same_feature`), and where a feature lies against a hint and North Frisia |
 | `wikidata` | the Wikidata items of countries by German name: the API lookup and its cache |
