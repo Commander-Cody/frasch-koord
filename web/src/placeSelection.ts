@@ -4,10 +4,10 @@
 import type { LngLat, LngLatLike, MapGeoJSONFeature } from 'maplibre-gl';
 
 import type { MapMarker } from './components/Map';
-import type { TileProps } from './names/card';
 import type { NameEntry } from './names/entry';
 import type { EntryLookup } from './names/load';
 import { displayName } from './names/resolveName';
+import type { TileProps } from './names/tile';
 
 /** A click on a place label of the map. */
 export interface MapPick {
@@ -22,7 +22,7 @@ export interface MapPick {
   ref?: string;
   /** The tile properties of the clicked feature. */
   props: TileProps;
-  /** Its tile feature id, see names.ts `osmRefFromFeatureId`. */
+  /** Its tile feature id, see names/links.ts `osmRefFromFeatureId`. */
   featureId?: string | number;
   /** Where the click was. */
   at: LngLat;

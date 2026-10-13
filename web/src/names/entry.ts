@@ -1,11 +1,11 @@
-// A place of the name list as the frontend sees it: an entry of
-// public/data/names.json, and the names of it a card shows.
+// A place as the frontend sees it: an entry of public/data/names.json, and
+// the names a card shows, of an entry or of a tile feature.
 
 /**
  * One entry of public/data/names.json, written by frasch/searchindex.py.
  * Only non-empty values are exported, so every optional field is genuinely
  * absent rather than an empty string. The contract itself is
- * names/search-index.schema.json; names.test.ts pins NameEntry to it.
+ * names/search-index.schema.json; entry.test.ts pins NameEntry to it.
  */
 export interface NameEntry {
   /** The name-list row's `id`, e.g. "naibel" — stable across edits to the list and OSM alike; the tiles carry it as `frasch:ref`. */
@@ -54,14 +54,29 @@ export interface NameEntry {
   kind: string;
 }
 
-/** An entry as the place card shows it: with what only a clicked tile feature knows. */
-export interface CardEntry extends NameEntry {
+/** The fields of an entry that name or describe the place, rather than identify or locate it. */
+type NameField =
+  | 'local'
+  | 'dialect'
+  | 'variety'
+  | 'name_nds'
+  | 'name_de'
+  | 'name_osm'
+  | 'name_da'
+  | 'kind';
+
+/**
+ * The names of a place as its card shows them: those of its entry, any of
+ * which a tile feature may carry too, and what only a tile feature knows.
+ * Neither id nor coordinates: a feature the name list does not have has none.
+ */
+export interface CardNames extends Partial<Pick<NameEntry, NameField>> {
+  names: NameEntry['names'];
   /**
    * Frisian name of no particular dialect — OSM's own `name:frr`, never our
    * name list, which always knows which dialect a name is in. The style
-   * labels with it too (see the label chain in style/localize.ts), so the
-   * card has to know about it or it would contradict the label the user just
-   * clicked.
+   * labels with it too (see labelChain.ts), so the card has to know about it
+   * or it would contradict the label the user just clicked.
    */
   name_frr?: string;
 }

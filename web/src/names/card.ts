@@ -1,82 +1,110 @@
-// What a place's card shows: the place's entry of the name list, filled up
-// from the tile feature that was clicked.
+// What a place's card shows: which names, in which order, and what each one
+// is. Pure; components/PlaceCard.tsx gives every source its label and renders.
 
 import { DIALECTS } from '../config';
-import type { CardEntry, NameEntry } from './entry';
+import type { PlaceSelection } from '../placeSelection';
+import { cardNames } from './cardNames';
+import type { CardNames } from './entry';
+import { resolveName, type Language, type NameSource, type ShownName } from './resolveName';
 
-/** Properties of a clicked vector-tile feature (source-layer `place`). */
-export type TileProps = Record<string, unknown>;
+/** One line of the name list below the headline. */
+export interface CardLine {
+  source: NameSource;
+  name: string;
+  /** The sub-dialect the local form belongs to (`frasch:variety`). */
+  note?: string;
+}
 
-function str(props: TileProps | undefined, key: string): string | undefined {
-  const v = props?.[key];
-  return typeof v === 'string' && v !== '' ? v : undefined;
+export interface CardModel {
+  /** The place's name in the view; empty for a place without any name. */
+  headline: string;
+  /** Which of the place's names the headline is. */
+  source: NameSource;
+  /** The variety remark of the local form, where the headline is that form: no line below carries it then. */
+  note?: string;
+  /** The kind of place (`settlement`, `hallig`), where one is known. */
+  kind?: string;
+  lines: CardLine[];
 }
 
 /**
- * A name-list-shaped view of a tile feature, for places the name list does
- * not have (a plain German village) and to fill gaps in the ones it does —
- * OSM's `name:da` on Föhr, say, where our own `da` column is empty.
- * Coordinates are not part of it; nothing on the card needs them.
+ * The local form as a source. It is named after the area's dialect only
+ * where it IS that dialect's name: where the place has a form of its own
+ * (Woiguurd, while Mooring says Waiguurd), calling both "Mooring" would
+ * contradict itself.
  */
-export function entryFromTile(props: TileProps): CardEntry {
-  const names: Record<string, string> = {};
-  for (const d of DIALECTS) {
-    const name = str(props, `name:${d.tag}`);
-    if (name) names[d.tag] = name;
-  }
-  return {
-    id: str(props, 'frasch:ref') ?? '',
-    names,
-    local: str(props, 'frasch:local'),
-    dialect: str(props, 'frasch:dialect'),
-    variety: str(props, 'frasch:variety'),
-    name_frr: str(props, 'name:frr'),
-    name_nds: str(props, 'name:nds'),
-    // `name_de` is OpenMapTiles' own German field. The plain `name` is not a
-    // German one north of the border, so it only goes into `name_osm`.
-    name_de: str(props, 'name:de') ?? str(props, 'name_de') ?? '',
-    name_osm: str(props, 'name:latin') ?? str(props, 'name'),
-    name_da: str(props, 'name:da'),
-    lon: 0,
-    lat: 0,
-    kind: str(props, 'frasch:kind') ?? str(props, 'class') ?? '',
-  };
+function localSource({ names, local, dialect }: CardNames): NameSource {
+  const isAreaName = dialect !== undefined && names[dialect] === local;
+  return isAreaName ? { kind: 'local', dialect } : { kind: 'local' };
+}
+
+/** The place's names in the dialects of the registry, in its order, but the headline's. */
+function dialectLines(names: CardNames, shown: ShownName): CardLine[] {
+  const isHeadline = (tag: string) => shown.source.kind === 'dialect' && shown.source.tag === tag;
+  // The area's own dialect falls back to the `local` column in
+  // frasch/placenames.py, so its name can be the very same string as the
+  // local form. It is shown once, on the local line, which names the dialect.
+  const isLocalForm = (tag: string) => tag === names.dialect && names.names[tag] === names.local;
+  return DIALECTS.map(({ tag }) => ({ tag, name: names.names[tag] }))
+    .filter(({ tag, name }) => name && !isHeadline(tag) && !isLocalForm(tag))
+    .map(({ tag, name }) => ({ source: { kind: 'dialect', tag }, name }));
 }
 
 /**
- * What the card renders: the name-list entry wins field by field — it is the
- * curated source — and the clicked tile feature fills whatever the list does
- * not have. The exceptions are what depends on the clicked object itself:
- * its local name with the dialect area it lies in, and OSM's own names.
- * Without an entry the tile alone carries the card.
- *
- * `entry` is the place's name-list entry, when it has one; `props` are the
- * tile properties of the clicked feature, absent when no click opened the
- * card.
+ * The local form. Not where the headline already is that form, under the
+ * same or another name: the selected dialect's name and the local one are
+ * the same string wherever the place lies in that dialect's own area
+ * (Niebüll in Mooring).
  */
-export function cardEntry(entry: NameEntry | undefined, props?: TileProps): CardEntry {
-  const tile = props ? entryFromTile(props) : undefined;
-  if (!entry) return tile ?? { id: '', names: {}, name_de: '', lon: 0, lat: 0, kind: '' };
-  if (!tile) return entry;
+function localLines(names: CardNames, headline: string): CardLine[] {
+  const { local, variety } = names;
+  if (!local || local === headline) return [];
+  return [{ source: localSource(names), name: local, note: variety }];
+}
+
+/**
+ * OSM's Frisian name of no dialect, for places our list does not have. Not
+ * where it only repeats one of the names `shown` on the card already (it
+ * usually is the same word as the dialect's): it says nothing worth a line.
+ */
+function frisianLines({ name_frr }: CardNames, shown: string[]): CardLine[] {
+  if (!name_frr || shown.includes(name_frr)) return [];
+  return [{ source: { kind: 'language', language: 'frr' }, name: name_frr }];
+}
+
+/**
+ * German and Danish, and Low Saxon where it says something German does not:
+ * most places are the same word in both (Husum).
+ */
+function languageLines({ name_nds, name_de, name_da }: CardNames, headline: string): CardLine[] {
+  const names: [Language, string | undefined][] = [
+    ['nds', name_nds === name_de ? undefined : name_nds],
+    ['de', name_de],
+    ['da', name_da],
+  ];
+  return names.flatMap(([language, name]) =>
+    name && name !== headline ? [{ source: { kind: 'language', language }, name }] : [],
+  );
+}
+
+function cardLines(names: CardNames, shown: ShownName): CardLine[] {
+  const frisian = [...dialectLines(names, shown), ...localLines(names, shown.name)];
+  const onCard = [shown.name, ...frisian.map((line) => line.name)];
+  return [...frisian, ...frisianLines(names, onCard), ...languageLines(names, shown.name)];
+}
+
+/**
+ * The card of a selection in a view: the headline is what the map labels the
+ * place with there (`resolveName`), the lines are its other names.
+ */
+export function cardModel(selection: PlaceSelection, view: string): CardModel {
+  const names = cardNames(selection);
+  const shown = resolveName(names, view);
   return {
-    ...entry,
-    names: { ...tile.names, ...entry.names },
-    // The tile's own local name first, and with it the tile's dialect area:
-    // the entry lies where the first object of its row lies, and the clicked
-    // one may be another object of that row, in another dialect area and
-    // with another local name (Nordwarft).
-    local: tile.local ?? entry.local,
-    dialect: tile.local ? tile.dialect : (entry.dialect ?? tile.dialect),
-    variety: entry.variety ?? tile.variety,
-    name_frr: tile.name_frr,
-    // The tile's own value first: it is what the label the user just clicked
-    // shows, while the entry's comes from the OSM extract the name list was
-    // matched against, which may be older.
-    name_nds: tile.name_nds ?? entry.name_nds,
-    // Likewise: the label may be the tile's generic name.
-    name_osm: tile.name_osm ?? entry.name_osm,
-    name_de: entry.name_de || tile.name_de,
-    name_da: entry.name_da ?? tile.name_da,
-    kind: entry.kind || tile.kind,
+    headline: shown.name,
+    source: shown.source.kind === 'local' ? localSource(names) : shown.source,
+    note: names.local === shown.name ? names.variety : undefined,
+    kind: names.kind || undefined,
+    lines: cardLines(names, shown),
   };
 }
