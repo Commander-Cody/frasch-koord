@@ -97,7 +97,7 @@ initial view can be linked to or loaded directly, e.g.
 scripted screenshots at a specific place/zoom.
 
 MapLibre rewrites the whole hash on every move, so the rest of what a link
-carries lives in the query string (`src/urlState.ts`), which it leaves alone:
+carries lives in the query string (`src/url/linkState.ts`), which it leaves alone:
 
 - `?view=<tag>` — the selected label option (`frr-x-mooring`, `frr-x-local`,
   …). A tag the selector does not offer falls back to the default.
@@ -107,11 +107,27 @@ carries lives in the query string (`src/urlState.ts`), which it leaves alone:
   its tile is on screen. With a `#zoom/lat/lon` the link opens there and just
   marks the place; without one the map flies to it, like a search result.
 
-App keeps both in sync with `history.replaceState`, so the address bar always
-is a link to what is on screen, e.g.
+Each is kept in sync by the hook that owns it, with `history.replaceState`
+(`useView` writes `?view=`, `usePlaceSelection` `?place=`), so the address bar
+always is a link to what is on screen, e.g.
 `/?view=frr-x-local&place=node/240042766#12/54.79/8.83`. The share button
 next to the dialect selector hands that URL to the system share sheet on
 touch devices and copies it everywhere else (`src/components/ShareButton.tsx`).
+
+`src/url/queryParams.ts` is the one module that touches `window.location` and
+`window.history` (a test scans `src/` for it); `src/url/linkState.ts` knows
+the two parameters above, and `src/url/useOpenLinked.ts` opens what a dev
+panel's link names (`?curate&row=`, `?areas&area=`).
+
+**The selected place** is one model (`src/placeSelection.ts`): a pick says
+how the place was chosen, `{via: 'map' | 'search' | 'link', ...}`, and
+`usePlaceSelection` holds the current one behind one `select(pick)` and one
+`close(means)`. The page starts with the pick its link names; the card opens
+once the name list has the place, unless another was picked by then. From
+`pick.via` follow the map move (a search result and a link are flown to, a
+link with a viewport and a clicked label are only brought out from under the
+phone's sheet), the focus, and the marker, which the map gets as a prop
+derived from the selection and the view.
 
 ## Tile hosting
 
@@ -204,7 +220,8 @@ derives the one dropdown from it:
   one map shows Mooring around Niebüll, Fering on Föhr, Sölring on Sylt…
 
 Each option carries a `uiLanguage`, and `useView` (`src/hooks/useView.ts`)
-calls `i18n.changeLanguage(option.uiLanguage)` when the selection changes, so map
+keeps the UI in it, in one effect on the selected option (`i18n.ts` only
+starts in the default option's language), so map
 labels and UI chrome move together. A dialect view uses its own dialect;
 the local view has no dialect of its own and borrows one —
 `LOCAL_VIEW_UI_LANGUAGE` in `config.ts` (Mooring today) is the single place
@@ -531,7 +548,7 @@ Escape, the × button and a click on the map (that hits no label) close the
 card; Escape in the search field only closes the result list. A search pick
 moves focus to the card's headline, so screen readers announce it, and a card
 closed from the keyboard hands focus back to the search field
-(`hooks/useCardFocus.ts`). The open card is in the URL (`?place=`, see above); the "report a wrong
+(`hooks/usePlaceSelection.ts`). The open card is in the URL (`?place=`, see above); the "report a wrong
 or missing name" link is issue #8.
 
 ## Curation view (dev only)

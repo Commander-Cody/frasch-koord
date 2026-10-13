@@ -1292,6 +1292,63 @@ browser read an `osm` cell in four places and built the OSM URL in two, and
 - **Not touched**: `nameindex._UML`, the transliteration the matcher compares
   names by. It is not a slug rule.
 
+## Decided 2026-10-13: one selected-place model and one URL module in the public app (issue #103)
+
+"The selected place" was spread over three hooks with three entry points and
+two queues of the same kind (a ref set in a handler, consumed in an effect),
+and the URL was read in five modules and written in three. Four bugs came
+with it: a pending `?place=` link replaced a card opened while the name list
+loaded; `?place=` left the address bar for one render when the list arrived;
+the marker kept the name of the view it was set in; and two unmemoized
+callbacks re-ran the link's effect on every render.
+
+| was | is |
+|---|---|
+| `selectEntry(entry, name)`, `selectFeature(feature, at)`, `openLinked(entry, hasViewport)`; `PickedPlace`, `names.PlaceSelection` | `web/src/placeSelection.ts`: `PlacePick` = `{via: 'map', ref?, props, featureId, at}` \| `{via: 'search', ref}` \| `{via: 'link', ref, keepViewport}`, `PlaceSelection = {pick, entry}`; `usePlaceSelection` → `select(pick)`, `close(means)` |
+| `useMoveAfterCard`, `useCardFocus` (`focusNextCard`, `closeByKeyboard`) | one layout effect per pick in `usePlaceSelection`: the map move and the focus follow from `pick.via` |
+| `useLinkedPlace`, and `selection?.entry?.id ?? linkedPlace` in `App.tsx` | the link is the initial pick; `?place=` is written by `usePlaceSelection` |
+| `MapViewHandle.showMarker`, `clearMarker`, the marker argument of `flyTo`; `name` in `SearchPanel`'s `onSelect` | `marker` prop of `MapView`, `placeSelection.markerOf(selection, view)` |
+| `urlState.ts`, `queryParams.ts`, `hooks/useUrlSync.ts`, `dev/useDeepLinkParam.ts` | `web/src/url/`: `queryParams.ts`, `linkState.ts`, `useOpenLinked.ts` |
+| `lng: labelOption(initialView()).uiLanguage` in `i18n.ts`, `i18n.changeLanguage` in `useView`'s handler | `useUiLanguage(view)`, one effect, used by `useView` and the dev app |
+| `cardEntry(selection)`, `placeOsmRef(selection)` | `cardEntry(entry, props)`, `placeOsmRef(entry, featureId)` |
+
+- **The link is the initial pick** (owner's decision). The plan named both
+  "the initial pick is read from the URL" and one `useOpenLinked` for the
+  public app and the dev panels; the two do not fit. `usePlaceSelection`
+  starts with `{via: 'link', ...}`, read at mount, before the map writes a
+  hash of its own. There is no card until the name list has the entry, and a
+  pick by hand replaces the pending link for good. `useOpenLinked` (the
+  renamed `useDeepLinkParam`) serves the two dev panels alone; their own
+  selection handling is #106.
+- **`?place=` has one source**: the entry's id, or, while the list is not
+  there to look it up in (loading or failed), the pick's own reference. So a
+  label clicked before the list loads is in the address bar at once, and a
+  link to a place the list does not have leaves it once the list is there.
+- **`window.location` is read in one module, literally** (owner's decision):
+  `url/queryParams.ts` also has the page's URL for the share button and
+  `config.siteUrl`, `main.tsx`'s `?curate` / `?areas`, and the hash restore
+  around `map.remove()` (`keepingHash`). A test scans `src/` for
+  `window.location` and `window.history`. MapLibre's own `hash: true` stays.
+- **`PlacePick`, not `Pick`**: `Pick` is TypeScript's own utility type.
+- **The card is measured in one file** (owner's decision):
+  `hooks/useSheetHeight.ts` keeps `--sheet-height` and exports
+  `sheetInset(card)`, the card's height where it is the phone's bottom sheet,
+  for the map move. An exported function, not the hook's return value: the
+  hook needs to know whether a card is open, which the selection hook says,
+  and the selection hook needs the reader.
+- **The marker is recreated, not moved**, whenever its prop changes; a click
+  on a label has none, as before.
+- **The UI language follows the view before paint** (`useLayoutEffect`), so a
+  page that opens in another view than the default never shows the default's
+  language first. The dev views take the view from the link through the same
+  effect and still write neither `?view=` nor `?place=`.
+- **Test seams** (owner's decision): the selection through `<App />` with the
+  map stubbed, the stub recording the `marker` prop and the `flyTo` /
+  `reveal` calls (`App.selection.test.tsx`); the URL through
+  `url/queryParams`, `url/linkState`, `url/useOpenLinked` and `useView`. The
+  writer mechanics are tested once, in `queryParams.test.ts`. The marker
+  itself is MapLibre's: the smoke test looks for it.
+
 ## Remaining open questions
 1. Hosting provider for the site (R2 + Pages proposed, nothing set up yet); the tiles are GitHub release assets for now (issue #28).
 2. When to do the planet build (needs the VM; only after the North Frisia build looks right).
