@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/Commander-Cody/frasch-koord/names/search-index.schema.json",
   "title": "Search index",
-  "description": "web/public/data/names.json: the rows of names/places.csv that are on the map, each with its names and where it lies. `frasch build index` writes it (frasch/searchindex.py, an entry in frasch/placenames.py), the web app fetches it once for the search and the place card (web/src/names.ts). A value that would be empty is left out, except `name_de`.",
+  "description": "web/public/data/names.json: the rows of names/places.csv that are on the map, each with its names and where it lies. `frasch build index` writes it (frasch/searchindex.py, an entry in frasch/placenames.py), the web app fetches it once for the search and the place card (web/src/names/load.ts). A value that would be empty is left out, except `name_de`.",
   "type": "object",
   "required": ["built_from", "places"],
   "additionalProperties": false,
