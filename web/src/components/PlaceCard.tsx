@@ -4,9 +4,9 @@ import { useTranslation } from 'react-i18next';
 
 import { DIALECTS, dialect, dialectLabelKey } from '../config';
 import type { DialectEntry } from '../config';
-import type { PlaceSelection } from '../names';
 import { cardEntry, placeOsmRef, resolveName, wikidataUrl } from '../names';
 import { osmUrl } from '../osmRef';
+import type { CloseMeans, PlaceSelection } from '../placeSelection';
 import CloseButton from './CloseButton';
 import './PlaceCard.css';
 
@@ -14,11 +14,11 @@ export interface PlaceCardProps {
   selection: PlaceSelection;
   /** Selected label option tag (a dialect, or LOCAL_TAG) — the view the headline is in. */
   view: string;
-  /** `byKeyboard`: closed with Enter or Space on ×, rather than by a click or tap. */
-  onClose: (byKeyboard: boolean) => void;
-  /** The card element: App measures it, where it is the phone bottom sheet. */
+  /** `keyboard`: closed with Enter or Space on ×, rather than by a click or tap. */
+  onClose: (means: CloseMeans) => void;
+  /** The card element: it is measured where it is the phone bottom sheet. */
   ref?: Ref<HTMLElement>;
-  /** The headline: App moves focus there (see useCardFocus). */
+  /** The headline: a search pick moves focus there (see usePlaceSelection). */
   headingRef?: Ref<HTMLHeadingElement>;
 }
 
@@ -46,8 +46,8 @@ interface Line {
  * the name list has a name in, the local form, Low Saxon, German and Danish,
  * and links to the objects behind it.
  *
- * Its data is `cardEntry(selection)` — the name-list entry where the place has
- * one, filled up from the clicked tile feature (see names.ts).
+ * Its data is `cardEntry` of the selection — the name-list entry where the
+ * place has one, filled up from the clicked tile feature (see names.ts).
  */
 export default function PlaceCard({
   selection,
@@ -57,7 +57,12 @@ export default function PlaceCard({
   headingRef,
 }: PlaceCardProps) {
   const { t, i18n } = useTranslation();
-  const entry = useMemo(() => cardEntry(selection), [selection]);
+  // What only a click on the map brings along: the feature's tile.
+  const clicked = selection.pick.via === 'map' ? selection.pick : undefined;
+  const entry = useMemo(
+    () => cardEntry(selection.entry, clicked?.props),
+    [selection.entry, clicked?.props],
+  );
   // Dialect names are translated like any other UI string; the registry
   // label covers a dialect the locale files do not know yet.
   const dialectLabel = useCallback(
@@ -125,7 +130,7 @@ export default function PlaceCard({
     return out;
   }, [entry, shownAs, headline, localLabel, dialectLabel, t]);
 
-  const osm = osmUrl(placeOsmRef(selection) ?? undefined);
+  const osm = osmUrl(placeOsmRef(selection.entry, clicked?.featureId) ?? undefined);
   const wikidata = wikidataUrl(entry.wikidata);
   // The "report a wrong or missing name" link belongs here; it is issue #8.
 
@@ -135,7 +140,7 @@ export default function PlaceCard({
       <CloseButton
         className="place-card-close"
         label={t('card.close')}
-        onClick={(e) => onClose(e.detail === 0)}
+        onClick={(e) => onClose(e.detail === 0 ? 'keyboard' : 'pointer')}
       />
       <h2 ref={headingRef} className="place-card-name" tabIndex={-1}>
         {headline}

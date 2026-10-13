@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 
-import { DIALECTS } from './config';
+import { DEFAULT_VIEW, DIALECTS, labelOption } from './config';
 
 // DialectEntry types `status` and `view` as unions, but the registry arrives
 // as JSON; frasch/dialects.py allows exactly these values.
@@ -9,4 +9,8 @@ it('reads only the status and view values the registry allows', () => {
     expect(['living', 'extinct']).toContain(dialect.status);
     expect(['yes', 'no']).toContain(dialect.view);
   }
+});
+
+it('answers a tag the selector does not offer with the default option', () => {
+  expect(labelOption('frr-x-nowhere').tag).toBe(DEFAULT_VIEW);
 });

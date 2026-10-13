@@ -20,7 +20,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 
 import type { MapViewHandle } from '../components/Map';
-import { replaceQueryParams } from '../queryParams';
+import { replaceQueryParams } from '../url/queryParams';
 import CurateDetail from './CurateDetail';
 import CurateFilters from './CurateFilters';
 import CurateList from './CurateList';
@@ -34,7 +34,7 @@ import {
   type CurateWorklist,
 } from './curateWorklist';
 import DevPanel from './DevPanel';
-import { useDeepLinkParam } from './useDeepLinkParam';
+import { useOpenLinked } from '../url/useOpenLinked';
 import { useListNavigation } from './useListNavigation';
 import './CuratePanel.css';
 
@@ -109,7 +109,7 @@ export default function CuratePanel({ mapRef }: CuratePanelProps) {
     [rows, goTo],
   );
   const hasSelection = useCallback(() => selectedIdNow.current !== null, []);
-  useDeepLinkParam('row', rows.length > 0, openLinkedRow, hasSelection);
+  useOpenLinked('row', rows.length > 0, openLinkedRow, hasSelection);
   useListNavigation(visibleIds, selectedId, goTo);
 
   /* ------------------------------------------------------------- saving */

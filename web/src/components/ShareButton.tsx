@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { TOUCH_MEDIA } from '../layout';
+import { pageUrl } from '../url/queryParams';
 
 /** How long the "link copied" confirmation stays up. */
 const CONFIRM_MS = 2000;
@@ -17,7 +18,7 @@ function hasShareSheet(): boolean {
 
 /**
  * Shares the page as it is: App keeps the address bar in sync with the
- * selected view and open place (see urlState.ts), and MapLibre keeps the
+ * selected view and open place (see url/linkState.ts), and MapLibre keeps the
  * viewport in its hash, so the current URL already is the link.
  */
 export default function ShareButton() {
@@ -31,7 +32,7 @@ export default function ShareButton() {
   }, [copied]);
 
   const share = async () => {
-    const url = window.location.href;
+    const url = pageUrl();
     if (hasShareSheet()) {
       try {
         await navigator.share({ title: document.title, url });

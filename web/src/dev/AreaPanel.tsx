@@ -37,10 +37,10 @@ import {
 } from './areaLayers';
 import { DIALECTS, dialect } from '../config';
 import { osmRefs, osmUrl } from '../osmRef';
-import { replaceQueryParams } from '../queryParams';
+import { replaceQueryParams } from '../url/queryParams';
 import DevPanel from './DevPanel';
 import { FIT_PADDING } from './panelLayout';
-import { useDeepLinkParam } from './useDeepLinkParam';
+import { useOpenLinked } from '../url/useOpenLinked';
 import { useListNavigation } from './useListNavigation';
 import './AreaPanel.css';
 
@@ -291,7 +291,7 @@ export default function AreaPanel({ mapRef }: AreaPanelProps) {
     [features, selectAndFly],
   );
   const hasSelection = useCallback(() => selectedRef.current !== null, []);
-  useDeepLinkParam('area', features.length > 0, openLinkedArea, hasSelection);
+  useOpenLinked('area', features.length > 0, openLinkedArea, hasSelection);
 
   /* ------------------------------------------------------------- overlay */
 

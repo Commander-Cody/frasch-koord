@@ -25,6 +25,7 @@ import { buildStyle, placeLayerIds } from '../style/localize';
 import { TILES_URL } from '../config';
 import { TOUCH_MEDIA } from '../layout';
 import { oncePerFrame } from '../oncePerFrame';
+import { keepingHash } from '../url/queryParams';
 import CloseButton from './CloseButton';
 
 // Register the pmtiles:// protocol with MapLibre exactly once, no matter
@@ -61,6 +62,12 @@ const REVEAL_MARGIN = 24;
  */
 const LOAD_TIMEOUT_MS = 30_000;
 
+/** The single marker of the map: where it stands, and what its tooltip names. */
+export interface MapMarker {
+  at: [lon: number, lat: number];
+  title: string;
+}
+
 export interface MapViewProps {
   /**
    * Label option tag: a dialect ("frr-x-mooring") or the local-dialect view
@@ -74,7 +81,9 @@ export interface MapViewProps {
    * click handling.
    */
   onSelectFeature?: (feature: MapGeoJSONFeature | null, at: LngLat) => void;
-  /** The imperative handle below, for App's search and place card and the dev views. */
+  /** The marker to show, if any (see placeSelection.ts `markerOf`). */
+  marker?: MapMarker | null;
+  /** The imperative handle below, for App's map moves and the dev views. */
   ref?: Ref<MapViewHandle>;
 }
 
@@ -87,27 +96,23 @@ export interface MapViewHandle {
   /** The underlying maplibre-gl Map, or null before mount / after unmount. */
   getMap(): MapLibreMap | null;
   /**
-   * Animate to `center` at `zoom` and drop a single marker there. `inset` is
-   * how many pixels at the bottom of the map something covers (the phone
-   * bottom sheet): the place lands in the middle of what stays visible.
+   * Animate to `center` at `zoom`. `inset` is how many pixels at the bottom
+   * of the map something covers (the phone bottom sheet): the place lands in
+   * the middle of what stays visible.
    */
-  flyTo(center: LngLatLike, zoom: number, marker?: { title?: string }, inset?: number): void;
+  flyTo(center: LngLatLike, zoom: number, inset?: number): void;
   /**
    * Pan up just enough to bring `center` into the middle of the part of the
    * map above a bottom `inset`, if that inset covers it. No-op otherwise.
    */
   reveal(center: LngLatLike, inset: number): void;
-  /** Drop the single marker at `center` without moving the map. */
-  showMarker(center: LngLatLike, marker?: { title?: string }): void;
-  /** Remove the marker placed by flyTo, if any. */
-  clearMarker(): void;
 }
 
 /**
  * Full-viewport MapLibre map. Exposes a small imperative handle via ref so
- * parents (e.g. search) can fly to a location and drop a marker.
+ * parents (e.g. search) can fly to a location.
  */
-export default function MapView({ view, onSelectFeature, ref }: MapViewProps) {
+export default function MapView({ view, onSelectFeature, marker = null, ref }: MapViewProps) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement | null>(null);
   // Something the map needs (tiles, glyphs, sprites, the worker) failed to
@@ -115,7 +120,6 @@ export default function MapView({ view, onSelectFeature, ref }: MapViewProps) {
   // go to the console.
   const [failure, setFailure] = useState<'error' | 'timeout' | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
-  const markerRef = useRef<Marker | null>(null);
   const appliedView = useRef(view);
   // The click handler is registered once, on the map rather than on layer
   // ids (those would have to be re-registered after every setStyle), so it
@@ -129,24 +133,11 @@ export default function MapView({ view, onSelectFeature, ref }: MapViewProps) {
   // in the layout phase, before the effect below has created the map, so a
   // captured value would be null forever. Reading the ref inside each method
   // sidesteps that.
-  useImperativeHandle(ref, () => {
-    const showMarker = (center: LngLatLike, marker?: { title?: string }) => {
-      const map = mapRef.current;
-      if (!map) return;
-      if (!markerRef.current) {
-        markerRef.current = new Marker({ color: '#d33' });
-      }
-      const m = markerRef.current;
-      m.setLngLat(center);
-      const el = m.getElement();
-      if (marker?.title) el.title = marker.title;
-      else el.removeAttribute('title');
-      m.addTo(map);
-    };
-    return {
+  useImperativeHandle(
+    ref,
+    () => ({
       getMap: () => mapRef.current,
-      flyTo: (center, zoom, marker, inset = 0) => {
-        showMarker(center, marker);
+      flyTo: (center, zoom, inset = 0) => {
         // A one-off offset rather than map padding: padding would stay on
         // the map after the sheet closes, and shift every later view.
         mapRef.current?.flyTo({ center, zoom, offset: [0, -inset / 2], essential: true });
@@ -159,12 +150,9 @@ export default function MapView({ view, onSelectFeature, ref }: MapViewProps) {
         if (y < height - inset - REVEAL_MARGIN) return;
         map.panBy([0, y - (height - inset) / 2]);
       },
-      showMarker,
-      clearMarker: () => {
-        markerRef.current?.remove();
-      },
-    };
-  }, []);
+    }),
+    [],
+  );
 
   // Create the map once on mount.
   useEffect(() => {
@@ -180,7 +168,7 @@ export default function MapView({ view, onSelectFeature, ref }: MapViewProps) {
       // Reflects viewport (zoom/lat/lon[/bearing/pitch]) in the URL hash and
       // reads an initial view from it if present, e.g. `#12/54.64/8.77`.
       // Handy for linking to / screenshotting a specific view. The label
-      // option and the open place ride along in the query (urlState.ts).
+      // option and the open place ride along in the query (url/linkState.ts).
       hash: true,
       attributionControl: false,
     });
@@ -237,21 +225,14 @@ export default function MapView({ view, onSelectFeature, ref }: MapViewProps) {
     mapRef.current = map;
 
     return () => {
+      window.clearTimeout(loadTimer);
+      hover.cancel();
       // MapLibre's `hash: true` clears the URL hash inside map.remove().
       // In dev, React StrictMode mounts this effect, cleans it up, then
       // mounts it again, all before paint; without this, that throwaway
       // first mount's cleanup would wipe an initial `#zoom/lat/lon` hash
-      // before the second (real) mount ever gets to read it. Preserve and
-      // restore it so both mounts see the same starting view.
-      const hash = window.location.hash;
-      window.clearTimeout(loadTimer);
-      hover.cancel();
-      markerRef.current?.remove();
-      markerRef.current = null;
-      map.remove();
-      if (hash) {
-        window.history.replaceState(window.history.state, '', hash);
-      }
+      // before the second (real) mount ever gets to read it.
+      keepingHash(() => map.remove());
       mapRef.current = null;
     };
     // Only the initial label option matters here; changes are handled below.
@@ -267,6 +248,18 @@ export default function MapView({ view, onSelectFeature, ref }: MapViewProps) {
     appliedView.current = view;
     map.setStyle(buildStyle(fraschBright as unknown as StyleSpecification, TILES_URL, view));
   }, [view]);
+
+  // The marker, after the effect that creates the map: on mount the map is
+  // there by the time this one runs.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !marker) return;
+    const pin = new Marker({ color: '#d33' }).setLngLat(marker.at).addTo(map);
+    if (marker.title) pin.getElement().title = marker.title;
+    return () => {
+      pin.remove();
+    };
+  }, [marker]);
 
   return (
     <>

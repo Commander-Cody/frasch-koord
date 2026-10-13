@@ -3,8 +3,7 @@ import { initReactI18next } from 'react-i18next';
 
 import de from './locales/de.json';
 import frrMooring from './locales/frr-x-mooring.json';
-import { labelOption } from './config';
-import { initialView } from './urlState';
+import { DEFAULT_VIEW, labelOption } from './config';
 
 // The page's title follows the UI language like every other string, and
 // the page's language is the one the UI is actually in: German for a
@@ -25,10 +24,9 @@ void i18n.use(initReactI18next).init({
     de: { translation: de },
     'frr-x-mooring': { translation: frrMooring },
   },
-  // The initial UI language is the one of the label option the page opens
-  // in, the link's `?view=` or the default (App switches it on every
-  // selector change).
-  lng: labelOption(initialView()).uiLanguage,
+  // The default view's language, until a view is mounted: from then on the
+  // UI language follows the selected label option (hooks/useView.ts).
+  lng: labelOption(DEFAULT_VIEW).uiLanguage,
   fallbackLng: 'de',
   returnEmptyString: false,
   interpolation: { escapeValue: false },

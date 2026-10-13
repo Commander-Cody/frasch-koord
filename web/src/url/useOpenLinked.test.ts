@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderHook } from '@testing-library/react';
 
-import { useDeepLinkParam } from './useDeepLinkParam';
+import { useOpenLinked } from './useOpenLinked';
 
 /** `selection.made` stands in for the panel's selection, as it is when the effect runs. */
 function renderDeepLink(ready: boolean) {
   const open = vi.fn();
   const selection = { made: false };
   const hook = renderHook(
-    (props: { ready: boolean }) => useDeepLinkParam('row', props.ready, open, () => selection.made),
+    (props: { ready: boolean }) => useOpenLinked('row', props.ready, open, () => selection.made),
     {
       initialProps: { ready },
     },
@@ -20,7 +20,7 @@ beforeEach(() => {
   window.history.replaceState(null, '', '/?curate&row=schorkewarw-2');
 });
 
-describe('useDeepLinkParam', () => {
+describe('useOpenLinked', () => {
   it('opens the linked value once the data is there', () => {
     const { open, rerender } = renderDeepLink(false);
     expect(open).not.toHaveBeenCalled();

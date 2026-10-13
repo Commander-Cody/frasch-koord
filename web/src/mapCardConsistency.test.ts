@@ -2,13 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createPropertyExpression, latest } from '@maplibre/maplibre-gl-style-spec';
 
 import { DIALECTS, LOCAL_TAG } from './config';
-import {
-  cardEntry,
-  resolveName,
-  type NameEntry,
-  type PlaceSelection,
-  type TileProps,
-} from './names';
+import { cardEntry, resolveName, type NameEntry, type TileProps } from './names';
 import { nameExpression } from './style/localize';
 
 // Issue #16: the place card once showed German while the map label showed
@@ -42,11 +36,14 @@ function mapLabel(tag: string, props: TileProps): string {
 }
 
 /** A click on a map label: the tile properties, and the entry when the place is listed. */
-type ClickedLabel = PlaceSelection & { props: TileProps };
+interface ClickedLabel {
+  props: TileProps;
+  entry?: NameEntry;
+}
 
 /** What the card would show, using the real card-building path. */
-function cardLabel(tag: string, selection: PlaceSelection): string {
-  return resolveName(cardEntry(selection), tag).name;
+function cardLabel(tag: string, { entry, props }: ClickedLabel): string {
+  return resolveName(cardEntry(entry, props), tag).name;
 }
 
 // Realistic tile-property sets a clicked feature could carry, named after

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Smoke check of the production build: serves dist/ with `vite preview`,
 // opens it in headless Chromium and checks that the map loads, search finds a
-// place and its card opens, and that the dev tools stay off. `npm run smoke`
+// place, its card opens and the map marks it, and that the dev tools stay off. `npm run smoke`
 // builds first, then runs this. The build needs the fetched assets (`npm run
 // fetch-assets`, or VITE_TILES_URL for the tiles), see README.md.
 //
@@ -55,6 +55,8 @@ try {
   await page.locator('.search-results button').first().click({ timeout: TIMEOUT });
   await page.waitForSelector('.place-card', { timeout: TIMEOUT });
   if (await page.locator('.search-error').count()) problems.push('search shows its load error');
+  // The marker is the map's own: no unit test has a map to put it on.
+  await page.waitForSelector(`.maplibregl-marker[title="${SEARCH}"]`, { timeout: TIMEOUT });
 
   // The dev tools are not in the build: `?curate` is the public map.
   await page.goto(`${url}?curate${VIEW}`);
@@ -72,4 +74,4 @@ if (problems.length > 0) {
   for (const p of problems) console.error(`smoke: ${p}`);
   process.exit(1);
 }
-console.log('smoke: ok (map loaded, search and card work, no dev tools)');
+console.log('smoke: ok (map loaded, search, card and marker work, no dev tools)');
