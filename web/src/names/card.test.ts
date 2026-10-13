@@ -281,6 +281,20 @@ describe('the card of a clicked label of a listed place', () => {
     });
   });
 
+  // The remark is the row's, on its `local` cell: the same on every object.
+  it("has the entry's variety remark rather than the tile feature's", () => {
+    const entry = listed({ variety: 'Listed' });
+    const props = { 'frasch:local': 'Brouersweerw', 'frasch:variety': 'Tile' };
+
+    expect(cardModel(clicked(props, entry), LOCAL_TAG).note).toBe('Listed');
+  });
+
+  it("has the tile feature's variety remark where the entry has none", () => {
+    const props = { 'frasch:local': 'Brouersweerw', 'frasch:variety': 'Tile' };
+
+    expect(cardModel(clicked(props, listed()), LOCAL_TAG).note).toBe('Tile');
+  });
+
   // The tile's own value is what the clicked label shows; the entry's comes
   // from the OSM extract the list was matched against, which may be older.
   it("has the tile feature's Low Saxon name rather than the entry's", () => {
