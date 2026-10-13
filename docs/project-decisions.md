@@ -94,6 +94,10 @@ Sölring, Öömrang, Halunder and Hålifrasch names. They are now first-class.
    exporter do point-in-polygon against it, **smallest area wins** (Hamburger
    Hallig lies inside Reußenköge). Positions come from id-filtered pre-passes,
    not from a location cache — the dev machine has 5 GB.
+   (Since 2026-10-13, #101: what is known is only that the passes take
+   neither a location cache for the whole extract nor area assembly; what
+   such a cache would cost in memory was never measured, and
+   `build_candidates` builds one. See the entry of that date.)
 5. **Tile attributes** per matched object: `name:<tag>` for every dialect with a
    name, `frasch:kind` (unchanged), `frasch:dialect` (the area's dialect),
    `frasch:local` (the local name), `frasch:variety` (the variety's name).
