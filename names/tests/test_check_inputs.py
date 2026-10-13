@@ -162,6 +162,7 @@ def test_a_variant_repeated_in_one_cell_is_reported(names: CheckNames) -> None:
         {"osm": "node/240044107;way/12"},  # canonical `; ` as in name cells
         {"osm": "local/toftum; node/240044107"},  # a local reference stands alone
         {"wikidata": "21003"},
+        {"wikidata": "Q２１００３"},  # digits, but not the ASCII ones of a QID
     ],
 )
 def test_a_malformed_reference_is_reported(names: CheckNames, cells: dict[str, str]) -> None:

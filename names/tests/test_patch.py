@@ -112,6 +112,14 @@ def test_each_entry_knows_its_line_in_the_patch(tmp_path: Path) -> None:
     assert [line.number for line in patch.read_patch(p)] == [1, 3]
 
 
+def test_an_empty_wikidata_id_is_refused(tmp_path: Path) -> None:
+    # a decision without a Wikidata id leaves the field out
+    p = tmp_path / "curate-patch.jsonl"
+    write_patch(p, entry(2, "Mursem", "Morsum", action="osm", osm="node/1", wikidata=""))
+    (line,) = patch.read_patch(p)
+    assert isinstance(line, patch.RefusedLine)
+
+
 def test_every_action_of_the_patch_schema_has_its_branch() -> None:
     schema = read_schema("curate-patch")
     branches = [branch["if"]["properties"]["action"]["const"] for branch in schema["allOf"]]

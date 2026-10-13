@@ -8,7 +8,6 @@ import {
   entryLookup,
   namesUrl,
   osmRefFromFeatureId,
-  osmUrl,
   parseNames,
   placeOsmRef,
   resolveName,
@@ -396,46 +395,13 @@ describe('osmRefFromFeatureId', () => {
   });
 });
 
-describe('osmUrl', () => {
-  it('links a node', () => {
-    expect(osmUrl('node/240042766')).toBe('https://www.openstreetmap.org/node/240042766');
-  });
-
-  it('links a way', () => {
-    expect(osmUrl('way/1087160352')).toBe('https://www.openstreetmap.org/way/1087160352');
-  });
-
-  it('links a relation', () => {
-    expect(osmUrl('relation/3352541')).toBe('https://www.openstreetmap.org/relation/3352541');
-  });
-
-  it('links the first of several references', () => {
-    expect(osmUrl('way/1347936331; node/1332249790')).toBe(
-      'https://www.openstreetmap.org/way/1347936331',
-    );
-  });
-
-  it('returns null for a synthetic local/ place', () => {
-    expect(osmUrl('local/some-slug')).toBeNull();
-  });
-
-  it('returns null for a bare Wikidata QID', () => {
-    expect(osmUrl('Q123')).toBeNull();
-  });
-
-  it('returns null when there is no reference at all', () => {
-    expect(osmUrl(undefined)).toBeNull();
-  });
-});
-
-// The card links a row's QID only if WIKIDATA_ID takes it, and the curation
-// panel saves one only if the patch schema does: the two must never disagree.
-// The schema also takes the empty string (an empty cell), which wikidataUrl
-// turns away before it tests, so the samples are all non-empty.
+// The card links a row's QID only if WIKIDATA_ID takes it -- the pattern of
+// the names.json contract --, and the curation panel saves one only if the
+// patch schema does: the two contracts must never disagree.
 describe('WIKIDATA_ID', () => {
   const schema = new RegExp(patchSchema.$defs.wikidata.pattern);
 
-  it.each(['Q1', 'Q42', 'Q559369', 'q42', 'Q', 'Q4a', ' Q42', 'P31', 'Q-1'])(
+  it.each(['Q1', 'Q42', 'Q559369', 'q42', 'Q', 'Q4a', ' Q42', 'P31', 'Q-1', ''])(
     'takes %j exactly when the patch schema does',
     (qid) => {
       expect(WIKIDATA_ID.test(qid)).toBe(schema.test(qid));
@@ -479,6 +445,12 @@ describe('placeOsmRef', () => {
     expect(
       placeOsmRef({ entry: entry({ id: 'naibel', osm: 'node/240042766' }), featureId: 33525413 }),
     ).toBe('node/240042766');
+  });
+
+  it('is the first of the several references of a row', () => {
+    expect(
+      placeOsmRef({ entry: entry({ id: 'nordwarw', osm: 'way/1347936331; node/1332249790' }) }),
+    ).toBe('way/1347936331');
   });
 
   it("is the clicked feature's object when the name list does not have the place", () => {

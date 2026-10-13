@@ -1256,6 +1256,42 @@ the same functions.
   `build_dialect_areas.build` on a `Scan` of shapely polygons; the tests of
   `build_dialect_areas.run`, `frasch areas` and `locate.run` stay.
 
+## Decided 2026-10-13: one slug rule, one reader of an `osm` cell in the browser, the Wikidata pattern from the schemas (issue #102)
+
+A row id and a `local/<slug>` reference share one pattern but were folded by
+two rules: `placelist.slug` (ü → u, `schorkewarw`) for the ids, the curation
+view's own `slugify` (ü → ue, `deezbuell-burg`) for the local references. The
+browser read an `osm` cell in four places and built the OSM URL in two, and
+`check_tiles` parsed references as strings.
+
+| was | is |
+|---|---|
+| `slugify`, `SLUG_CHARS` in `web/src/dev/curateWorklist.ts` | `slug_suggestion` of a worklist row, computed by `placelist.slug` in `frasch/worklist.py`; the browser folds no name |
+| the folding described nowhere | `$defs.slug` of `names/curate-patch.schema.json` |
+| `names.osmUrl`, `AreaPanel.osmRefs` and its URL template, the split in `entryLookup`, the reference patterns in `parseRefs` | `web/src/osmRef.ts`: `osmRefs(cell)`, `osmUrl(ref)`, `parseOsmRef(text)`; `parseRefs` keeps the split of typed text, which also separates by newline and comma |
+| `split(";")` / `startswith("local/")` in `check_tiles`, a retyped type table in `test_consistency.py` | `refs.parse`, `refs.local_of`, `refs.format` |
+| `/^Q\d+$/` in `names.ts`; `^(Q[0-9]+)?$` in the patch schema, with an `id &&` beside it | `names.ts` reads the pattern of `search-index.schema.json`, `curatePatch.ts` that of the patch schema, both `^Q[0-9]+$`; a decision without an id leaves the field out |
+| `Q\d+` and `(node\|way\|relation)/\d+` in Python, which also take non-ASCII digits | `[0-9]+` in `placelist.WIKIDATA_ID` and `refs.parse` |
+
+- **`local/` slugs follow the row-id rule** (owner, 2026-10-05). Row ids stay
+  as they are, so share links keep working.
+- **The existing slugs were renamed** (owner, 2026-10-13): the 34 that were
+  the old fold of their German name are now `placelist.slug` of it
+  (`local/gruenhoern` → `local/grunhorn`), in `places.csv` and `curation.csv`
+  together; the hand-chosen `hoern-enge` became `horn-enge`,
+  `westerheide-amrum` stays. A link from before the row ids that names one
+  of the old `local/` references no longer resolves; links by row id do.
+- **The suggestion is the plain slug**, the German primary name first (as
+  the view did before), not made free against the slugs in use: `curate
+  apply` refuses a taken one, as before.
+- **`osmUrl` takes one reference.** "The first of several" is the caller's
+  `osmRefs(cell)[0]` (`placeOsmRef`).
+- **The schema is in the production bundle.** `names.ts` imports
+  `search-index.schema.json` (5 kB) for the one pattern; accepted for having
+  the pattern typed once per contract.
+- **Not touched**: `nameindex._UML`, the transliteration the matcher compares
+  names by. It is not a slug rule.
+
 ## Remaining open questions
 1. Hosting provider for the site (R2 + Pages proposed, nothing set up yet); the tiles are GitHub release assets for now (issue #28).
 2. When to do the planet build (needs the VM; only after the North Frisia build looks right).

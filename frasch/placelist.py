@@ -65,7 +65,7 @@ def columns(reg: Registry) -> list[str]:
 AUTO, OK, SKIP = "auto", "ok", "skip"  # the values of `status`, beside the empty one
 STATUSES = {"", AUTO, OK, SKIP}
 
-WIKIDATA_ID = re.compile(r"Q\d+")
+WIKIDATA_ID = re.compile(r"Q[0-9]+")
 
 # A row's cells, column -> stripped text: what the functions that only read a
 # row take, so that a row built by hand (a test, a patch) will do as well.
@@ -320,7 +320,9 @@ _ASCII_FOLD = str.maketrans(
 def slug(text: str) -> str:
     """`"Schörkewärw"` -> `"schorkewarw"`, `"e Strönj"` -> `"e-stronj"`:
     lowercase ASCII letters and digits, the rest folded or turned into
-    hyphens."""
+    hyphens.  The one folding of a row id and of the slug the worklist
+    suggests for a local reference; `$defs.slug` of
+    names/curate-patch.schema.json spells it out."""
     text = unicodedata.normalize("NFKD", text.translate(_ASCII_FOLD))
     text = text.encode("ascii", "ignore").decode().lower()
     return re.sub(r"[^a-z0-9]+", "-", text).strip("-")

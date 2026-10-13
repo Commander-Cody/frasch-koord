@@ -37,14 +37,14 @@ from typing import Literal, NotRequired, TypedDict
 import mapbox_vector_tile
 from pmtiles.reader import MmapSource, Reader
 
-from frasch import cli, dialects
+from frasch import cli, dialects, refs
 from frasch.dialects import Registry
 from frasch.geo import LonLat
 from frasch.placenames import GERMAN_KEY, REF_KEY, TILE_KEY, SearchEntry, dialect_key
 
 # OpenMapTiles feature ids: the OSM id times ten plus the type
 # (web/src/names.ts's osmRefFromFeatureId)
-OSM_TYPE_BY_DIGIT = {1: "node", 2: "way", 3: "relation"}
+OSM_TYPE_BY_DIGIT = {1: "n", 2: "w", 3: "r"}
 TOLERANCE_DEG = 1e-4  # ~10 m, far above tile precision at z14
 
 # the value of a feature property in a vector tile
@@ -117,15 +117,16 @@ def _is_point_object(feature: Label) -> bool:
     """Whether a point feature is where the object is: a node, or a node the
     injector added (no OSM id).  A way or relation labelled as a point sits
     where Planetiler put its label, which is its business, not ours."""
-    return "lon" in feature and (feature["osm"] is None or feature["osm"].startswith("node/"))
+    object_types = {kind for kind, _ in refs.parse(feature["osm"])}
+    return "lon" in feature and object_types <= {refs.OSM_TYPES["node"]}
 
 
 def _is_entry_object(entry: SearchEntry, feature: Label) -> bool:
     """Whether the feature is the object the entry was placed by."""
-    osm = entry.get("osm", "")
-    if osm.startswith("local/"):
+    placed_by = refs.parse(entry.get("osm"))
+    if refs.local_of(placed_by):
         return True
-    return feature["osm"] == osm.split(";")[0].strip()
+    return feature["osm"] == refs.format(placed_by[:1])
 
 
 # ------------------------------------------------------------- the archive ----
@@ -174,7 +175,7 @@ def osm_ref(feature_id: int | None) -> str | None:
     if not isinstance(feature_id, int) or feature_id <= 0:
         return None
     kind = OSM_TYPE_BY_DIGIT.get(feature_id % 10)
-    return f"{kind}/{feature_id // 10}" if kind else None
+    return refs.format([(kind, feature_id // 10)]) if kind else None
 
 
 def tile_features(data: bytes, zoom: int, x: int, y: int) -> list[Label]:

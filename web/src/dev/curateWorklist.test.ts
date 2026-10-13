@@ -30,6 +30,7 @@ describe('the worklist types', () => {
       names: { object: true },
       name_de: { string: true },
       name_da: { string: true },
+      slug_suggestion: { string: true },
       de: { string: true },
       da: { string: true },
       hint: { string: true },

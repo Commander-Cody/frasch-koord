@@ -68,8 +68,8 @@ const WIKIDATA = new RegExp(patchSchema.$defs.wikidata.pattern);
  * so `apply` — refuses; the panel then saves none.
  */
 export function singleWikidataId(tag: string | undefined): string | undefined {
-  const id = tag?.trim();
-  return id && WIKIDATA.test(id) ? id : undefined;
+  const id = tag?.trim() ?? '';
+  return WIKIDATA.test(id) ? id : undefined;
 }
 
 const SLUG = new RegExp(patchSchema.$defs.slug.pattern);

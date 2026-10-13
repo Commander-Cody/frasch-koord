@@ -74,7 +74,7 @@ Either the feature is not in OSM at all, or OSM spells it differently. `near mis
 | huuchhulm | 94 | settlement | Huuchhulm | Hyholm | no name match in OSM |  |
 | kulsmark | 95 | settlement | Külsmårk | Karlsmark | 1 name match(es), none compatible with kind=settlement | `w/95739643:Karlsmark:unclassified:9` |
 | e-runel | 96 | settlement | e Rünel | Ründel | 1 name match(es), none compatible with kind=settlement | `w/222712401:Ründel:primary:10` |
-| wiilbarj | 97 | settlement | Wiilbärj | Wielberg | way/95746028 is taken by line 650 |  |
+| wiilbarj | 97 | settlement | Wiilbärj | Wielberg | way/95746028 is taken by row wiilbarj-2 |  |
 | peerebel | 104 | settlement | Peerebel | Perebüll | no name match in OSM |  |
 | orerslaach | 112 | settlement | Orerslääch | Adersleben | no name match in OSM |  |
 | dang-hii | 116 | settlement | Däng Hii | Engerheide | no name match in OSM |  |
@@ -99,7 +99,7 @@ Either the feature is not in OSM at all, or OSM spells it differently. `near mis
 | abuurt | 295 | settlement | Abuurt | Abort | no name match in OSM |  |
 | gurt-muasem | 301 | settlement | Gurt Muasem | Groß-Morsum | no name match in OSM |  |
 | litj-muasem | 302 | settlement | Litj Muasem | Klein-Morsum | no name match in OSM |  |
-| klapholtdaal | 310 | settlement | Klapholtdääl | Klappholttal | way/28006828 is taken by line 700 |  |
+| klapholtdaal | 310 | settlement | Klapholtdääl | Klappholttal | way/28006828 is taken by row klapholtdaal-2 |  |
 | wriakhorn | 340 | settlement | Wriakhörn | Wriakhörn | no name match in OSM |  |
 | balem | 344 | settlement | Bålem | Ballum | no name match in OSM |  |
 | lon-n | 363 | settlement | Lon'n | London | no name match in OSM |  |
@@ -107,7 +107,7 @@ Either the feature is not in OSM at all, or OSM spells it differently. `near mis
 | breamen | 365 | settlement | Breämen | Bremen | no name match in OSM |  |
 | breamerhoawen | 366 | settlement | Breämerhoawen | Bremerhaven | no name match in OSM |  |
 | wullemshoawen | 367 | settlement | Wüllemshoawen | Wilhelmshaven | no name match in OSM |  |
-| runghoolt | 368 | settlement | Runghoolt | Rungholt | 2 name match(es), none compatible with kind=settlement | `n/11010578491:Rungholt:-:27;w/174651877:Rungholt:farmyard:44` |
+| runghoolt | 368 | settlement | Runghoolt | Rungholt | 2 name match(es), none compatible with kind=settlement | `n/11010578491:Rungholt:archaeological_site:27;w/174651877:Rungholt:farmyard:44` |
 | deesblinge-koornkuuch | 370 | koog | Deesblinge Kornkuuch | Deezbüller Kornkoog | no name match in OSM |  |
 | braistinge-kuuch | 371 | koog | Bräistinge Kuuch | Bredstedter Koog | 2 name match(es), none compatible with kind=koog | `w/27447670:Bredstedter Koog:secondary:10;w/365401131:Bredstedter Koog:secondary:11` |
 | gutskuuch | 372 | koog | Gutskuuch | Gotteskoog | no name match in OSM |  |
@@ -258,11 +258,11 @@ Either the feature is not in OSM at all, or OSM spells it differently. `near mis
 | gutskuuchsiie | 860 | water | Gutskuuchsiie | Gotteskoogsee | no name match in OSM |  |
 | haaselun-ou | 862 | water | Hååselün Ou | Haselund Au | no name match in OSM |  |
 | heesbelsiie | 863 | water | Heesbelsiie | Hesbüll Feld | no name match in OSM |  |
-| e-smeerle | 864 | water | e Smeerle | Schmale | way/145819821 is taken by line 637; way/836479122 is taken by line 637; relation/18140519 is taken by line 637 |  |
+| e-smeerle | 864 | water | e Smeerle | Schmale | way/145819821 is taken by row e-smeele; way/836479122 is taken by row e-smeele; relation/18140519 is taken by row e-smeele |  |
 | uaa | 865 | water | Uáá | Oste | no name match in OSM |  |
 | waiser | 866 | water | Waiser | Weser | no name match in OSM |  |
 | schiirlbosch | 887 | road | Schiirlbosch | Eichkratt Schirlbusch | 1 name match(es), none compatible with kind=road | `w/118020694:Eichkratt Schirlbusch:protected_area:15` |
 | bru | 888 | helgoland | Bru | Helgoländer Felswatt | no name match in OSM |  |
 | ruusik | 916 | road | Ruusik | Rodesiek | no name match in OSM |  |
 
-<!-- built_from: {"places.csv":"673b33e1bfb887e13cec8e67cef882064dd9b83b","dialects.csv":"ca69b19fd53fe4cb3186c52b5d509379e80e3e2a","extracts":[{"file":"schleswig-holstein-latest.osm.pbf","replication_timestamp":"2026-09-22T20:22:59Z"},{"file":"denmark-latest.osm.pbf","replication_timestamp":"2026-09-26T20:22:51Z"}]} -->
+<!-- built_from: {"places.csv":"12fbbef6c43c9c4f259afb8fc7fca726a0f0543f","dialects.csv":"ca69b19fd53fe4cb3186c52b5d509379e80e3e2a","extracts":[{"file":"schleswig-holstein-latest.osm.pbf","replication_timestamp":"2026-09-22T20:22:59Z"},{"file":"denmark-latest.osm.pbf","replication_timestamp":"2026-09-26T20:22:51Z"}]} -->

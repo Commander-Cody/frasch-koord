@@ -70,6 +70,7 @@
         "names",
         "name_de",
         "name_da",
+        "slug_suggestion",
         "de",
         "da",
         "hint",
@@ -106,6 +107,10 @@
         },
         "name_da": {
           "description": "The primary Danish name, read from `da` like `name_de`.",
+          "type": "string"
+        },
+        "slug_suggestion": {
+          "description": "A slug for a local reference `local/<slug>`, should the row turn out to be a place OSM does not have: the German primary name, else `name`, folded like a row id (`$defs.slug` of curate-patch.schema.json says how). A suggestion only: it may be taken already, and it is empty for a name the folding leaves nothing of.",
           "type": "string"
         },
         "de": { "description": "The German cell, raw: every variant with its remarks.", "type": "string" },

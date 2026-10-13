@@ -146,13 +146,30 @@ def test_the_worklist_offers_the_results_of_its_schema(world: Path) -> None:
     assert exported["results"] == read_schema("curate-worklist")["$defs"]["result"]["enum"]
 
 
+def exported_row(world: Path, place: dict[str, str]) -> dict[str, object]:
+    """The worklist row of `place`, the one row of a list the matcher found
+    nothing for."""
+    (world / "places.csv").write_text(places_text([place]), encoding="utf-8")
+    export(world, left(place["id"], "not_found", "no candidate"))
+    (row,) = json.loads((world / "work" / "curate.json").read_text(encoding="utf-8"))["rows"]
+    return dict(row)
+
+
 def test_a_row_is_exported_with_its_primary_german_and_danish_names(world: Path) -> None:
     ripen = {"id": "ripen", "kind": "settlement", "mooring": "Ripen"}
     cells = {"de": "Ripen; Riepen (alt)", "da": "Ribe?"}
-    (world / "places.csv").write_text(places_text([ripen | cells]), encoding="utf-8")
-    export(world, left("ripen", "not_found", "no candidate"))
-    (row,) = json.loads((world / "work" / "curate.json").read_text(encoding="utf-8"))["rows"]
+    row = exported_row(world, ripen | cells)
     assert (row["name_de"], row["name_da"]) == ("Ripen", "Ribe")
+
+
+def test_a_row_suggests_the_slug_of_its_german_name_folded_like_a_row_id(world: Path) -> None:
+    burg = {"id": "e-borj", "kind": "settlement", "mooring": "e Borj", "de": "Deezbüll Burg"}
+    assert exported_row(world, burg)["slug_suggestion"] == "deezbull-burg"
+
+
+def test_a_row_without_a_german_name_suggests_the_slug_of_its_frisian_one(world: Path) -> None:
+    bridge = {"id": "bro", "kind": "road", "mooring": "Hansbäistååkbro"}
+    assert exported_row(world, bridge)["slug_suggestion"] == "hansbaistaakbro"
 
 
 def test_export_prints_nothing(world: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -211,6 +228,7 @@ def test_export_writes_the_worklist(world: Path) -> None:
         "names": {"mooring": "Kaamp"},
         "name_de": "Kampen",
         "name_da": "",
+        "slug_suggestion": "kampen",
         "de": "Kampen",
         "da": "",
         "hint": "Sylt",

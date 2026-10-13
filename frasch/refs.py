@@ -42,7 +42,7 @@ def parse(cell: str | None, where: str = "") -> list[Ref]:
         ref = ref.strip()
         if not ref:
             continue
-        m = re.fullmatch(rf"(node|way|relation)/(\d+)|(local)/({SLUG.pattern})", ref)
+        m = re.fullmatch(rf"(node|way|relation)/([0-9]+)|(local)/({SLUG.pattern})", ref)
         if not m:
             raise Invalid(
                 where,
