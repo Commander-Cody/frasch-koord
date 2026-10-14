@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { LngLat } from 'maplibre-gl';
 
 import { DIALECTS, LOCAL_TAG } from '../config';
-import type { PlaceSelection } from '../placeSelection';
+import type { PlaceSelection } from '../selection/placeSelection';
 import { cardModel } from './card';
 import type { NameEntry } from './entry';
 import type { NameSource } from './resolveName';

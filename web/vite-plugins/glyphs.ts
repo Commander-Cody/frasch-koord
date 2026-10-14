@@ -7,7 +7,7 @@
  * exactly the listed ranges of the listed stacks. And a label character
  * outside them would be a glyph request that fails (issue #29), so every
  * string a symbol layer of the site's style can show -- in any view, read
- * off the style that src/style/localize.ts builds -- is taken from the
+ * off the style that src/map/style/localize.ts builds -- is taken from the
  * pinned tile archive and checked. With VITE_TILES_URL the build needs no
  * archive; then the fetched one is checked if there is one, else the build
  * warns that it checked no labels.
@@ -156,7 +156,7 @@ function installProblem({ stacks, ranges }: FontsLock, installed: string[]): str
   return `public/fonts/ does not hold the glyphs fonts.lock lists (${what.join('; ')}): run \`npm run fetch-assets\``;
 }
 
-/** What the plugin needs of src/config.ts and src/style/localize.ts. */
+/** What the plugin needs of src/config.ts and src/map/style/localize.ts. */
 interface SiteModules {
   config: { DIALECTS: { tag: string }[]; LOCAL_TAG: string };
   localize: {
@@ -176,8 +176,8 @@ async function siteModule<T>(path: string): Promise<T> {
 /** Every field a symbol layer of the site's style shows, in any of its views. */
 async function siteFields(): Promise<Field[]> {
   const config = await siteModule<SiteModules['config']>('src/config.ts');
-  const localize = await siteModule<SiteModules['localize']>('src/style/localize.ts');
-  const base = JSON.parse(await readFile(join(WEB, 'src/style/frasch-bright.json'), 'utf8'));
+  const localize = await siteModule<SiteModules['localize']>('src/map/style/localize.ts');
+  const base = JSON.parse(await readFile(join(WEB, 'src/map/style/frasch-bright.json'), 'utf8'));
   const views = [config.LOCAL_TAG, ...config.DIALECTS.map((d) => d.tag)];
   const layers = views.flatMap((view) => localize.buildStyle(base, '', view).layers);
   return renderedFields({ ...base, layers });

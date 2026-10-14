@@ -7,8 +7,8 @@ import { dialect, dialectLabelKey } from '../config';
 import { cardModel } from '../names/card';
 import { placeOsmRef, wikidataUrl } from '../names/links';
 import type { Language, NameSource } from '../names/resolveName';
-import { osmUrl } from '../osmRef';
-import type { CloseMeans, PlaceSelection } from '../placeSelection';
+import { osmUrl } from '../names/osmRef';
+import type { CloseMeans, PlaceSelection } from '../selection/placeSelection';
 import CloseButton from './CloseButton';
 import './PlaceCard.css';
 

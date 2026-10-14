@@ -33,7 +33,7 @@ describe('TILES_URL', () => {
     vi.stubEnv('BASE_URL', '/frasch-koord/');
     vi.stubEnv('VITE_TILES_URL', '');
     // Read at module load, so load the module afresh under the stubbed env.
-    const { TILES_URL } = await import('../config');
+    const { TILES_URL } = await import('../../config');
     expect(TILES_URL).toBe(`pmtiles://${origin}/frasch-koord/tiles/schleswig-holstein.pmtiles`);
   });
 });

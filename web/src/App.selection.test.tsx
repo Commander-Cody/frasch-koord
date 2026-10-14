@@ -5,7 +5,7 @@ import type { LngLat, MapGeoJSONFeature } from 'maplibre-gl';
 
 import i18n from './i18n';
 import { LOCAL_TAG } from './config';
-import type { MapViewProps } from './components/Map';
+import type { MapViewProps } from './map/MapView';
 import type { NameEntry } from './names/entry';
 import { holdNames, stubLayout } from './testing/appHarness';
 import App from './App';
@@ -19,7 +19,7 @@ const map = vi.hoisted(() => ({
   flyTo: vi.fn(),
   reveal: vi.fn(),
 }));
-vi.mock('./components/Map', () => ({
+vi.mock('./map/MapView', () => ({
   default: function MapStub({ onSelectFeature, marker, ref }: MapViewProps) {
     map.select = onSelectFeature;
     map.marker = marker;

@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { LOCAL_TAG } from './config';
+import { LOCAL_TAG } from '../config';
 import { labelChain } from './labelChain';
 
 // Expected chains are hand-written from the registry order in
-// src/generated/dialects.json (mooring, wieding, karrhard, nordgoes, midgoes,
+// src/dialects/generated/dialects.json (mooring, wieding, karrhard, nordgoes, midgoes,
 // suedgoes, fering, oomrang, solring, hallig, halunder), not derived by
 // calling labelChain itself, so a change to the chain's logic would actually
 // be caught here.

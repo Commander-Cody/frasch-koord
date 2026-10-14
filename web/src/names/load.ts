@@ -4,8 +4,8 @@
 import { useEffect, useState } from 'react';
 
 import { siteUrl } from '../config';
-import { osmRefs } from '../osmRef';
-import type { BuiltFrom } from '../provenance';
+import { osmRefs } from './osmRef';
+import type { BuiltFrom } from '../map/provenance';
 import type { NameEntry } from './entry';
 import { createSearch, type Search } from './search';
 

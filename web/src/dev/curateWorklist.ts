@@ -4,7 +4,7 @@
 // contract itself is names/curate-worklist.schema.json; curateWorklist.test.ts
 // pins the types below to it.
 
-import { parseOsmRef } from '../osmRef';
+import { parseOsmRef } from '../names/osmRef';
 import type { PatchEntry } from './curatePatch';
 
 /** One candidate of a worklist row. */

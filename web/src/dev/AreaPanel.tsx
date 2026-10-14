@@ -20,7 +20,7 @@ import type { RefObject } from 'react';
 import type { GeoJSONSource, Map as MapLibreMap, MapLayerMouseEvent } from 'maplibre-gl';
 import type { ExpressionSpecification } from '@maplibre/maplibre-gl-style-spec';
 
-import type { MapViewHandle } from '../components/Map';
+import type { MapViewHandle } from '../map/MapView';
 import {
   BEFORE_ID,
   COLOR_UNASSIGNED,
@@ -36,7 +36,7 @@ import {
   layerSpecs,
 } from './areaLayers';
 import { DIALECTS, dialect } from '../config';
-import { osmRefs, osmUrl } from '../osmRef';
+import { osmRefs, osmUrl } from '../names/osmRef';
 import { replaceQueryParams } from '../url/queryParams';
 import DevPanel from './DevPanel';
 import { FIT_PADDING } from './panelLayout';

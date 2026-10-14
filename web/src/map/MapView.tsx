@@ -20,13 +20,13 @@ import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&ur
 import { Protocol } from 'pmtiles';
 import { useTranslation } from 'react-i18next';
 
-import fraschBright from '../style/frasch-bright.json';
-import { buildStyle, placeLayerIds } from '../style/localize';
+import fraschBright from './style/frasch-bright.json';
+import { buildStyle, placeLayerIds } from './style/localize';
 import { TILES_URL } from '../config';
 import { TOUCH_MEDIA } from '../layout';
-import { oncePerFrame } from '../oncePerFrame';
+import { oncePerFrame } from './oncePerFrame';
 import { keepingHash } from '../url/queryParams';
-import CloseButton from './CloseButton';
+import CloseButton from '../ui/CloseButton';
 
 // Register the pmtiles:// protocol with MapLibre exactly once, no matter
 // how many times this component mounts.

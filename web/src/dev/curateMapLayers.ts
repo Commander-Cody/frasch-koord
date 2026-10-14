@@ -8,7 +8,7 @@ import type { RefObject } from 'react';
 import { LngLatBounds, Marker } from 'maplibre-gl';
 import type { MapMouseEvent, Map as MapLibreMap } from 'maplibre-gl';
 
-import type { MapViewHandle } from '../components/Map';
+import type { MapViewHandle } from '../map/MapView';
 import type { Bbox, CurateCandidate, CurateRow } from './curateWorklist';
 import type { LookupResult } from './osmLookup';
 import { FIT_PADDING } from './panelLayout';

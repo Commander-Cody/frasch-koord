@@ -2,7 +2,7 @@
 // the map (labelChain.ts), walked over a place's names instead of the tile
 // properties.
 
-import { labelChain } from '../labelChain';
+import { labelChain } from '../dialects/labelChain';
 import type { CardNames } from './entry';
 import { dialectOfTileKey, fieldOfTileKey, type TileField } from './tile';
 

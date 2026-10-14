@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import indexSchema from '../../names/search-index.schema.json';
+import indexSchema from '../../../names/search-index.schema.json';
 import { provenanceWarning, parseBuiltFrom, type BuiltFrom, type ExtractStamp } from './provenance';
-import { pinnedFields, schemaFields, type Pin } from './testing/schemaPin';
+import { pinnedFields, schemaFields, type Pin } from '../testing/schemaPin';
 
 const INDEX: BuiltFrom = {
   'places.csv': 'aaa',

@@ -5,7 +5,7 @@ import type { LngLat } from 'maplibre-gl';
 import i18n from '../i18n';
 import { DIALECTS, LOCAL_TAG } from '../config';
 import type { NameEntry } from '../names/entry';
-import type { PlaceSelection } from '../placeSelection';
+import type { PlaceSelection } from '../selection/placeSelection';
 import PlaceCard from './PlaceCard';
 
 // Which names a card shows is names/card.test.ts's; this is what the card

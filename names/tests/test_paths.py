@@ -29,7 +29,7 @@ def test_a_workspace_lays_its_files_out_like_the_repository(tmp_path: Path) -> N
         "objects": "names/osm_objects.json",
         "report": "names/REPORT.md",
         "index": "web/public/data/names.json",
-        "registry_json": "web/src/generated/dialects.json",
+        "registry_json": "web/src/dialects/generated/dialects.json",
         "candidates": "names/work/candidates.jsonl",
         "matches": "names/work/matches.jsonl",
         "wikidata_cache": "names/work/wikidata-countries.json",

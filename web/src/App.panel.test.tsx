@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { LngLat, MapGeoJSONFeature } from 'maplibre-gl';
 
 import i18n from './i18n';
-import type { MapViewProps } from './components/Map';
+import type { MapViewProps } from './map/MapView';
 import type { NameEntry } from './names/entry';
 import { holdNames, stubLayout } from './testing/appHarness';
 import App from './App';
@@ -12,7 +12,7 @@ import App from './App';
 // with the map stubbed (MapLibre needs WebGL, which jsdom has not). The stub
 // keeps the click handler App gives it, so a test can click a map label.
 const map = vi.hoisted(() => ({ select: undefined as MapViewProps['onSelectFeature'] }));
-vi.mock('./components/Map', () => ({
+vi.mock('./map/MapView', () => ({
   default: function MapStub({ onSelectFeature }: MapViewProps) {
     map.select = onSelectFeature;
     return <div className="map-container" />;

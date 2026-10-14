@@ -1,7 +1,7 @@
-import { DIALECTS, LOCAL_TAG } from './config';
+import { DIALECTS, LOCAL_TAG } from '../config';
 
 // Which name a place is labelled with, defined once for everything that shows
-// one: the map (style/localize.ts turns the chain into a `coalesce` over the
+// one: the map (map/style/localize.ts turns the chain into a `coalesce` over the
 // tile properties) and the place card and search results (names/resolveName.ts
 // walks the same chain over a place's names). Two chains kept in sync by hand drifted
 // apart before — the card said Flensburg where the map said Flensborg — so

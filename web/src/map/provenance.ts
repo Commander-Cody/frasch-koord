@@ -9,7 +9,7 @@
 import { useEffect } from 'react';
 import { PMTiles } from 'pmtiles';
 
-import { TILES_URL } from './config';
+import { TILES_URL } from '../config';
 
 export interface ExtractStamp {
   file: string;

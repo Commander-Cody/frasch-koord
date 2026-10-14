@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 
-import type { MapViewHandle } from '../components/Map';
+import type { MapViewHandle } from '../map/MapView';
 import type { NamesData } from '../names/load';
-import { mapMove, selectionOf } from '../placeSelection';
-import type { CloseMeans, PlacePick, PlaceSelection } from '../placeSelection';
+import { mapMove, selectionOf } from './placeSelection';
+import type { CloseMeans, PlacePick, PlaceSelection } from './placeSelection';
 import { linkedPlace, writePlace } from '../url/linkState';
 import { sheetInset } from './useSheetHeight';
 

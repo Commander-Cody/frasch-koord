@@ -206,7 +206,7 @@ then reads TileJSON straight out of the archive itself.
 ### Dialect registry and the selector
 
 `names/dialects.csv` is the single list of North Frisian dialects for the
-whole project; `frasch build dialects` (`uv run just rebuild dialects`) writes it to `src/generated/dialects.json`
+whole project; `frasch build dialects` (`uv run just rebuild dialects`) writes it to `src/dialects/generated/dialects.json`
 (`{tag, column, label, status, view}` per dialect, registry order) which
 `src/config.ts` imports — **generated, do not edit by hand.** `config.ts`
 derives the one dropdown from it:

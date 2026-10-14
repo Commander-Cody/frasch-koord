@@ -6,12 +6,12 @@ import { DIALECTS, LOCAL_TAG } from './config';
 import { cardModel } from './names/card';
 import type { NameEntry } from './names/entry';
 import type { TileProps } from './names/tile';
-import { nameExpression } from './style/localize';
+import { nameExpression } from './map/style/localize';
 
 // Issue #16: the place card once showed German while the map label showed
 // Low Saxon for the same place, because the card's label chain and the map's
 // text-field expression had drifted apart. Both are supposed to be built from
-// the single chain in labelChain.ts (map: style/localize.ts's nameExpression,
+// the single chain in labelChain.ts (map: map/style/localize.ts's nameExpression,
 // card: names/card.ts's cardModel), but nothing stops a future edit to
 // one side from forgetting the other. This test evaluates the REAL map
 // expression (nameExpression, the same export buildStyle puts into

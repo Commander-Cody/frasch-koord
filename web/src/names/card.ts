@@ -1,8 +1,8 @@
 // What a place's card shows: which names, in which order, and what each one
-// is. Pure; components/PlaceCard.tsx gives every source its label and renders.
+// is. Pure; ui/PlaceCard.tsx gives every source its label and renders.
 
 import { DIALECTS } from '../config';
-import type { PlaceSelection } from '../placeSelection';
+import type { PlaceSelection } from '../selection/placeSelection';
 import { cardNames } from './cardNames';
 import type { CardNames } from './entry';
 import { resolveName, type Language, type NameSource, type ShownName } from './resolveName';

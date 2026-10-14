@@ -1,7 +1,7 @@
 // The names a card has to show: those of the place's entry of the name list
 // and those of the tile feature that was clicked, as one.
 
-import type { PlaceSelection } from '../placeSelection';
+import type { PlaceSelection } from '../selection/placeSelection';
 import type { CardNames, NameEntry } from './entry';
 import { namesOfTile } from './tile';
 

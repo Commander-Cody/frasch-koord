@@ -6,7 +6,7 @@ than one of them.  Everything else derives from this list: the name columns of
 names/places.csv (frasch.placelist), the `name:<tag>` tags the injector
 writes, Planetiler's `--languages` list (`frasch dialects --tags` in
 tiles/build.sh), the search index and the frontend's selector
-(web/src/generated/dialects.json).  Adding a dialect is therefore one line in
+(web/src/dialects/generated/dialects.json).  Adding a dialect is therefore one line in
 the registry plus a column in places.csv -- and, the one thing in the code, its
 colour in the dialect-area review view (`DIALECT_COLORS` in
 web/src/dev/areaLayers.ts, which a test holds to the registry's tags).
@@ -31,7 +31,7 @@ parameter.
                                (tiles/build.sh feeds it to Planetiler)
 
 and `frasch build dialects` writes the registry the frontend compiles in
-(`export_json`: web/src/generated/dialects.json, every column but `note`).
+(`export_json`: web/src/dialects/generated/dialects.json, every column but `note`).
 """
 
 from __future__ import annotations

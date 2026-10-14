@@ -25,7 +25,7 @@ void i18n.use(initReactI18next).init({
     'frr-x-mooring': { translation: frrMooring },
   },
   // The default view's language, until a view is mounted: from then on the
-  // UI language follows the selected label option (hooks/useView.ts).
+  // UI language follows the selected label option (dialects/useView.ts).
   lng: labelOption(DEFAULT_VIEW).uiLanguage,
   fallbackLng: 'de',
   returnEmptyString: false,

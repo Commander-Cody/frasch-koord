@@ -1,8 +1,8 @@
 import type { StyleSpecification, LayerSpecification } from 'maplibre-gl';
 import type { ExpressionSpecification } from '@maplibre/maplibre-gl-style-spec';
 
-import { siteUrl } from '../config';
-import { labelChain } from '../labelChain';
+import { siteUrl } from '../../config';
+import { labelChain } from '../../dialects/labelChain';
 
 // `../style/frasch-bright.json` started as a fork of upstream OSM Bright
 // (openmaptiles/osm-bright-gl-style, openmaptiles:version "3.x", fetched

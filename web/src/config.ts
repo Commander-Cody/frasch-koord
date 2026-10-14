@@ -1,7 +1,7 @@
 // Central place for tile hosting and label/dialect configuration.
 // The tiles URL is the ONLY place the frontend depends on how/where tiles are hosted.
 
-import registry from './generated/dialects.json';
+import registry from './dialects/generated/dialects.json';
 import { resolvedOnPage } from './url/queryParams';
 
 /**

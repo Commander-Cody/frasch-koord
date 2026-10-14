@@ -19,7 +19,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 
-import type { MapViewHandle } from '../components/Map';
+import type { MapViewHandle } from '../map/MapView';
 import { replaceQueryParams } from '../url/queryParams';
 import CurateDetail from './CurateDetail';
 import CurateFilters from './CurateFilters';

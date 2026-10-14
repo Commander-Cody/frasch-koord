@@ -1,13 +1,13 @@
 // The selected place: how it was picked, what the card shows for it, and what
-// the map does about it. hooks/usePlaceSelection.ts holds the state.
+// the map does about it. usePlaceSelection.ts holds the state.
 
 import type { LngLat, LngLatLike, MapGeoJSONFeature } from 'maplibre-gl';
 
-import type { MapMarker } from './components/Map';
-import type { NameEntry } from './names/entry';
-import type { EntryLookup } from './names/load';
-import { displayName } from './names/resolveName';
-import type { TileProps } from './names/tile';
+import type { MapMarker } from '../map/MapView';
+import type { NameEntry } from '../names/entry';
+import type { EntryLookup } from '../names/load';
+import { displayName } from '../names/resolveName';
+import type { TileProps } from '../names/tile';
 
 /** A click on a place label of the map. */
 export interface MapPick {
