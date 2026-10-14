@@ -45,7 +45,7 @@ export default function AreaPanel({ map }: { map: MapLibreMap }) {
   const [shown, setShown] = useState<string | null>(null);
   const visible = useMemo(() => filterAreas(features, { text, shown }), [features, text, shown]);
   const sections = useMemo(() => groupByDialect(visible, DIALECT_ORDER), [visible]);
-  const selection = useAreaSelection(map, features, sections);
+  const selection = useAreaSelection(map, resource.data, sections);
   useAreaMap(map, {
     collection: resource.data,
     selectedOsm: selection.area?.properties.osm ?? null,

@@ -7,19 +7,27 @@ import type { Map as MapLibreMap } from 'maplibre-gl';
 
 import { fitTo } from '../shell/mapMoves';
 import { useSelection, type Selection } from '../shell/useSelection';
-import { areaKey, bboxOf, findByRef, type AreaFeature, type DialectGroup } from './areas';
+import {
+  areaKey,
+  bboxOf,
+  findByRef,
+  type AreaCollection,
+  type AreaFeature,
+  type DialectGroup,
+} from './areas';
 
 export interface AreaSelection extends Selection {
   /** The selected municipality; undefined when none is, or a reload took it away. */
   area: AreaFeature | undefined;
 }
 
-/** `features`: every municipality; `sections`: the list as shown. */
+/** `collection`: every municipality, null until loaded; `sections`: the list as shown. */
 export function useAreaSelection(
   map: MapLibreMap,
-  features: readonly AreaFeature[],
+  collection: AreaCollection | null,
   sections: readonly DialectGroup[],
 ): AreaSelection {
+  const features = useMemo(() => collection?.features ?? [], [collection]);
   const byKey = useMemo(
     () => new Map(features.map((feature) => [areaKey(feature.properties), feature])),
     [features],
@@ -27,7 +35,7 @@ export function useAreaSelection(
   const selection = useSelection({
     param: 'area',
     keys: useMemo(() => listedKeys(sections), [sections]),
-    ready: features.length > 0,
+    ready: collection !== null,
     resolve: useCallback(
       (ref: string) => {
         const hit = findByRef(features, ref);

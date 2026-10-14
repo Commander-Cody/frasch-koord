@@ -62,4 +62,16 @@ describe('useSelection', () => {
     rerender(options());
     expect(result.current.selected).toBeNull();
   });
+
+  it('follows its item to the key a reload gave it', () => {
+    const { result, rerender } = renderHook((props: SelectionOptions) => useSelection(props), {
+      initialProps: options({ param: 'area', keys: ['relation/1'] }),
+    });
+    act(() => result.current.select('relation/1'));
+    // The row's osm cell became `relation/9; relation/1`.
+    const resolve = (value: string) =>
+      ['relation/1', 'relation/9'].includes(value) ? 'relation/9' : undefined;
+    rerender(options({ param: 'area', keys: ['relation/9'], resolve }));
+    expect(new URLSearchParams(window.location.search).get('area')).toBe('relation/9');
+  });
 });

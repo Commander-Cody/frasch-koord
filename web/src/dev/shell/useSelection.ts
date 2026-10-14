@@ -10,9 +10,9 @@ export interface SelectionOptions {
   param: string;
   /** The keys in the order the list shows them, for ↓/↑. */
   keys: readonly string[];
-  /** Whether the data a link is looked up in is there. */
+  /** Whether the data is loaded: a link is looked up in it, the selection checked against it. */
   ready: boolean;
-  /** The key a linked value names, if any; a key names itself as long as its item is there. */
+  /** The key a linked value names, if any; a key names its item's current key while it is there. */
   resolve: (value: string) => string | undefined;
   /** Brings the selected item into view on the map. */
   show?: (key: string) => void;
@@ -35,7 +35,7 @@ function keepInView(node: HTMLElement | null): void {
 
 /**
  * Which item of a dev panel's list is selected, by a key that stays put when
- * the data is reloaded, and none once a reload took its item away. Kept in
+ * the data is reloaded (see useFollowReload). Kept in
  * `?<param>=`, opened from there once `ready`, and walked with the keys of
  * useListNavigation.
  */
@@ -64,7 +64,7 @@ export function useSelection({ param, keys, ready, resolve, show }: SelectionOpt
     [resolve, select],
   );
   useOpenLinked(param, ready, openLinked);
-  useForgetGone({ param, selected, ready, resolve, setSelected });
+  useFollowReload({ param, selected, ready, resolve, setSelected });
   useListNavigation(keys, selected, select);
   const itemRef = useCallback(
     (key: string) => (key === selected ? keepInView : undefined),
@@ -73,8 +73,12 @@ export function useSelection({ param, keys, ready, resolve, show }: SelectionOpt
   return { selected, select, selectInPlace, itemRef };
 }
 
-/** Selects nothing once the data no longer has the selected item, in the URL too. */
-function useForgetGone({
+/**
+ * Keeps the selection on its item when the data is reloaded: the key the
+ * data now gives it (a rebuild can change it), or none once the item is gone
+ * — in the URL too, so a later reload cannot bring it back unasked.
+ */
+function useFollowReload({
   param,
   selected,
   ready,
@@ -82,11 +86,13 @@ function useForgetGone({
   setSelected,
 }: Pick<SelectionOptions, 'param' | 'ready' | 'resolve'> & {
   selected: string | null;
-  setSelected: (key: null) => void;
+  setSelected: (key: string | null) => void;
 }): void {
   useEffect(() => {
-    if (!ready || selected === null || resolve(selected) !== undefined) return;
-    setSelected(null);
-    replaceQueryParams({ [param]: undefined });
+    if (!ready || selected === null) return;
+    const key = resolve(selected) ?? null;
+    if (key === selected) return;
+    setSelected(key);
+    replaceQueryParams({ [param]: key ?? undefined });
   }, [param, selected, ready, resolve, setSelected]);
 }

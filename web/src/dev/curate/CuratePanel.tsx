@@ -56,7 +56,7 @@ export default function CuratePanel({ map }: { map: MapLibreMap }) {
   const selection = useSelection({
     param: 'row',
     keys: useMemo(() => visible.map((row) => row.id), [visible]),
-    ready: rows.length > 0,
+    ready: worklist !== undefined,
     resolve: useCallback((id: string) => rows.find((row) => row.id === id)?.id, [rows]),
   });
   const selected = rows.find((row) => row.id === selection.selected) ?? null;

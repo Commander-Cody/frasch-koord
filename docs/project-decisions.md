@@ -1535,9 +1535,11 @@ named.
   panel mounts on a loaded map, so an overlay is added once, without waiting
   for `load`, and no dev module asks the map whether it exists yet.
 - **Reload keeps what is on screen** until the new data is there (owner's
-  decision); the selection stays by its key, and `useSelection` empties it
-  (and the link) if the reload took its item away, so it does not come back
-  with a later one. The curation view's own saves go into the loaded data with
+  decision); the selection stays on its item: `useSelection` asks the
+  reloaded data for the item's key (a rebuild that changed a row's first
+  reference moves it along) and empties the selection and the link if the
+  item is gone, so a later reload cannot bring it back unasked. Both panels
+  count as `ready` once loaded, an empty worklist included. The curation view's own saves go into the loaded data with
   `update`, so a reload replaces them with the patch as stored.
 - **No style-rebuild handling** (owner's decision): the dev views never
   change the view, so the `styledata` re-add, its try/catch and the

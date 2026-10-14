@@ -49,4 +49,13 @@ describe('AreaPanel', () => {
     await screen.findByRole('button', { name: /Ackerum/ });
     expect(screen.getByRole('heading', { level: 2 }).textContent).toBe('Risum');
   });
+
+  it('selects nothing once a rebuild left no municipality', async () => {
+    render(<AreaPanel map={new FakeMap().map} />);
+    fireEvent.click(await screen.findByRole('button', { name: /Risum/ }));
+    built = parts();
+    fireEvent.click(screen.getByRole('button', { name: 'Reload' }));
+    await screen.findByText('nothing matches that filter');
+    expect(new URLSearchParams(window.location.search).get('area')).toBeNull();
+  });
 });
