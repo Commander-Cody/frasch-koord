@@ -6,7 +6,7 @@
 //  - The bundle points MapLibre at a worker file that dist/ really contains.
 //    MapLibre's own default (`maplibre-gl-worker.mjs` next to its module) is
 //    never emitted, and a request for it gets index.html, so without the
-//    explicit setWorkerUrl in src/map/MapView.tsx no tile is ever parsed.
+//    explicit setWorkerUrl in src/map/createMap.ts no tile is ever parsed.
 //  - Every relative import between the emitted chunks resolves.
 //  - The dev tools (`?curate`, `?areas`, see src/main.tsx) are not in it.
 //  - Neither is the dialect-area review: its data

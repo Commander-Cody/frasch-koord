@@ -164,7 +164,11 @@ export function siteFields(base: StyleSpecification): Field[] {
   return renderedFields({ ...base, layers });
 }
 
-/** The site's own style, before a view is applied. */
+/**
+ * The site's own style, before a view is applied. Read from the file, not
+ * imported as BASE_STYLE: src/map/style/index.ts reads `import.meta.env`
+ * (through site.ts), which the Vite config has not.
+ */
 async function siteStyle(): Promise<StyleSpecification> {
   return JSON.parse(await readFile(join(WEB, 'src/map/style/frasch-bright.json'), 'utf8'));
 }

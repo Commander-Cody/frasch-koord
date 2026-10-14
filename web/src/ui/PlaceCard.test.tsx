@@ -55,9 +55,10 @@ it('calls a name in a dialect by the name of the dialect', () => {
 
 it('calls a dialect by its registry name in the German UI', async () => {
   await i18n.changeLanguage('de');
-  renderCard(place({ names: { 'frr-x-wieding': 'Hoorbel' } }), 'frr-x-wieding');
+  const [{ tag, label }] = DIALECTS;
+  renderCard(place({ names: { [tag]: 'Hoorbel' } }), tag);
 
-  expect(headlineLabel()).toBe('Wiedingharder');
+  expect(headlineLabel()).toBe(label);
 });
 
 it("calls a local form that is the name in its area's dialect by both", () => {

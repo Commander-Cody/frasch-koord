@@ -30,9 +30,9 @@ export function createMap(container: HTMLElement, style: StyleSpecification): Ma
     style,
     center: NORTH_FRISIA_CENTER,
     zoom: INITIAL_ZOOM,
-    // Reflects viewport (zoom/lat/lon[/bearing/pitch]) in the URL hash and
-    // reads an initial view from it if present, e.g. `#12/54.64/8.77`.
-    // Handy for linking to / screenshotting a specific view. The view and
+    // Reflects the viewport (zoom/lat/lon[/bearing/pitch]) in the URL hash
+    // and reads an initial one from it if present, e.g. `#12/54.64/8.77`.
+    // Handy for linking to / screenshotting a specific place. The view and
     // the open place ride along in the query (url/linkState.ts).
     hash: true,
     attributionControl: false,

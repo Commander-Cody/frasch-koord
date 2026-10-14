@@ -64,7 +64,7 @@ Requirement: **the map must never be blank anywhere**. Therefore: one full plane
 Three levels of map changes, all without forking Planetiler:
 1. **Tag fixes before the build** (`names/curation.csv`, applied by `tiles/inject_names.py`): per OSM id, `set_tags` such as `place=island` change how OpenMapTiles classifies a feature. Needed because OMT drops `place=islet` polygons entirely (Habel, Norderoog, Südfall had no label at any zoom) and Nordstrand has no island polygon in OSM.
 2. **Own tile attributes**: Planetiler's `--extra_name_tags=frasch:kind,frasch:minzoom,frasch:maxzoom` copies arbitrary tags into the tiles. The injector writes `frasch:kind` (the sheet's own classification: island / hallig / sand / warft / koog / …) and `frasch:minzoom` (per-feature curation, e.g. Tilli and Tammensiel not before Dagebüll at z10; Süderoogsand together with Norderoogsand at z9). The style enforces `frasch:minzoom` with a zoom filter and styles/prioritises labels by `frasch:kind`.
-3. **Style** (`web/src/style/frasch-bright.json`, forked from OSM Bright): label layers per kind (`place-island`, `place-hallig`, `place-sand` from z10, `place-warft` from z13, …). Priority islands > Halligen > towns/villages > sands > hamlets > Warften. Important MapLibre detail: label collision is resolved in reverse layer order (the LAST symbol layer in the style wins), `symbol-sort-key` only orders within one layer — so the priority is expressed by the physical layer order, low-priority layers first.
+3. **Style** (`web/src/map/style/frasch-bright.json`, forked from OSM Bright): label layers per kind (`place-island`, `place-hallig`, `place-sand` from z10, `place-warft` from z13, …). Priority islands > Halligen > towns/villages > sands > hamlets > Warften. Important MapLibre detail: label collision is resolved in reverse layer order (the LAST symbol layer in the style wins), `symbol-sort-key` only orders within one layer — so the priority is expressed by the physical layer order, low-priority layers first.
 
 Resolved with this mechanism (2026-09-15): Habel/Norderoog/Südfall labelled (islet → island); Nordstrand styled and timed like Pellworm (municipality relation gets `place=island`, village node held to z12; revised 2026-09-16: the relation's label sat 2 km from the village and stayed on next to the village label, so the injector now adds a synthetic 50 km² `place=island` square centred on the village node via curation's `polygon_km2`; it carries the island label from z8 at the village's position and `frasch:maxzoom=11` hands over to the village label at z12 — see `names/README.md`); Süderoogsand and Norderoogsand both from z10 as sands; Tilli/Tammensiel not before Dagebüll (z10) and never over the island name. Second round: sands labelled whenever there is room (their OSM class is `island`, the filter had excluded it); smallest Halligen (OMT rank 6, e.g. Habel) wait until z12 by style rule; Hamburger Hallig via its admin_level=10 relation (z12); all Warften share one layer from z13 — Hallig Warften are `place=hamlet` in OSM and are recognised by name (*warf*, *weerw*, *wäärw*).
 
@@ -113,7 +113,7 @@ Sölring, Öömrang, Halunder and Hålifrasch names. They are now first-class.
    entries with `view=yes` are selectable (today only Mooring — a dialect
    becomes selectable when its UI translation exists). The local view uses
    Mooring for the UI, configurable in one place
-   (`LOCAL_VIEW_UI_LANGUAGE` in `web/src/config.ts`).
+   (`LOCAL_VIEW_UI_LANGUAGE` in `web/src/dialects/views.ts`).
 8. Owner's decisions on the data behind this: **Low Saxon** counts as the local
    majority language in northern Germany; **Südergoesharde** is extinct (1981)
    but its historic names still label the local view; **Nordstrand, Pellworm and
@@ -227,9 +227,9 @@ the build). Still to confirm by the owner: that no one else contributed rows to
 the original sheet (co-authors would have to agree to the license).
 
 The code is MIT (root `LICENSE`, 2026-09-26, #22). The style fork keeps OSM
-Bright's BSD / CC BY notice in `web/src/style/LICENSE-osm-bright.md`. The map's attribution
+Bright's BSD / CC BY notice in `web/src/map/style/LICENSE-osm-bright.md`. The map's attribution
 control shows "© OpenStreetMap contributors" and the OpenMapTiles credit, as a
-fixed licence notice in every UI language (`web/src/style/localize.ts`).
+fixed licence notice in every UI language (`web/src/map/style/index.ts`).
 
 ## Decided 2026-09-19: review the matcher's leftovers on the map (issue #1)
 

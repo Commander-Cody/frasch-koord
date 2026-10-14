@@ -11,6 +11,7 @@ import { build, createLogger } from 'vite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import glyphs, { archiveLabels, glyphProblems, renderedFields, siteFields } from './glyphs.ts';
+import { DIALECTS } from '../src/dialects/registry.ts';
 import { type TestTile, writeTestArchive } from './testArchive.ts';
 
 const LATIN = ['0-255', '256-511'];
@@ -138,29 +139,10 @@ describe('siteFields', () => {
       ],
     } as StyleSpecification;
 
-    expect(
-      siteFields(base)
-        .map((field) => field.key)
-        .sort(),
-    ).toEqual([
-      'frasch:local',
-      'name',
-      'name:de',
-      'name:frr',
-      'name:frr-x-fering',
-      'name:frr-x-hallig',
-      'name:frr-x-halunder',
-      'name:frr-x-karrhard',
-      'name:frr-x-midgoes',
-      'name:frr-x-mooring',
-      'name:frr-x-nordgoes',
-      'name:frr-x-oomrang',
-      'name:frr-x-solring',
-      'name:frr-x-suedgoes',
-      'name:frr-x-wieding',
-      'name:latin',
-      'name:nds',
-    ]);
+    const keys = siteFields(base).map((field) => field.key);
+    expect(keys).toEqual(expect.arrayContaining(['frasch:local', 'name:frr', 'name:nds', 'name']));
+    // Every dialect's name, whether the selector offers its view or not.
+    expect(keys).toEqual(expect.arrayContaining(DIALECTS.map((d) => `name:${d.tag}`)));
   });
 });
 

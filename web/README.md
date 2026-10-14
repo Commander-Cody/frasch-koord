@@ -91,9 +91,9 @@ strip at the top of the map; and a crash in the side panel is caught by
 `src/ui/ErrorBoundary.tsx`, so it never takes the map with it.
 
 The map is created with MapLibre's `hash: true` option, so the URL hash
-reflects the current view (`#zoom/lat/lon`, e.g. `#13/54.52/8.65`) and an
-initial view can be linked to or loaded directly, e.g.
-`http://localhost:5173/#12/54.64/8.77`. Useful for sharing a view or for
+reflects the current viewport (`#zoom/lat/lon`, e.g. `#13/54.52/8.65`) and an
+initial viewport can be linked to or loaded directly, e.g.
+`http://localhost:5173/#12/54.64/8.77`. Useful for sharing a viewport or for
 scripted screenshots at a specific place/zoom.
 
 MapLibre rewrites the whole hash on every move, so the rest of what a link
