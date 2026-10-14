@@ -11,10 +11,10 @@ import { nameExpression } from './map/style/labels';
 // Issue #16: the place card once showed German while the map label showed
 // Low Saxon for the same place, because the card's label chain and the map's
 // text-field expression had drifted apart. Both are supposed to be built from
-// the single chain in labelChain.ts (map: map/style/labels.ts's nameExpression,
+// the single chain in dialects/labelChain.ts (map: map/style/labels.ts's nameExpression,
 // card: names/card.ts's cardModel), but nothing stops a future edit to
 // one side from forgetting the other. This test evaluates the REAL map
-// expression (nameExpression, the same export buildStyle puts into
+// expression (nameExpression, the same export styleFor puts into
 // `text-field`) with MapLibre's own style-spec expression engine and checks
 // it against the REAL card path, for the same tile properties and view, so a
 // drift on either side fails here rather than shipping.

@@ -1,7 +1,7 @@
 // The one module that reads and writes the page's URL: the public map's link
 // state (linkState.ts), the dev panels' deep links (`?curate&row=`,
 // `?areas&area=`), and what else needs the address. The viewport is MapLibre's
-// own `#zoom/lat/lon` hash (see Map.tsx), which it reads and writes itself.
+// own `#zoom/lat/lon` hash (see map/createMap.ts), which it reads and writes itself.
 
 /** The value of `?<name>=`, the first of several; an empty one counts as none. */
 export function readQueryParam(name: string): string | undefined {

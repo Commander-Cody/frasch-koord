@@ -1,5 +1,5 @@
 // Which of a place's names is shown, and which one it is: the label chain of
-// the map (labelChain.ts), walked over a place's names instead of the tile
+// the map (dialects/labelChain.ts), walked over a place's names instead of the tile
 // properties.
 
 import { labelChain } from '../dialects/labelChain';
@@ -62,7 +62,7 @@ function chainStep(names: CardNames, key: string): ShownName | undefined {
 
 /**
  * The name to show for a place in the selected view, and which one it is:
- * the same label chain the map follows (labelChain.ts), walked over the
+ * the same label chain the map follows (dialects/labelChain.ts), walked over the
  * place's names instead of the tile properties, so the card and the search
  * results name a place exactly as its map label does.
  *

@@ -14,7 +14,7 @@ import './PlaceCard.css';
 
 export interface PlaceCardProps {
   selection: PlaceSelection;
-  /** Selected label option tag (a dialect, or LOCAL_TAG) — the view the headline is in. */
+  /** Selected view (a dialect tag, or LOCAL_TAG): the one the headline is in. */
   view: string;
   /** `keyboard`: closed with Enter or Space on ×, rather than by a click or tap. */
   onClose: (means: CloseMeans) => void;

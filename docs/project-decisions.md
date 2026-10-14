@@ -1451,3 +1451,58 @@ label and its lines inline, decoding a `source` string three ways.
   winning, is gone: `placelist` refuses such rows since #94.
 - **The 120 lines** of the issue are read as a limit on the modules of
   `names/`, not on their test files. `cardNames.ts` exists for it.
+
+## Decided 2026-10-14: `web/src` by concept, `config.ts` split, one word for the view (issue #105)
+
+`web/src` was grouped by file kind (`hooks/`, `components/`, `style/`, the
+rest flat), and not consistently. `config.ts` mixed the site's base path, the
+tile hosting, the dialect registry and the selector's options, and because it
+read `import.meta.env` at module level the glyphs check of the build loaded it
+through a nested Vite runner. The selector's concept had four names (view,
+label option, tag, dialect), and `Map.tsx` set the whole map up in one
+90-line effect.
+
+| was | is |
+|---|---|
+| `components/`, `hooks/`, `style/`, `labelChain.ts`, `oncePerFrame.ts`, `provenance.ts`, `placeSelection.ts`, `osmRef.ts`, `generated/` | `ui/`, `map/` (with `style/`), `selection/`, `dialects/` (with `generated/`), `names/osmRef.ts`; see "Source layout" in `web/README.md` |
+| `config.ts` | `site.ts` (`siteUrl`, `TILES_URL`), `dialects/registry.ts`, `dialects/views.ts` |
+| `LABEL_OPTIONS`, `LabelOption`, `labelOption`; i18n `dialect.label`, `dialect.local`; `.dialect-select` | `VIEWS`, `ViewOption`, `viewOption`; `view.label`, `view.local`; `.view-select` |
+| "every dialect plus the local view" spelled in `mapCardConsistency.test.ts` and `glyphs.ts` | `ALL_VIEW_TAGS` |
+| `runnerImport` of `config.ts` and `localize.ts` in `vite-plugins/glyphs.ts`, three exports mirrored by hand | `glyphs.ts` imports `ALL_VIEW_TAGS` and `labelLayers` (`map/style/labels.ts`); `siteFields(base)` |
+| `buildStyle(base, tilesUrl, view)` and `fraschBright as unknown as StyleSpecification` in `Map.tsx` (twice) and two tests | `map/style/index.ts`: `BASE_STYLE` (the one cast), `styleFor(view)` |
+| the mount effect of `Map.tsx` | `createMap(container, style)`, `removeMap`, `placeHitTest(map, layers)`, `useMapFailure(map)`, and a hook each for the handle, the view's style, the clicks and the marker |
+| `ensurePmtilesProtocol` in `Map.tsx`, a second `PMTiles` in `provenance.ts` | `map/pmtiles.ts`: `registerPmtilesProtocol()`, `pmtilesArchive(url)`, the instance the protocol reads tiles from |
+| `MapViewHandle` = `getMap`, `flyTo(center, zoom, inset = 0)`, `reveal` | `MapMoves` (`flyTo`, `reveal`, every argument required), `MapAccess` (`getMap`); `MapViewHandle = MapAccess & MapMoves` |
+| `column` in `dialects.json` and `DialectEntry` | left out of the export |
+| `dialects.*` in `de.json` | the registry `label` |
+| `App.css` for the whole panel | `App.css` (app and side-panel layout), `ControlBar.css`, `SearchBox.css`, `ViewSelect.css`, `ShareButton.css`, `MapView.css` |
+
+- **The German dialect names live in the registry only** (owner's decision).
+  `de.json`'s `dialects.*` repeated `label` string for string; the German UI
+  now falls back to it (it was already `defaultValue`). Mooring keeps its own
+  names, and a dialect new to the registry has a name in every UI.
+- **The handle is split, not shrunk** (owner's decision): the selection
+  depends on `MapMoves` alone, the dev views on `MapAccess`; `MapView`'s ref
+  is both. The App tests' map stub still hands `getMap` over, since the stub
+  stands in for that ref.
+- **App.css is split per component** (owner's decision). `ControlBar.css`
+  holds the bar's grid, where each widget sits in it, and the one look of its
+  two fields; it is imported before the widgets, whose sheets refine that
+  look. Screenshots of the build (desktop and phone; results, card, the local
+  view) were pixel-identical to the previous one's.
+- **The registry's `view=yes|no` keeps its name**: it now means exactly
+  "offered as a view".
+- **The #103 names stay**: `usePlaceSelection` and `placeSelection.ts`, not
+  the issue's `useSelectedPlace`; `initialView` stays in `url/linkState.ts`,
+  since it reads the link.
+- **`MapView` holds the map twice**: in a ref for the handle, whose methods
+  have to reach it in the effects of the parent's first render (the dev
+  panels draw then), and in state for the hooks that set it up.
+- **Modules the Vite config imports** (`dialects/registry.ts`, `views.ts`,
+  `labelChain.ts`, `map/style/labels.ts`) import with `.ts` extensions and
+  the JSON with `with { type: 'json' }`, as `tsconfig.node.json` checks them
+  too.
+- **Test seams** (owner's decision): `dialects/views.ts`, `styleFor`,
+  `placeHitTest` and `useMapFailure` against a small fake of the MapLibre map,
+  `pmtilesArchive`, the Python export, `siteFields`, and the German UI's
+  dialect name on the card. The rest moved with its module.

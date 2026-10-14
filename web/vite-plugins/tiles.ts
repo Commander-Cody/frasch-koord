@@ -8,7 +8,7 @@
  * a build must not ship an archive nobody can name. So the copied archives
  * are dropped, and the pinned one is taken from the fetch cache
  * (.cache/tiles/<sha256>.pmtiles) instead. With VITE_TILES_URL set the tiles
- * live elsewhere (see src/config.ts) and no archive is shipped at all. A link
+ * live elsewhere (see src/site.ts) and no archive is shipped at all. A link
  * there that leads nowhere (to tiles not built yet) stops the build as well:
  * Vite cannot copy it. The glyphs are vite-plugins/glyphs.ts' business.
  *
@@ -23,7 +23,7 @@ import type { Plugin } from 'vite';
 
 import { lockValue } from './lock.ts';
 
-/** Where the site serves its own archive from, under dist/ (see src/config.ts). */
+/** Where the site serves its own archive from, under dist/ (see src/site.ts). */
 const ARCHIVE = 'tiles/schleswig-holstein.pmtiles';
 
 /** Where the dev server's archive is linked, under the web/ root. */

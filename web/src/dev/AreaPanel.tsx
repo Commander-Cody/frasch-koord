@@ -320,7 +320,7 @@ export default function AreaPanel({ mapRef }: AreaPanelProps) {
 
     if (map.isStyleLoaded()) ensure();
     else map.once('load', ensure);
-    // MapView rebuilds the whole style when the label option changes, which
+    // MapView rebuilds the whole style when the view changes, which
     // drops every imperatively added layer. `?areas` shows no label selector
     // today, so this is insurance — but it is the difference between "works"
     // and "silently empty" the day one is added.

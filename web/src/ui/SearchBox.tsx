@@ -13,7 +13,7 @@ export interface SearchBoxProps {
   search: Search;
   /** Whether that list is there yet, or failed to load. */
   status: NamesData['status'];
-  /** Selected label option tag (a dialect, or LOCAL_TAG): results are named as the map labels them. */
+  /** Selected view (a dialect tag, or LOCAL_TAG): results are named as the map labels them. */
   view: string;
   onSelect: (entry: NameEntry) => void;
   /** The search field: focus returns there when the card closes (see usePlaceSelection). */

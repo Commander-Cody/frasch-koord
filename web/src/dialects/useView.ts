@@ -5,10 +5,10 @@ import { viewOption } from './views';
 import { initialView, writeView } from '../url/linkState';
 
 /**
- * Keeps the UI in the language of the label option `view`: map labels and UI
+ * Keeps the UI in the language of the view `view`: map labels and UI
  * chrome move together. Each option names the UI language it comes with (the
  * local view has no dialect of its own and borrows one, see
- * config.LOCAL_VIEW_UI_LANGUAGE). i18next falls back to German for any
+ * views.LOCAL_VIEW_UI_LANGUAGE). i18next falls back to German for any
  * language without resources, so unwritten dialect UIs are harmless.
  *
  * Before paint, so a page that opens in another view than the default never
@@ -23,7 +23,7 @@ export function useUiLanguage(view: string): void {
 }
 
 /**
- * The selected label option — a dialect tag, or LOCAL_TAG for the local view —
+ * The selected view — a dialect tag, or LOCAL_TAG for the local view —
  * and the function that switches it. Starts in the view the link names, and
  * keeps the UI language and the link's `?view=` with it.
  */

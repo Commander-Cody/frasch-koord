@@ -4,7 +4,7 @@ import { VIEWS } from '../dialects/views';
 import './ViewSelect.css';
 
 export interface ViewSelectProps {
-  /** Selected label option tag (a dialect, or LOCAL_TAG). */
+  /** Selected view (a dialect tag, or LOCAL_TAG). */
   view: string;
   onViewChange: (view: string) => void;
 }

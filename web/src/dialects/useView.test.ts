@@ -7,7 +7,7 @@ import { useView } from './useView';
 
 beforeEach(async () => {
   window.history.replaceState(null, '', '/');
-  // A language no label option brings along, so a switch shows.
+  // A language no view brings along, so a switch shows.
   await i18n.changeLanguage('de');
 });
 
