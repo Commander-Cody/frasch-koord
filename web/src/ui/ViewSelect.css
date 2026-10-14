@@ -1,0 +1,10 @@
+@media (max-width: 600px) {
+  /* A chip as wide as the selected view's name, not as its longest
+     option. Where field-sizing is missing, the cap keeps it from eating the
+     search field. */
+  .view-select {
+    width: auto;
+    max-width: 40vw;
+    field-sizing: content;
+  }
+}

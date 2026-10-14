@@ -10,6 +10,7 @@ import { placeHitTest } from './hitTest';
 import { oncePerFrame } from './oncePerFrame';
 import { BASE_STYLE, placeLayerIds, styleFor } from './style';
 import { useMapFailure } from './useMapFailure';
+import './MapView.css';
 
 /** How close (px) to the edge of a bottom inset a place may sit before `reveal` pans. */
 const REVEAL_MARGIN = 24;

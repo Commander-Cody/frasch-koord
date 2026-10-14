@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { TOUCH_MEDIA } from '../layout';
 import { pageUrl } from '../url/queryParams';
+import './ShareButton.css';
 
 /** How long the "link copied" confirmation stays up. */
 const CONFIRM_MS = 2000;

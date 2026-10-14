@@ -6,6 +6,7 @@ import type { NameEntry } from '../names/entry';
 import type { NamesData } from '../names/load';
 import { displayName } from '../names/resolveName';
 import type { Search } from '../names/search';
+import './SearchBox.css';
 
 export interface SearchBoxProps {
   /** The search over the name list, loaded once by App (see names/load.ts). */
@@ -22,7 +23,7 @@ export interface SearchBoxProps {
 /**
  * The search field with its list of results, a combobox. Renders no element
  * of its own around the two: they are placed by the grid of the bar they are
- * in (ControlBar, App.css).
+ * in (ControlBar, ControlBar.css).
  */
 export default function SearchBox({ search, status, view, onSelect, ref }: SearchBoxProps) {
   const { t } = useTranslation();

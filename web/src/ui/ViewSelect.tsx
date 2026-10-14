@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 
 import { VIEWS } from '../dialects/views';
+import './ViewSelect.css';
 
 export interface ViewSelectProps {
   /** Selected label option tag (a dialect, or LOCAL_TAG). */
