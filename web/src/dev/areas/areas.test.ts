@@ -5,6 +5,7 @@ import { pinnedFields, schemaFields, type Pin } from '../../testing/schemaPin';
 import {
   bboxOf,
   filterAreas,
+  findByRef,
   groupByDialect,
   UNASSIGNED,
   type AreaFeature,
@@ -111,5 +112,20 @@ describe('filterAreas', () => {
       shown: UNASSIGNED,
     }).map((feature) => feature.properties.name);
     expect(names).toEqual(['Loose']);
+  });
+});
+
+describe('findByRef', () => {
+  const foehr = {
+    ...area('Föhr', 'a'),
+    properties: { ...area('Föhr', 'a').properties, osm: 'relation/1; relation/9' },
+  };
+
+  it('finds a row by a later one of its references', () => {
+    expect(findByRef([area('Naibel', 'a'), foehr], 'relation/9')).toBe(foehr);
+  });
+
+  it('finds nothing for a reference no row has', () => {
+    expect(findByRef([area('Naibel', 'a'), foehr], 'relation/7')).toBeUndefined();
   });
 });

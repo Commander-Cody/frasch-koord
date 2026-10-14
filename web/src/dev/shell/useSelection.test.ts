@@ -22,7 +22,9 @@ describe('useSelection', () => {
 
   it('opens what the link names once the data is there', () => {
     window.history.replaceState(null, '', '/?areas&area=relation/2');
-    const resolve = (value: string) => (value === 'relation/2' ? 'relation/1' : undefined);
+    // Any reference of the row names it; its key is the first.
+    const resolve = (value: string) =>
+      ['relation/1', 'relation/2'].includes(value) ? 'relation/1' : undefined;
     const { result, rerender } = renderHook((props: SelectionOptions) => useSelection(props), {
       initialProps: options({ param: 'area', ready: false, resolve }),
     });
@@ -49,5 +51,15 @@ describe('useSelection', () => {
     const { result } = renderHook(() => useSelection(options({ show })));
     act(() => result.current.selectInPlace('deesbel'));
     expect(show).not.toHaveBeenCalled();
+  });
+
+  it('forgets a selection a reload took the item of away', () => {
+    const { result, rerender } = renderHook((props: SelectionOptions) => useSelection(props), {
+      initialProps: options(),
+    });
+    act(() => result.current.select('deesbel'));
+    rerender(options({ resolve: (value) => (value === 'deesbel' ? undefined : value) }));
+    rerender(options());
+    expect(result.current.selected).toBeNull();
   });
 });

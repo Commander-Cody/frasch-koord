@@ -1535,8 +1535,9 @@ named.
   panel mounts on a loaded map, so an overlay is added once, without waiting
   for `load`, and no dev module asks the map whether it exists yet.
 - **Reload keeps what is on screen** until the new data is there (owner's
-  decision); the selection stays by its key, and is empty if the reload took
-  its item away. The curation view's own saves go into the loaded data with
+  decision); the selection stays by its key, and `useSelection` empties it
+  (and the link) if the reload took its item away, so it does not come back
+  with a later one. The curation view's own saves go into the loaded data with
   `update`, so a reload replaces them with the patch as stored.
 - **No style-rebuild handling** (owner's decision): the dev views never
   change the view, so the `styledata` re-add, its try/catch and the
@@ -1551,7 +1552,9 @@ named.
   before `ready`.
 - **Test seams** (owner's decision): `fetchJson`, `useDevResource`,
   `useSelection`, `useGeoJsonOverlay` (against `testing/fakeMap.ts`),
-  `bboxOf`, `groupByDialect`, `filterAreas`, `decisionLabel`, `AreaPanel` (Reload after a
+  `bboxOf`, `groupByDialect`, `filterAreas`, `findByRef`, `areaLayers` (which
+  municipalities each layer draws, through the style spec's own
+  `featureFilter`), `decisionLabel`, `AreaPanel` (Reload after a
   rebuild that moved the selected municipality), `CuratePanel` (Reload, the
   selected row kept in view; MapLibre's `Marker` replaced by a fake, since it
   needs a real map's camera), and the parts without `fid`.

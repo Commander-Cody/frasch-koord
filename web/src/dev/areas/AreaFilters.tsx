@@ -7,15 +7,15 @@ export interface AreaFiltersProps {
   /** Every municipality, for the counts. */
   features: readonly AreaFeature[];
   /** How many the filter lets through. */
-  shown: number;
+  shownCount: number;
 }
 
-export default function AreaFilters({ text, onText, features, shown }: AreaFiltersProps) {
+export default function AreaFilters({ text, onText, features, shownCount }: AreaFiltersProps) {
   const assigned = features.filter((feature) => feature.properties.assigned).length;
   return (
     <>
       <p className="dev-panel-counts">
-        {assigned} assigned · {features.length - assigned} not assigned · {shown} shown
+        {assigned} assigned · {features.length - assigned} not assigned · {shownCount} shown
       </p>
       <input
         className="dev-panel-input"

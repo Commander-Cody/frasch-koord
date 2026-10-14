@@ -67,7 +67,7 @@ export default function AreaPanel({ map }: { map: MapLibreMap }) {
       }
       resource={resource}
       header={
-        <AreaFilters text={text} onText={setText} features={features} shown={visible.length} />
+        <AreaFilters text={text} onText={setText} features={features} shownCount={visible.length} />
       }
     >
       <AreaLegend groups={groups} shown={shown} onShow={setShown} />
