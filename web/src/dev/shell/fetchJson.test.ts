@@ -19,16 +19,29 @@ describe('fetchJson', () => {
     await expect(fetchJson('/__curate/worklist')).resolves.toEqual({ rows: [1, 2] });
   });
 
-  it('fails with the error the endpoint names', async () => {
-    answer(404, '{"error":"names/work/curate.json not found"}');
+  it('fails with the error the endpoint names, and which endpoint it was', async () => {
+    answer(404, '{"error":"run frasch curate export"}');
     await expect(fetchJson('/__curate/worklist')).rejects.toThrow(
-      'names/work/curate.json not found',
+      '/__curate/worklist: run frasch curate export',
     );
   });
 
   it('fails with the status of an answer that names no error', async () => {
     answer(502, 'Bad Gateway');
-    await expect(fetchJson('/__areas/parts')).rejects.toThrow('HTTP 502');
+    await expect(fetchJson('/__areas/parts')).rejects.toThrow('/__areas/parts: HTTP 502');
+  });
+
+  it('names the endpoint whose answer is no JSON', async () => {
+    answer(200, '{"entries": [');
+    await expect(fetchJson('/__curate/patch')).rejects.toThrow(/^\/__curate\/patch: /);
+  });
+
+  it('names the endpoint it could not reach', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.reject(new TypeError('Failed to fetch'))),
+    );
+    await expect(fetchJson('/__curate/patch')).rejects.toThrow('/__curate/patch: Failed to fetch');
   });
 });
 

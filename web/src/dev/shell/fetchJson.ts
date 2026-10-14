@@ -3,10 +3,19 @@
 
 /**
  * The JSON body `url` answers with. Rejects when the answer is a failure,
- * with the `error` its body names, or else with its status.
+ * with the `error` its body names, or else with its status — and, whatever
+ * went wrong, with `url` in front: a panel that loads two files at once
+ * has to say which of them failed.
  */
 export async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, init);
+  try {
+    return await bodyOf<T>(await fetch(url, init));
+  } catch (err) {
+    throw new Error(`${url}: ${errorMessage(err)}`);
+  }
+}
+
+async function bodyOf<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as { error?: string } | null;
     throw new Error(body?.error ?? `HTTP ${res.status}`);

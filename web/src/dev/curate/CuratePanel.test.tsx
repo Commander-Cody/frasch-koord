@@ -385,7 +385,7 @@ describe('CuratePanel', () => {
       );
       await posts[0].reply.promise;
     });
-    await screen.findByText('could not save: disk full');
+    await screen.findByText('could not save: /__curate/patch: disk full');
 
     fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
 
