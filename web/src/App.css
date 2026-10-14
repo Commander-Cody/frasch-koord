@@ -34,9 +34,9 @@
   z-index: 0;
 }
 
-/* The left column of the public view: the search panel and, below it, the
+/* The left column of the public view: the control bar and, below it, the
    place card. A column rather than two absolutely positioned panels so the
-   card never has to know how tall the search panel is. */
+   card never has to know how tall the control bar is. */
 .side-panel {
   position: absolute;
   top: calc(12px + var(--safe-top));
@@ -56,13 +56,13 @@
   pointer-events: auto;
 }
 
-.search-panel {
+.control-bar {
   flex: none;
   background: white;
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
   padding: 10px;
-  /* Flat markup (see SearchPanel.tsx), placed by area: selector and share
+  /* Flat markup (see ControlBar.tsx), placed by area: selector and share
      button on top, the search field below, the results (when there are
      any) in a row of their own under that. */
   display: grid;
@@ -214,7 +214,7 @@
   font-size: 13px;
 }
 
-/* Phone width. The search panel becomes a one-row bar across the top —
+/* Phone width. The control bar becomes a one-row bar across the top —
    search field, dialect chip, share button — with the results as a list
    overlaying the map below it; the place card becomes a bottom sheet (see
    PlaceCard.css). The width is PHONE_MEDIA in layout.ts. */
@@ -232,7 +232,7 @@
     width: auto;
   }
 
-  .search-panel {
+  .control-bar {
     position: relative;
     /* Above the sheet, which the result list may reach down to. */
     z-index: 1;
@@ -334,7 +334,7 @@
   cursor: pointer;
 }
 
-/* The name list failed to load (SearchPanel.tsx): one line under the field. */
+/* The name list failed to load (SearchBox.tsx): one line under the field. */
 .search-error {
   grid-column: 1 / -1;
   margin: 0;

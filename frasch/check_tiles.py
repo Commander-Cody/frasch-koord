@@ -43,7 +43,7 @@ from frasch.geo import LonLat
 from frasch.placenames import GERMAN_KEY, REF_KEY, TILE_KEY, SearchEntry, dialect_key
 
 # OpenMapTiles feature ids: the OSM id times ten plus the type
-# (web/src/names.ts's osmRefFromFeatureId)
+# (web/src/names/links.ts's osmRefFromFeatureId)
 OSM_TYPE_BY_DIGIT = {1: "n", 2: "w", 3: "r"}
 TOLERANCE_DEG = 1e-4  # ~10 m, far above tile precision at z14
 

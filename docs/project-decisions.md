@@ -1399,3 +1399,55 @@ Open questions for the list owner (from the first run):
 4. Choose hosting; first deployment of the SH build.
 5. Extend name matching to Denmark tiles (Rudbøl, Rømø, Tønder …) and country names via Wikidata.
 6. Planet build on a rented VM.
+
+## Decided 2026-10-14: `names/` by concern, a pure card model, a tile's `name_de` is no German name (issue #104)
+
+`web/src/names.ts` held six concerns, the search index lived in a component
+next to a second id → entry map, and the place card computed its headline
+label and its lines inline, decoding a `source` string three ways.
+
+| was | is |
+|---|---|
+| `names.ts` | `web/src/names/`: `entry.ts` (the types), `load.ts` (the only one that imports React), `tile.ts`, `resolveName.ts`, `card.ts`, `cardNames.ts`, `links.ts`, `search.ts` |
+| `ShownName.source: string` (a dialect tag, `local`, `frr`, `nds`, `de`, `da`, `osm`) | `NameSource`: `{kind: 'dialect', tag}` \| `{kind: 'local', dialect?}` \| `{kind: 'language', language}` \| `{kind: 'unknown'}` |
+| the headline label and the line rules in `PlaceCard.tsx`; `cardEntry(entry, props)` | `cardModel(selection, view)` → `{headline, source, note?, kind?, lines}`; `PlaceCard` maps a source to a label |
+| `chainStep` and `entryFromTile`, the same mapping written in both directions | one table tile key → field in `names/tile.ts` |
+| `CardEntry extends NameEntry`, a tile's card with `id: ''`, `lon: 0`, `lat: 0` | `NameEntry` is the exporter's fields; `CardNames` (no id, no coordinates) is what a card reads |
+| `IndexedEntry`, `createSearchIndex`, `search`, `byId` in `SearchPanel.tsx` | `names/search.ts`: `createSearch(entries)` → `search(query)`, returning the entries |
+| `NamesData.entries` | `NamesData.search`, next to `find` |
+| `SearchPanel` | `ControlBar` = `SearchBox` + `ViewSelect` + `ShareButton` |
+
+- **A tile's `name_de` is not a German name.** OpenMapTiles writes it on
+  every feature: `name:de` where OSM has one, the plain `name` everywhere
+  else. The card read it as the German name, so every place the list does not
+  have was labelled "Deutsch", a Danish hamlet among them (Kalleshave). In
+  `tiles/data/schleswig-holstein.pmtiles`, place layer, zoom 14: 4,934
+  distinct features, 4,301 of them without `name:de`, and `name_de === name`
+  on every one of those. The table of tile keys does not have `name_de`.
+- **A generic name in no known language** (owner's decision): the headline
+  gets no language label, and a generic name that is not the headline is not
+  shown at all. No new UI string. Where `name` equals the place's `name:de`
+  or `name:da`, the language is still named. The cost: 153 of the features
+  above have `name:nds` and no `name:de` (110 with another word than `name`);
+  in the local view their card shows the Low Saxon name and no longer the
+  generic one, which it used to list as German.
+- **A place without any name** resolves to an empty name of unknown source,
+  where it reported German.
+- **A clicked label's local name is its own object's** (issue #89, owner's
+  decision to fix it here): the local name and the dialect area come from the
+  tile feature alone. The entry's serve a card opened from search or a link.
+- **The table of tile keys is written by hand**, as the frontend's copy of
+  `placenames.TILE_KEY` plus OSM's own name keys. Nothing generates it or pins
+  it to the Python table.
+- **The search index is built at load**, next to `find` (owner's decision),
+  so `ControlBar` only composes. Its documents are numbered by the entry's
+  position in the list, which is why a hit needs no second map to its entry.
+- **The merge of entry and tile is internal** (owner's decision): the tests
+  sit on `cardModel`, `resolveName`, `createSearch`, `entryLookup`,
+  `parseNames` / `useNames` and the link helpers; `PlaceCard`'s tests cover
+  what each source is called.
+- **Old links**: `entryLookup` resolves a row's OSM reference, its QID and
+  `<ref>#<csv line>` as before. That two rows may claim one object, the first
+  winning, is gone: `placelist` refuses such rows since #94.
+- **The 120 lines** of the issue are read as a limit on the modules of
+  `names/`, not on their test files. `cardNames.ts` exists for it.

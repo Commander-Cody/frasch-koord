@@ -3,16 +3,16 @@ import { useTranslation } from 'react-i18next';
 import type { LngLat, MapGeoJSONFeature } from 'maplibre-gl';
 
 import CloseButton from './components/CloseButton';
+import ControlBar from './components/ControlBar';
 import ErrorBoundary from './components/ErrorBoundary';
 import MapView from './components/Map';
 import type { MapViewHandle } from './components/Map';
 import PlaceCard from './components/PlaceCard';
-import SearchPanel from './components/SearchPanel';
 import { useCloseOnEscape } from './hooks/useCloseOnEscape';
 import { usePlaceSelection } from './hooks/usePlaceSelection';
 import { useSheetHeight } from './hooks/useSheetHeight';
 import { useView } from './hooks/useView';
-import { useNames } from './names';
+import { useNames } from './names/load';
 import { mapPick, markerOf } from './placeSelection';
 import { useProvenanceCheck } from './provenance';
 import './App.css';
@@ -23,7 +23,7 @@ function App() {
   const cardRef = useRef<HTMLElement | null>(null);
   const cardHeadingRef = useRef<HTMLHeadingElement | null>(null);
   const searchFieldRef = useRef<HTMLInputElement | null>(null);
-  // One fetch of the name list for both the search index and the card.
+  // One fetch of the name list for both the search and the card.
   const names = useNames();
   useProvenanceCheck(names.builtFrom);
   const [view, changeView] = useView();
@@ -63,9 +63,9 @@ function App() {
         )}
       >
         <div className="side-panel">
-          <SearchPanel
+          <ControlBar
             ref={searchFieldRef}
-            entries={names.entries}
+            search={names.search}
             status={names.status}
             view={view}
             onViewChange={changeView}
@@ -89,7 +89,7 @@ function App() {
 /**
  * What the side panel shows after it crashed. Closing it clears the
  * selection, which is what most likely broke it, and brings the panel back,
- * also when the crash came without one (the search panel's own).
+ * also when the crash came without one (the control bar's own).
  */
 function PanelError({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();

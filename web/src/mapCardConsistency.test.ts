@@ -1,15 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { createPropertyExpression, latest } from '@maplibre/maplibre-gl-style-spec';
+import type { LngLat } from 'maplibre-gl';
 
 import { DIALECTS, LOCAL_TAG } from './config';
-import { cardEntry, resolveName, type NameEntry, type TileProps } from './names';
+import { cardModel } from './names/card';
+import type { NameEntry } from './names/entry';
+import type { TileProps } from './names/tile';
 import { nameExpression } from './style/localize';
 
 // Issue #16: the place card once showed German while the map label showed
 // Low Saxon for the same place, because the card's label chain and the map's
 // text-field expression had drifted apart. Both are supposed to be built from
 // the single chain in labelChain.ts (map: style/localize.ts's nameExpression,
-// card: names.ts's resolveName/cardEntry), but nothing stops a future edit to
+// card: names/card.ts's cardModel), but nothing stops a future edit to
 // one side from forgetting the other. This test evaluates the REAL map
 // expression (nameExpression, the same export buildStyle puts into
 // `text-field`) with MapLibre's own style-spec expression engine and checks
@@ -43,14 +46,25 @@ interface ClickedLabel {
 
 /** What the card would show, using the real card-building path. */
 function cardLabel(tag: string, { entry, props }: ClickedLabel): string {
-  return resolveName(cardEntry(entry, props), tag).name;
+  const pick = { via: 'map', props, at: { lng: 0, lat: 0 } as LngLat } as const;
+  return cardModel({ pick, entry }, tag).headline;
+}
+
+/**
+ * `props` with OpenMapTiles' own `name_de` on top, which every feature of
+ * the tiles has: OSM's `name:de`, else the plain `name`. No German name, that
+ * is, where the two differ (issue #104).
+ */
+function asInTheTiles(props: TileProps): TileProps {
+  const name_de = props['name:de'] ?? props.name;
+  return name_de === undefined ? props : { ...props, name_de };
 }
 
 // Realistic tile-property sets a clicked feature could carry, named after
 // what makes each interesting. OpenMapTiles always carries the plain `name`
 // on a labelled point (it is the primary field; name:xx are translations
 // added alongside it). South of the border it is normally the same string as
-// name:de, north of it the Danish name.
+// name:de, north of it the Danish name. `asInTheTiles` adds `name_de`.
 const SCENARIOS: Record<string, TileProps> = {
   'only a German name': { 'name:de': 'Niebüll', name: 'Niebüll' },
   'Low Saxon and German': { 'name:nds': 'Niböl', 'name:de': 'Niebüll', name: 'Niebüll' },
@@ -88,8 +102,8 @@ function listed(
 
 // A clicked label of a place in the name list: its names.json entry together
 // with the tile properties of its object, as `frasch inject` writes
-// them. The card then reads the entry first, so these exercise cardEntry's
-// merge as well. Since issue #61 the injector writes the list's `de` as
+// them. The card then reads the entry first, so these exercise the card's
+// merge of the two as well. Since issue #61 the injector writes the list's `de` as
 // `name:de`, the step where the card's German name comes from the list.
 const LISTED_SCENARIOS: Record<string, ClickedLabel & { entry: NameEntry }> = {
   'a listed Danish place whose German name only the list has': {
@@ -171,15 +185,36 @@ const LISTED_SCENARIOS: Record<string, ClickedLabel & { entry: NameEntry }> = {
       name: 'Nordwarft',
     },
   },
+  // Issue #89: the entry stands for the row's first object, which has a
+  // local name; the clicked one lies outside every dialect area and has none.
+  'the second object of a listed row, outside every dialect area': {
+    entry: listed({
+      id: 'e-wask',
+      names: { 'frr-x-wieding': 'e Wäsk' },
+      name_de: 'Wisch',
+      name_osm: 'Wisch',
+      local: 'e Wäsk',
+      dialect: 'frr-x-wieding',
+    }),
+    props: {
+      'frasch:ref': 'e-wask',
+      'name:frr-x-wieding': 'e Wäsk',
+      'name:de': 'Wisch',
+      name: 'Wisch',
+    },
+  },
 };
 
-const CASES: [string, ClickedLabel][] = [
+const CASES = [
   ...Object.entries(SCENARIOS).map(([scenario, props]): [string, ClickedLabel] => [
     scenario,
     { props },
   ]),
   ...Object.entries(LISTED_SCENARIOS),
-];
+].map(([scenario, { props, entry }]): [string, ClickedLabel] => [
+  scenario,
+  { props: asInTheTiles(props), entry },
+]);
 
 describe('map label vs. place card (issue #16 regression)', () => {
   for (const [scenario, selection] of CASES) {

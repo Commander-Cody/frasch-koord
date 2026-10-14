@@ -1,10 +1,12 @@
-import { useCallback, useMemo } from 'react';
+import { useMemo } from 'react';
 import type { Ref } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 
-import { DIALECTS, dialect, dialectLabelKey } from '../config';
-import type { DialectEntry } from '../config';
-import { cardEntry, placeOsmRef, resolveName, wikidataUrl } from '../names';
+import { dialect, dialectLabelKey } from '../config';
+import { cardModel } from '../names/card';
+import { placeOsmRef, wikidataUrl } from '../names/links';
+import type { Language, NameSource } from '../names/resolveName';
 import { osmUrl } from '../osmRef';
 import type { CloseMeans, PlaceSelection } from '../placeSelection';
 import CloseButton from './CloseButton';
@@ -22,23 +24,49 @@ export interface PlaceCardProps {
   headingRef?: Ref<HTMLHeadingElement>;
 }
 
-/** Locale keys of the labels of the names in no dialect of the registry, by `resolveName`'s source. */
-const SOURCE_LABEL_KEYS: Partial<Record<string, string>> = {
+/** Locale keys of the labels of the names in no dialect of the registry. */
+const LANGUAGE_LABEL_KEYS: Record<Language, string> = {
   frr: 'card.frisian',
   nds: 'card.lowSaxon',
   de: 'card.german',
   da: 'card.danish',
 };
 
-/** One line of the name list below the headline. */
-interface Line {
-  key: string;
-  label: string;
-  /** Registry label of an extinct dialect gets a marker; nothing else does. */
-  extinct?: boolean;
-  name: string;
-  /** The sub-dialect the local form belongs to (`frasch:variety`). */
-  note?: string;
+/**
+ * The name of a dialect. Dialect names are translated like any other UI
+ * string; the registry label covers a dialect the locale files do not know
+ * yet. None for a tag the registry does not have.
+ */
+function dialectLabel(tag: string | undefined, t: TFunction): string {
+  const entry = tag === undefined ? undefined : dialect(tag);
+  return entry ? t(dialectLabelKey(entry.tag), { defaultValue: entry.label }) : '';
+}
+
+/** What a name is called on the card; nothing for one of unknown source. */
+function sourceLabel(source: NameSource, t: TFunction): string {
+  switch (source.kind) {
+    case 'dialect':
+      return dialectLabel(source.tag, t);
+    case 'local': {
+      const area = dialectLabel(source.dialect, t);
+      return area ? `${t('card.local')} · ${area}` : t('card.local');
+    }
+    case 'language':
+      return t(LANGUAGE_LABEL_KEYS[source.language]);
+    case 'unknown':
+      return '';
+  }
+}
+
+/** Only the name in an extinct dialect of the registry gets a marker. */
+function isExtinct(source: NameSource): boolean {
+  return source.kind === 'dialect' && dialect(source.tag)?.status === 'extinct';
+}
+
+/** A line's React key: a card has one line per source. */
+function sourceKey(source: NameSource): string {
+  if (source.kind === 'dialect') return source.tag;
+  return source.kind === 'language' ? source.language : source.kind;
 }
 
 /**
@@ -46,8 +74,8 @@ interface Line {
  * the name list has a name in, the local form, Low Saxon, German and Danish,
  * and links to the objects behind it.
  *
- * Its data is `cardEntry` of the selection — the name-list entry where the
- * place has one, filled up from the clicked tile feature (see names.ts).
+ * Which names it shows, and in which order, is `cardModel` of the selection
+ * (names/card.ts); this gives each its label.
  */
 export default function PlaceCard({
   selection,
@@ -57,81 +85,16 @@ export default function PlaceCard({
   headingRef,
 }: PlaceCardProps) {
   const { t, i18n } = useTranslation();
-  // What only a click on the map brings along: the feature's tile.
-  const clicked = selection.pick.via === 'map' ? selection.pick : undefined;
-  const entry = useMemo(
-    () => cardEntry(selection.entry, clicked?.props),
-    [selection.entry, clicked?.props],
-  );
-  // Dialect names are translated like any other UI string; the registry
-  // label covers a dialect the locale files do not know yet.
-  const dialectLabel = useCallback(
-    (d: DialectEntry) => t(dialectLabelKey(d.tag), { defaultValue: d.label }),
-    [t],
-  );
-
-  // What the headline actually is — the selected dialect only when that
-  // dialect has a name for the place. The card must not label a fallback
-  // with the dialect the map claims to be in.
-  const { name: headline, source: shownAs } = resolveName(entry, view);
-  const area = entry.dialect ? dialect(entry.dialect) : undefined;
-  const shownDialect = dialect(shownAs);
+  const card = useMemo(() => cardModel(selection, view), [selection, view]);
   // A kind without a word in the locale files names no kind at all (an empty
   // `defaultValue` would not do: returnEmptyString is off, see i18n.ts).
-  const kindKey = `kind.${entry.kind}`;
-  const kind = entry.kind && i18n.exists(kindKey) ? t(kindKey) : '';
-  // The local form is named after the area's dialect only when it IS that
-  // dialect's name. Where the place has a form of its own (Woiguurd, while
-  // Mooring says Waiguurd), calling both "Mooring" would contradict itself.
-  const localIsAreaName = area !== undefined && entry.names[area.tag] === entry.local;
-  const localLabel = localIsAreaName
-    ? `${t('card.local')} · ${dialectLabel(area)}`
-    : t('card.local');
-  const sourceKey = SOURCE_LABEL_KEYS[shownAs];
-  const sourceLabel = sourceKey ? t(sourceKey) : shownDialect && dialectLabel(shownDialect);
-  const headlineLabel = shownAs === 'local' ? localLabel : sourceLabel;
+  const kindKey = `kind.${card.kind}`;
+  const kind = card.kind && i18n.exists(kindKey) ? t(kindKey) : '';
 
-  const lines = useMemo<Line[]>(() => {
-    const out: Line[] = [];
-    for (const d of DIALECTS) {
-      const name = entry.names[d.tag];
-      if (!name) continue;
-      // The headline already shows this one.
-      if (d.tag === shownAs) continue;
-      // The area's own dialect falls back to the `local` column in
-      // frasch/placenames.py, so its name can be the very same string as the
-      // local form. Show it once, on the local line, which names the dialect.
-      if (d.tag === entry.dialect && name === entry.local) continue;
-      out.push({ key: d.tag, label: dialectLabel(d), extinct: d.status === 'extinct', name });
-    }
-    // Not when the headline is already that form: the selected dialect's
-    // name and the local one are the same string wherever the place lies in
-    // that dialect's own area (Niebüll in Mooring).
-    if (entry.local && shownAs !== 'local' && entry.local !== headline) {
-      out.push({ key: 'local', label: localLabel, name: entry.local, note: entry.variety });
-    }
-    // OSM's dialect-less Frisian name, for places our list does not have.
-    // Where it only repeats a name already on the card (it usually is the
-    // same word as the dialect's), it says nothing worth a line.
-    if (entry.name_frr && ![headline, ...out.map((l) => l.name)].includes(entry.name_frr)) {
-      out.push({ key: 'frr', label: t('card.frisian'), name: entry.name_frr });
-    }
-    // Low Saxon only where it says something German does not: most places
-    // are the same word in both (Husum).
-    if (entry.name_nds && entry.name_nds !== headline && entry.name_nds !== entry.name_de) {
-      out.push({ key: 'nds', label: t('card.lowSaxon'), name: entry.name_nds });
-    }
-    if (entry.name_de && entry.name_de !== headline) {
-      out.push({ key: 'de', label: t('card.german'), name: entry.name_de });
-    }
-    if (entry.name_da && entry.name_da !== headline) {
-      out.push({ key: 'da', label: t('card.danish'), name: entry.name_da });
-    }
-    return out;
-  }, [entry, shownAs, headline, localLabel, dialectLabel, t]);
-
-  const osm = osmUrl(placeOsmRef(selection.entry, clicked?.featureId) ?? undefined);
-  const wikidata = wikidataUrl(entry.wikidata);
+  // What only a click on the map brings along: the feature's tile.
+  const featureId = selection.pick.via === 'map' ? selection.pick.featureId : undefined;
+  const osm = osmUrl(placeOsmRef(selection.entry, featureId) ?? undefined);
+  const wikidata = wikidataUrl(selection.entry?.wikidata);
   // The "report a wrong or missing name" link belongs here; it is issue #8.
 
   return (
@@ -143,24 +106,20 @@ export default function PlaceCard({
         onClick={(e) => onClose(e.detail === 0 ? 'keyboard' : 'pointer')}
       />
       <h2 ref={headingRef} className="place-card-name" tabIndex={-1}>
-        {headline}
+        {card.headline}
       </h2>
       <p className="place-card-meta">
-        {headlineLabel}
-        {/* Where the headline IS the local form, its variety remark belongs
-            here — there is no local line below to carry it. */}
-        {entry.variety && entry.local === headline && (
-          <span className="place-card-note">{entry.variety}</span>
-        )}
+        {sourceLabel(card.source, t)}
+        {card.note && <span className="place-card-note">{card.note}</span>}
         {kind && <span className="place-card-kind">{kind}</span>}
       </p>
-      {lines.length > 0 && (
+      {card.lines.length > 0 && (
         <dl className="place-card-names">
-          {lines.map((line) => (
-            <div key={line.key}>
+          {card.lines.map((line) => (
+            <div key={sourceKey(line.source)}>
               <dt>
-                {line.label}
-                {line.extinct && <abbr title={t('card.extinct')}>&nbsp;†</abbr>}
+                {sourceLabel(line.source, t)}
+                {isExtinct(line.source) && <abbr title={t('card.extinct')}>&nbsp;†</abbr>}
               </dt>
               <dd>
                 {line.name}

@@ -4,7 +4,7 @@
 import { act } from '@testing-library/react';
 import { vi } from 'vitest';
 
-import type { NameEntry } from '../names';
+import type { NameEntry } from '../names/entry';
 
 /** Serves names.json once the test calls the returned function. */
 export function holdNames(entries: NameEntry[]): () => Promise<void> {

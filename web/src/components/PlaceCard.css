@@ -1,5 +1,5 @@
 /* Place info card: the name list of one place. Sits in the left column below
-   the search panel on desktop and becomes a bottom sheet on phone width. */
+   the control bar on desktop and becomes a bottom sheet on phone width. */
 
 .place-card {
   position: relative;
@@ -9,10 +9,10 @@
   padding: 12px;
   overflow-y: auto;
   /* Lets the card shrink inside the flex column instead of pushing the
-     search panel out of the viewport. */
+     control bar out of the viewport. */
   min-height: 0;
   font-family: system-ui, sans-serif;
-  /* Like the search panel: always light, whatever the OS is set to. */
+  /* Like the control bar: always light, whatever the OS is set to. */
   color-scheme: light;
   color: #222;
 }

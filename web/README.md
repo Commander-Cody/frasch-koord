@@ -233,8 +233,8 @@ resources, so an option whose UI is unwritten is harmless.
 `labelChain(tag)` in `src/labelChain.ts` is the one definition of which name
 a place is shown by. `nameExpression(tag)` in `src/style/localize.ts` turns it
 into the `text-field` of every name-based symbol layer, and `resolveName` in
-`src/names.ts` walks the same chain over a name-list entry for the place card
-and the search results — so neither can drift from the map label again (it
+`src/names/resolveName.ts` walks the same chain over a place's names for the
+place card and the search results — so neither can drift from the map label again (it
 did once: the card said Flensburg where the map said Flensborg). Dialect view
 (`tag = "frr-x-mooring"`):
 
@@ -310,7 +310,10 @@ OpenMapTiles schema plus our extras, injected by the `tiles/` build
   the feature (`name:frr-x-mooring`, `name:frr-x-fering`, …), plus
   `name:frr`, `name:nds`, `name:de`, `name:da`, `name:latin`, `name`. On a
   feature from our name list, `name:de` is the list's German name where it
-  has one (issue #61), the same one as the entry's `name_de`.
+  has one (issue #61), the same one as the entry's `name_de`. OpenMapTiles'
+  own `name_de` (with an underscore) is on every feature too and is no German
+  name: it is `name:de` where OSM has one and the plain `name` everywhere
+  else. Nothing in the app reads it.
 
 The style degrades gracefully when `frasch:*` is absent (an archive built
 before the name-list merge): every `frasch:kind`-based filter has a
@@ -430,15 +433,19 @@ single Warft (which in any case doesn't render before `place-warft`'s
 
 ## Search
 
-`src/components/SearchPanel.tsx` builds a MiniSearch index over
-`public/data/names.json`, which `App` fetches once at startup (`useNames` in
-`src/names.ts`) and shares with the place card. It is an object:
+`App` fetches `public/data/names.json` once at startup (`useNames` in
+`src/names/load.ts`) for both the search and the place card. `useNames`
+returns what the two need of the list: `find(ref)`, the entry a reference
+names, and `search(query)`, a MiniSearch index over all of them
+(`src/names/search.ts`). The field with its result list is
+`src/components/SearchBox.tsx`; `ControlBar.tsx` puts it into one bar with
+the view selector (`ViewSelect.tsx`) and the share button. The file is an object:
 `{"built_from": {...}, "places": [entry, ...]}`. `built_from` records what the
 file was built from (see "Build provenance" below). The file's contract is
 [`names/search-index.schema.json`](../names/search-index.schema.json): every
 field of an entry with what it means, and which ones are left out when empty.
-`frasch build index` writes the file by it, and `NameEntry` in `src/names.ts`
-is pinned to it by a test. `parseNames` is the one place that looks at the
+`frasch build index` writes the file by it, and `NameEntry` in
+`src/names/entry.ts` is pinned to it by a test. `parseNames` is the one place that looks at the
 fetched file: it stops on what is no name list and drops an entry without an
 id or with a repeated one. From there on the app trusts the type.
 
@@ -448,8 +455,9 @@ its row in the name list. It never changes, so a `?place=` link survives
 edits to the list and OSM id changes alike. Links shared before the row ids
 (`?place=node/240042766`, or `?place=way/28330569#679` for a second row on one
 object) and tiles built before them name the row's OSM reference (or its QID)
-instead; `entryLookup` in `src/names.ts` resolves those too — an object two
-rows claim opens the first.
+instead; `entryLookup` in `src/names/load.ts` resolves those too. The
+`#<line>` told two rows on one object apart, which the name list no longer
+allows; it is ignored.
 
 Written by `frasch build index` (`uv run just rebuild index`); only
 non-empty values are exported, so an absent field really means "no such
@@ -486,7 +494,13 @@ selected view large at the top, then every other dialect that has a name (in
 marked with †), the local form with its `frasch:variety` remark, German,
 Danish, and links to the OpenStreetMap object and to Wikidata.
 
-Where the data comes from (`src/names.ts`):
+Which names a card shows, in which order, and what each one is, is decided
+by `cardModel(selection, view)` in `src/names/card.ts`, a pure function. It
+returns the headline, the lines below it and, with each name, its source: a
+dialect, the local form, a language, or unknown. `PlaceCard` gives every
+source its label and renders; it holds no rule of its own.
+
+Where the data comes from (`src/names/`):
 
 - `App` loads `public/data/names.json` once (`useNames`) and looks entries up
   with `find` (`entryLookup`): by `id`, else by an old-style OSM reference.
@@ -494,14 +508,18 @@ Where the data comes from (`src/names.ts`):
   `TOUCH_MEDIA` in `layout.ts`) against the label layers of the current style (`placeLayerIds` in `style/localize.ts` reads them off the
   style, so a new label class is clickable without touching the map) and hands
   the topmost feature up.
-- The feature's `frasch:ref` looks the row up with `find`. `cardEntry` then
-  merges the two: the name-list entry wins field by field, the tile fills what
-  the list does not have — which is how Föhr shows a Danish name (OSM's
+- The feature's `frasch:ref` looks the row up with `find`. `cardNames.ts`
+  then merges the two: the name-list entry wins field by field, the tile fills
+  what the list does not have — which is how Föhr shows a Danish name (OSM's
   `name:da`) although our own `da` column is empty there. The local name and
-  its dialect area are the exception: the clicked feature's own
-  `frasch:local` wins and brings its `frasch:dialect` along. A row may have
-  several objects in different dialect areas, and the entry only knows the
-  first one's.
+  its dialect area are the exception: they are the clicked feature's own
+  `frasch:local` and `frasch:dialect`, never the entry's. A row may have
+  several objects, and the entry only knows the first one's: another may lie
+  in another dialect area, or in none and have no local name at all
+  (issue #89). The entry's own serve a card opened from search or a link.
+- `src/names/tile.ts` has the one table of which tile property is which of a
+  place's names. Reading a tile feature and walking the label chain over a
+  place's names both go by it.
 - A feature with no row in the list (a plain German village, or an object only
   `names/curation.csv` touches) still gets a card, built from the tile
   attributes alone, with the OSM link decoded from the tile feature id
@@ -530,7 +548,11 @@ Where the data comes from (`src/names.ts`):
   the name the injector gives its point. The card never treats it as German:
   in the local view Ribe is labelled Ribe, and the list's German Ripen gets a
   line of its own. The headline says which language it is only where that is
-  known, i.e. where the name equals the German or the Danish one.
+  known, i.e. where the name equals the German (`name:de`) or the Danish one;
+  otherwise it names no language. A generic name that is not the headline
+  gets no line: the card would have no language to call it by. So the card of
+  a village the list does not have, whose only tags are `name` and
+  `name:nds`, shows the Low Saxon name alone in the local view.
 
 Two details worth knowing:
 
@@ -553,7 +575,7 @@ or missing name" link is issue #8.
 
 ## Curation view (dev only)
 
-`http://localhost:5173/?curate` swaps the search panel for
+`http://localhost:5173/?curate` swaps the control bar for
 `src/dev/CuratePanel.tsx`: the rows `frasch match` left `ambiguous`
 or `not_found`, each with its candidates as numbered pins on the map. Export
 the worklist first — `frasch curate export` writes `names/work/curate.json`
@@ -588,7 +610,7 @@ message in the panel.
 
 ## Dialect-area review (dev only)
 
-`http://localhost:5173/?areas` swaps the search panel for
+`http://localhost:5173/?areas` swaps the control bar for
 `src/dev/AreaPanel.tsx`: every municipality of
 `names/dialect_areas.csv` drawn in its dialect's colour, so the mainland
 assignments — a researched draft nobody has checked — can be reviewed on the

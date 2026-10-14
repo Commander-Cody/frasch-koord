@@ -171,7 +171,7 @@ def as_tags(names: PlaceNames) -> dict[str, str]:
 # ----------------------------------------------------------- as entry ----
 class SearchEntry(TypedDict):
     """One place of the search index, as names/search-index.schema.json
-    defines it (web/src/names.ts reads it); the optional fields are left out
+    defines it (web/src/names/load.ts reads it); the optional fields are left out
     when empty."""
 
     id: str

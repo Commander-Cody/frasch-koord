@@ -1,7 +1,7 @@
 /**
  * Root of the dev views, `?curate` (CuratePanel.tsx) and `?areas`
  * (AreaPanel.tsx): the map with one of the review panels instead of the
- * search panel and place card of the public App.
+ * control bar and place card of the public App.
  *
  * Only ever loaded under `vite dev`: main.tsx imports this module behind
  * `import.meta.env.DEV`, so a production build leaves it (and both panels)

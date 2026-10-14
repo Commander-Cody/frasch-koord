@@ -4,11 +4,11 @@ import type { LngLat, MapGeoJSONFeature } from 'maplibre-gl';
 
 import i18n from './i18n';
 import type { MapViewProps } from './components/Map';
-import type { NameEntry } from './names';
+import type { NameEntry } from './names/entry';
 import { holdNames, stubLayout } from './testing/appHarness';
 import App from './App';
 
-// The side panel as a visitor uses it: the real search panel and place card,
+// The side panel as a visitor uses it: the real control bar and place card,
 // with the map stubbed (MapLibre needs WebGL, which jsdom has not). The stub
 // keeps the click handler App gives it, so a test can click a map label.
 const map = vi.hoisted(() => ({ select: undefined as MapViewProps['onSelectFeature'] }));
