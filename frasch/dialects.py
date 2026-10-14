@@ -31,7 +31,8 @@ parameter.
                                (tiles/build.sh feeds it to Planetiler)
 
 and `frasch build dialects` writes the registry the frontend compiles in
-(`export_json`: web/src/dialects/generated/dialects.json, every column but `note`).
+(`export_json`: web/src/dialects/generated/dialects.json, every column but
+`column` and `note`).
 """
 
 from __future__ import annotations
@@ -67,7 +68,9 @@ class Dialect(TypedDict):
 
 
 FIELDS = list(Dialect.__annotations__)  # the columns of the file, in its order
-EXPORT_FIELDS = FIELDS[:-1]  # what the frontend gets: all but `note`
+# What the frontend gets: all but `column` (places.csv is no business of the
+# browser) and `note`.
+EXPORT_FIELDS = [f for f in FIELDS if f not in ("column", "note")]
 
 
 class Registry:
@@ -167,7 +170,7 @@ def read(path: str) -> Registry:
 
 
 def export_json(reg: Registry, path: str) -> None:
-    """Write the registry the frontend compiles in: every column but `note`."""
+    """Write the registry the frontend compiles in: every column but `column` and `note`."""
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     files.atomic_write(
         path,

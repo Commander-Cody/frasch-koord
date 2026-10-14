@@ -8,8 +8,6 @@ import registry from './generated/dialects.json' with { type: 'json' };
 export interface DialectEntry {
   /** BCP 47 language tag, e.g. "frr-x-mooring". Tile property: "name:<tag>". */
   tag: string;
-  /** Column of that dialect in names/places.csv. Not used by the frontend, kept for traceability. */
-  column: string;
   /**
    * Human-readable label, e.g. "Mooring". Only the last-resort fallback for
    * display: the UI shows `dialects.<tag>` from the locale files (see
