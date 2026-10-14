@@ -1,14 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { latest, normalizePropertyExpression } from '@maplibre/maplibre-gl-style-spec';
-import type { StyleSpecification, SymbolLayerSpecification } from 'maplibre-gl';
+import type { SymbolLayerSpecification } from 'maplibre-gl';
 
-import fraschBright from './frasch-bright.json';
+import { BASE_STYLE } from './index';
 
-const style = fraschBright as unknown as StyleSpecification;
 const MAX_ZOOM = 20;
 
 function symbolLayer(id: string): SymbolLayerSpecification {
-  const layer = style.layers.find((candidate) => candidate.id === id);
+  const layer = BASE_STYLE.layers.find((candidate) => candidate.id === id);
   if (layer?.type !== 'symbol') throw new Error(`no symbol layer ${id}`);
   return layer;
 }

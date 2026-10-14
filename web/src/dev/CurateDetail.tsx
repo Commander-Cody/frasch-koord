@@ -9,7 +9,7 @@
 import { useCallback, useState } from 'react';
 import type { RefObject } from 'react';
 
-import type { MapViewHandle } from '../map/MapView';
+import type { MapAccess } from '../map/MapView';
 import {
   candidateColor,
   hasPoint,
@@ -38,7 +38,7 @@ export interface CurateDetailProps {
   settlementPlaces: readonly string[];
   /** Whether a local reference of the row's kind can carry an area instead of a bare point. */
   canBePolygon: boolean;
-  mapRef: RefObject<MapViewHandle | null>;
+  mapRef: RefObject<MapAccess | null>;
   /** Stores a decision; rejects with a message fit for the panel. */
   onSave: (row: CurateRow, decision: Decision) => Promise<void>;
 }
@@ -370,7 +370,7 @@ function ManualRef({ decide }: { decide: (decision: Decision) => void }) {
 interface LocalRefProps {
   initialSlug: string;
   canBePolygon: boolean;
-  mapRef: RefObject<MapViewHandle | null>;
+  mapRef: RefObject<MapAccess | null>;
   decide: (decision: Decision) => void;
 }
 

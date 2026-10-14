@@ -19,7 +19,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 
-import type { MapViewHandle } from '../map/MapView';
+import type { MapAccess } from '../map/MapView';
 import { replaceQueryParams } from '../url/queryParams';
 import CurateDetail from './CurateDetail';
 import CurateFilters from './CurateFilters';
@@ -40,7 +40,7 @@ import './CuratePanel.css';
 
 export interface CuratePanelProps {
   /** The live map, for pins and the "set position on map" click. */
-  mapRef: RefObject<MapViewHandle | null>;
+  mapRef: RefObject<MapAccess | null>;
 }
 
 export default function CuratePanel({ mapRef }: CuratePanelProps) {

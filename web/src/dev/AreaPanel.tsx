@@ -20,7 +20,7 @@ import type { RefObject } from 'react';
 import type { GeoJSONSource, Map as MapLibreMap, MapLayerMouseEvent } from 'maplibre-gl';
 import type { ExpressionSpecification } from '@maplibre/maplibre-gl-style-spec';
 
-import type { MapViewHandle } from '../map/MapView';
+import type { MapAccess } from '../map/MapView';
 import {
   BEFORE_ID,
   COLOR_UNASSIGNED,
@@ -122,7 +122,7 @@ function dialectLabel(tag: string): string {
 }
 
 export interface AreaPanelProps {
-  mapRef: RefObject<MapViewHandle | null>;
+  mapRef: RefObject<MapAccess | null>;
 }
 
 export default function AreaPanel({ mapRef }: AreaPanelProps) {

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 
-import type { MapViewHandle } from '../map/MapView';
+import type { MapMoves } from '../map/MapView';
 import type { NamesData } from '../names/load';
 import { mapMove, selectionOf } from './placeSelection';
 import type { CloseMeans, PlacePick, PlaceSelection } from './placeSelection';
@@ -10,7 +10,7 @@ import { sheetInset } from './useSheetHeight';
 
 /** What a selection reaches for: the map it moves, and where keyboard focus goes. */
 export interface SelectionTargets {
-  map: RefObject<MapViewHandle | null>;
+  map: RefObject<MapMoves | null>;
   card: RefObject<HTMLElement | null>;
   /** The card's headline. */
   heading: RefObject<HTMLElement | null>;

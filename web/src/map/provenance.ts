@@ -7,9 +7,10 @@
 // a visitor can fix.
 
 import { useEffect } from 'react';
-import { PMTiles } from 'pmtiles';
+import type { PMTiles } from 'pmtiles';
 
 import { TILES_URL } from '../site';
+import { pmtilesArchive } from './pmtiles';
 
 export interface ExtractStamp {
   file: string;
@@ -50,11 +51,8 @@ export function parseBuiltFrom(description: unknown): BuiltFrom | undefined {
   }
 }
 
-const PMTILES_PREFIX = 'pmtiles://';
-
-/** The stamp in the metadata of a `pmtiles://` archive. */
-async function tilesBuiltFrom(tilesUrl: string): Promise<BuiltFrom | undefined> {
-  const archive = new PMTiles(tilesUrl.slice(PMTILES_PREFIX.length));
+/** The stamp in the metadata of a PMTiles archive. */
+async function tilesBuiltFrom(archive: PMTiles): Promise<BuiltFrom | undefined> {
   const metadata = (await archive.getMetadata()) as { description?: unknown };
   return parseBuiltFrom(metadata.description);
 }
@@ -66,9 +64,10 @@ async function tilesBuiltFrom(tilesUrl: string): Promise<BuiltFrom | undefined> 
  */
 export function useProvenanceCheck(indexBuiltFrom: BuiltFrom | undefined): void {
   useEffect(() => {
-    if (!indexBuiltFrom || !TILES_URL.startsWith(PMTILES_PREFIX)) return;
+    const archive = pmtilesArchive(TILES_URL);
+    if (!indexBuiltFrom || !archive) return;
     let cancelled = false;
-    tilesBuiltFrom(TILES_URL)
+    tilesBuiltFrom(archive)
       .then((tiles) => {
         const warning = provenanceWarning(indexBuiltFrom, tiles);
         if (warning && !cancelled) console.warn(warning);

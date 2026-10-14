@@ -1,6 +1,7 @@
 import type { StyleSpecification } from 'maplibre-gl';
 
-import { siteUrl } from '../../site';
+import { siteUrl, TILES_URL } from '../../site';
+import fraschBright from './frasch-bright.json';
 import { labelLayers } from './labels';
 
 // `frasch-bright.json` started as a fork of upstream OSM Bright
@@ -26,29 +27,29 @@ export function placeLayerIds(style: StyleSpecification): string[] {
 }
 
 /**
- * Rewrites `baseStyle` into a label-aware, self-hosted style:
- *  - points the `openmaptiles` source at `tilesUrl`
- *  - rewrites every symbol layer's name-based `text-field` to the chain of
- *    `nameExpression(view)` (labels.ts)
- *  - points `glyphs`/`sprite` at the copies this site hosts itself
- *
- * `view` is a dialect tag or LOCAL_TAG.
+ * frasch-bright.json, typed: a JSON import widens every literal to `string`,
+ * so it is cast, once, here.
  */
-export function buildStyle(
-  baseStyle: StyleSpecification,
-  tilesUrl: string,
-  view: string,
-): StyleSpecification {
-  const style: StyleSpecification = structuredClone(baseStyle);
+export const BASE_STYLE = fraschBright as unknown as StyleSpecification;
+
+/**
+ * The site's style in `view` (a dialect tag or LOCAL_TAG): BASE_STYLE with
+ *  - its `openmaptiles` source pointed at TILES_URL
+ *  - every symbol layer's name-based `text-field` rewritten to the view's
+ *    label chain (labels.ts)
+ *  - `glyphs`/`sprite` pointed at the copies this site hosts itself
+ */
+export function styleFor(view: string): StyleSpecification {
+  const style: StyleSpecification = structuredClone(BASE_STYLE);
 
   // (a) Vector tile source: MapLibre reads TileJSON out of the PMTiles
   // archive itself via the registered `pmtiles://` protocol, so a plain
-  // `{ type: 'vector', url: tilesUrl }` source is all that's needed here.
+  // `{ type: 'vector', url }` source is all that's needed here.
   style.sources = {
     ...style.sources,
     openmaptiles: {
       type: 'vector',
-      url: tilesUrl,
+      url: TILES_URL,
       attribution:
         '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a> · © <a href="https://openmaptiles.org/" target="_blank" rel="noopener">OpenMapTiles</a>',
     },
