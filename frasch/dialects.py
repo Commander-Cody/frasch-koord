@@ -9,7 +9,7 @@ tiles/build.sh), the search index and the frontend's selector
 (web/src/dialects/generated/dialects.json).  Adding a dialect is therefore one line in
 the registry plus a column in places.csv -- and, the one thing in the code, its
 colour in the dialect-area review view (`DIALECT_COLORS` in
-web/src/dev/areaLayers.ts, which a test holds to the registry's tags).
+web/src/dev/areas/areaLayers.ts, which a test holds to the registry's tags).
 
 | column | meaning |
 |---|---|

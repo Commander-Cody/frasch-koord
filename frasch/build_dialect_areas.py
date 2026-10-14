@@ -41,7 +41,7 @@ cannot disagree:
            research `note` of its dialect_areas.csv row -- plus the Kreis
            Nordfriesland municipalities that no row claims at all, marked
            `assigned: false`.  This one is for the review overlay only
-           (web `?areas`, see web/src/dev/AreaPanel.tsx); a reviewer needs
+           (web `?areas`, see web/src/dev/areas/AreaPanel.tsx); a reviewer needs
            to see which municipality got which dialect and why, and an
            unassigned one is a hole in the coverage.  `--no-parts` leaves
            it unwritten.
@@ -135,7 +135,6 @@ class PartProperties(PartIdentity):
     """A feature of --parts, as names/dialect-area-parts.schema.json defines
     it: one municipality."""
 
-    fid: int
     km2: float
 
 
@@ -340,8 +339,7 @@ def build_parts(rows: Sequence[AreaRow], found: Scan, source: Source, options: O
             "built_from": source.built_from,
         },
         "features": [
-            _part_feature(fid, about, polygons, options.parts_simplify)
-            for fid, (about, polygons) in enumerate(parts, start=1)
+            _part_feature(about, polygons, options.parts_simplify) for about, polygons in parts
         ],
     }
     return Parts(fc, skipped=len(rows) - len(assigned), unassigned=len(found.unclaimed))
@@ -593,14 +591,14 @@ def _unassigned_parts(
 
 
 def _part_feature(
-    fid: int, about: PartIdentity, polygons: Sequence[BaseGeometry], tol: float
+    about: PartIdentity, polygons: Sequence[BaseGeometry], tol: float
 ) -> Feature[PartProperties]:
     """The Feature of one part, assigned or not: its polygons as one,
     simplified to `tol`."""
     # also of a single polygon: the union says where its rings start, and
     # that decides which vertices simplifying keeps
     area = simplified(unary_union(polygons), tol)
-    return _feature(area, {"fid": fid, **about, "km2": round(km2(area), 1)})
+    return _feature(area, {**about, "km2": round(km2(area), 1)})
 
 
 def _write_dialects(path: str, fc: FeatureCollection[DialectProperties], total: int) -> None:

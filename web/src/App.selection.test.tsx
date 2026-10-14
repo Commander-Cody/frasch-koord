@@ -23,7 +23,7 @@ vi.mock('./map/MapView', () => ({
   default: function MapStub({ onSelectFeature, marker, ref }: MapViewProps) {
     map.select = onSelectFeature;
     map.marker = marker;
-    useImperativeHandle(ref, () => ({ getMap: () => null, flyTo: map.flyTo, reveal: map.reveal }));
+    useImperativeHandle(ref, () => ({ flyTo: map.flyTo, reveal: map.reveal }));
     return <div className="map-container" />;
   },
 }));

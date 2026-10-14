@@ -1,0 +1,263 @@
+/* Curation review view (?curate): its own rules. What it shares with the
+   dialect-area view is in shell/DevPanel.css. */
+
+.curate-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.curate-row .dev-panel-input {
+  flex: 1 1 0;
+}
+
+button.is-armed {
+  background: #ffe9b3;
+  border-color: #d9a300;
+}
+
+.curate-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #444;
+}
+
+/* ------------------------------------------------------------- worklist */
+
+.curate-list {
+  /* The panel scrolls as a whole; without this a long detail block would
+     shrink the list to nothing (flex items may shrink below their content). */
+  flex-shrink: 0;
+  max-height: 40vh;
+  overflow-y: auto;
+  border: 1px solid #eee;
+  border-radius: 4px;
+}
+
+.curate-list > li {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.curate-list > li:last-child {
+  border-bottom: none;
+}
+
+.curate-list .dev-panel-rowbutton {
+  flex-direction: column;
+  align-items: stretch;
+  border-radius: 0;
+  padding: 5px 6px;
+}
+
+.curate-list .is-done {
+  color: #888;
+}
+
+.curate-item-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.curate-item-name {
+  font-weight: 600;
+}
+
+.curate-item-de {
+  color: #777;
+  font-size: 12px;
+}
+
+.curate-item-hint {
+  font-size: 11px;
+  color: #777;
+}
+
+/* A row's decision, in the list and on the row's detail. */
+.curate-done {
+  margin: 0;
+  font-size: 11px;
+  color: var(--dev-panel-ok);
+}
+
+.curate-badge {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  border-radius: 8px;
+  background: #eee;
+  color: #555;
+  margin-left: auto;
+}
+
+/* The badge doubles as the result marker: ambiguous had candidates to choose
+   from, not_found had none — worth telling apart at a glance. */
+.curate-badge-ambiguous {
+  background: #fff1c2;
+  color: #7a5900;
+}
+
+.curate-badge-not_found {
+  background: #ffe0e0;
+  color: #8a1f1f;
+}
+
+/* --------------------------------------------------------------- detail */
+
+/* Only there to disable the decisions while one is saved; lays out nothing. */
+.curate-decisions {
+  display: contents;
+}
+
+.curate-detail-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.curate-detail-line {
+  font-size: 11px;
+  font-weight: normal;
+  color: #888;
+}
+
+.curate-candidates {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.curate-candidates li {
+  display: flex;
+  gap: 4px;
+  align-items: stretch;
+  border: 1px solid #eee;
+  border-radius: 4px;
+}
+
+.curate-candidates li.is-active {
+  border-color: #1e88e5;
+  background: var(--dev-panel-selected);
+}
+
+.curate-candidates li.is-checked:not(.is-active) {
+  border-color: var(--dev-panel-ok);
+  background: var(--dev-panel-ok-background);
+}
+
+.curate-check-ref {
+  align-self: center;
+  margin: 0 0 0 5px;
+  flex: none;
+}
+
+.curate-multi {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 6px;
+  border: 1px solid var(--dev-panel-ok);
+  border-radius: 4px;
+  background: var(--dev-panel-ok-background);
+}
+
+.curate-candidate {
+  flex: 1 1 auto;
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  text-align: left;
+  border: none;
+  background: none;
+  padding: 4px 5px;
+  min-width: 0;
+}
+
+.curate-candidate-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.curate-candidate-name {
+  font-weight: 600;
+}
+
+.curate-candidate-meta {
+  font-size: 11px;
+  color: #777;
+  overflow-wrap: anywhere;
+}
+
+/* What the panel will not save of the object, e.g. a wikidata tag with several ids. */
+.curate-candidate-warning {
+  font-size: 11px;
+  color: #b3261e;
+  overflow-wrap: anywhere;
+}
+
+.curate-pick {
+  align-self: center;
+  margin-right: 4px;
+}
+
+.curate-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  border-radius: 50%;
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.curate-mono {
+  color: #555;
+}
+
+/* ------------------------------------------------------------- map pins */
+
+.curate-pin {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid white;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  color: white;
+  font:
+    700 12px/1 system-ui,
+    sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+/* The hint and lookup pins are not candidates; a different shape keeps them
+   from being mistaken for one. */
+.curate-pin-hint {
+  border-radius: 4px;
+}
+
+.curate-pin-lookup {
+  border-radius: 4px;
+  border-style: dashed;
+}
+
+/* Ticked for a multi-object pick (shift-click or the list checkbox). */
+.curate-pin.curate-pin-checked {
+  border-color: var(--dev-panel-ok);
+  box-shadow:
+    0 0 0 3px white,
+    0 0 0 5px var(--dev-panel-ok);
+}

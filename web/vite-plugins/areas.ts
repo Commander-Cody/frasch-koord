@@ -1,6 +1,6 @@
 /**
  * Dev-only HTTP endpoint behind `/__areas/` for the dialect-area review view
- * (`?areas`, see src/dev/AreaPanel.tsx).
+ * (`?areas`, see src/dev/areas/AreaPanel.tsx).
  *
  * `names/dialect_areas_parts.geojson` lives next to the CSV it is generated
  * from, outside the Vite root, so the browser cannot reach it; the dev server
