@@ -4,8 +4,8 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { LngLat, MapGeoJSONFeature } from 'maplibre-gl';
 
 import i18n from './i18n';
-import { LOCAL_TAG } from './config';
-import type { MapViewProps } from './components/Map';
+import { LOCAL_TAG } from './dialects/views';
+import type { MapViewProps } from './map/MapView';
 import type { NameEntry } from './names/entry';
 import { holdNames, stubLayout } from './testing/appHarness';
 import App from './App';
@@ -19,7 +19,7 @@ const map = vi.hoisted(() => ({
   flyTo: vi.fn(),
   reveal: vi.fn(),
 }));
-vi.mock('./components/Map', () => ({
+vi.mock('./map/MapView', () => ({
   default: function MapStub({ onSelectFeature, marker, ref }: MapViewProps) {
     map.select = onSelectFeature;
     map.marker = marker;
@@ -70,7 +70,7 @@ function pick(query: string) {
 }
 
 function switchView(tag: string) {
-  const selector = screen.getByRole('combobox', { name: i18n.t('dialect.label') });
+  const selector = screen.getByRole('combobox', { name: i18n.t('view.label') });
   fireEvent.change(selector, { target: { value: tag } });
 }
 

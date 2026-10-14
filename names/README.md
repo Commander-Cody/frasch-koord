@@ -21,7 +21,7 @@ names/REPORT.md          generated worklist: what is still unmatched (in git)
 names/work/matches.jsonl generated details of the last match run (git-ignored)
         |
         |  frasch build index     ->  web/public/data/names.json (in git)
-        |  frasch build dialects  ->  web/src/generated/dialects.json (in git)
+        |  frasch build dialects  ->  web/src/dialects/generated/dialects.json (in git)
         |  frasch inject          ->  tags in the OSM extract  ->  tiles
 ```
 
@@ -418,7 +418,7 @@ back to it. Re-run `frasch match` afterwards and export again.
 uv run just extracts        # download + verify the SH and DK extracts (REFRESH=1: again)
 uv run just rebuild objects   # after a row got a new `osm` reference (result is committed)
 uv run just rebuild areas     # only when dialect_areas.csv changed (result is committed)
-uv run just rebuild dialects  # -> web/src/generated/dialects.json
+uv run just rebuild dialects  # -> web/src/dialects/generated/dialects.json
 uv run just rebuild index     # -> web/public/data/names.json
 uv run just tiles           # injects places.csv + objects + areas + curation.csv, runs Planetiler
 uv run just check-outputs   # the committed outputs match their inputs (CI runs this)
@@ -723,7 +723,7 @@ the commands.
 | command | what |
 |---|---|
 | `update` | `just update`: checks the inputs, applies the curation decisions and builds every generated file of the table in its order (see [Workflow](#workflow)), skipping a scan of the extracts whose output is not stale |
-| `build` | `just rebuild <name>`: builds one generated file of the table — `candidates`, `report`, `objects` (OSM extracts → `osm_objects.json`: where each object of the name list is), `areas`, `dialects` (→ `web/src/generated/dialects.json`) or `index` (`places.csv` + `osm_objects.json` + `dialect_areas.geojson` → `web/public/data/names.json`: every dialect name, the local form, OSM's Low Saxon name, German, Danish, the QID; keyed by the row `id`, the same string the tiles carry as `frasch:ref`; stamped with `built_from`) |
+| `build` | `just rebuild <name>`: builds one generated file of the table — `candidates`, `report`, `objects` (OSM extracts → `osm_objects.json`: where each object of the name list is), `areas`, `dialects` (→ `web/src/dialects/generated/dialects.json`) or `index` (`places.csv` + `osm_objects.json` + `dialect_areas.geojson` → `web/public/data/names.json`: every dialect name, the local form, OSM's Low Saxon name, German, Danish, the QID; keyed by the row `id`, the same string the tiles carry as `frasch:ref`; stamped with `built_from`) |
 | `check-inputs` | `just check-inputs`: checks the hand-edited files, every problem with its line (`--fix` gives new rows an id) |
 | `candidates` | OSM extract(s) → `work/candidates.jsonl`, with the scan's own options |
 | `match` | fills `osm`/`wikidata` in `places.csv`; writes `work/matches.jsonl` and `REPORT.md` (`--dry-run`: only `work/matches.jsonl`) |

@@ -26,14 +26,6 @@
   bottom: var(--safe-bottom);
 }
 
-.map-container {
-  position: absolute;
-  inset: 0;
-  /* Its own stacking context: MapLibre's controls carry a z-index of their
-     own, which would otherwise paint them over the panels. */
-  z-index: 0;
-}
-
 /* The left column of the public view: the control bar and, below it, the
    place card. A column rather than two absolutely positioned panels so the
    card never has to know how tall the control bar is. */
@@ -56,292 +48,6 @@
   pointer-events: auto;
 }
 
-.control-bar {
-  flex: none;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-  padding: 10px;
-  /* Flat markup (see ControlBar.tsx), placed by area: selector and share
-     button on top, the search field below, the results (when there are
-     any) in a row of their own under that. */
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas:
-    'select share'
-    'input input';
-  row-gap: 8px;
-  column-gap: 6px;
-  font-family: system-ui, sans-serif;
-  /* The panel is always white, so pin its widgets to the light palette even
-     when the OS/browser is in dark mode (index.css opts into `light dark`). */
-  color-scheme: light;
-  color: #222;
-}
-
-.dialect-select,
-.search-input {
-  font-size: 14px;
-  padding: 6px 8px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  width: 100%;
-  box-sizing: border-box;
-  background: #fff;
-  color: #222;
-}
-
-.search-input {
-  grid-area: input;
-}
-
-.dialect-select {
-  grid-area: select;
-  min-width: 0;
-}
-
-.share {
-  grid-area: share;
-  position: relative;
-  display: flex;
-}
-
-.share-button {
-  width: 32px;
-  padding: 0;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  background: #fff;
-  color: #444;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.share-button:hover {
-  background: #f0f0f0;
-}
-
-.share-button svg {
-  width: 18px;
-  height: 18px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-/* The "link copied" confirmation: a small tag under the button, announced
-   through role=status. Empty (and invisible) the rest of the time. */
-.share-status {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
-  white-space: nowrap;
-  font-size: 12px;
-  background: #222;
-  color: #fff;
-  border-radius: 4px;
-  padding: 3px 6px;
-  pointer-events: none;
-}
-
-.share-status:empty {
-  display: none;
-}
-
-.search-results {
-  grid-column: 1 / -1;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  max-height: 240px;
-  overflow-y: auto;
-  border-top: 1px solid #eee;
-}
-
-.search-results li {
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.search-results li:last-child {
-  border-bottom: none;
-}
-
-.search-results button {
-  width: 100%;
-  text-align: left;
-  background: none;
-  border: none;
-  padding: 6px 4px;
-  font: inherit;
-  font-size: 14px;
-  color: #222;
-  cursor: pointer;
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.search-results button:hover,
-.search-results li.is-active button {
-  background: #f0f0f0;
-}
-
-.search-result-name {
-  font-weight: 500;
-}
-
-.search-result-de {
-  color: #6b6b6b;
-  font-size: 12px;
-}
-
-.search-result-de::before {
-  content: '(';
-}
-
-.search-result-de::after {
-  content: ')';
-}
-
-.search-empty {
-  padding: 6px 4px;
-  color: #6b6b6b;
-  font-size: 13px;
-}
-
-/* Phone width. The control bar becomes a one-row bar across the top —
-   search field, dialect chip, share button — with the results as a list
-   overlaying the map below it; the place card becomes a bottom sheet (see
-   PlaceCard.css). The width is PHONE_MEDIA in layout.ts. */
-@media (max-width: 600px) {
-  .app {
-    --bar-inset: 8px;
-    --bar-height: 52px;
-  }
-
-  .side-panel {
-    top: calc(var(--bar-inset) + var(--safe-top));
-    left: calc(var(--bar-inset) + var(--safe-left));
-    right: calc(var(--bar-inset) + var(--safe-right));
-    bottom: auto;
-    width: auto;
-  }
-
-  .control-bar {
-    position: relative;
-    /* Above the sheet, which the result list may reach down to. */
-    z-index: 1;
-    box-sizing: border-box;
-    height: var(--bar-height);
-    padding: 6px;
-    grid-template-columns: minmax(0, 1fr) auto auto;
-    grid-template-rows: 100%;
-    grid-template-areas: 'input select share';
-  }
-
-  /* 16px: iOS Safari zooms the page into any smaller focused field. */
-  .search-input,
-  .dialect-select {
-    font-size: 16px;
-    height: 100%;
-  }
-
-  /* A chip as wide as the selected dialect's name, not as its longest
-     option. Where field-sizing is missing, the cap keeps it from eating the
-     search field. */
-  .dialect-select {
-    width: auto;
-    max-width: 40vw;
-    field-sizing: content;
-  }
-
-  .share-button {
-    width: 40px;
-  }
-
-  .search-results {
-    /* Out of the grid: positioned against the whole bar, padding included. */
-    grid-column: auto;
-    position: absolute;
-    top: calc(100% + 6px);
-    left: 0;
-    right: 0;
-    max-height: min(22rem, 55dvh);
-    background: white;
-    border-top: none;
-    border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-  }
-
-  /* Finger-sized rows. */
-  .search-results button,
-  .search-empty {
-    padding: 11px 12px;
-    font-size: 16px;
-  }
-
-  /* MapLibre's zoom/compass buttons, from under the bar to below it. */
-  .app .maplibregl-ctrl-top-right {
-    top: calc(var(--bar-inset) + var(--bar-height) + var(--safe-top));
-  }
-
-  /* The attribution rides on top of the open sheet; hooks/useSheetHeight.ts
-     keeps --sheet-height at the sheet's height while there is one, which
-     covers the bottom's unsafe strip itself. */
-  .app .maplibregl-ctrl-bottom-right,
-  .app .maplibregl-ctrl-bottom-left {
-    bottom: var(--sheet-height, var(--safe-bottom));
-  }
-}
-
-/* A map that failed to load (Map.tsx): a strip at the top centre, above the
-   map but below the side panel, which it must not hide. */
-.map-error {
-  position: absolute;
-  top: calc(12px + var(--safe-top));
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 1;
-  max-width: min(420px, calc(100vw - 24px));
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 6px 6px 12px;
-  border-radius: 8px;
-  background: #fdecea;
-  color: #7a1c14;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-  font:
-    13px system-ui,
-    sans-serif;
-}
-
-.map-error button {
-  flex: none;
-  border: none;
-  background: none;
-  padding: 2px 6px;
-  font: inherit;
-  font-size: 18px;
-  line-height: 1;
-  color: inherit;
-  cursor: pointer;
-}
-
-/* The name list failed to load (SearchBox.tsx): one line under the field. */
-.search-error {
-  grid-column: 1 / -1;
-  margin: 0;
-  color: #a1260d;
-  font-size: 13px;
-}
-
 /* What the side panel shows after it crashed (App.tsx), styled like a card. */
 .panel-error {
   position: relative;
@@ -356,21 +62,33 @@
   color: #222;
 }
 
-/* Phone width: the error strip and line move below the search bar (see the
-   phone block above). */
+/* Phone width. The control bar becomes a one-row bar across the top (see
+   ui/ControlBar.css), the place card a bottom sheet (see ui/PlaceCard.css).
+   The width is PHONE_MEDIA in layout.ts. */
 @media (max-width: 600px) {
-  .map-error {
-    top: calc(var(--bar-inset) + var(--bar-height) + 8px);
+  .app {
+    --bar-inset: 8px;
+    --bar-height: 52px;
   }
 
-  .search-error {
-    position: absolute;
-    top: calc(100% + 6px);
-    left: 0;
-    right: 0;
-    padding: 11px 12px;
-    background: white;
-    border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  .side-panel {
+    top: calc(var(--bar-inset) + var(--safe-top));
+    left: calc(var(--bar-inset) + var(--safe-left));
+    right: calc(var(--bar-inset) + var(--safe-right));
+    bottom: auto;
+    width: auto;
+  }
+
+  /* MapLibre's zoom/compass buttons, from under the bar to below it. */
+  .app .maplibregl-ctrl-top-right {
+    top: calc(var(--bar-inset) + var(--bar-height) + var(--safe-top));
+  }
+
+  /* The attribution rides on top of the open sheet;
+     selection/useSheetHeight.ts keeps --sheet-height at the sheet's height
+     while there is one, which covers the bottom's unsafe strip itself. */
+  .app .maplibregl-ctrl-bottom-right,
+  .app .maplibregl-ctrl-bottom-left {
+    bottom: var(--sheet-height, var(--safe-bottom));
   }
 }

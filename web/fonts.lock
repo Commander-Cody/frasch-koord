@@ -4,7 +4,7 @@
 # The Noto Sans glyphs of openmaptiles/fonts v2.0, pinned by the zip's sha256.
 FONTS_URL=https://github.com/openmaptiles/fonts/releases/download/v2.0/noto-sans.zip
 FONTS_SHA256=d117316544b43a5dde7ee761b36e17701e9f85574e181d76a74814240fdbaf34
-# The font stacks src/style/frasch-bright.json names, comma-separated.
+# The font stacks src/map/style/frasch-bright.json names, comma-separated.
 STACKS=Noto Sans Regular,Noto Sans Italic,Noto Sans Bold
 # Of the 256 ranges of each stack, those the labels need, the same for every
 # stack: the Latin blocks and punctuation whether or not a label uses them

@@ -16,7 +16,7 @@ export default defineConfig({
   // 'serve' as well, but they only add dev-server endpoints, so there they do
   // nothing. `tiles` and `glyphs` only run on a build.
   plugins: [react(), curate(), areas(), tiles(), glyphs()],
-  // MapLibre's worker is bundled on its own (see src/components/Map.tsx) and
+  // MapLibre's worker is bundled on its own (see src/map/createMap.ts) and
   // started as a module worker, so it is built as an ES module too.
   worker: { format: 'es' },
   // The libraries change far less often than the app: in chunks of their own

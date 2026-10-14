@@ -60,15 +60,14 @@ def test_an_unknown_tag_is_a_pipeline_error(tmp_path: Path) -> None:
         reg.column_of("frr-x-fering")
 
 
-def test_the_frontend_gets_the_registry_without_the_notes(tmp_path: Path) -> None:
+def test_the_frontend_gets_the_registry_without_notes_and_columns(tmp_path: Path) -> None:
     reg = dialects.read(
         write(tmp_path, HEADER + "frr-x-mooring,mooring,Mooring,living,yes,Bökingharde\n")
     )
     out = tmp_path / "generated" / "dialects.json"
     dialects.export_json(reg, str(out))
     assert out.read_text(encoding="utf-8") == (
-        '[{"tag":"frr-x-mooring","column":"mooring","label":"Mooring",'
-        '"status":"living","view":"yes"}]\n'
+        '[{"tag":"frr-x-mooring","label":"Mooring","status":"living","view":"yes"}]\n'
     )
 
 

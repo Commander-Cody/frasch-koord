@@ -6,14 +6,14 @@ import App from './App';
 
 // MapLibre needs WebGL, which jsdom has not; a bare container stands in for
 // it, which is all this test needs: whether it survives.
-vi.mock('./components/Map', () => ({
+vi.mock('./map/MapView', () => ({
   default: function MapStub() {
     return <div className="map-container" data-testid="map" />;
   },
 }));
 
 // A card that trips over a malformed names.json entry.
-vi.mock('./components/PlaceCard', () => ({
+vi.mock('./ui/PlaceCard', () => ({
   default: function BrokenCard(): never {
     throw new Error('malformed entry');
   },

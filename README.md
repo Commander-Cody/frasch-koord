@@ -73,6 +73,6 @@ fetched assets.
   Attribution: "Frasche stääsnoome, Thore Andresen, ODbL 1.0".
 - **Map style and sprites:** a fork of OSM Bright, BSD 3-Clause (code) and
   CC BY 4.0 (design), see
-  [`web/src/style/LICENSE-osm-bright.md`](web/src/style/LICENSE-osm-bright.md).
+  [`web/src/map/style/LICENSE-osm-bright.md`](web/src/map/style/LICENSE-osm-bright.md).
 - **Map data:** © OpenStreetMap contributors, ODbL; tiles in the
   OpenMapTiles schema (© OpenMapTiles).

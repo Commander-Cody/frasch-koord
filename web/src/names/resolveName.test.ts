@@ -77,7 +77,7 @@ describe('resolveName', () => {
   });
 
   it('the local view never shows name:frr, only frasch:local then Low Saxon then German', () => {
-    // name_frr is deliberately ignored by the local view (see labelChain.ts);
+    // name_frr is deliberately ignored by the local view (see dialects/labelChain.ts);
     // Low Saxon still wins over OSM's generic name and the German one.
     const e = entry({ name_frr: 'Rüms', name_nds: 'Sölerloch', name_osm: 'Sylt', name_de: 'Sylt' });
     expect(resolveName(e, 'frr-x-local')).toEqual({ name: 'Sölerloch', source: LOW_SAXON });

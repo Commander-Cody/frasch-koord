@@ -1,0 +1,86 @@
+/* The bar arranges its widgets (see ControlBar.tsx) and gives its two
+   fields one look. Imported before the widgets' own stylesheets, which
+   refine that look. */
+.control-bar {
+  flex: none;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  padding: 10px;
+  /* Flat markup (see ControlBar.tsx), placed by area: selector and share
+     button on top, the search field below, the results (when there are
+     any) in a row of their own under that. */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'select share'
+    'input input';
+  row-gap: 8px;
+  column-gap: 6px;
+  font-family: system-ui, sans-serif;
+  /* The panel is always white, so pin its widgets to the light palette even
+     when the OS/browser is in dark mode (index.css opts into `light dark`). */
+  color-scheme: light;
+  color: #222;
+}
+
+.view-select,
+.search-input {
+  font-size: 14px;
+  padding: 6px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  width: 100%;
+  box-sizing: border-box;
+  background: #fff;
+  color: #222;
+}
+
+/* Placed by area. */
+.search-input {
+  grid-area: input;
+}
+
+.view-select {
+  grid-area: select;
+  min-width: 0;
+}
+
+.share {
+  grid-area: share;
+}
+
+/* The results and the error line, when there are any, in a row of their own. */
+.search-results,
+.search-error {
+  grid-column: 1 / -1;
+}
+
+/* Phone width (PHONE_MEDIA in layout.ts): a one-row bar across the top —
+   search field, view chip, share button. */
+@media (max-width: 600px) {
+  .control-bar {
+    position: relative;
+    /* Above the sheet, which the result list may reach down to. */
+    z-index: 1;
+    box-sizing: border-box;
+    height: var(--bar-height);
+    padding: 6px;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-rows: 100%;
+    grid-template-areas: 'input select share';
+  }
+
+  /* 16px: iOS Safari zooms the page into any smaller focused field. */
+  .search-input,
+  .view-select {
+    font-size: 16px;
+    height: 100%;
+  }
+
+  /* The results overlay the map (see SearchBox.css): out of the grid,
+     positioned against the whole bar, padding included. */
+  .search-results {
+    grid-column: auto;
+  }
+}

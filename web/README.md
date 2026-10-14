@@ -44,7 +44,7 @@ Two things make a build differ from `npm run dev`, and each has a check:
 
 - **The MapLibre worker.** MapLibre 6 looks for `maplibre-gl-worker.mjs` next
   to its own module, a file Vite never emits; a production build would get
-  `index.html` back and parse no tile at all. `src/components/Map.tsx` imports
+  `index.html` back and parse no tile at all. `src/map/createMap.ts` imports
   the worker with `?worker&url`, so Vite bundles it (with the shared chunk it
   imports) as `assets/maplibre-gl-worker-<hash>.js`, and hands that URL to
   `setWorkerUrl` before any map exists.
@@ -69,7 +69,7 @@ system libraries on a bare Linux).
 
 **Base path.** Everything the site serves itself — `data/names.json`, the
 glyphs, the sprites, the default tiles URL — goes through `siteUrl()` in
-`src/config.ts`, which prefixes Vite's `base`. So the same code runs at a
+`src/site.ts`, which prefixes Vite's `base`. So the same code runs at a
 domain root or under a sub-path, e.g. a GitHub Pages project site:
 `npx vite build --base /frasch-koord/`.
 
@@ -88,18 +88,18 @@ server shows a local tile build.
 the search field instead of "no results" to every query; a map error (tiles,
 glyphs, sprites, or a first render that has not happened after 30 s) shows a
 strip at the top of the map; and a crash in the side panel is caught by
-`src/components/ErrorBoundary.tsx`, so it never takes the map with it.
+`src/ui/ErrorBoundary.tsx`, so it never takes the map with it.
 
 The map is created with MapLibre's `hash: true` option, so the URL hash
-reflects the current view (`#zoom/lat/lon`, e.g. `#13/54.52/8.65`) and an
-initial view can be linked to or loaded directly, e.g.
-`http://localhost:5173/#12/54.64/8.77`. Useful for sharing a view or for
+reflects the current viewport (`#zoom/lat/lon`, e.g. `#13/54.52/8.65`) and an
+initial viewport can be linked to or loaded directly, e.g.
+`http://localhost:5173/#12/54.64/8.77`. Useful for sharing a viewport or for
 scripted screenshots at a specific place/zoom.
 
 MapLibre rewrites the whole hash on every move, so the rest of what a link
 carries lives in the query string (`src/url/linkState.ts`), which it leaves alone:
 
-- `?view=<tag>` — the selected label option (`frr-x-mooring`, `frr-x-local`,
+- `?view=<tag>` — the selected view (`frr-x-mooring`, `frr-x-local`,
   …). A tag the selector does not offer falls back to the default.
 - `?place=<id>` — the name-list id of the place whose card is open
   (`node/240042766`, `local/<slug>`). Only name-list places can be linked; a
@@ -111,15 +111,15 @@ Each is kept in sync by the hook that owns it, with `history.replaceState`
 (`useView` writes `?view=`, `usePlaceSelection` `?place=`), so the address bar
 always is a link to what is on screen, e.g.
 `/?view=frr-x-local&place=node/240042766#12/54.79/8.83`. The share button
-next to the dialect selector hands that URL to the system share sheet on
-touch devices and copies it everywhere else (`src/components/ShareButton.tsx`).
+next to the view selector hands that URL to the system share sheet on
+touch devices and copies it everywhere else (`src/ui/ShareButton.tsx`).
 
 `src/url/queryParams.ts` is the one module that touches `window.location` and
 `window.history` (a test scans `src/` for it); `src/url/linkState.ts` knows
 the two parameters above, and `src/url/useOpenLinked.ts` opens what a dev
 panel's link names (`?curate&row=`, `?areas&area=`).
 
-**The selected place** is one model (`src/placeSelection.ts`): a pick says
+**The selected place** is one model (`src/selection/placeSelection.ts`): a pick says
 how the place was chosen, `{via: 'map' | 'search' | 'link', ...}`, and
 `usePlaceSelection` holds the current one behind one `select(pick)` and one
 `close(means)`. The page starts with the pick its link names; the card opens
@@ -129,10 +129,26 @@ link with a viewport and a clicked label are only brought out from under the
 phone's sheet), the focus, and the marker, which the map gets as a prop
 derived from the selection and the view.
 
+## Source layout
+
+`src/` is grouped by concept, each folder with its hooks, helpers and tests:
+
+| folder       | what                                                                                                                                                                     |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| (root)       | `main.tsx`, `App.tsx`, `i18n.ts`; `site.ts` (`siteUrl`, `TILES_URL`, the only reader of the deployment's `import.meta.env`); `layout.ts` (the media queries); `locales/` |
+| `dialects/`  | the registry (`registry.ts`, `generated/`), the views (`views.ts`, `useView.ts`), `labelChain.ts`                                                                        |
+| `names/`     | the name list: loading, search, a place's names, the card model, OSM references                                                                                          |
+| `map/`       | `MapView.tsx` and what it is built from (`createMap`, `hitTest`, `useMapFailure`, `oncePerFrame`), the PMTiles archive (`pmtiles.ts`, `provenance.ts`), `style/`         |
+| `url/`       | the query string and what a link carries                                                                                                                                 |
+| `selection/` | the selected place (`placeSelection.ts`, `usePlaceSelection.ts`), the sheet's height, Escape                                                                             |
+| `ui/`        | the components of the side panel, each with its stylesheet                                                                                                               |
+| `dev/`       | the curation view and the dialect-area review (dev only)                                                                                                                 |
+| `testing/`   | helpers of the tests                                                                                                                                                     |
+
 ## Tile hosting
 
 The **only** place this frontend depends on how/where tiles are hosted is
-`VITE_TILES_URL`, read in `src/config.ts`. Copy `.env.example` to `.env` to
+`VITE_TILES_URL`, read in `src/site.ts`. Copy `.env.example` to `.env` to
 override it (e.g. to point at a CDN-hosted PMTiles archive). Unset, it
 defaults to a PMTiles file served by this site itself:
 
@@ -141,7 +157,7 @@ pmtiles://<site>/tiles/schleswig-holstein.pmtiles
 ```
 
 i.e. `web/public/tiles/schleswig-holstein.pmtiles`, resolved against the page
-and the site's base path (`siteUrl()` in `src/config.ts`). That path is gitignored (`public/tiles/*.pmtiles`) — only
+and the site's base path (`siteUrl()` in `src/site.ts`). That path is gitignored (`public/tiles/*.pmtiles`) — only
 `public/tiles/.gitkeep` is tracked.
 
 **The published archive.** Finished archives are published as GitHub release
@@ -174,14 +190,16 @@ but warns. Either build the tiles, or remove the link and run
 `npm run fetch-tiles`, which then links the pinned archive.
 
 The `pmtiles://` protocol is registered once with MapLibre in
-`src/components/Map.tsx` (`addProtocol('pmtiles', protocol.tile)`); MapLibre
-then reads TileJSON straight out of the archive itself.
+`src/map/pmtiles.ts` (`addProtocol('pmtiles', protocol.tile)`); MapLibre
+then reads TileJSON straight out of the archive itself. The provenance check
+reads the archive's metadata through the same `PMTiles` instance
+(`pmtilesArchive(url)`), so the archive's header is fetched once.
 
 ## Map style and dialect-aware labels
 
 ### Style ownership
 
-- `src/style/frasch-bright.json` **is our style**, edited directly. It
+- `src/map/style/frasch-bright.json` **is our style**, edited directly. It
   started as a fork of upstream OSM Bright
   ([openmaptiles/osm-bright-gl-style](https://github.com/openmaptiles/osm-bright-gl-style),
   `openmaptiles:version` "3.x", downloaded as-is on 2026-09-15 — see
@@ -189,27 +207,33 @@ then reads TileJSON straight out of the archive itself.
   2026-09-15, when the `place`-layer label group was restructured for
   Frisian place kinds (see "Label classes" below). Everything else in the
   file is still stock OSM Bright.
-- `src/style/localize.ts` — `buildStyle(baseStyle, tilesUrl, view)` keeps
-  doing only what has to stay dynamic at runtime:
-  - points the `openmaptiles` source at `tilesUrl` and adds OSM/OpenMapTiles
+- `src/map/style/index.ts` — `styleFor(view)` takes it (`BASE_STYLE`, the
+  one place the JSON is cast to a `StyleSpecification`) and keeps doing only
+  what has to stay dynamic at runtime:
+  - points the `openmaptiles` source at `TILES_URL` and adds OSM/OpenMapTiles
     attribution to it;
   - rewrites every name-based symbol layer's `text-field` to
-    `nameExpression(view)` below;
+    `nameExpression(view)` below (`labelLayers` in `src/map/style/labels.ts`,
+    which needs no `import.meta.env`, so the glyphs check of the build
+    imports it too);
   - points `glyphs`/`sprite` at the locally hosted copies below, resolved
     as absolute URLs against the page origin (MapLibre requires this for
     sprites).
 
   Layers labelling something else (e.g. `{ref}` road shields) are left
   untouched. Changing the selector calls `map.setStyle()` with a freshly
-  built style for the new label option.
+  built style for the new view.
 
 ### Dialect registry and the selector
 
 `names/dialects.csv` is the single list of North Frisian dialects for the
-whole project; `frasch build dialects` (`uv run just rebuild dialects`) writes it to `src/generated/dialects.json`
-(`{tag, column, label, status, view}` per dialect, registry order) which
-`src/config.ts` imports — **generated, do not edit by hand.** `config.ts`
-derives the one dropdown from it:
+whole project; `frasch build dialects` (`uv run just rebuild dialects`) writes it to `src/dialects/generated/dialects.json`
+(`{tag, label, status, view}` per dialect, registry order) which
+`src/dialects/registry.ts` imports — **generated, do not edit by hand.**
+`label` is the dialect's German name: the German UI shows it, any other UI
+language names a dialect under `dialects.<tag>` in its locale file
+(Mooring: Wiedingharder is "Wisinge"). `src/dialects/views.ts` derives the
+views, the one dropdown's options, from it:
 
 - one option per dialect with `view = yes` (today only Mooring — the other
   dialects' name coverage is too thin for a whole map view), labelled from
@@ -219,19 +243,26 @@ derives the one dropdown from it:
   the way the people of that place speak (the injector's `frasch:local`), so
   one map shows Mooring around Niebüll, Fering on Föhr, Sölring on Sylt…
 
-Each option carries a `uiLanguage`, and `useView` (`src/hooks/useView.ts`)
-keeps the UI in it, in one effect on the selected option (`i18n.ts` only
-starts in the default option's language), so map
+Each view carries a `uiLanguage`, and `useView` (`src/dialects/useView.ts`)
+keeps the UI in it, in one effect on the selected view (`i18n.ts` only
+starts in the default view's language), so map
 labels and UI chrome move together. A dialect view uses its own dialect;
 the local view has no dialect of its own and borrows one —
-`LOCAL_VIEW_UI_LANGUAGE` in `config.ts` (Mooring today) is the single place
+`LOCAL_VIEW_UI_LANGUAGE` in `views.ts` (Mooring today) is the single place
 to change that. i18next falls back to German for every language without
-resources, so an option whose UI is unwritten is harmless.
+resources, so a view whose UI is unwritten is harmless.
+
+"View" is the one word for this choice, in code (`VIEWS`, `viewOption`,
+`useView`), CSS (`.view-select`), i18n keys (`view.label`, `view.local`)
+and the URL (`?view=`). `ALL_VIEW_TAGS` is every tag the map can be labelled
+in, offered or not: each dialect and the local view. The checks that have to
+hold in any view (the glyphs of the build, the map and the card agreeing)
+run over it.
 
 ### Label chain
 
-`labelChain(tag)` in `src/labelChain.ts` is the one definition of which name
-a place is shown by. `nameExpression(tag)` in `src/style/localize.ts` turns it
+`labelChain(tag)` in `src/dialects/labelChain.ts` is the one definition of which name
+a place is shown by. `nameExpression(tag)` in `src/map/style/labels.ts` turns it
 into the `text-field` of every name-based symbol layer, and `resolveName` in
 `src/names/resolveName.ts` walks the same chain over a place's names for the
 place card and the search results — so neither can drift from the map label again (it
@@ -422,7 +453,8 @@ single Warft (which in any case doesn't render before `place-warft`'s
   download, a missing range fetches the zip again.
 
   **The build checks the labels against the list.** `vite-plugins/glyphs.ts`
-  builds the style for every view (`buildStyle()`, loaded through Vite), reads
+  rewrites the style's labels for every tag of `ALL_VIEW_TAGS` (`labelLayers`,
+  imported straight from `src/`), reads
   off which tile properties each symbol layer can show, takes every such
   string from the pinned archive and stops the build when one has a character
   outside the listed ranges; for a layer with `text-transform: uppercase`,
@@ -438,7 +470,7 @@ single Warft (which in any case doesn't render before `place-warft`'s
 returns what the two need of the list: `find(ref)`, the entry a reference
 names, and `search(query)`, a MiniSearch index over all of them
 (`src/names/search.ts`). The field with its result list is
-`src/components/SearchBox.tsx`; `ControlBar.tsx` puts it into one bar with
+`src/ui/SearchBox.tsx`; `ControlBar.tsx` puts it into one bar with
 the view selector (`ViewSelect.tsx`) and the share button. The file is an object:
 `{"built_from": {...}, "places": [entry, ...]}`. `built_from` records what the
 file was built from (see "Build provenance" below). The file's contract is
@@ -473,7 +505,7 @@ index was built from (`places.csv`, `dialects.csv`, `curation.csv`,
 `dialect_areas.geojson`, `osm_objects.json`) and the OSM extracts the objects
 were located in. `tiles/build.sh` writes the same stamp into the PMTiles
 archive's `description`. Once `names.json` has loaded, `useProvenanceCheck`
-(`src/provenance.ts`) reads the archive's metadata and logs a `console.warn`
+(`src/map/provenance.ts`) reads the archive's metadata and logs a `console.warn`
 naming every input the two were built from differently — the map labels and
 the place cards may then disagree. A tile source that is not a `pmtiles://`
 archive (`VITE_TILES_URL`) is not checked.
@@ -482,12 +514,12 @@ archive (`VITE_TILES_URL`) is not checked.
 are flattened into one indexed string, so a place stays findable under any of
 its names whichever view is selected — typing "Naibel" while the map is in
 Fering still finds Niebüll. Which name a result _shows_ follows the selected
-option through `resolveName`, i.e. the label chain above, with the German
+view through `resolveName`, i.e. the label chain above, with the German
 name on the second line when it differs. Selecting a result flies the map to it.
 
 ## Place info card
 
-`src/components/PlaceCard.tsx`. Clicking a place label — or picking a search
+`src/ui/PlaceCard.tsx`. Clicking a place label — or picking a search
 result — opens a card with the whole name list of that place: the name in the
 selected view large at the top, then every other dialect that has a name (in
 `names/dialects.csv` order, labelled from the registry, extinct dialects
@@ -504,8 +536,8 @@ Where the data comes from (`src/names/`):
 
 - `App` loads `public/data/names.json` once (`useNames`) and looks entries up
   with `find` (`entryLookup`): by `id`, else by an old-style OSM reference.
-- `Map` hit-tests a 12 px box around the click (24 px on a touch screen,
-  `TOUCH_MEDIA` in `layout.ts`) against the label layers of the current style (`placeLayerIds` in `style/localize.ts` reads them off the
+- `MapView` hit-tests a 12 px box around the click (24 px on a touch screen,
+  `TOUCH_MEDIA` in `layout.ts`; `placeHitTest` in `src/map/hitTest.ts`) against the label layers of the current style (`placeLayerIds` in `src/map/style/index.ts` reads them off the
   style, so a new label class is clickable without touching the map) and hands
   the topmost feature up.
 - The feature's `frasch:ref` looks the row up with `find`. `cardNames.ts`
@@ -530,7 +562,7 @@ Where the data comes from (`src/names/`):
   repeats a name the card already shows. Inside a dialect area the tile
   carries the same name as `frasch:local` (issue #81); the card then shows it
   as the local form (`card.local`), in every view.
-- `src/osmRef.ts` is the one place that reads an `osm` cell: `osmRefs(cell)`
+- `src/names/osmRef.ts` is the one place that reads an `osm` cell: `osmRefs(cell)`
   splits it, `osmUrl(ref)` links one reference to openstreetmap.org (null for
   a `local/<slug>` place of our own), `parseOsmRef(text)` takes a typed
   reference or a pasted OSM URL. The card links the first reference of its
@@ -570,7 +602,7 @@ Escape, the × button and a click on the map (that hits no label) close the
 card; Escape in the search field only closes the result list. A search pick
 moves focus to the card's headline, so screen readers announce it, and a card
 closed from the keyboard hands focus back to the search field
-(`hooks/usePlaceSelection.ts`). The open card is in the URL (`?place=`, see above); the "report a wrong
+(`src/selection/usePlaceSelection.ts`). The open card is in the URL (`?place=`, see above); the "report a wrong
 or missing name" link is issue #8.
 
 ## Curation view (dev only)
@@ -658,15 +690,16 @@ The checklist of rows to confirm is `docs/dialect-area-review.md`.
 ## i18n
 
 `i18next` + `react-i18next`, configured in `src/i18n.ts`; the UI language
-follows the selected label option (see "Dialect registry and the selector").
-One JSON file per dialect in `src/locales/`, same keys in each:
+follows the selected view (see "Dialect registry and the selector").
+One JSON file per UI language in `src/locales/`, same keys in each, but for
+the dialect names under `dialects.*`, which German takes from the registry:
 
 - `de.json` — German UI strings (the page title `app.title`, the search
-  field's label and placeholder, dialect label, "no results", the place card's row labels under
+  field's label and placeholder, the view selector's label, "no results", the place card's row labels under
   `card.*`, the kind names under `kind.*` — both our own `frasch:kind` values
   and the OpenMapTiles `class` values a place outside the name list has). This
   is the fallback language (`fallbackLng: 'de'`). The map's attribution is not
-  among them: it is a fixed licence notice (`src/style/localize.ts`).
+  among them: it is a fixed licence notice (`src/map/style/index.ts`).
 - `frr-x-mooring.json` — Mooring UI strings. A string nobody has written yet
   is left as an **empty string — never invented** — so the UI falls back to
   German rather than showing blank text (`returnEmptyString: false` makes
@@ -675,8 +708,6 @@ One JSON file per dialect in `src/locales/`, same keys in each:
 
 ## Not done / left as-is
 
-- Mooring UI translations for the remaining keys (see i18n section above),
-  including the name of the local-dialect view (`dialect.local`).
 - Nothing in the _style_ reads `frasch:dialect`/`frasch:variety`; the place
   card does.
 - The `within`-polygon split of the label chain for non-German areas (see

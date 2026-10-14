@@ -1,7 +1,7 @@
 // The links at the foot of a place's card: to its OSM object and its Wikidata item.
 
 import indexSchema from '../../../names/search-index.schema.json';
-import { osmRefs } from '../osmRef';
+import { osmRefs } from './osmRef';
 import type { NameEntry } from './entry';
 
 /**

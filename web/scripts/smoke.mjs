@@ -45,7 +45,7 @@ try {
   });
 
   await page.goto(`${url}${VIEW}`);
-  // Map.tsx sets data-state once MapLibre fires `load`: style, tiles, glyphs
+  // map/createMap.ts sets data-state once MapLibre fires `load`: style, tiles, glyphs
   // and sprites fetched, tiles parsed by the worker, first frame drawn.
   await page.waitForSelector('.map-container[data-state="loaded"]', { timeout: TIMEOUT });
   if (await page.locator('.map-error').count()) problems.push('the map shows its error banner');

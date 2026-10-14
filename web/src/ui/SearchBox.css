@@ -1,0 +1,101 @@
+.search-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  border-top: 1px solid #eee;
+}
+
+.search-results li {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.search-results li:last-child {
+  border-bottom: none;
+}
+
+.search-results button {
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 6px 4px;
+  font: inherit;
+  font-size: 14px;
+  color: #222;
+  cursor: pointer;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.search-results button:hover,
+.search-results li.is-active button {
+  background: #f0f0f0;
+}
+
+.search-result-name {
+  font-weight: 500;
+}
+
+.search-result-de {
+  color: #6b6b6b;
+  font-size: 12px;
+}
+
+.search-result-de::before {
+  content: '(';
+}
+
+.search-result-de::after {
+  content: ')';
+}
+
+.search-empty {
+  padding: 6px 4px;
+  color: #6b6b6b;
+  font-size: 13px;
+}
+
+/* The name list failed to load (SearchBox.tsx): one line under the field. */
+.search-error {
+  margin: 0;
+  color: #a1260d;
+  font-size: 13px;
+}
+
+/* Phone width (PHONE_MEDIA in layout.ts): the results as a list overlaying
+   the map below the bar, the error line where they would be. */
+@media (max-width: 600px) {
+  .search-results {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    max-height: min(22rem, 55dvh);
+    background: white;
+    border-top: none;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  }
+
+  /* Finger-sized rows. */
+  .search-results button,
+  .search-empty {
+    padding: 11px 12px;
+    font-size: 16px;
+  }
+
+  .search-error {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    padding: 11px 12px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  }
+}

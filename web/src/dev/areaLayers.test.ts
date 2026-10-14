@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 
-import { DIALECTS } from '../config';
+import { DIALECTS } from '../dialects/registry';
 import { DIALECT_COLORS } from './areaLayers';
 
 it('has a colour for exactly the dialects of the registry', () => {

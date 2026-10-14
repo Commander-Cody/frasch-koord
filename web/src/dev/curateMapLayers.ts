@@ -8,7 +8,7 @@ import type { RefObject } from 'react';
 import { LngLatBounds, Marker } from 'maplibre-gl';
 import type { MapMouseEvent, Map as MapLibreMap } from 'maplibre-gl';
 
-import type { MapViewHandle } from '../components/Map';
+import type { MapAccess } from '../map/MapView';
 import type { Bbox, CurateCandidate, CurateRow } from './curateWorklist';
 import type { LookupResult } from './osmLookup';
 import { FIT_PADDING } from './panelLayout';
@@ -154,7 +154,7 @@ function addHintCircle(map: MapLibreMap, lon: number, lat: number, radiusKm: num
 /* ------------------------------------------------------------------ hooks */
 
 export interface RowPinsOptions {
-  mapRef: RefObject<MapViewHandle | null>;
+  mapRef: RefObject<MapAccess | null>;
   row: CurateRow;
   /** The worklist's bbox: what the map shows when the row has nothing to pin. */
   bbox: Bbox;
@@ -308,7 +308,7 @@ export interface Position {
 }
 
 export interface PositionPinOptions {
-  mapRef: RefObject<MapViewHandle | null>;
+  mapRef: RefObject<MapAccess | null>;
   position: Position | null;
   setPosition: (position: Position) => void;
   /** Whether the next map click sets the position. */

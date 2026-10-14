@@ -2,19 +2,19 @@ import { useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { LngLat, MapGeoJSONFeature } from 'maplibre-gl';
 
-import CloseButton from './components/CloseButton';
-import ControlBar from './components/ControlBar';
-import ErrorBoundary from './components/ErrorBoundary';
-import MapView from './components/Map';
-import type { MapViewHandle } from './components/Map';
-import PlaceCard from './components/PlaceCard';
-import { useCloseOnEscape } from './hooks/useCloseOnEscape';
-import { usePlaceSelection } from './hooks/usePlaceSelection';
-import { useSheetHeight } from './hooks/useSheetHeight';
-import { useView } from './hooks/useView';
+import CloseButton from './ui/CloseButton';
+import ControlBar from './ui/ControlBar';
+import ErrorBoundary from './ui/ErrorBoundary';
+import MapView from './map/MapView';
+import type { MapViewHandle } from './map/MapView';
+import PlaceCard from './ui/PlaceCard';
+import { useCloseOnEscape } from './selection/useCloseOnEscape';
+import { usePlaceSelection } from './selection/usePlaceSelection';
+import { useSheetHeight } from './selection/useSheetHeight';
+import { useView } from './dialects/useView';
 import { useNames } from './names/load';
-import { mapPick, markerOf } from './placeSelection';
-import { useProvenanceCheck } from './provenance';
+import { mapPick, markerOf } from './selection/placeSelection';
+import { useProvenanceCheck } from './map/provenance';
 import './App.css';
 
 function App() {

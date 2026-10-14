@@ -20,7 +20,7 @@ import type { RefObject } from 'react';
 import type { GeoJSONSource, Map as MapLibreMap, MapLayerMouseEvent } from 'maplibre-gl';
 import type { ExpressionSpecification } from '@maplibre/maplibre-gl-style-spec';
 
-import type { MapViewHandle } from '../components/Map';
+import type { MapAccess } from '../map/MapView';
 import {
   BEFORE_ID,
   COLOR_UNASSIGNED,
@@ -35,8 +35,8 @@ import {
   fidFilter,
   layerSpecs,
 } from './areaLayers';
-import { DIALECTS, dialect } from '../config';
-import { osmRefs, osmUrl } from '../osmRef';
+import { DIALECTS, dialect } from '../dialects/registry';
+import { osmRefs, osmUrl } from '../names/osmRef';
 import { replaceQueryParams } from '../url/queryParams';
 import DevPanel from './DevPanel';
 import { FIT_PADDING } from './panelLayout';
@@ -122,7 +122,7 @@ function dialectLabel(tag: string): string {
 }
 
 export interface AreaPanelProps {
-  mapRef: RefObject<MapViewHandle | null>;
+  mapRef: RefObject<MapAccess | null>;
 }
 
 export default function AreaPanel({ mapRef }: AreaPanelProps) {
@@ -320,7 +320,7 @@ export default function AreaPanel({ mapRef }: AreaPanelProps) {
 
     if (map.isStyleLoaded()) ensure();
     else map.once('load', ensure);
-    // MapView rebuilds the whole style when the label option changes, which
+    // MapView rebuilds the whole style when the view changes, which
     // drops every imperatively added layer. `?areas` shows no label selector
     // today, so this is insurance — but it is the difference between "works"
     // and "silently empty" the day one is added.

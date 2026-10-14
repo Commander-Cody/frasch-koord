@@ -10,7 +10,8 @@ import type { StyleSpecification } from 'maplibre-gl';
 import { build, createLogger } from 'vite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import glyphs, { archiveLabels, glyphProblems, renderedFields } from './glyphs.ts';
+import glyphs, { archiveLabels, glyphProblems, renderedFields, siteFields } from './glyphs.ts';
+import { DIALECTS } from '../src/dialects/registry.ts';
 import { type TestTile, writeTestArchive } from './testArchive.ts';
 
 const LATIN = ['0-255', '256-511'];
@@ -119,6 +120,29 @@ describe('renderedFields', () => {
       { sourceLayer: 'place', key: 'name', uppercase: true },
       { sourceLayer: 'place', key: 'name', uppercase: false },
     ]);
+  });
+});
+
+describe('siteFields', () => {
+  it("reads a name layer's properties in every view, offered by the selector or not", () => {
+    const base = {
+      version: 8,
+      sources: {},
+      layers: [
+        {
+          id: 'place',
+          type: 'symbol',
+          source: 'openmaptiles',
+          'source-layer': 'place',
+          layout: { 'text-field': '{name}' },
+        },
+      ],
+    } as StyleSpecification;
+
+    const keys = siteFields(base).map((field) => field.key);
+    expect(keys).toEqual(expect.arrayContaining(['frasch:local', 'name:frr', 'name:nds', 'name']));
+    // Every dialect's name, whether the selector offers its view or not.
+    expect(keys).toEqual(expect.arrayContaining(DIALECTS.map((d) => `name:${d.tag}`)));
   });
 });
 

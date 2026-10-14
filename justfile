@@ -13,7 +13,7 @@
 #                        └─ areas ───┼─ index             web/public/data/names.json
 #                                    └─ tiles             tiles/data/<region>.pmtiles
 #                                         └─ publish-tiles  a release + web/tiles.lock
-#   dialects                                              web/src/generated/dialects.json
+#   dialects                                              web/src/dialects/generated/dialects.json
 #
 # The generated files of its name part -- candidates, report, objects, areas,
 # dialects, index -- are defined once, in frasch/pipeline.py: what builds

@@ -9,9 +9,9 @@
  */
 import { useRef, useState } from 'react';
 
-import MapView from '../components/Map';
-import type { MapViewHandle } from '../components/Map';
-import { useUiLanguage } from '../hooks/useView';
+import MapView from '../map/MapView';
+import type { MapViewHandle } from '../map/MapView';
+import { useUiLanguage } from '../dialects/useView';
 import { initialView } from '../url/linkState';
 import AreaPanel from './AreaPanel';
 import CuratePanel from './CuratePanel';

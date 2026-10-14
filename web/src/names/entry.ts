@@ -75,7 +75,7 @@ export interface CardNames extends Partial<Pick<NameEntry, NameField>> {
   /**
    * Frisian name of no particular dialect — OSM's own `name:frr`, never our
    * name list, which always knows which dialect a name is in. The style
-   * labels with it too (see labelChain.ts), so the card has to know about it
+   * labels with it too (see dialects/labelChain.ts), so the card has to know about it
    * or it would contradict the label the user just clicked.
    */
   name_frr?: string;
