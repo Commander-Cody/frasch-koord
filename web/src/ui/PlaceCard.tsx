@@ -33,9 +33,8 @@ const LANGUAGE_LABEL_KEYS: Record<Language, string> = {
 };
 
 /**
- * The name of a dialect. Dialect names are translated like any other UI
- * string; the registry label covers a dialect the locale files do not know
- * yet. None for a tag the registry does not have.
+ * The name of a dialect: the UI language's own, or the registry's German
+ * one (see dialectLabelKey). None for a tag the registry does not have.
  */
 function dialectLabel(tag: string | undefined, t: TFunction): string {
   const entry = tag === undefined ? undefined : dialect(tag);

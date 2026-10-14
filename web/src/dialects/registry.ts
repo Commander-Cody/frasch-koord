@@ -9,9 +9,9 @@ export interface DialectEntry {
   /** BCP 47 language tag, e.g. "frr-x-mooring". Tile property: "name:<tag>". */
   tag: string;
   /**
-   * Human-readable label, e.g. "Mooring". Only the last-resort fallback for
-   * display: the UI shows `dialects.<tag>` from the locale files (see
-   * dialectLabelKey), so the name follows the UI language.
+   * The dialect's German name, e.g. "Wiedingharder": what the German UI
+   * calls it, and any UI whose locale file has no `dialects.<tag>` of its own
+   * (see dialectLabelKey).
    */
   label: string;
   /** Südergoesharde names are historic. */
@@ -37,9 +37,11 @@ export function dialect(tag: string): DialectEntry | undefined {
 }
 
 /**
- * i18n key of a dialect's display name. Callers pass the registry label as
- * `defaultValue`, so a dialect newly added to the registry still shows a name
- * before the locale files catch up.
+ * i18n key of a dialect's display name in a UI language that names it its
+ * own way (Mooring: "Wisinge"). German has none: callers pass the registry
+ * label as `defaultValue`, so names/dialects.csv is the one place a dialect's
+ * German name is written, and a dialect new to the registry has a name in
+ * every UI.
  */
 export function dialectLabelKey(tag: string): string {
   return `dialects.${tag}`;

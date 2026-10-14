@@ -27,7 +27,7 @@ export interface ViewOption {
   tag: string;
   /** i18n key of the view's name. */
   labelKey: string;
-  /** Fallback name where the key has no translation (the registry label of a dialect). */
+  /** Name where the UI language has none of its own: a dialect's German registry label. */
   label?: string;
   /** UI language to switch to when this view is picked. */
   uiLanguage: string;

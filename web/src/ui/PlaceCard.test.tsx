@@ -12,7 +12,10 @@ import PlaceCard from './PlaceCard';
 // Which names a card shows is names/card.test.ts's; this is what the card
 // calls each of them.
 
-afterEach(cleanup);
+afterEach(async () => {
+  cleanup();
+  await i18n.changeLanguage('frr-x-mooring');
+});
 
 const MOORING = 'frr-x-mooring';
 const FERING = 'frr-x-fering';
@@ -48,6 +51,13 @@ it('calls a name in a dialect by the name of the dialect', () => {
   renderCard(place({ names: { [MOORING]: 'Naibel' } }), MOORING);
 
   expect(headlineLabel()).toBe(i18n.t(`dialects.${MOORING}`));
+});
+
+it('calls a dialect by its registry name in the German UI', async () => {
+  await i18n.changeLanguage('de');
+  renderCard(place({ names: { 'frr-x-wieding': 'Hoorbel' } }), 'frr-x-wieding');
+
+  expect(headlineLabel()).toBe('Wiedingharder');
 });
 
 it("calls a local form that is the name in its area's dialect by both", () => {

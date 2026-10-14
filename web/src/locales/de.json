@@ -13,19 +13,6 @@
     "label": "Dialekt",
     "local": "Ortsdialekt"
   },
-  "dialects": {
-    "frr-x-mooring": "Mooring",
-    "frr-x-wieding": "Wiedingharder",
-    "frr-x-karrhard": "Karrharder",
-    "frr-x-nordgoes": "Nordergoesharder",
-    "frr-x-midgoes": "Mittelgoesharder",
-    "frr-x-suedgoes": "Südergoesharder",
-    "frr-x-fering": "Fering",
-    "frr-x-oomrang": "Öömrang",
-    "frr-x-solring": "Sölring",
-    "frr-x-hallig": "Halligfriesisch",
-    "frr-x-halunder": "Halunder"
-  },
   "share": {
     "label": "Link teilen",
     "copied": "Link kopiert",

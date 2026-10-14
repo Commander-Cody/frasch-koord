@@ -20,8 +20,6 @@ export default function ViewSelect({ view, onViewChange }: ViewSelectProps) {
     >
       {VIEWS.map((option) => (
         <option key={option.tag} value={option.tag}>
-          {/* Dialect names come from the registry as-is; only the local
-              view's name is translated. */}
           {t(option.labelKey, { defaultValue: option.label ?? option.tag })}
         </option>
       ))}
