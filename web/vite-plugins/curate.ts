@@ -1,6 +1,6 @@
 /**
  * Dev-only HTTP endpoints behind `/__curate/` for the curation review view
- * (`?curate`, see src/dev/CuratePanel.tsx).
+ * (`?curate`, see src/dev/curate/CuratePanel.tsx).
  *
  * The browser cannot read or append to files in `names/work/`, so the Vite dev
  * server does it: it hands out the worklist `frasch curate export` wrote and

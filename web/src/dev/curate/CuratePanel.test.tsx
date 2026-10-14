@@ -208,6 +208,15 @@ describe('CuratePanel', () => {
     expect(await screen.findByText('Ripen')).toBeDefined();
   });
 
+  it('selects no row once an export left none', async () => {
+    await renderPanel();
+    await openRow('Naibel');
+    worklist = { ...WORKLIST, rows: [] };
+    fireEvent.click(screen.getByRole('button', { name: 'Reload' }));
+    await screen.findByText('nothing matches the filter');
+    expect(new URLSearchParams(window.location.search).get('row')).toBeNull();
+  });
+
   it('keeps the row the keys moved to in view', async () => {
     const scrolled: string[] = [];
     Element.prototype.scrollIntoView = function (this: Element) {
