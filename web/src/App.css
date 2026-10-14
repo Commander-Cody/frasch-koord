@@ -79,7 +79,7 @@
   color: #222;
 }
 
-.dialect-select,
+.view-select,
 .search-input {
   font-size: 14px;
   padding: 6px 8px;
@@ -95,7 +95,7 @@
   grid-area: input;
 }
 
-.dialect-select {
+.view-select {
   grid-area: select;
   min-width: 0;
 }
@@ -246,7 +246,7 @@
 
   /* 16px: iOS Safari zooms the page into any smaller focused field. */
   .search-input,
-  .dialect-select {
+  .view-select {
     font-size: 16px;
     height: 100%;
   }
@@ -254,7 +254,7 @@
   /* A chip as wide as the selected dialect's name, not as its longest
      option. Where field-sizing is missing, the cap keeps it from eating the
      search field. */
-  .dialect-select {
+  .view-select {
     width: auto;
     max-width: 40vw;
     field-sizing: content;

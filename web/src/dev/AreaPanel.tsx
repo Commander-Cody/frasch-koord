@@ -35,7 +35,7 @@ import {
   fidFilter,
   layerSpecs,
 } from './areaLayers';
-import { DIALECTS, dialect } from '../config';
+import { DIALECTS, dialect } from '../dialects/registry';
 import { osmRefs, osmUrl } from '../names/osmRef';
 import { replaceQueryParams } from '../url/queryParams';
 import DevPanel from './DevPanel';

@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { LngLat, MapGeoJSONFeature } from 'maplibre-gl';
 
 import i18n from './i18n';
-import { LOCAL_TAG } from './config';
+import { LOCAL_TAG } from './dialects/views';
 import type { MapViewProps } from './map/MapView';
 import type { NameEntry } from './names/entry';
 import { holdNames, stubLayout } from './testing/appHarness';
@@ -70,7 +70,7 @@ function pick(query: string) {
 }
 
 function switchView(tag: string) {
-  const selector = screen.getByRole('combobox', { name: i18n.t('dialect.label') });
+  const selector = screen.getByRole('combobox', { name: i18n.t('view.label') });
   fireEvent.change(selector, { target: { value: tag } });
 }
 

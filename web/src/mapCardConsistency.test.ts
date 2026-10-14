@@ -2,24 +2,22 @@ import { describe, expect, it } from 'vitest';
 import { createPropertyExpression, latest } from '@maplibre/maplibre-gl-style-spec';
 import type { LngLat } from 'maplibre-gl';
 
-import { DIALECTS, LOCAL_TAG } from './config';
+import { ALL_VIEW_TAGS } from './dialects/views';
 import { cardModel } from './names/card';
 import type { NameEntry } from './names/entry';
 import type { TileProps } from './names/tile';
-import { nameExpression } from './map/style/localize';
+import { nameExpression } from './map/style/labels';
 
 // Issue #16: the place card once showed German while the map label showed
 // Low Saxon for the same place, because the card's label chain and the map's
 // text-field expression had drifted apart. Both are supposed to be built from
-// the single chain in labelChain.ts (map: map/style/localize.ts's nameExpression,
+// the single chain in labelChain.ts (map: map/style/labels.ts's nameExpression,
 // card: names/card.ts's cardModel), but nothing stops a future edit to
 // one side from forgetting the other. This test evaluates the REAL map
 // expression (nameExpression, the same export buildStyle puts into
 // `text-field`) with MapLibre's own style-spec expression engine and checks
 // it against the REAL card path, for the same tile properties and view, so a
 // drift on either side fails here rather than shipping.
-
-const VIEWS = [...DIALECTS.map((d) => d.tag), LOCAL_TAG];
 
 /** What the map would render as the label, using the real style expression. */
 function mapLabel(tag: string, props: TileProps): string {
@@ -218,7 +216,7 @@ const CASES = [
 
 describe('map label vs. place card (issue #16 regression)', () => {
   for (const [scenario, selection] of CASES) {
-    for (const tag of VIEWS) {
+    for (const tag of ALL_VIEW_TAGS) {
       it(`${scenario} — ${tag} view`, () => {
         expect(cardLabel(tag, selection)).toBe(mapLabel(tag, selection.props));
       });

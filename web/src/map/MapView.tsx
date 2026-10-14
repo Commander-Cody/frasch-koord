@@ -22,7 +22,7 @@ import { useTranslation } from 'react-i18next';
 
 import fraschBright from './style/frasch-bright.json';
 import { buildStyle, placeLayerIds } from './style/localize';
-import { TILES_URL } from '../config';
+import { TILES_URL } from '../site';
 import { TOUCH_MEDIA } from '../layout';
 import { oncePerFrame } from './oncePerFrame';
 import { keepingHash } from '../url/queryParams';

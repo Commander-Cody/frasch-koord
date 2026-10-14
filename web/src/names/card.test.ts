@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { LngLat } from 'maplibre-gl';
 
-import { DIALECTS, LOCAL_TAG } from '../config';
+import { DIALECTS } from '../dialects/registry';
+import { LOCAL_TAG } from '../dialects/views';
 import type { PlaceSelection } from '../selection/placeSelection';
 import { cardModel } from './card';
 import type { NameEntry } from './entry';

@@ -1,4 +1,5 @@
-import { DIALECTS, LOCAL_TAG } from '../config';
+import { DIALECTS } from './registry.ts';
+import { LOCAL_TAG } from './views.ts';
 
 // Which name a place is labelled with, defined once for everything that shows
 // one: the map (map/style/localize.ts turns the chain into a `coalesce` over the

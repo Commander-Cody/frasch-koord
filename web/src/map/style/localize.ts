@@ -1,30 +1,17 @@
-import type { StyleSpecification, LayerSpecification } from 'maplibre-gl';
-import type { ExpressionSpecification } from '@maplibre/maplibre-gl-style-spec';
+import type { StyleSpecification } from 'maplibre-gl';
 
-import { siteUrl } from '../../config';
-import { labelChain } from '../../dialects/labelChain';
+import { siteUrl } from '../../site';
+import { labelLayers } from './labels';
 
-// `../style/frasch-bright.json` started as a fork of upstream OSM Bright
+// `frasch-bright.json` started as a fork of upstream OSM Bright
 // (openmaptiles/osm-bright-gl-style, openmaptiles:version "3.x", fetched
 // 2026-09-15 - see web/README.md for details) and is now edited directly as
 // our own style (place-label layers restructured for Frisian place kinds,
 // see the "Label classes" section of the README). This module keeps doing
 // only what must stay dynamic at runtime: pointing the vector source at the
-// configured tiles URL, building the label expression for the selected
-// dialect (or the local-dialect view), and resolving glyph/sprite URLs
+// configured tiles URL, applying the label expression (labels.ts) of the
+// selected view, and resolving glyph/sprite URLs
 // against the page and the site's base path.
-
-/**
- * Builds the `text-field` expression for a label option: a `coalesce` over
- * the tile properties of `labelChain(tag)`, the chain the place card and the
- * search results follow too (see labelChain.ts).
- */
-export function nameExpression(tag: string): ExpressionSpecification {
-  return [
-    'coalesce',
-    ...labelChain(tag).map((key) => ['get', key]),
-  ] as unknown as ExpressionSpecification;
-}
 
 /**
  * The ids of the layers that label places — what a click on the map has to
@@ -39,30 +26,13 @@ export function placeLayerIds(style: StyleSpecification): string[] {
 }
 
 /**
- * Does this symbol layer's text-field render the feature's `name`
- * (possibly combined with `name:latin`/`name:nonlatin` in various
- * OpenMapTiles/OSM Bright templating styles)? Layers that label something
- * else entirely (e.g. `{ref}` road shields) are left untouched.
- */
-function referencesName(textField: unknown): boolean {
-  if (typeof textField === 'string') {
-    return textField.includes('name');
-  }
-  if (Array.isArray(textField)) {
-    // Recurse into expressions such as ["concat", ["get", "name:latin"], ...]
-    return textField.some((part) => referencesName(part));
-  }
-  return false;
-}
-
-/**
  * Rewrites `baseStyle` into a label-aware, self-hosted style:
  *  - points the `openmaptiles` source at `tilesUrl`
  *  - rewrites every symbol layer's name-based `text-field` to the chain of
- *    `nameExpression(view)` above
+ *    `nameExpression(view)` (labels.ts)
  *  - points `glyphs`/`sprite` at the copies this site hosts itself
  *
- * `view` is a dialect tag or LOCAL_TAG (see `nameExpression`).
+ * `view` is a dialect tag or LOCAL_TAG.
  */
 export function buildStyle(
   baseStyle: StyleSpecification,
@@ -84,20 +54,8 @@ export function buildStyle(
     },
   };
 
-  // (b) Rewrite name-based text-fields to follow the selected label chain.
-  const textFieldExpression = nameExpression(view);
-  style.layers = style.layers.map((layer: LayerSpecification): LayerSpecification => {
-    if (layer.type !== 'symbol' || !layer.layout) return layer;
-    const textField = (layer.layout as Record<string, unknown>)['text-field'];
-    if (textField === undefined || !referencesName(textField)) return layer;
-    return {
-      ...layer,
-      layout: {
-        ...layer.layout,
-        'text-field': textFieldExpression,
-      },
-    };
-  });
+  // (b) Rewrite name-based text-fields to follow the view's label chain.
+  style.layers = labelLayers(style.layers, view);
 
   // (c) Serve glyphs and sprites locally rather than from a third party.
   // MapLibre requires absolute sprite URLs; siteUrl resolves them against

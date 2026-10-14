@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
-import { LOCAL_TAG } from '../config';
+import { LOCAL_TAG } from '../dialects/views';
 import ViewSelect from './ViewSelect';
 
 afterEach(cleanup);

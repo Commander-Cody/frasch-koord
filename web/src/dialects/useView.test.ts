@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 
 import i18n from '../i18n';
-import { DEFAULT_VIEW, LOCAL_TAG, labelOption } from '../config';
+import { DEFAULT_VIEW, LOCAL_TAG, viewOption } from './views';
 import { useView } from './useView';
 
 beforeEach(async () => {
@@ -20,14 +20,14 @@ describe('useView', () => {
 
   it('puts the UI into the language of the view the page opens in', () => {
     renderHook(() => useView());
-    expect(i18n.language).toBe(labelOption(DEFAULT_VIEW).uiLanguage);
+    expect(i18n.language).toBe(viewOption(DEFAULT_VIEW).uiLanguage);
   });
 
   it('puts the UI into the language of the view switched to', async () => {
     const { result } = renderHook(() => useView());
     await act(() => i18n.changeLanguage('de'));
     act(() => result.current[1](LOCAL_TAG));
-    expect(i18n.language).toBe(labelOption(LOCAL_TAG).uiLanguage);
+    expect(i18n.language).toBe(viewOption(LOCAL_TAG).uiLanguage);
   });
 
   it('puts the view the page opens in into the address bar', () => {

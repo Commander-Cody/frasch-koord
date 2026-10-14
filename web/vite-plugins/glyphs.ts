@@ -7,7 +7,7 @@
  * exactly the listed ranges of the listed stacks. And a label character
  * outside them would be a glyph request that fails (issue #29), so every
  * string a symbol layer of the site's style can show -- in any view, read
- * off the style that src/map/style/localize.ts builds -- is taken from the
+ * off the label layers src/map/style/labels.ts builds -- is taken from the
  * pinned tile archive and checked. With VITE_TILES_URL the build needs no
  * archive; then the fetched one is checked if there is one, else the build
  * warns that it checked no labels.
@@ -18,13 +18,15 @@ import { access, readdir, readFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { StyleSpecification } from 'maplibre-gl';
-import { type Plugin, runnerImport } from 'vite';
+import type { Plugin } from 'vite';
 
+import { ALL_VIEW_TAGS } from '../src/dialects/views.ts';
+import { labelLayers } from '../src/map/style/labels.ts';
 import { lockValue } from './lock.ts';
 import { pinnedArchive } from './tiles.ts';
 import { vectorTiles } from './vectorTiles.ts';
 
-/** web/, whose src/ the site's style is built from, whatever root a build runs in. */
+/** web/, whose src/ holds the site's style, whatever root a build runs in. */
 const WEB = fileURLToPath(new URL('..', import.meta.url));
 
 /** A tile property a symbol layer shows: `key` of the features of `sourceLayer`. */
@@ -156,31 +158,15 @@ function installProblem({ stacks, ranges }: FontsLock, installed: string[]): str
   return `public/fonts/ does not hold the glyphs fonts.lock lists (${what.join('; ')}): run \`npm run fetch-assets\``;
 }
 
-/** What the plugin needs of src/config.ts and src/map/style/localize.ts. */
-interface SiteModules {
-  config: { DIALECTS: { tag: string }[]; LOCAL_TAG: string };
-  localize: {
-    buildStyle(base: StyleSpecification, tilesUrl: string, view: string): StyleSpecification;
-  };
-}
-
-/**
- * Loads a module of the site through Vite, as a build would: they read
- * `import.meta.env`, which a plain import in a Vite config does not have.
- */
-async function siteModule<T>(path: string): Promise<T> {
-  const options = { configFile: false as const, root: WEB, logLevel: 'silent' as const };
-  return (await runnerImport<T>(join(WEB, path), options)).module;
-}
-
-/** Every field a symbol layer of the site's style shows, in any of its views. */
-async function siteFields(): Promise<Field[]> {
-  const config = await siteModule<SiteModules['config']>('src/config.ts');
-  const localize = await siteModule<SiteModules['localize']>('src/map/style/localize.ts');
-  const base = JSON.parse(await readFile(join(WEB, 'src/map/style/frasch-bright.json'), 'utf8'));
-  const views = [config.LOCAL_TAG, ...config.DIALECTS.map((d) => d.tag)];
-  const layers = views.flatMap((view) => localize.buildStyle(base, '', view).layers);
+/** Every field a symbol layer of `base` shows, in any view of the site. */
+export function siteFields(base: StyleSpecification): Field[] {
+  const layers = ALL_VIEW_TAGS.flatMap((view) => labelLayers(base.layers, view));
   return renderedFields({ ...base, layers });
+}
+
+/** The site's own style, before a view is applied. */
+async function siteStyle(): Promise<StyleSpecification> {
+  return JSON.parse(await readFile(join(WEB, 'src/map/style/frasch-bright.json'), 'utf8'));
 }
 
 /**
@@ -206,7 +192,7 @@ async function labelProblems(
     }
     return [];
   }
-  return glyphProblems(await archiveLabels(archive, await siteFields()), ranges);
+  return glyphProblems(await archiveLabels(archive, siteFields(await siteStyle())), ranges);
 }
 
 export default function glyphs(): Plugin {

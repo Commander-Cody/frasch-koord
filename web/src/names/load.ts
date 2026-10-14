@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react';
 
-import { siteUrl } from '../config';
+import { siteUrl } from '../site';
 import { osmRefs } from './osmRef';
 import type { BuiltFrom } from '../map/provenance';
 import type { NameEntry } from './entry';

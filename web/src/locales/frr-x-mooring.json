@@ -9,7 +9,7 @@
     "loading": "Toorpslist wårt leesed…",
     "error": "E toorpslist köö ai leesed wårde, et koon ai am stäänge soocht wårde"
   },
-  "dialect": {
+  "view": {
     "label": "Spräkewise",
     "local": "Toorpsspräkewise"
   },

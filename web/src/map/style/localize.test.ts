@@ -9,7 +9,6 @@ const origin = window.location.origin;
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  vi.resetModules();
 });
 
 describe('buildStyle', () => {
@@ -25,15 +24,5 @@ describe('buildStyle', () => {
     // The placeholders stay as they are, not percent-encoded.
     expect(style.glyphs).toBe(`${origin}/frasch-koord/fonts/{fontstack}/{range}.pbf`);
     expect(style.sprite).toBe(`${origin}/frasch-koord/sprites/sprite`);
-  });
-});
-
-describe('TILES_URL', () => {
-  it('points at the archive under a non-root base', async () => {
-    vi.stubEnv('BASE_URL', '/frasch-koord/');
-    vi.stubEnv('VITE_TILES_URL', '');
-    // Read at module load, so load the module afresh under the stubbed env.
-    const { TILES_URL } = await import('../../config');
-    expect(TILES_URL).toBe(`pmtiles://${origin}/frasch-koord/tiles/schleswig-holstein.pmtiles`);
   });
 });

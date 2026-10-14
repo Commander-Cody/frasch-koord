@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { DEFAULT_VIEW, LOCAL_TAG } from '../config';
+import { DEFAULT_VIEW, LOCAL_TAG } from '../dialects/views';
 import { initialView, linkedPlace, writePlace, writeView } from './linkState';
 
 function setLocation(url: string) {

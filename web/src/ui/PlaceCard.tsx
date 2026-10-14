@@ -3,7 +3,7 @@ import type { Ref } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 
-import { dialect, dialectLabelKey } from '../config';
+import { dialect, dialectLabelKey } from '../dialects/registry';
 import { cardModel } from '../names/card';
 import { placeOsmRef, wikidataUrl } from '../names/links';
 import type { Language, NameSource } from '../names/resolveName';

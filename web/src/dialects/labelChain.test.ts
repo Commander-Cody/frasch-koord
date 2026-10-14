@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { LOCAL_TAG } from '../config';
+import { LOCAL_TAG } from './views';
 import { labelChain } from './labelChain';
 
 // Expected chains are hand-written from the registry order in

@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { labelOption } from '../config';
+import { viewOption } from './views';
 import { initialView, writeView } from '../url/linkState';
 
 /**
@@ -17,7 +17,7 @@ import { initialView, writeView } from '../url/linkState';
 export function useUiLanguage(view: string): void {
   const { i18n } = useTranslation();
   useLayoutEffect(() => {
-    const language = labelOption(view).uiLanguage;
+    const language = viewOption(view).uiLanguage;
     if (i18n.language !== language) void i18n.changeLanguage(language);
   }, [i18n, view]);
 }

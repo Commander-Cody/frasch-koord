@@ -7,7 +7,7 @@
 // rewrites the whole hash on every move, so nothing else can live there; these
 // go in the query string, which it leaves alone.
 
-import { DEFAULT_VIEW, labelOption } from '../config';
+import { DEFAULT_VIEW, viewOption } from '../dialects/views';
 import { hasViewport, readQueryParam, replaceQueryParams } from './queryParams';
 
 /** Label option tag (a dialect, or LOCAL_TAG). */
@@ -26,7 +26,7 @@ const PLACE_PARAM = 'place';
  * function, read when a view mounts: the URL changes once the page runs.
  */
 export function initialView(): string {
-  return labelOption(readQueryParam(VIEW_PARAM) ?? DEFAULT_VIEW).tag;
+  return viewOption(readQueryParam(VIEW_PARAM) ?? DEFAULT_VIEW).tag;
 }
 
 /** Keeps `?view=` the selected label option. */

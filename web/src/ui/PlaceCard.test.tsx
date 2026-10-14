@@ -3,7 +3,8 @@ import { cleanup, render, screen } from '@testing-library/react';
 import type { LngLat } from 'maplibre-gl';
 
 import i18n from '../i18n';
-import { DIALECTS, LOCAL_TAG } from '../config';
+import { DIALECTS } from '../dialects/registry';
+import { LOCAL_TAG } from '../dialects/views';
 import type { NameEntry } from '../names/entry';
 import type { PlaceSelection } from '../selection/placeSelection';
 import PlaceCard from './PlaceCard';

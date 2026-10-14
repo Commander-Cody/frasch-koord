@@ -9,7 +9,7 @@
     "loading": "Ortsliste wird geladen…",
     "error": "Die Ortsliste konnte nicht geladen werden, die Suche ist nicht verfügbar."
   },
-  "dialect": {
+  "view": {
     "label": "Dialekt",
     "local": "Ortsdialekt"
   },

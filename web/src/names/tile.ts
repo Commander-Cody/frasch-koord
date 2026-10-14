@@ -2,7 +2,7 @@
 // place's names. The one table of it in the frontend; frasch/placenames.py's
 // TILE_KEY is the table the tiles are written by.
 
-import { DIALECTS } from '../config';
+import { DIALECTS } from '../dialects/registry';
 import type { CardNames } from './entry';
 
 /** Properties of a clicked vector-tile feature (source-layer `place`). */

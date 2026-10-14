@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
-import { LABEL_OPTIONS } from '../config';
+import { VIEWS } from '../dialects/views';
 
 export interface ViewSelectProps {
   /** Selected label option tag (a dialect, or LOCAL_TAG). */
@@ -13,12 +13,12 @@ export default function ViewSelect({ view, onViewChange }: ViewSelectProps) {
   const { t } = useTranslation();
   return (
     <select
-      className="dialect-select"
-      aria-label={t('dialect.label')}
+      className="view-select"
+      aria-label={t('view.label')}
       value={view}
       onChange={(e) => onViewChange(e.target.value)}
     >
-      {LABEL_OPTIONS.map((option) => (
+      {VIEWS.map((option) => (
         <option key={option.tag} value={option.tag}>
           {/* Dialect names come from the registry as-is; only the local
               view's name is translated. */}
