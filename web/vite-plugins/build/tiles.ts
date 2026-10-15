@@ -1,23 +1,20 @@
 /**
- * Puts the tile archive `web/tiles.lock` pins into the build, and nothing
- * else from public/tiles/, and stops a build that would show no map.
+ * The tile archive a build ships: the one `web/tiles.lock` pins, and
+ * nothing else from public/tiles/.
  *
  * Vite copies web/public/ into the build as it is. public/tiles/ holds
- * whatever archive is linked there -- the one `npm run fetch-assets` fetched
- * (scripts/fetch-tiles.sh), or a tile builder's own from tiles/data/ -- and
- * a build must not ship an archive nobody can name. So the copied archives
- * are dropped, and the pinned one is taken from the fetch cache
- * (.cache/tiles/<sha256>.pmtiles) instead. With VITE_TILES_URL set the tiles
- * live elsewhere (see src/site.ts) and no archive is shipped at all. A link
- * there that leads nowhere (to tiles not built yet) stops the build as well:
- * Vite cannot copy it. The glyphs are vite-plugins/glyphs.ts' business.
- *
- * Build only (`apply: 'build'`); the dev server reads public/ in place.
+ * whatever archive is linked there -- the one `npm run fetch-assets` fetched,
+ * or a tile builder's own from tiles/data/ -- and a build must not ship an
+ * archive nobody can name. So the copied archives are dropped, and the
+ * pinned one is taken from the fetch cache (.cache/tiles/<sha256>.pmtiles)
+ * instead. With VITE_TILES_URL set the tiles live elsewhere (see
+ * src/site.ts) and no archive is shipped at all. A link there that leads
+ * nowhere (to tiles not built yet) stops the build as well: Vite cannot copy
+ * it. vite-plugins/build/assets.ts runs the check and ships the archive.
  */
 import type { Dirent } from 'node:fs';
 import { copyFile, mkdir, readdir, readlink, rm, stat } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
-import type { Plugin } from 'vite';
+import { join } from 'node:path';
 
 import { ARCHIVE_NAME, readTilesPin } from './pins.ts';
 import { sha256Of } from './sha256.ts';
@@ -33,11 +30,6 @@ export interface TilesBuild {
   root: string;
   outDir: string;
   external: boolean;
-}
-
-/** Where `npm run fetch-assets` puts the archive tiles.lock pins. */
-export async function pinnedArchive(root: string): Promise<string> {
-  return join(root, (await readTilesPin(root)).cachePath);
 }
 
 async function archiveProblem(root: string): Promise<string | undefined> {
@@ -91,7 +83,7 @@ export async function danglingLinkProblems(root: string): Promise<string[]> {
 }
 
 /** What stands in the build's way, one line each, when it starts; empty when it has all it needs. */
-export async function assetProblems({
+export async function tilesProblems({
   root,
   external,
 }: Omit<TilesBuild, 'outDir'>): Promise<string[]> {
@@ -106,33 +98,9 @@ async function dropCopiedArchives(tilesDir: string): Promise<void> {
 }
 
 /** Replaces the archives Vite copied into `outDir` with the pinned one, or none. */
-async function shipTiles({ root, outDir, external }: TilesBuild): Promise<void> {
+export async function shipTiles({ root, outDir, external }: TilesBuild): Promise<void> {
   await dropCopiedArchives(join(outDir, 'tiles'));
   if (external) return;
   await mkdir(join(outDir, 'tiles'), { recursive: true });
-  await copyFile(await pinnedArchive(root), join(outDir, ARCHIVE));
-}
-
-export default function tiles(): Plugin {
-  let build: TilesBuild;
-  return {
-    name: 'frasch-tiles',
-    apply: 'build',
-    configResolved(config) {
-      build = {
-        root: config.root,
-        outDir: resolve(config.root, config.build.outDir),
-        external: Boolean(config.env.VITE_TILES_URL),
-      };
-    },
-    async buildStart() {
-      const problems = await assetProblems(build);
-      if (problems.length > 0) this.error(problems.join('\n'));
-    },
-    // After Vite has copied public/ into the output. Not closeBundle, which
-    // also runs after a failed build and would bury buildStart's message.
-    async writeBundle() {
-      await shipTiles(build);
-    },
-  };
+  await copyFile(join(root, (await readTilesPin(root)).cachePath), join(outDir, ARCHIVE));
 }

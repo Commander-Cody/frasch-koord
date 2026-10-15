@@ -1,6 +1,7 @@
-// Checks the output of `npm run build` for what broke deployments before
-// (issue #20), and for what must not be published. `npm run build` ends with
-// it, so every build is checked.
+// Checks the output of a build for what broke deployments before (issue
+// #20), and for what must not be published. vite-plugins/build/assets.ts
+// runs it once the build is written, so every build is checked, `vite build`
+// as well as `npm run build`.
 //
 //  - The bundle points MapLibre at a worker file that dist/ really contains.
 //    MapLibre's own default (`maplibre-gl-worker.mjs` next to its module) is
@@ -12,11 +13,10 @@
 //    (names/dialect_areas_parts.geojson) or its research notes, which quote
 //    unconfirmed assignments (names/dialect_areas.csv, docs/dialect-area-review.md).
 //
-// Exits non-zero with one line per problem.
+// One line per problem.
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import { AREAS_BASE, AREA_PARTS_FILE, CURATE_BASE } from '../devToolNames.ts';
 
@@ -124,7 +124,7 @@ function areaReviewProblems(files: string[], text: Files): string[] {
 export function checkBuild(dist: string): BuildCheck {
   if (!existsSync(join(dist, 'assets'))) {
     return {
-      problems: [`no ${join(dist, 'assets')}: run \`npm run build\` first`],
+      problems: [`no ${join(dist, 'assets')}: the build wrote no assets`],
       scripts: 0,
       workers: [],
     };
@@ -147,14 +147,4 @@ export function checkBuild(dist: string): BuildCheck {
     ...areaReviewProblems(files, text),
   ];
   return { problems, scripts: Object.keys(code).length, workers: worker.workers };
-}
-
-if (import.meta.main) {
-  const dist = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'dist');
-  const { problems, scripts, workers } = checkBuild(dist);
-  if (problems.length > 0) {
-    for (const p of problems) console.error(`check-build: ${p}`);
-    process.exit(1);
-  }
-  console.log(`check-build: ok (${scripts} scripts, worker ${workers.join(', ')})`);
 }

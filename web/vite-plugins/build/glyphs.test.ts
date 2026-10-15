@@ -3,14 +3,13 @@
  * vite-plugins/glyphs.ts: which glyph ranges the labels need, read off the
  * style and the tile archive, and what a build refuses.
  */
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import type { StyleSpecification } from 'maplibre-gl';
-import { build, createLogger } from 'vite';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import glyphs, { archiveLabels, glyphProblems, renderedFields, siteFields } from './glyphs.ts';
+import { archiveLabels, glyphProblems, renderedFields, siteFields } from './glyphs.ts';
 import { DIALECTS } from '../../src/dialects/registry.ts';
 import { type TestTile, writeTestArchive } from './testArchive.ts';
 
@@ -198,108 +197,5 @@ describe('archiveLabels', () => {
     writeTestArchive(archive, TILES, { leaf: true });
 
     expect(await archiveLabels(archive, FIELDS)).toHaveLength(3);
-  });
-});
-
-describe('a vite build with the plugin', () => {
-  const STACKS = ['Noto Sans Regular', 'Noto Sans Italic', 'Noto Sans Bold'];
-  const SHA256 = 'a'.repeat(64);
-  const ARCHIVE = `.cache/tiles/${SHA256}.pmtiles`;
-
-  /** A web/ checkout: both locks, the fetched glyphs, the pinned archive. */
-  let root: string;
-
-  function put(path: string, text: string): void {
-    const file = join(root, path);
-    mkdirSync(dirname(file), { recursive: true });
-    writeFileSync(file, text);
-  }
-
-  /** The pinned archive, with one place feature of these properties. */
-  function pinArchive(place: Record<string, string>): void {
-    mkdirSync(join(root, '.cache/tiles'), { recursive: true });
-    writeTestArchive(join(root, ARCHIVE), [{ z: 0, x: 0, y: 0, layers: { place: [place] } }]);
-  }
-
-  function viteBuild(logger = createLogger('silent')) {
-    return build({
-      root,
-      configFile: false,
-      customLogger: logger,
-      logLevel: 'silent',
-      plugins: [glyphs()],
-    });
-  }
-
-  beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'glyphs-plugin-'));
-    put('index.html', '<!doctype html><title>Frasch Maps</title>');
-    put('fonts.lock', `STACKS=${STACKS.join(',')}\nRANGES=0-255 256-511\n`);
-    put('tiles.lock', `ARCHIVE_SHA256=${SHA256}\n`);
-    for (const stack of STACKS) {
-      put(`public/fonts/${stack}/0-255.pbf`, '');
-      put(`public/fonts/${stack}/256-511.pbf`, '');
-    }
-    pinArchive({ 'frasch:local': 'Hoorne äöüå', 'name:frr-x-solring': 'Kairem đā' });
-  });
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
-    rmSync(root, { recursive: true, force: true });
-  });
-
-  it('ships the listed ranges when every label fits them', async () => {
-    await viteBuild();
-
-    for (const stack of STACKS) {
-      expect(readdirSync(join(root, 'dist/fonts', stack)).sort()).toEqual([
-        '0-255.pbf',
-        '256-511.pbf',
-      ]);
-    }
-  });
-
-  it('refuses a label the shipped ranges cannot show', async () => {
-    pinArchive({ 'frasch:local': 'Stråt – Bütjebel' });
-
-    await expect(viteBuild()).rejects.toThrow(
-      '"–" (U+2013) in "Stråt – Bütjebel" needs the glyph range 8192-8447',
-    );
-  });
-
-  it("ignores what the site's style does not show", async () => {
-    pinArchive({ 'name:nonlatin': '北京', class: 'town' });
-
-    await viteBuild();
-  });
-
-  it('refuses glyphs that are not the listed ranges', async () => {
-    put('public/fonts/Noto Sans Bold/20224-20479.pbf', '');
-    rmSync(join(root, 'public/fonts/Noto Sans Italic'), { recursive: true });
-
-    await expect(viteBuild()).rejects.toThrow(
-      'public/fonts/ does not hold the glyphs fonts.lock lists (missing: Noto Sans Italic/0-255.pbf, Noto Sans Italic/256-511.pbf; not listed: Noto Sans Bold/20224-20479.pbf): run `npm run fetch-assets`',
-    );
-  });
-
-  it('checks the pinned archive with VITE_TILES_URL too, when it is fetched', async () => {
-    vi.stubEnv('VITE_TILES_URL', 'pmtiles://https://example.org/schleswig-holstein.pmtiles');
-    pinArchive({ 'frasch:local': 'B 5 Ⅱ' });
-
-    await expect(viteBuild()).rejects.toThrow('needs the glyph range 8448-8703');
-  });
-
-  it('warns that it checked no labels with VITE_TILES_URL and no fetched archive', async () => {
-    vi.stubEnv('VITE_TILES_URL', 'pmtiles://https://example.org/schleswig-holstein.pmtiles');
-    rmSync(join(root, '.cache'), { recursive: true });
-    const logger = createLogger('silent');
-    const warn = vi.spyOn(logger, 'warn');
-
-    await viteBuild(logger);
-
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('the labels were not checked against the glyph ranges'),
-      expect.anything(),
-    );
   });
 });
