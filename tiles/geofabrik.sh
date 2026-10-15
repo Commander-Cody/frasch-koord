@@ -3,8 +3,9 @@
 # downloaded from, and the download itself, verified by Geofabrik's own MD5
 # sidecar (with fetch.sh, which this sources).
 #
-# Meant to be sourced, not run: `source ./geofabrik.sh` from build.sh, the
-# justfile's `extracts`, or tiles/tests/test_geofabrik.py via a subprocess.
+# Meant to be sourced, not run: `source ./geofabrik.sh` from build.sh,
+# publish.sh, the justfile's `extracts` and its extract paths, or
+# tiles/tests/test_geofabrik.py via a subprocess.
 #
 # Public functions:
 #   geofabrik_path <region>
