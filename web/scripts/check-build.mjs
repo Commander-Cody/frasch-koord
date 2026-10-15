@@ -19,11 +19,17 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-/** Strings only the dev tools contain: their endpoints and the curation panel's heading. */
-const DEV_ONLY = ['__curate', '__areas', 'Curation review'];
+import { AREAS_BASE, AREA_PARTS_FILE, CURATE_BASE } from '../vite-plugins/devToolNames.ts';
 
-/** The file the area review reads its geometry and notes from, under any path. */
-const AREA_DATA = 'dialect_areas_parts';
+/**
+ * Strings only the dev tools contain: the bases of their endpoints, which
+ * every one of their views fetches through. Without the slashes, which a
+ * bundler may escape (`\/__curate\/`).
+ */
+const DEV_ONLY = [CURATE_BASE, AREAS_BASE].map((base) => base.replaceAll('/', ''));
+
+/** The file the area review reads its geometry and notes from, under any path and extension. */
+const AREA_DATA = AREA_PARTS_FILE.replace(/\.geojson$/, '');
 
 /**
  * What only the area review's research prose says: a row's confidence and
