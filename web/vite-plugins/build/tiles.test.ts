@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { tilesProblems } from './tiles.ts';
+import { checkTiles } from './tiles.ts';
 
 const PINNED = 'the published archive';
 const PINNED_SHA256 = createHash('sha256').update(PINNED).digest('hex');
@@ -43,15 +43,20 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
-describe('tilesProblems', () => {
+/** What a build would refuse, with VITE_TILES_URL set or not. */
+async function tilesProblems(external: boolean): Promise<string[]> {
+  return (await checkTiles({ root, external })).problems;
+}
+
+describe('checkTiles', () => {
   it('passes a checkout with the pinned archive', async () => {
-    expect(await tilesProblems({ root, external: false })).toEqual([]);
+    expect(await tilesProblems(false)).toEqual([]);
   });
 
   it('refuses a build without the fetched archive', async () => {
     rmSync(join(root, '.cache'), { recursive: true });
 
-    expect(await tilesProblems({ root, external: false })).toEqual([
+    expect(await tilesProblems(false)).toEqual([
       'the pinned tile archive is not fetched: run `npm run fetch-assets` (or set VITE_TILES_URL)',
     ]);
   });
@@ -59,7 +64,7 @@ describe('tilesProblems', () => {
   it('refuses a fetched archive that is not the pinned one', async () => {
     put(`.cache/tiles/${PINNED_SHA256}.pmtiles`, 'a truncated download');
 
-    expect(await tilesProblems({ root, external: false })).toEqual([
+    expect(await tilesProblems(false)).toEqual([
       `.cache/tiles/${PINNED_SHA256}.pmtiles does not match tiles.lock: run \`npm run fetch-assets\` again`,
     ]);
   });
@@ -67,21 +72,19 @@ describe('tilesProblems', () => {
   it('refuses a lock that pins no archive', async () => {
     put('tiles.lock', 'ARCHIVE_URL=https://example.org/schleswig-holstein.pmtiles\n');
 
-    expect(await tilesProblems({ root, external: false })).toEqual([
-      'tiles.lock pins no sha256 (ARCHIVE_SHA256=)',
-    ]);
+    expect(await tilesProblems(false)).toEqual(['tiles.lock pins no sha256 (ARCHIVE_SHA256=)']);
   });
 
   it('passes a link in public/tiles/ to an archive that is there', async () => {
     link('public/tiles/schleswig-holstein.pmtiles', `../../.cache/tiles/${PINNED_SHA256}.pmtiles`);
 
-    expect(await tilesProblems({ root, external: false })).toEqual([]);
+    expect(await tilesProblems(false)).toEqual([]);
   });
 
   it('refuses a link in public/tiles/ to an archive that is not built', async () => {
     link('public/tiles/schleswig-holstein.pmtiles', '../../own-tiles/schleswig-holstein.pmtiles');
 
-    expect(await tilesProblems({ root, external: false })).toEqual([
+    expect(await tilesProblems(false)).toEqual([
       'public/tiles/schleswig-holstein.pmtiles links to ../../own-tiles/schleswig-holstein.pmtiles, which does not exist: the dev server shows no map and `npm run build` stops. Build the tiles, or remove the link and run `npm run fetch-assets`',
     ]);
   });
@@ -91,7 +94,7 @@ describe('tilesProblems', () => {
     link('public/tiles/halligen.pmtiles', `../../.cache/tiles/${PINNED_SHA256}.pmtiles`);
     link('public/tiles/schleswig-holstein.pmtiles', '../../own-tiles/schleswig-holstein.pmtiles');
 
-    const problems = await tilesProblems({ root, external: false });
+    const problems = await tilesProblems(false);
 
     expect(problems.map((problem) => problem.split(' links to ')[0]).sort()).toEqual([
       'public/tiles/denmark.pmtiles',
@@ -102,7 +105,7 @@ describe('tilesProblems', () => {
   it('refuses a dangling link with VITE_TILES_URL too', async () => {
     link('public/tiles/denmark.pmtiles', '../../own-tiles/denmark.pmtiles');
 
-    expect(await tilesProblems({ root, external: true })).toEqual([
+    expect(await tilesProblems(true)).toEqual([
       'public/tiles/denmark.pmtiles links to ../../own-tiles/denmark.pmtiles, which does not exist: the dev server shows no map and `npm run build` stops. Build the tiles, or remove the link and run `npm run fetch-assets`',
     ]);
   });

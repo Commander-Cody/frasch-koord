@@ -137,6 +137,18 @@ describe('buildProblems', () => {
     ]);
   });
 
+  it('names a fetched archive that is not the pinned one, without reading it', async () => {
+    const sha256 = pinArchive({ 'frasch:local': 'Hoorne' });
+    put(`.cache/tiles/${sha256}.pmtiles`, 'a truncated download');
+
+    expect(await buildProblems({ root, external: false })).toEqual({
+      problems: [
+        `.cache/tiles/${sha256}.pmtiles does not match tiles.lock: run \`npm run fetch-assets\` again`,
+      ],
+      warnings: [],
+    });
+  });
+
   it('checks the pinned archive with VITE_TILES_URL too, when it is fetched', async () => {
     pinArchive({ 'frasch:local': 'B 5 Ⅱ' });
 
@@ -153,7 +165,19 @@ describe('buildProblems', () => {
     expect(await buildProblems({ root, external: true })).toEqual({
       problems: [],
       warnings: [
-        "the pinned tile archive is not fetched, so the labels were not checked against the glyph ranges fonts.lock lists, nor its built_from against names.json's (`npm run fetch-assets` fetches it)",
+        "no fetched tile archive matches tiles.lock, so the labels were not checked against the glyph ranges fonts.lock lists, nor its built_from against names.json's (`npm run fetch-assets` fetches it)",
+      ],
+    });
+  });
+
+  it('reads no archive that is not the pinned one with VITE_TILES_URL, and says so', async () => {
+    const sha256 = pinArchive({ 'frasch:local': 'Hoorne' });
+    put(`.cache/tiles/${sha256}.pmtiles`, 'a truncated download');
+
+    expect(await buildProblems({ root, external: true })).toEqual({
+      problems: [],
+      warnings: [
+        "no fetched tile archive matches tiles.lock, so the labels were not checked against the glyph ranges fonts.lock lists, nor its built_from against names.json's (`npm run fetch-assets` fetches it)",
       ],
     });
   });

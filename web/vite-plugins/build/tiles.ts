@@ -13,11 +13,11 @@
  * it. vite-plugins/build/assets.ts runs the check and ships the archive.
  */
 import type { Dirent } from 'node:fs';
-import { copyFile, mkdir, readdir, readlink, rm, stat } from 'node:fs/promises';
+import { copyFile, mkdir, readdir, readlink, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { ARCHIVE_NAME, readTilesPin } from './pins.ts';
-import { sha256Of } from './sha256.ts';
+import { exists, sha256Of } from './files.ts';
 
 /** Where the site serves its own archive from, under dist/ (see src/site.ts). */
 const ARCHIVE = `tiles/${ARCHIVE_NAME}`;
@@ -32,31 +32,36 @@ export interface TilesBuild {
   external: boolean;
 }
 
-async function archiveProblem(root: string): Promise<string | undefined> {
+/** What a build finds of the tiles when it starts. */
+export interface TilesCheck {
+  /** What stands in its way, one line each; empty when it has all it needs. */
+  problems: string[];
+  /** The fetched archive, when it is the one tiles.lock pins; nothing else may be read as it. */
+  archive: string | undefined;
+}
+
+/** The fetched archive when it is the pinned one, or what is wrong with it. */
+async function verifiedArchive(root: string): Promise<{ archive: string } | { problem: string }> {
   let pin;
   try {
     pin = await readTilesPin(root);
   } catch (err) {
-    return (err as Error).message;
+    return { problem: (err as Error).message };
   }
-  const actual = await sha256Of(join(root, pin.cachePath));
+  const archive = join(root, pin.cachePath);
+  const actual = await sha256Of(archive);
   if (actual === undefined) {
-    return 'the pinned tile archive is not fetched: run `npm run fetch-assets` (or set VITE_TILES_URL)';
+    return {
+      problem:
+        'the pinned tile archive is not fetched: run `npm run fetch-assets` (or set VITE_TILES_URL)',
+    };
   }
   if (actual !== pin.sha256) {
-    return `${pin.cachePath} does not match tiles.lock: run \`npm run fetch-assets\` again`;
+    return {
+      problem: `${pin.cachePath} does not match tiles.lock: run \`npm run fetch-assets\` again`,
+    };
   }
-}
-
-/** Whether the path leads to a file, its links followed. */
-async function exists(path: string): Promise<boolean> {
-  try {
-    await stat(path);
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return false;
-    throw err;
-  }
-  return true;
+  return { archive };
 }
 
 /** The links directly in `dir` whose target is not there. */
@@ -82,13 +87,21 @@ export async function danglingLinkProblems(root: string): Promise<string[]> {
   );
 }
 
-/** What stands in the build's way, one line each, when it starts; empty when it has all it needs. */
-export async function tilesProblems({
+/**
+ * The pinned archive and public/tiles/ when a build starts. With
+ * VITE_TILES_URL the build ships no archive, so a missing or wrong one is
+ * no problem; it is only not handed on.
+ */
+export async function checkTiles({
   root,
   external,
-}: Omit<TilesBuild, 'outDir'>): Promise<string[]> {
-  const problem = external ? undefined : await archiveProblem(root);
-  return [...(problem === undefined ? [] : [problem]), ...(await danglingLinkProblems(root))];
+}: Omit<TilesBuild, 'outDir'>): Promise<TilesCheck> {
+  const verified = await verifiedArchive(root);
+  const archiveProblems = 'problem' in verified && !external ? [verified.problem] : [];
+  return {
+    problems: [...archiveProblems, ...(await danglingLinkProblems(root))],
+    archive: 'archive' in verified ? verified.archive : undefined,
+  };
 }
 
 /** Drops the archives Vite copied from public/tiles/: a dev symlink's target, or a stale fetch. */

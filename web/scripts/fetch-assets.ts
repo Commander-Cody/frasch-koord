@@ -19,7 +19,6 @@
 import { createHash } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
 import {
-  access,
   mkdir,
   readdir,
   readFile,
@@ -43,7 +42,7 @@ import {
   readTilesPin,
   TILE_CACHE_DIR,
 } from '../vite-plugins/build/pins.ts';
-import { sha256Of } from '../vite-plugins/build/sha256.ts';
+import { exists, sha256Of } from '../vite-plugins/build/files.ts';
 import { FONTS_DIR, glyphInstall } from '../vite-plugins/build/glyphInstall.ts';
 import { danglingLinkProblems } from '../vite-plugins/build/tiles.ts';
 
@@ -116,14 +115,6 @@ async function linkTarget(path: string): Promise<string | undefined> {
   }
 }
 
-/** Whether the path leads to a file, its links followed. */
-async function reachable(path: string): Promise<boolean> {
-  return access(path).then(
-    () => true,
-    () => false,
-  );
-}
-
 /**
  * Links public/tiles/ to the fetched archive when the link there is ours to
  * (re)point: no archive there yet, or a link to an earlier fetch. Anything
@@ -136,7 +127,7 @@ async function linkForDevServer(root: string, cachePath: string, report: Report)
   if (target === undefined || target.startsWith(`../../${TILE_CACHE_DIR}/`)) {
     await rm(link, { force: true });
     await symlink(`../../${cachePath}`, link);
-  } else if (await reachable(link)) {
+  } else if (await exists(link)) {
     report.info(
       `kept ${LINK} (-> ${target}): the dev server serves that, a build the fetched archive`,
     );

@@ -463,8 +463,9 @@ single Warft (which in any case doesn't render before `place-warft`'s
   outside the listed ranges; for a layer with `text-transform: uppercase`,
   the upper-case form counts. The message names the character, the label and
   the range: add the range to `RANGES` and run `npm run fetch-assets`. With
-  `VITE_TILES_URL` set and no fetched archive the build only warns that it
-  checked no labels.
+  `VITE_TILES_URL` set and no fetched archive that matches `tiles.lock`, the
+  build only warns that it checked no labels; a build never reads an archive
+  that is not the pinned one.
 
 ## Search
 

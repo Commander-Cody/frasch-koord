@@ -13,15 +13,13 @@
  *
  * Build only (`apply: 'build'`); the dev server reads public/ in place.
  */
-import { access } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { resolve } from 'node:path';
 import type { Plugin } from 'vite';
 
 import { checkBuild } from './checkBuild.ts';
 import { fontProblems } from './glyphs.ts';
-import { readTilesPin } from './pins.ts';
 import { builtFromWarning } from './provenance.ts';
-import { shipTiles, type TilesBuild, tilesProblems } from './tiles.ts';
+import { checkTiles, shipTiles, type TilesBuild } from './tiles.ts';
 
 /** What stops a build, and what it should know but builds anyway. */
 export interface BuildProblems {
@@ -29,34 +27,20 @@ export interface BuildProblems {
   warnings: string[];
 }
 
-/** The fetched archive tiles.lock pins, or undefined when it is not there (or the lock is broken). */
-async function fetchedArchive(root: string): Promise<string | undefined> {
-  try {
-    const archive = join(root, (await readTilesPin(root)).cachePath);
-    await access(archive);
-    return archive;
-  } catch {
-    return undefined;
-  }
-}
-
 /** Everything that stands in a build's way when it starts, and what it should warn about. */
 export async function buildProblems({
   root,
   external,
 }: Omit<TilesBuild, 'outDir'>): Promise<BuildProblems> {
-  const archive = await fetchedArchive(root);
-  const problems = [
-    ...(await tilesProblems({ root, external })),
-    ...(await fontProblems(root, archive)),
-  ];
-  return { problems, warnings: await archiveWarnings(root, archive, external) };
+  const tiles = await checkTiles({ root, external });
+  const problems = [...tiles.problems, ...(await fontProblems(root, tiles.archive))];
+  return { problems, warnings: await archiveWarnings(root, tiles.archive, external) };
 }
 
 /**
  * What the build should know about the archive: that names.json was built
  * from other files, or with VITE_TILES_URL that there was none to check.
- * Without VITE_TILES_URL, tilesProblems already stops a build that has none.
+ * Without VITE_TILES_URL, checkTiles already stops a build that has none.
  */
 async function archiveWarnings(
   root: string,
@@ -69,7 +53,7 @@ async function archiveWarnings(
   }
   return external
     ? [
-        "the pinned tile archive is not fetched, so the labels were not checked against the glyph ranges fonts.lock lists, nor its built_from against names.json's (`npm run fetch-assets` fetches it)",
+        "no fetched tile archive matches tiles.lock, so the labels were not checked against the glyph ranges fonts.lock lists, nor its built_from against names.json's (`npm run fetch-assets` fetches it)",
       ]
     : [];
 }
