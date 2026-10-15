@@ -11,7 +11,7 @@ import { build, createLogger } from 'vite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import glyphs, { archiveLabels, glyphProblems, renderedFields, siteFields } from './glyphs.ts';
-import { DIALECTS } from '../src/dialects/registry.ts';
+import { DIALECTS } from '../../src/dialects/registry.ts';
 import { type TestTile, writeTestArchive } from './testArchive.ts';
 
 const LATIN = ['0-255', '256-511'];

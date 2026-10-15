@@ -20,14 +20,14 @@ import { fileURLToPath } from 'node:url';
 import type { StyleSpecification } from 'maplibre-gl';
 import type { Plugin } from 'vite';
 
-import { ALL_VIEW_TAGS } from '../src/dialects/views.ts';
-import { labelLayers } from '../src/map/style/labels.ts';
+import { ALL_VIEW_TAGS } from '../../src/dialects/views.ts';
+import { labelLayers } from '../../src/map/style/labels.ts';
 import { lockValue } from './lock.ts';
 import { pinnedArchive } from './tiles.ts';
 import { vectorTiles } from './vectorTiles.ts';
 
 /** web/, whose src/ holds the site's style, whatever root a build runs in. */
-const WEB = fileURLToPath(new URL('..', import.meta.url));
+const WEB = fileURLToPath(new URL('../..', import.meta.url));
 
 /** A tile property a symbol layer shows: `key` of the features of `sourceLayer`. */
 export interface Field {

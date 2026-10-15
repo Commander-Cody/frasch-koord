@@ -4,14 +4,14 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { checkBuild } from './check-build.mjs';
+import { checkBuild } from './checkBuild.ts';
 
 const WORKER = 'maplibre-gl-worker-Ab12.js';
 
 /** A dist/ as `npm run build` leaves it: an entry chunk that names the worker, and the worker. */
-let dist;
+let dist: string;
 
-function put(path, text) {
+function put(path: string, text: string): void {
   const file = join(dist, path);
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, text);

@@ -4,8 +4,8 @@ import { defineConfig } from 'vite';
 
 import areas from './vite-plugins/areas.ts';
 import curate from './vite-plugins/curate.ts';
-import glyphs from './vite-plugins/glyphs.ts';
-import tiles from './vite-plugins/tiles.ts';
+import glyphs from './vite-plugins/build/glyphs.ts';
+import tiles from './vite-plugins/build/tiles.ts';
 
 // https://vite.dev/config/
 export default defineConfig({

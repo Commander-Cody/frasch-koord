@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 // Checks the output of `npm run build` for what broke deployments before
 // (issue #20), and for what must not be published. `npm run build` ends with
 // it, so every build is checked.
@@ -19,7 +18,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { AREAS_BASE, AREA_PARTS_FILE, CURATE_BASE } from '../vite-plugins/devToolNames.ts';
+import { AREAS_BASE, AREA_PARTS_FILE, CURATE_BASE } from '../devToolNames.ts';
 
 /**
  * Strings only the dev tools contain: the bases of their endpoints, which
@@ -44,8 +43,18 @@ const TEXT = /\.(?:m?js|css|html|json|geojson|md|txt|csv)$/;
 const WORKER = /^maplibre-gl-worker-[\w-]+\.m?js$/;
 const SCRIPT = /\.m?js$/;
 
+/** Text files by their path under dist/. */
+type Files = Record<string, string>;
+
+/** What checkBuild found: the problems, the number of scripts and the worker file(s). */
+export interface BuildCheck {
+  problems: string[];
+  scripts: number;
+  workers: string[];
+}
+
 /** Every file under `dist`, as a path relative to it with `/` separators. */
-function listFiles(dist) {
+function listFiles(dist: string): string[] {
   return readdirSync(dist, { recursive: true, withFileTypes: true })
     .filter((entry) => !entry.isDirectory())
     .map((entry) =>
@@ -57,8 +66,8 @@ function listFiles(dist) {
 }
 
 /** The worker: a hashed file under assets/, named in some other chunk, and no chunk naming one that is not there. */
-function workerProblems(assets, code) {
-  const problems = [];
+function workerProblems(assets: string[], code: Files): { workers: string[]; problems: string[] } {
+  const problems: string[] = [];
   const workers = assets.filter((name) => WORKER.test(name));
   if (workers.length === 0) problems.push('no maplibre-gl-worker-<hash>.js in dist/assets');
   for (const worker of workers) {
@@ -76,8 +85,8 @@ function workerProblems(assets, code) {
 }
 
 /** Relative imports between chunks (`from"./x.js"`, `import("./x.js")`). */
-function importProblems(dist, code) {
-  const problems = [];
+function importProblems(dist: string, code: Files): string[] {
+  const problems: string[] = [];
   for (const [f, text] of Object.entries(code)) {
     for (const [, spec] of text.matchAll(/(?:from|import)\s*\(?\s*["'`](\.\.?\/[^"'`]+)["'`]/g)) {
       if (!existsSync(resolve(dist, dirname(f), spec))) {
@@ -88,7 +97,7 @@ function importProblems(dist, code) {
   return problems;
 }
 
-function devToolProblems(assetText) {
+function devToolProblems(assetText: Files): string[] {
   return Object.entries(assetText).flatMap(([f, text]) =>
     DEV_ONLY.filter((needle) => text.includes(needle)).map(
       (needle) => `${f} contains "${needle}": a dev tool is in the build`,
@@ -96,7 +105,7 @@ function devToolProblems(assetText) {
   );
 }
 
-function areaReviewProblems(files, text) {
+function areaReviewProblems(files: string[], text: Files): string[] {
   const data = files
     .filter((f) => f.includes(AREA_DATA))
     .map((f) => `${f}: the dialect-area review data is in the build`);
@@ -112,7 +121,7 @@ function areaReviewProblems(files, text) {
  * The problems of the build in `dist`, and what it found: the number of
  * scripts and the worker file(s).
  */
-export function checkBuild(dist) {
+export function checkBuild(dist: string): BuildCheck {
   if (!existsSync(join(dist, 'assets'))) {
     return {
       problems: [`no ${join(dist, 'assets')}: run \`npm run build\` first`],
@@ -121,7 +130,7 @@ export function checkBuild(dist) {
     };
   }
   const files = listFiles(dist);
-  const text = Object.fromEntries(
+  const text: Files = Object.fromEntries(
     files.filter((f) => TEXT.test(f)).map((f) => [f, readFileSync(join(dist, f), 'utf8')]),
   );
   const assetText = Object.fromEntries(
