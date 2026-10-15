@@ -131,9 +131,9 @@ tiles region=region *args:
 check-tiles region=region:
     {{frasch}} check-tiles tiles/data/{{file_name(region)}}.pmtiles
 
-# publish the built tiles as a GitHub release and pin web/tiles.lock to them (needs gh)
+# check the built tiles, then publish them as a GitHub release and pin web/tiles.lock to them (needs gh)
 [group('tiles')]
-publish-tiles:
+publish-tiles: (check-tiles region)
     tiles/publish.sh {{region}}
 
 # download (or with REFRESH=1 re-download) and verify the OSM extracts
