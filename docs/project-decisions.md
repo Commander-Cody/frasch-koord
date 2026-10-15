@@ -1623,7 +1623,9 @@ skipped the output check, which ran after it in `npm run build`.
   check but the type check.
 - **`tiles/fetch.sh` stays** for the tile build and `just extracts`.
 - **Test seams** (owner's decision): `fetchTiles` and `fetchFonts` against a
-  local HTTP server; `readTilesPin`, `readFontsPin`; the plugin through a
-  real `vite build` of a tiny site with a stand-in MapLibre worker, so
-  `checkBuild` passes; `checkBuild`, `provenanceWarning` and the tile and
-  glyph checks as functions.
+  local HTTP server; `readTilesPin`, `readFontsPin`; `buildProblems`, every
+  problem and warning a build starts with; the plugin through a real
+  `vite build` of a tiny site with a stand-in MapLibre worker, so
+  `checkBuild` passes, for what only a build shows (what it ships, that
+  `buildStart`'s problems and warnings reach Vite, the output check);
+  `checkBuild` and `provenanceWarning` as pure functions.

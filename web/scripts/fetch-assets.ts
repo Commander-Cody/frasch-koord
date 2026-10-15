@@ -19,6 +19,7 @@
 import { createHash } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
 import {
+  access,
   mkdir,
   readdir,
   readFile,
@@ -115,10 +116,19 @@ async function linkTarget(path: string): Promise<string | undefined> {
   }
 }
 
+/** Whether the path leads to a file, its links followed. */
+async function reachable(path: string): Promise<boolean> {
+  return access(path).then(
+    () => true,
+    () => false,
+  );
+}
+
 /**
  * Links public/tiles/ to the fetched archive when the link there is ours to
  * (re)point: no archive there yet, or a link to an earlier fetch. Anything
- * else is someone's own archive, e.g. a link to tiles/data/, and is kept.
+ * else is someone's own archive, e.g. a link to tiles/data/, and is kept;
+ * one that leads nowhere is danglingLinkProblems' to warn about.
  */
 async function linkForDevServer(root: string, cachePath: string, report: Report): Promise<void> {
   const link = join(root, LINK);
@@ -126,7 +136,7 @@ async function linkForDevServer(root: string, cachePath: string, report: Report)
   if (target === undefined || target.startsWith(`../../${TILE_CACHE_DIR}/`)) {
     await rm(link, { force: true });
     await symlink(`../../${cachePath}`, link);
-  } else {
+  } else if (await reachable(link)) {
     report.info(
       `kept ${LINK} (-> ${target}): the dev server serves that, a build the fetched archive`,
     );

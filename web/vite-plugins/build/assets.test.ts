@@ -20,7 +20,7 @@ import { dirname, join } from 'node:path';
 import { build, createLogger } from 'vite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import assets from './assets.ts';
+import assets, { buildProblems } from './assets.ts';
 import { writeTestArchive } from './testArchive.ts';
 
 const STACKS = ['Noto Sans Regular', 'Noto Sans Italic', 'Noto Sans Bold'];
@@ -56,7 +56,13 @@ function pinArchive(place: Record<string, string>, builtFrom = BUILT_FROM): stri
 }
 
 function viteBuild(logger = createLogger('silent')) {
-  return build({ root, configFile: false, customLogger: logger, plugins: [assets()] });
+  return build({
+    root,
+    configFile: false,
+    customLogger: logger,
+    logLevel: 'silent',
+    plugins: [assets()],
+  });
 }
 
 beforeEach(() => {
@@ -83,6 +89,93 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllEnvs();
   rmSync(root, { recursive: true, force: true });
+});
+
+describe('buildProblems', () => {
+  it('passes a site with the pinned archive and the listed glyphs', async () => {
+    expect(await buildProblems({ root, external: false })).toEqual({ problems: [], warnings: [] });
+  });
+
+  it('refuses a label the shipped ranges cannot show', async () => {
+    pinArchive({ 'frasch:local': 'Stråt – Bütjebel' });
+
+    const { problems } = await buildProblems({ root, external: false });
+
+    expect(problems).toEqual([
+      '"–" (U+2013) in "Stråt – Bütjebel" needs the glyph range 8192-8447, which fonts.lock does not list',
+    ]);
+  });
+
+  it("ignores what the site's style does not show", async () => {
+    pinArchive({ 'name:nonlatin': '北京', class: 'town' });
+
+    const { problems } = await buildProblems({ root, external: false });
+
+    expect(problems).toEqual([]);
+  });
+
+  it('refuses glyphs that are not the listed ranges', async () => {
+    put('public/fonts/Noto Sans Bold/20224-20479.pbf', '');
+    rmSync(join(root, 'public/fonts/Noto Sans Italic'), { recursive: true });
+
+    const { problems } = await buildProblems({ root, external: false });
+
+    expect(problems).toEqual([
+      'public/fonts/ does not hold the glyphs fonts.lock lists (missing: Noto Sans Italic/0-255.pbf, Noto Sans Italic/256-511.pbf; not listed: Noto Sans Bold/20224-20479.pbf): run `npm run fetch-assets`',
+    ]);
+  });
+
+  it('reports the tiles and the glyphs that are wrong together', async () => {
+    rmSync(join(root, '.cache'), { recursive: true });
+    put('public/fonts/Noto Sans Bold/20224-20479.pbf', '');
+
+    const { problems } = await buildProblems({ root, external: false });
+
+    expect(problems).toEqual([
+      'the pinned tile archive is not fetched: run `npm run fetch-assets` (or set VITE_TILES_URL)',
+      'public/fonts/ does not hold the glyphs fonts.lock lists (not listed: Noto Sans Bold/20224-20479.pbf): run `npm run fetch-assets`',
+    ]);
+  });
+
+  it('checks the pinned archive with VITE_TILES_URL too, when it is fetched', async () => {
+    pinArchive({ 'frasch:local': 'B 5 Ⅱ' });
+
+    const { problems } = await buildProblems({ root, external: true });
+
+    expect(problems).toEqual([
+      '"Ⅱ" (U+2161) in "B 5 Ⅱ" needs the glyph range 8448-8703, which fonts.lock does not list',
+    ]);
+  });
+
+  it('warns that it checked nothing with VITE_TILES_URL and no fetched archive', async () => {
+    rmSync(join(root, '.cache'), { recursive: true });
+
+    expect(await buildProblems({ root, external: true })).toEqual({
+      problems: [],
+      warnings: [
+        "the pinned tile archive is not fetched, so the labels were not checked against the glyph ranges fonts.lock lists, nor its built_from against names.json's (`npm run fetch-assets` fetches it)",
+      ],
+    });
+  });
+
+  it('only refuses, without a warning, a build that has no archive and no VITE_TILES_URL', async () => {
+    rmSync(join(root, '.cache'), { recursive: true });
+
+    const { warnings } = await buildProblems({ root, external: false });
+
+    expect(warnings).toEqual([]);
+  });
+
+  it('warns when the archive was built from other name files than names.json', async () => {
+    pinArchive({ 'frasch:local': 'Hoorne' }, { ...BUILT_FROM, 'places.csv': 'older' });
+
+    expect(await buildProblems({ root, external: false })).toEqual({
+      problems: [],
+      warnings: [
+        'the pinned tile archive and public/data/names.json were built from different places.csv: map labels and place cards may disagree. Rebuild the index (`just rebuild index`) or rebuild and publish the tiles (`just tiles`, `just publish-tiles`)',
+      ],
+    });
+  });
 });
 
 describe('a vite build with the plugin', () => {
@@ -122,74 +215,25 @@ describe('a vite build with the plugin', () => {
     expect(readdirSync(join(outDir, 'tiles'))).toEqual([]);
   });
 
-  it('stops with what is missing, not with what it could not copy', async () => {
+  it('stops at its start with what is missing, not with what it could not copy', async () => {
     rmSync(join(root, '.cache'), { recursive: true });
-
-    await expect(viteBuild()).rejects.toThrow('the pinned tile archive is not fetched');
-  });
-
-  it('stops at a dangling link in public/tiles/ with the ways out', async () => {
     mkdirSync(join(root, 'public/tiles'));
-    symlinkSync(
-      '../../own-tiles/schleswig-holstein.pmtiles',
-      join(root, 'public/tiles/sh.pmtiles'),
-    );
-
-    await expect(viteBuild()).rejects.toThrow('remove the link and run `npm run fetch-assets`');
-  });
-
-  it('refuses a label the shipped ranges cannot show', async () => {
-    pinArchive({ 'frasch:local': 'Stråt – Bütjebel' });
+    symlinkSync('../../own-tiles/sh.pmtiles', join(root, 'public/tiles/sh.pmtiles'));
 
     await expect(viteBuild()).rejects.toThrow(
-      '"–" (U+2013) in "Stråt – Bütjebel" needs the glyph range 8192-8447',
+      /the pinned tile archive is not fetched.*\n.*public\/tiles\/sh\.pmtiles links to/,
     );
   });
 
-  it("ignores what the site's style does not show", async () => {
-    pinArchive({ 'name:nonlatin': '北京', class: 'town' });
-
-    await viteBuild();
-  });
-
-  it('refuses glyphs that are not the listed ranges', async () => {
-    put('public/fonts/Noto Sans Bold/20224-20479.pbf', '');
-    rmSync(join(root, 'public/fonts/Noto Sans Italic'), { recursive: true });
-
-    await expect(viteBuild()).rejects.toThrow(
-      'public/fonts/ does not hold the glyphs fonts.lock lists (missing: Noto Sans Italic/0-255.pbf, Noto Sans Italic/256-511.pbf; not listed: Noto Sans Bold/20224-20479.pbf): run `npm run fetch-assets`',
-    );
-  });
-
-  it('reports the tiles and the glyphs that are wrong together', async () => {
-    rmSync(join(root, '.cache'), { recursive: true });
-    put('public/fonts/Noto Sans Bold/20224-20479.pbf', '');
-
-    const failure = viteBuild();
-
-    await expect(failure).rejects.toThrow('the pinned tile archive is not fetched');
-    await expect(failure).rejects.toThrow(
-      'public/fonts/ does not hold the glyphs fonts.lock lists',
-    );
-  });
-
-  it('checks the pinned archive with VITE_TILES_URL too, when it is fetched', async () => {
-    vi.stubEnv('VITE_TILES_URL', 'pmtiles://https://example.org/schleswig-holstein.pmtiles');
-    pinArchive({ 'frasch:local': 'B 5 Ⅱ' });
-
-    await expect(viteBuild()).rejects.toThrow('needs the glyph range 8448-8703');
-  });
-
-  it('warns that it checked no labels with VITE_TILES_URL and no fetched archive', async () => {
-    vi.stubEnv('VITE_TILES_URL', 'pmtiles://https://example.org/schleswig-holstein.pmtiles');
-    rmSync(join(root, '.cache'), { recursive: true });
+  it('hands its warnings to Vite', async () => {
+    pinArchive({ 'frasch:local': 'Hoorne' }, { ...BUILT_FROM, 'places.csv': 'older' });
     const logger = createLogger('silent');
     const warn = vi.spyOn(logger, 'warn');
 
     await viteBuild(logger);
 
     expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('the labels were not checked against the glyph ranges'),
+      expect.stringContaining('were built from different places.csv'),
       expect.anything(),
     );
   });
@@ -201,20 +245,5 @@ describe('a vite build with the plugin', () => {
     );
 
     await expect(viteBuild()).rejects.toThrow('a dev tool is in the build');
-  });
-
-  it('warns when the archive was built from other name files than names.json', async () => {
-    pinArchive({ 'frasch:local': 'Hoorne' }, { ...BUILT_FROM, 'places.csv': 'older' });
-    const logger = createLogger('silent');
-    const warn = vi.spyOn(logger, 'warn');
-
-    await viteBuild(logger);
-
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining(
-        'the pinned tile archive and public/data/names.json were built from different places.csv',
-      ),
-      expect.anything(),
-    );
   });
 });

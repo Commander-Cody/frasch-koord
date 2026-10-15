@@ -112,6 +112,7 @@ describe('fetchTiles', () => {
     await fetchTiles(root, report);
 
     expect(readlinkSync(join(root, LINK))).toBe('../../own-tiles/schleswig-holstein.pmtiles');
+    expect(info).not.toContainEqual(expect.stringContaining('kept'));
     expect(warnings).toEqual([
       `${LINK} links to ../../own-tiles/schleswig-holstein.pmtiles, which does not exist: the dev server shows no map and \`npm run build\` stops. Build the tiles, or remove the link and run \`npm run fetch-assets\``,
     ]);

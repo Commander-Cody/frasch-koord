@@ -41,7 +41,7 @@ async function fetchedArchive(root: string): Promise<string | undefined> {
 }
 
 /** Everything that stands in a build's way when it starts, and what it should warn about. */
-async function buildProblems({
+export async function buildProblems({
   root,
   external,
 }: Omit<TilesBuild, 'outDir'>): Promise<BuildProblems> {
@@ -95,7 +95,7 @@ export default function assets(): Plugin {
     // also runs after a failed build and would bury buildStart's message.
     async writeBundle() {
       await shipTiles(build);
-      const { problems } = checkBuild(build.outDir);
+      const problems = checkBuild(build.outDir);
       if (problems.length > 0) this.error(problems.join('\n'));
     },
   };

@@ -46,13 +46,6 @@ const SCRIPT = /\.m?js$/;
 /** Text files by their path under dist/. */
 type Files = Record<string, string>;
 
-/** What checkBuild found: the problems, the number of scripts and the worker file(s). */
-export interface BuildCheck {
-  problems: string[];
-  scripts: number;
-  workers: string[];
-}
-
 /** Every file under `dist`, as a path relative to it with `/` separators. */
 function listFiles(dist: string): string[] {
   return readdirSync(dist, { recursive: true, withFileTypes: true })
@@ -66,7 +59,7 @@ function listFiles(dist: string): string[] {
 }
 
 /** The worker: a hashed file under assets/, named in some other chunk, and no chunk naming one that is not there. */
-function workerProblems(assets: string[], code: Files): { workers: string[]; problems: string[] } {
+function workerProblems(assets: string[], code: Files): string[] {
   const problems: string[] = [];
   const workers = assets.filter((name) => WORKER.test(name));
   if (workers.length === 0) problems.push('no maplibre-gl-worker-<hash>.js in dist/assets');
@@ -81,7 +74,7 @@ function workerProblems(assets: string[], code: Files): { workers: string[]; pro
         problems.push(`${f} refers to assets/${name}, which dist/ does not have`);
     }
   }
-  return { workers, problems };
+  return problems;
 }
 
 /** Relative imports between chunks (`from"./x.js"`, `import("./x.js")`). */
@@ -117,17 +110,10 @@ function areaReviewProblems(files: string[], text: Files): string[] {
   return [...data, ...notes];
 }
 
-/**
- * The problems of the build in `dist`, and what it found: the number of
- * scripts and the worker file(s).
- */
-export function checkBuild(dist: string): BuildCheck {
+/** The problems of the build in `dist`, one line each; none when it is fine. */
+export function checkBuild(dist: string): string[] {
   if (!existsSync(join(dist, 'assets'))) {
-    return {
-      problems: [`no ${join(dist, 'assets')}: the build wrote no assets`],
-      scripts: 0,
-      workers: [],
-    };
+    return [`no ${join(dist, 'assets')}: the build wrote no assets`];
   }
   const files = listFiles(dist);
   const text: Files = Object.fromEntries(
@@ -139,12 +125,10 @@ export function checkBuild(dist: string): BuildCheck {
   const code = Object.fromEntries(Object.entries(assetText).filter(([f]) => SCRIPT.test(f)));
   const assets = files.filter((f) => f.startsWith('assets/')).map((f) => f.slice('assets/'.length));
 
-  const worker = workerProblems(assets, code);
-  const problems = [
-    ...worker.problems,
+  return [
+    ...workerProblems(assets, code),
     ...importProblems(dist, code),
     ...devToolProblems(assetText),
     ...areaReviewProblems(files, text),
   ];
-  return { problems, scripts: Object.keys(code).length, workers: worker.workers };
 }
