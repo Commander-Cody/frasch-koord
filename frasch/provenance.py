@@ -25,7 +25,7 @@ inputs a file is behind (frasch.pipeline asks, for `update` and
 
 The search index and the tiles share one stamp (`stamp`): the files both
 are built from.  tiles/build.sh writes it into the archive's metadata, and
-the frontend warns when the stamp of names.json differs from the tiles'.
+the site's build warns when the stamp of names.json differs from the tiles'.
 
 `frasch provenance` prints that stamp, `{"built_from": {...}}`, for
 tiles/build.sh.

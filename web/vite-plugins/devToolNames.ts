@@ -1,9 +1,8 @@
 /**
  * The names that mark the dev tools: the bases of their dev-server endpoints
  * and the file the area review reads. The plugins serve under them, and
- * scripts/check-build.mjs refuses a build that contains them — Node runs this
- * file for it as it is, so it imports nothing and has no syntax but types to
- * strip.
+ * the build check (vite-plugins/build/checkBuild.ts) refuses a build that
+ * contains them.
  */
 
 /** Where vite-plugins/curate.ts answers. */

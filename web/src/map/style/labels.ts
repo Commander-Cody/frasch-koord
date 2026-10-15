@@ -1,5 +1,5 @@
 // What a symbol layer of the site's style labels a place with, in a view.
-// No `siteUrl` and no `import.meta.env` here: vite-plugins/glyphs.ts imports
+// No `siteUrl` and no `import.meta.env` here: vite-plugins/build/glyphs.ts imports
 // this module into the Vite config to read off what any view can show.
 
 import type { LayerSpecification } from 'maplibre-gl';

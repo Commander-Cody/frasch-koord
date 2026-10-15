@@ -8,17 +8,15 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build && node scripts/check-build.mjs",
+    "build": "tsc -b && vite build",
     "check": "bash ../scripts/run-all.sh 'npm run lint' 'npm run format:check' 'npm run typecheck' 'npm test'",
     "lint": "oxlint",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "typecheck": "tsc -b",
     "test": "vitest run",
-    "smoke": "npm run build && node scripts/smoke.mjs",
-    "fetch-fonts": "bash scripts/fetch-fonts.sh",
-    "fetch-tiles": "bash scripts/fetch-tiles.sh",
-    "fetch-assets": "npm run fetch-fonts && npm run fetch-tiles",
+    "smoke": "npm run build && node scripts/smoke.ts",
+    "fetch-assets": "node scripts/fetch-assets.ts",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -39,6 +37,7 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",
+    "fflate": "^0.8.3",
     "jsdom": "^30.1.1",
     "oxfmt": "0.71.0",
     "oxlint": "^1.86.0",

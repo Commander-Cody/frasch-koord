@@ -3,9 +3,8 @@ import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
 import areas from './vite-plugins/areas.ts';
+import assets from './vite-plugins/build/assets.ts';
 import curate from './vite-plugins/curate.ts';
-import glyphs from './vite-plugins/glyphs.ts';
-import tiles from './vite-plugins/tiles.ts';
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -14,8 +13,8 @@ export default defineConfig({
   // `areas` hands the dialect-area review its geometry from names/
   // (read-only). `vite preview` loads them too, since Vite resolves it as
   // 'serve' as well, but they only add dev-server endpoints, so there they do
-  // nothing. `tiles` and `glyphs` only run on a build.
-  plugins: [react(), curate(), areas(), tiles(), glyphs()],
+  // nothing. `assets` only runs on a build: it checks what the build ships.
+  plugins: [react(), curate(), areas(), assets()],
   // MapLibre's worker is bundled on its own (see src/map/createMap.ts) and
   // started as a module worker, so it is built as an ES module too.
   worker: { format: 'es' },
@@ -47,6 +46,6 @@ export default defineConfig({
     // curate.test.ts) override this to 'node' themselves (a
     // `// @vitest-environment node` docblock): they drive a Vite dev-server
     // middleware directly and have no business needing a DOM.
-    include: ['src/**/*.test.{ts,tsx}', 'vite-plugins/**/*.test.ts', 'scripts/**/*.test.mjs'],
+    include: ['src/**/*.test.{ts,tsx}', 'vite-plugins/**/*.test.ts', 'scripts/**/*.test.ts'],
   },
 });

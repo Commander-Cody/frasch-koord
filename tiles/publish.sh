@@ -33,8 +33,8 @@ Map data © OpenStreetMap contributors, available under the Open Database Licens
 
 cat > "$LOCK" <<EOF
 # The tile archive the website ships, published by \`just publish-tiles\`
-# (tiles/publish.sh). scripts/fetch-tiles.sh fetches it and
-# vite-plugins/tiles.ts puts it into the build; both check its sha256.
+# (tiles/publish.sh). \`npm run fetch-assets\` fetches it and the build
+# (vite-plugins/build/) ships it; both check its sha256.
 ARCHIVE_URL=${URL}
 ARCHIVE_SHA256=${SHA256}
 EOF

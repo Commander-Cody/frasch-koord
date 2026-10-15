@@ -1,5 +1,5 @@
 // The dialect registry as the frontend compiles it in. No `import.meta.env`
-// here: vite-plugins/glyphs.ts imports this module (through views.ts and
+// here: vite-plugins/build/glyphs.ts imports this module (through views.ts and
 // labelChain.ts) into the Vite config, where there is none.
 
 import registry from './generated/dialects.json' with { type: 'json' };

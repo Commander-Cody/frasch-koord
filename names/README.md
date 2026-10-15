@@ -453,8 +453,8 @@ then say that the row's `osm` cell is what has to be corrected.
 (`frasch provenance`): the git blob hashes (`git hash-object`, of the content, so
 it also names an uncommitted state) of `places.csv`, `dialects.csv`,
 `curation.csv`, `dialect_areas.geojson` and `osm_objects.json`, plus the
-extracts the objects were located in. The frontend warns in the console when
-the two differ. `dialect_areas*.geojson` record the hashes of
+extracts the objects were located in. The site's build (`npm run build`)
+warns when the two differ. `dialect_areas*.geojson` record the hashes of
 `dialect_areas.csv` and `dialects.csv` and their extract, `osm_objects.json`
 and `work/candidates.jsonl` their extracts, `REPORT.md` the hashes of
 `places.csv` and `dialects.csv` and the extracts behind its candidates. It is

@@ -5,7 +5,6 @@ import { useEffect, useState } from 'react';
 
 import { siteUrl } from '../site';
 import { osmRefs } from './osmRef';
-import type { BuiltFrom } from '../map/provenance';
 import type { NameEntry } from './entry';
 import { createSearch, type Search } from './search';
 
@@ -20,8 +19,6 @@ export interface NamesData {
   find: EntryLookup;
   /** The entries a typed query finds, see names/search.ts. */
   search: Search;
-  /** What the list was built from, to compare with the tiles' (see provenance.ts). */
-  builtFrom?: BuiltFrom;
 }
 
 /** Finds the entry a reference names, see `entryLookup`. */
@@ -47,23 +44,14 @@ export function entryLookup(entries: NameEntry[]): EntryLookup {
   return (ref) => byRef.get(ref) ?? byRef.get(ref.split('#')[0]);
 }
 
-/** names.json as loaded: its entries, and what it was built from. */
-export interface NameList {
-  entries: NameEntry[];
-  builtFrom: BuiltFrom;
-}
-
 /**
- * The name list of a fetched names.json — the one place that looks at what
+ * The entries of a fetched names.json — the one place that looks at what
  * came over the wire; from here on the app trusts the types. Throws on what
  * is no name list at all, and drops (and logs) a place without an id or with
  * a repeated one: either would take the whole search index down.
  */
-export function parseNames(json: unknown): NameList {
-  const { built_from: builtFrom, places } = (json ?? {}) as {
-    built_from: BuiltFrom;
-    places?: unknown;
-  };
+export function parseNames(json: unknown): NameEntry[] {
+  const { places } = (json ?? {}) as { places?: unknown };
   if (!Array.isArray(places)) throw new Error('no list of places');
   const ids = new Set<string>();
   const entries = (places as NameEntry[]).filter(({ id }) => {
@@ -75,7 +63,7 @@ export function parseNames(json: unknown): NameList {
     const dropped = places.length - entries.length;
     console.warn(`names.json: skipped ${dropped} places without an id or with a repeated one`);
   }
-  return { entries, builtFrom };
+  return entries;
 }
 
 /** The list before it has loaded, or after it failed to: nothing to find. */
@@ -83,8 +71,8 @@ const EMPTY = { find: () => undefined, search: () => [] } satisfies Partial<Name
 const LOADING: NamesData = { status: 'loading', ...EMPTY };
 const FAILED: NamesData = { status: 'error', ...EMPTY };
 
-function loaded({ entries, builtFrom }: NameList): NamesData {
-  return { status: 'ready', find: entryLookup(entries), search: createSearch(entries), builtFrom };
+function loaded(entries: NameEntry[]): NamesData {
+  return { status: 'ready', find: entryLookup(entries), search: createSearch(entries) };
 }
 
 /** Where the name list is served, under the site's base path. */

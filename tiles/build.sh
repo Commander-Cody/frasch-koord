@@ -122,8 +122,9 @@ mv "$INJECTED_TMP" "$INJECTED"
 echo "== building $OUT"
 # NAME_TAG_OPTIONS:  which name:* and frasch:* tags end up in the tiles
 #                    (nametags.sh).
-# --archive_description: the build's `built_from` stamp; the frontend compares
-#                    it with names.json's (web/src/map/provenance.ts). Planetiler
+# --archive_description: the build's `built_from` stamp; the site's build
+#                    compares it with names.json's
+#                    (web/vite-plugins/build/provenance.ts). Planetiler
 #                    records the extract's replication time by itself.
 "$JAVA_BIN" -Xmx"$XMX" -jar planetiler.jar \
   --osm-path="$INJECTED" \

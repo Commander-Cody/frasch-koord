@@ -10,7 +10,7 @@
  * assignments the owner has not confirmed yet. The file and the notes are no
  * secret — they are in the repository — but the map should not present them
  * as fact, so only the local machine's own pages get them (devEndpoints).
- * `npm run build` fails when either reaches dist/ (check-build.mjs).
+ * A build fails when either reaches dist/ (vite-plugins/build/checkBuild.ts).
  *
  * Read-only, unlike vite-plugins/curate.ts: the review writes nothing back,
  * `names/dialect_areas.csv` is edited by hand.

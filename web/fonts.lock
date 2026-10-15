@@ -1,5 +1,5 @@
-# The glyphs the website ships (issue #29): scripts/fetch-fonts.sh puts
-# exactly these into public/fonts/, and vite-plugins/glyphs.ts checks them.
+# The glyphs the website ships (issue #29): `npm run fetch-assets` puts
+# exactly these into public/fonts/, and vite-plugins/build/glyphs.ts checks them.
 #
 # The Noto Sans glyphs of openmaptiles/fonts v2.0, pinned by the zip's sha256.
 FONTS_URL=https://github.com/openmaptiles/fonts/releases/download/v2.0/noto-sans.zip
@@ -22,5 +22,5 @@ STACKS=Noto Sans Regular,Noto Sans Italic,Noto Sans Bold
 # MapLibre draws the last two itself and does not request them today; they
 # are listed because the build's check requires every character a label
 # has. A build fails when a label of the pinned tile archive needs a range
-# this list lacks: add it here then, and run `npm run fetch-fonts`.
+# this list lacks: add it here then, and run `npm run fetch-assets`.
 RANGES=0-255 256-511 512-767 768-1023 7680-7935 8192-8447 8448-8703 9728-9983 12288-12543 65024-65279

@@ -394,6 +394,7 @@ carry the same `built_from` (git blob hashes of `places.csv`,
 plus the objects' extracts) in the PMTiles `description`. The frontend warns
 in the console when they differ. The dialect areas record the hashes of
 `dialect_areas.csv` and `dialects.csv` and their extract.
+*Superseded 2026-10-15 (#108): the build warns instead, see the entry of that date.*
 
 **Drift check.** `just check-outputs` runs in CI: it regenerates `names.json`
 and `dialects.json` and diffs them, and checks the stamps of the extract-derived
@@ -447,6 +448,7 @@ their own build there. `vite-plugins/tiles.ts` drops whatever Vite copied from
 it, and puts the verified pinned archive into `dist/`, or none with
 `VITE_TILES_URL`. It also stops the build at its start when the glyphs or the
 archive are missing (owner's choice over a warning).
+*Superseded 2026-10-15 (#108): it is `vite-plugins/build/tiles.ts`, run by the one build plugin.*
 
 **Planetiler's own inputs are pinned.** `build.sh` no longer uses
 `--download`. Natural Earth 5.1.2 and the water polygons (2026-09-14) have no
@@ -526,7 +528,8 @@ removing them). Commands that take arguments (`check.py --fix`, `curate.py`,
   `npm run smoke` hold the web side's steps, and the `just` recipes only call
   them.
 - **Every build is checked**: `npm run build` ends with `check-build.mjs`
-  (owner's choice), and `npm run smoke` builds first.
+  (owner's choice), and `npm run smoke` builds first. *Superseded 2026-10-15 (#108): the check
+  runs inside the Vite build, `vite-plugins/build/checkBuild.ts`.*
 - **CI calls the composite commands** (`just check-python`, `npm run check`,
   `npm run smoke`), so CI and a local run cannot drift. The price is one CI
   step per side instead of one per check: a failure is found in the log
@@ -561,7 +564,8 @@ routine recipes and the pipeline's internals side by side.
 - **`fetch-fonts.sh` keeps only the listed ranges** (owner's choice over
   trimming them in the build): the dev server serves what production
   serves. The list lives in `web/fonts.lock` with the zip's URL and sha256
-  (owner's choice over a separate ranges file).
+  (owner's choice over a separate ranges file). *Superseded 2026-10-15 (#108): `npm run
+  fetch-assets` (`scripts/fetch-assets.ts`) does it.*
 - **With `VITE_TILES_URL`** the fetched archive is checked if there is one,
   else the build warns (owner's choice over requiring the archive).
 
@@ -634,6 +638,8 @@ copy of `public/` and builds anyway). It does so with `VITE_TILES_URL` too.
 `npm run fetch-tiles` keeps a link that is not its own even when it dangles,
 but warns instead of saying the dev server serves it (owner's choice over
 replacing it: the link may have been set ahead of the first tile build).
+*Superseded 2026-10-15 (#108): `vite-plugins/build/tiles.ts` and `npm run fetch-assets`, with one
+message.*
 
 ## Decided 2026-10-06: one `frasch` command, no launchers (issue #91)
 
@@ -1591,3 +1597,41 @@ file were readable from the local network.
   routing, the 404s, the 500 and `serveFile` through `devEndpoints`
   directly; the POST's own checks stay in `curate.test.ts`. The fake
   request and response are `vite-plugins/testHttp.ts`.
+
+## Decided 2026-10-15: the web fetch in Node, one pins module, every build check inside the Vite build (issue #108)
+
+"What the lock pins is what is on disk" was written in TypeScript and again in
+bash, and a plain `vite build` — the GitHub Pages command the README gave —
+skipped the output check, which ran after it in `npm run build`.
+
+| was | is |
+| --- | --- |
+| `scripts/fetch-fonts.sh`, `scripts/fetch-tiles.sh` (bash, `tiles/fetch.sh`, `unzip`; tests spawning bash and `zip`) | `scripts/fetch-assets.ts`, run by Node 24 as it is: `fetchTiles`, `fetchFonts`; `npm run fetch-assets` is the only npm script for it |
+| the lock parsed in `lock.ts` and by `sed` in both scripts; the sha256 shape check, the cache path and the archive name in four places | `vite-plugins/build/pins.ts`: `readTilesPin`, `readFontsPin`, `ARCHIVE_NAME`, `TILE_CACHE_DIR` |
+| "public/fonts/ is exactly the listed files" in `glyphs.ts` and `fetch-fonts.sh`; the dangling-link message in `tiles.ts` and `fetch-tiles.sh` | `glyphInstall.ts` and `danglingLinkProblems`, used by both |
+| the `tiles` and `glyphs` plugins, each with its own `root`/`VITE_TILES_URL` and `this.error`; `glyphs` relying on `tiles` to stop a build without an archive | one plugin, `vite-plugins/build/assets.ts`: one `buildStart` reports every problem at once, `writeBundle` ships the archive and then runs `checkBuild` |
+| `scripts/check-build.mjs` after `vite build` | `vite-plugins/build/checkBuild.ts`, run by the plugin; `npm run build` is `tsc -b && vite build` |
+| `useProvenanceCheck` opening a second `PMTiles` in every visitor's browser | the build compares the pinned archive's `built_from` with `names.json`'s (`vite-plugins/build/provenance.ts`) |
+| `smoke` opening `?curate` only | `?curate` and `?areas` |
+
+- **A differing `built_from` warns, it does not fail** (owner's decision):
+  the archive pinned today was built from older name files than
+  `names.json`, and it is published on its own (`just publish-tiles`).
+- **The runtime check is gone, not kept for dev** (owner's decision): the
+  build covers what is deployed, `just check-tiles` a tile builder's own
+  archive. `builtFrom` left `NamesData`, `pmtilesArchive` left `pmtiles.ts`.
+- **fflate unzips the glyph zip** (owner's choice over a hand-written reader
+  and yauzl): no dependencies, maintained, and the tests build their zip
+  with it, so the host needs neither `zip` nor `unzip`.
+- **`tsc -b` stays outside the plugin** (owner's choice over spawning it in
+  `buildStart`): the README's Pages command is
+  `npm run build -- --base /frasch-koord/`; a bare `vite build` runs every
+  check but the type check.
+- **`tiles/fetch.sh` stays** for the tile build and `just extracts`.
+- **Test seams** (owner's decision): `fetchTiles` and `fetchFonts` against a
+  local HTTP server; `readTilesPin`, `readFontsPin`; `buildProblems`, every
+  problem and warning a build starts with; the plugin through a real
+  `vite build` of a tiny site with a stand-in MapLibre worker, so
+  `checkBuild` passes, for what only a build shows (what it ships, that
+  `buildStart`'s problems and warnings reach Vite, the output check);
+  `checkBuild` and `provenanceWarning` as pure functions.

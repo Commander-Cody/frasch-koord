@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 // Smoke check of the production build: serves dist/ with `vite preview`,
 // opens it in headless Chromium and checks that the map loads, search finds a
 // place, its card opens and the map marks it, and that the dev tools stay off. `npm run smoke`
@@ -8,7 +7,7 @@
 // Browser: Playwright's headless Chromium (`npx playwright install
 // chromium-headless-shell` once).
 
-import { chromium } from 'playwright';
+import { type Browser, chromium } from 'playwright';
 import { preview } from 'vite';
 
 /** Niebüll and around: the name list is densest here. */
@@ -20,8 +19,8 @@ const server = await preview({ preview: { port: 4173, strictPort: false, open: f
 const url = server.resolvedUrls?.local[0];
 if (!url) throw new Error('vite preview reports no URL');
 
-const problems = [];
-let browser;
+const problems: string[] = [];
+let browser: Browser | undefined;
 
 try {
   // Software WebGL: headless has no GPU, and Chromium only falls back to
@@ -58,11 +57,14 @@ try {
   // The marker is the map's own: no unit test has a map to put it on.
   await page.waitForSelector(`.maplibregl-marker[title="${SEARCH}"]`, { timeout: TIMEOUT });
 
-  // The dev tools are not in the build: `?curate` is the public map.
-  await page.goto(`${url}?curate${VIEW}`);
-  await page.waitForSelector('.search-input', { timeout: TIMEOUT });
-  if (await page.locator('.curate-panel, .area-panel').count())
-    problems.push('?curate opens a dev tool');
+  // The dev tools are not in the build: their parameters open the public map.
+  for (const tool of ['curate', 'areas']) {
+    await page.goto(`${url}?${tool}${VIEW}`);
+    await page.waitForSelector('.search-input', { timeout: TIMEOUT });
+    if (await page.locator('.curate-panel, .area-panel').count()) {
+      problems.push(`?${tool} opens a dev tool`);
+    }
+  }
 } catch (err) {
   problems.push(String(err));
 } finally {

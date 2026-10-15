@@ -1,33 +1,28 @@
 /**
- * Stops a build whose glyphs are not the ranges web/fonts.lock lists, or
- * whose labels need a range it does not list.
+ * The glyphs a build ships: they have to be exactly the ranges web/fonts.lock
+ * lists, and those have to cover the labels.
  *
  * Vite copies public/fonts/ into the build as it is, so what
- * scripts/fetch-fonts.sh put there is what the site ships: it has to be
- * exactly the listed ranges of the listed stacks. And a label character
- * outside them would be a glyph request that fails (issue #29), so every
- * string a symbol layer of the site's style can show -- in any view, read
- * off the label layers src/map/style/labels.ts builds -- is taken from the
- * pinned tile archive and checked. With VITE_TILES_URL the build needs no
- * archive; then the fetched one is checked if there is one, else the build
- * warns that it checked no labels.
- *
- * Build only (`apply: 'build'`); the dev server reads public/ in place.
+ * `npm run fetch-assets` put there is what the site ships. And a label
+ * character outside the listed ranges would be a glyph request that fails
+ * (issue #29), so every string a symbol layer of the site's style can show
+ * -- in any view, read off the label layers src/map/style/labels.ts builds
+ * -- is taken from the pinned tile archive and checked. vite-plugins/build/
+ * assets.ts runs the check when a build starts.
  */
-import { access, readdir, readFile } from 'node:fs/promises';
-import { join, relative } from 'node:path';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { StyleSpecification } from 'maplibre-gl';
-import type { Plugin } from 'vite';
 
-import { ALL_VIEW_TAGS } from '../src/dialects/views.ts';
-import { labelLayers } from '../src/map/style/labels.ts';
-import { lockValue } from './lock.ts';
-import { pinnedArchive } from './tiles.ts';
-import { vectorTiles } from './vectorTiles.ts';
+import { ALL_VIEW_TAGS } from '../../src/dialects/views.ts';
+import { labelLayers } from '../../src/map/style/labels.ts';
+import { glyphInstall, type GlyphInstall } from './glyphInstall.ts';
+import { readFontsPin } from './pins.ts';
+import { vectorTiles } from './archive.ts';
 
 /** web/, whose src/ holds the site's style, whatever root a build runs in. */
-const WEB = fileURLToPath(new URL('..', import.meta.url));
+const WEB = fileURLToPath(new URL('../..', import.meta.url));
 
 /** A tile property a symbol layer shows: `key` of the features of `sourceLayer`. */
 export interface Field {
@@ -115,30 +110,6 @@ export async function archiveLabels(path: string, fields: readonly Field[]): Pro
   return [...labels.values()];
 }
 
-/** What web/fonts.lock asks for: these ranges of each of these stacks. */
-interface FontsLock {
-  stacks: string[];
-  ranges: string[];
-}
-
-async function readFontsLock(root: string): Promise<FontsLock> {
-  const file = join(root, 'fonts.lock');
-  return {
-    stacks: (await lockValue(file, 'STACKS')).split(',').filter(Boolean),
-    ranges: (await lockValue(file, 'RANGES')).split(/\s+/).filter(Boolean),
-  };
-}
-
-/** The files under public/fonts/, as `<stack>/<range>.pbf`. */
-async function installedGlyphs(root: string): Promise<string[]> {
-  const fonts = join(root, 'public/fonts');
-  const entries = await readdir(fonts, { recursive: true, withFileTypes: true }).catch(() => []);
-  return entries
-    .filter((entry) => !entry.isDirectory())
-    .map((entry) => relative(fonts, join(entry.parentPath, entry.name)).split('\\').join('/'))
-    .sort();
-}
-
 /** The first few of a list of files, and how many more there are. */
 function few(files: string[]): string {
   const shown = files.slice(0, 3).join(', ');
@@ -146,10 +117,7 @@ function few(files: string[]): string {
 }
 
 /** Whether public/fonts/ holds anything but the listed ranges of the listed stacks. */
-function installProblem({ stacks, ranges }: FontsLock, installed: string[]): string | undefined {
-  const listed = stacks.flatMap((stack) => ranges.map((range) => `${stack}/${range}.pbf`));
-  const missing = listed.filter((file) => !installed.includes(file));
-  const extra = installed.filter((file) => !listed.includes(file));
+function installProblem({ missing, extra }: GlyphInstall): string | undefined {
   if (missing.length === 0 && extra.length === 0) return undefined;
   const what = [
     missing.length > 0 ? `missing: ${few(missing)}` : '',
@@ -174,48 +142,16 @@ async function siteStyle(): Promise<StyleSpecification> {
 }
 
 /**
- * The labels of the pinned archive that need a range `ranges` lacks; none
- * when the archive is not fetched (the tiles plugin stops such a build, or
- * with VITE_TILES_URL `warn` says that nothing was checked).
+ * What stands in the way of the glyphs: public/fonts/ not holding exactly
+ * the listed ranges, and labels of the pinned `archive` that need a range
+ * fonts.lock does not list. The labels are checked only when the archive
+ * is there (undefined when it is not fetched).
  */
-async function labelProblems(
-  root: string,
-  ranges: string[],
-  { external, warn }: { external: boolean; warn(message: string): void },
-): Promise<string[]> {
-  const archive = await pinnedArchive(root);
-  const fetched = await access(archive).then(
-    () => true,
-    () => false,
-  );
-  if (!fetched) {
-    if (external) {
-      warn(
-        'the pinned tile archive is not fetched, so the labels were not checked against the glyph ranges fonts.lock lists (`npm run fetch-tiles` fetches it)',
-      );
-    }
-    return [];
-  }
-  return glyphProblems(await archiveLabels(archive, siteFields(await siteStyle())), ranges);
-}
-
-export default function glyphs(): Plugin {
-  let root: string;
-  let external: boolean;
-  return {
-    name: 'frasch-glyphs',
-    apply: 'build',
-    configResolved(config) {
-      root = config.root;
-      external = Boolean(config.env.VITE_TILES_URL);
-    },
-    async buildStart() {
-      const lock = await readFontsLock(root);
-      const problems = [
-        installProblem(lock, await installedGlyphs(root)),
-        ...(await labelProblems(root, lock.ranges, { external, warn: (m) => this.warn(m) })),
-      ].filter((p) => p !== undefined);
-      if (problems.length > 0) this.error(problems.join('\n'));
-    },
-  };
+export async function fontProblems(root: string, archive: string | undefined): Promise<string[]> {
+  const pin = await readFontsPin(root);
+  const install = installProblem(await glyphInstall(root, pin));
+  const labels = archive
+    ? glyphProblems(await archiveLabels(archive, siteFields(await siteStyle())), pin.ranges)
+    : [];
+  return [...(install === undefined ? [] : [install]), ...labels];
 }

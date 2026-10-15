@@ -78,6 +78,7 @@ function encodeDirectory(entries: DirEntry[]): Uint8Array {
 
 function header(fields: {
   root: Uint8Array;
+  metadata: Uint8Array;
   leaves: Uint8Array;
   tileData: number;
   tiles: number;
@@ -89,13 +90,13 @@ function header(fields: {
   bytes.set(new TextEncoder().encode('PMTiles'));
   view.setUint8(7, 3);
   const metadata = HEADER_BYTES + fields.root.length;
-  const leaves = metadata;
+  const leaves = metadata + fields.metadata.length;
   const tileData = leaves + fields.leaves.length;
   const u64 = [
     HEADER_BYTES,
     fields.root.length,
     metadata,
-    0,
+    fields.metadata.length,
     leaves,
     fields.leaves.length,
     tileData,
@@ -115,12 +116,13 @@ function header(fields: {
  * Writes `tiles` to `file` as a PMTiles archive, uncompressed. With
  * `gzip`, the tiles are gzip-compressed, as Planetiler writes them. With
  * `leaf`, the root directory points to a leaf directory that holds the
- * tiles, as in an archive too large for one directory.
+ * tiles, as in an archive too large for one directory. `metadata` is the
+ * archive's JSON metadata.
  */
 export function writeTestArchive(
   file: string,
   tiles: TestTile[],
-  { gzip = false, leaf = false } = {},
+  { gzip = false, leaf = false, metadata = {} as Record<string, unknown> } = {},
 ): void {
   const encode = (t: TestTile) => (gzip ? gzipSync(encodeTile(t.layers)) : encodeTile(t.layers));
   const sorted = tiles
@@ -137,9 +139,11 @@ export function writeTestArchive(
     ? encodeDirectory([{ tileId: 0, offset: 0, length: leaves.length, runLength: 0 }])
     : encodeDirectory(entries);
   const maxZoom = Math.max(...tiles.map((t) => t.z));
+  const json = new TextEncoder().encode(JSON.stringify(metadata));
   const parts = [
     header({
       root,
+      metadata: json,
       leaves,
       tileData: offset,
       tiles: tiles.length,
@@ -147,6 +151,7 @@ export function writeTestArchive(
       tileCompression: gzip ? GZIP : NO_COMPRESSION,
     }),
     root,
+    json,
     leaves,
     ...sorted.map((t) => t.data),
   ];

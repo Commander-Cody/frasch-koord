@@ -16,10 +16,10 @@ npm run dev
 ```
 
 That is all a fresh clone needs, for the dev server and for `npm run build`:
-no Java, Python or OSM downloads. `npm run fetch-assets` runs
-`scripts/fetch-fonts.sh` and `scripts/fetch-tiles.sh` (see
-[Tile hosting](#tile-hosting) and [Glyphs and sprites](#glyphs-and-sprites-served-locally-not-from-a-third-party));
-both skip what is already there. At the repo
+no Java, Python or OSM downloads, and no bash: `npm run fetch-assets`
+(`scripts/fetch-assets.ts`) fetches the glyphs and the tiles (see
+[Tile hosting](#tile-hosting) and [Glyphs and sprites](#glyphs-and-sprites-served-locally-not-from-a-third-party))
+and skips what is already there. At the repo
 root, `uv run just setup` does the same, plus the Python side and the smoke
 test's browser.
 
@@ -38,9 +38,12 @@ need `@typescript/typescript6` alongside it; none in `web/` does today.
 
 ## Production build
 
-`npm run build` type-checks with `tsc -b`, builds `dist/` with Vite, and
-checks the result (`scripts/check-build.mjs`); `npm run preview` serves it.
-Two things make a build differ from `npm run dev`, and each has a check:
+`npm run build` type-checks with `tsc -b` and builds `dist/` with Vite;
+`npm run preview` serves it. Every check of the build runs inside the Vite
+build, in one plugin (`vite-plugins/build/assets.ts`): what it needs when it
+starts, and the result once it is written (`vite-plugins/build/checkBuild.ts`).
+So a plain `vite build` is checked as well, all but the types. Two things make
+a build differ from `npm run dev`, and each has a check:
 
 - **The MapLibre worker.** MapLibre 6 looks for `maplibre-gl-worker.mjs` next
   to its own module, a file Vite never emits; a production build would get
@@ -53,16 +56,18 @@ Two things make a build differ from `npm run dev`, and each has a check:
   `src/dev/` out entirely; there the parameters open the public map.
 
 ```sh
-npm run build   # ends with check-build: dist/ has the worker the bundle names; no dev tool, no dialect-area review data or notes
+npm run build   # checks dist/: it has the worker the bundle names; no dev tool, no dialect-area review data or notes
 npm run smoke   # build, then vite preview + headless Chromium: map loads, search, card
 ```
 
-`npm run build` stops at its start, naming what is wrong, when
+A build stops at its start, naming everything that is wrong at once, when
 `public/fonts/` does not hold exactly the glyph ranges `fonts.lock` lists, or
 the pinned tile archive has not been fetched (`npm run fetch-assets`); the
 archive only when `VITE_TILES_URL` is not set. It also stops when a label of
 the pinned archive needs a glyph range `fonts.lock` does not list (see
-[Glyphs and sprites](#glyphs-and-sprites-served-locally-not-from-a-third-party)). `npm run smoke` needs
+[Glyphs and sprites](#glyphs-and-sprites-served-locally-not-from-a-third-party)),
+and warns when the archive was built from other name files than
+`names.json` (see "Build provenance" below). `npm run smoke` needs
 Playwright's headless Chromium, once: `npx playwright install
 chromium-headless-shell` (plus `sudo npx playwright install-deps` for the
 system libraries on a bare Linux).
@@ -71,12 +76,12 @@ system libraries on a bare Linux).
 glyphs, the sprites, the default tiles URL — goes through `siteUrl()` in
 `src/site.ts`, which prefixes Vite's `base`. So the same code runs at a
 domain root or under a sub-path, e.g. a GitHub Pages project site:
-`npx vite build --base /frasch-koord/`.
+`npm run build -- --base /frasch-koord/`.
 
 **What `dist/` holds.** Vite copies `public/` as it is: the name list, the
 sprites and the ~2.6 MB of glyphs in `public/fonts/` (the style always loads
-them from the site), which `vite-plugins/glyphs.ts` checks are exactly the
-ranges `fonts.lock` lists. The tiles are the exception (`vite-plugins/tiles.ts`):
+them from the site), which `vite-plugins/build/glyphs.ts` checks are exactly the
+ranges `fonts.lock` lists. The tiles are the exception (`vite-plugins/build/tiles.ts`):
 whatever `public/tiles/` links to is left out, and `dist/tiles/` gets the
 ~125 MB archive `tiles.lock` pins, checked against its sha256 — or no archive
 at all with `VITE_TILES_URL` set, when the tiles live elsewhere. So a build
@@ -138,7 +143,7 @@ derived from the selection and the view.
 | (root)       | `main.tsx`, `App.tsx`, `i18n.ts`; `site.ts` (`siteUrl`, `TILES_URL`, the only reader of the deployment's `import.meta.env`); `layout.ts` (the media queries); `locales/` |
 | `dialects/`  | the registry (`registry.ts`, `generated/`), the views (`views.ts`, `useView.ts`), `labelChain.ts`                                                                        |
 | `names/`     | the name list: loading, search, a place's names, the card model, OSM references                                                                                          |
-| `map/`       | `MapView.tsx` and what it is built from (`createMap`, `hitTest`, `useMapFailure`, `oncePerFrame`), the PMTiles archive (`pmtiles.ts`, `provenance.ts`), `style/`         |
+| `map/`       | `MapView.tsx` and what it is built from (`createMap`, `hitTest`, `useMapFailure`, `oncePerFrame`), the PMTiles protocol (`pmtiles.ts`), `style/`                         |
 | `url/`       | the query string and what a link carries                                                                                                                                 |
 | `selection/` | the selected place (`placeSelection.ts`, `usePlaceSelection.ts`), the sheet's height, Escape                                                                             |
 | `ui/`        | the components of the side panel, each with its stylesheet                                                                                                               |
@@ -162,8 +167,8 @@ and the site's base path (`siteUrl()` in `src/site.ts`). That path is gitignored
 
 **The published archive.** Finished archives are published as GitHub release
 assets of this repository (`tiles-<yyyymmdd>-<sha8>`), and `tiles.lock` pins
-the one the site uses: its URL and sha256. `npm run fetch-tiles` (part of
-`fetch-assets`) downloads it into `.cache/tiles/<sha256>.pmtiles`
+the one the site uses: its URL and sha256. `npm run fetch-assets`
+downloads it into `.cache/tiles/<sha256>.pmtiles`
 (gitignored), verifies it and links
 `public/tiles/schleswig-holstein.pmtiles` to it. It skips an archive that is
 already there, and drops those of earlier pins. A new archive is published
@@ -178,22 +183,20 @@ ln -sfn ../../../tiles/data/schleswig-holstein.pmtiles \
   web/public/tiles/schleswig-holstein.pmtiles
 ```
 
-`npm run fetch-tiles` leaves such a link alone (it only replaces links into
+`npm run fetch-assets` leaves such a link alone (it only replaces links into
 `.cache/tiles/`), and `npm run build` still ships the pinned archive, never
 the linked one.
 
 A link whose target does not exist, e.g. that one before the tiles are built,
 shows no map in the dev server, and Vite cannot copy it into a build. So
 `npm run build` stops at its start and names every such link in
-`public/tiles/` (`vite-plugins/tiles.ts`), and `npm run fetch-tiles` keeps it
-but warns. Either build the tiles, or remove the link and run
-`npm run fetch-tiles`, which then links the pinned archive.
+`public/tiles/` (`vite-plugins/build/tiles.ts`), and `npm run fetch-assets`
+keeps it but warns. Either build the tiles, or remove the link and run
+`npm run fetch-assets`, which then links the pinned archive.
 
 The `pmtiles://` protocol is registered once with MapLibre in
 `src/map/pmtiles.ts` (`addProtocol('pmtiles', protocol.tile)`); MapLibre
-then reads TileJSON straight out of the archive itself. The provenance check
-reads the archive's metadata through the same `PMTiles` instance
-(`pmtilesArchive(url)`), so the archive's header is fetched once.
+then reads TileJSON straight out of the archive itself.
 
 ## Map style and dialect-aware labels
 
@@ -437,8 +440,8 @@ single Warft (which in any case doesn't render before `place-warft`'s
   files of `openmaptiles/osm-bright-gl-style`'s `gh-pages` branch at
   [`286b174`](https://github.com/openmaptiles/osm-bright-gl-style/tree/286b174adbd6e8693887841d6cfdf7445cd5f8c0)
   (2026-08-04). ~136 KB total.
-- `public/fonts/` — **not in git** (~2.6 MB); `npm run fetch-assets` (or
-  `npm run fetch-fonts`) fetches them. PBF glyph ranges of the three font
+- `public/fonts/` — **not in git** (~2.6 MB); `npm run fetch-assets`
+  fetches them. PBF glyph ranges of the three font
   stacks the style uses, `Noto Sans Regular`, `Noto Sans Italic` and
   `Noto Sans Bold`, from the `noto-sans.zip` asset of the
   [openmaptiles/fonts v2.0 release](https://github.com/openmaptiles/fonts/releases/tag/v2.0),
@@ -448,20 +451,21 @@ single Warft (which in any case doesn't render before `place-warft`'s
   256, the same for every stack, with a comment on what each covers. They are
   the Latin blocks and punctuation, and whatever else the labels of the
   tile archive use. `fonts.lock` also pins the zip (URL and sha256) and
-  names the stacks. `scripts/fetch-fonts.sh` makes `public/fonts/` hold
+  names the stacks. `npm run fetch-assets` makes `public/fonts/` hold
   exactly those files: an earlier, fuller fetch is pruned without a
   download, a missing range fetches the zip again.
 
-  **The build checks the labels against the list.** `vite-plugins/glyphs.ts`
+  **The build checks the labels against the list.** `vite-plugins/build/glyphs.ts`
   rewrites the style's labels for every tag of `ALL_VIEW_TAGS` (`labelLayers`,
   imported straight from `src/`), reads
   off which tile properties each symbol layer can show, takes every such
   string from the pinned archive and stops the build when one has a character
   outside the listed ranges; for a layer with `text-transform: uppercase`,
   the upper-case form counts. The message names the character, the label and
-  the range: add the range to `RANGES` and run `npm run fetch-fonts`. With
-  `VITE_TILES_URL` set and no fetched archive the build only warns that it
-  checked no labels.
+  the range: add the range to `RANGES` and run `npm run fetch-assets`. With
+  `VITE_TILES_URL` set and no fetched archive that matches `tiles.lock`, the
+  build only warns that it checked no labels; a build never reads an archive
+  that is not the pinned one.
 
 ## Search
 
@@ -504,11 +508,12 @@ code (see `names/README.md`, "Where the objects are").
 index was built from (`places.csv`, `dialects.csv`, `curation.csv`,
 `dialect_areas.geojson`, `osm_objects.json`) and the OSM extracts the objects
 were located in. `tiles/build.sh` writes the same stamp into the PMTiles
-archive's `description`. Once `names.json` has loaded, `useProvenanceCheck`
-(`src/map/provenance.ts`) reads the archive's metadata and logs a `console.warn`
-naming every input the two were built from differently — the map labels and
-the place cards may then disagree. A tile source that is not a `pmtiles://`
-archive (`VITE_TILES_URL`) is not checked.
+archive's `description`. The build (`vite-plugins/build/provenance.ts`) reads
+the pinned archive's stamp and warns, naming every input the two were built
+from differently — the map labels and the place cards may then disagree. It
+warns rather than fails: the archive is published on its own and catches up
+with `names.json` later. With `VITE_TILES_URL` the archive that is served is
+not the build's to read; the fetched pinned one is checked if there is one.
 
 **All** of an entry's names (every dialect, the local one, Low Saxon and German)
 are flattened into one indexed string, so a place stays findable under any of

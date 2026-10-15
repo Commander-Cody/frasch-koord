@@ -84,7 +84,7 @@ check-python:
       "uv run pytest {{pytest_summary}}" \
       "{{frasch}} check-inputs {{names_check_summary}}" \
       "{{just_executable()}} check-outputs" \
-      "uv run shellcheck scripts/*.sh tiles/*.sh web/scripts/*.sh"
+      "uv run shellcheck scripts/*.sh tiles/*.sh"
 
 # format the Python code (ruff format) and the web code (oxfmt)
 [group('everyday')]
