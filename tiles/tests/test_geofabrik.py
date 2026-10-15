@@ -177,6 +177,11 @@ def test_extract_url_with_a_snapshot_names_the_dated_file() -> None:
     assert result.stdout.strip() == "https://download.geofabrik.de/europe/denmark-260923.osm.pbf"
 
 
+def test_extract_url_is_on_the_server_geofabrik_url_names() -> None:
+    result = run("geofabrik_extract_url", "europe/denmark", GEOFABRIK_URL="file:///mirror")
+    assert result.stdout.strip() == "file:///mirror/europe/denmark-latest.osm.pbf"
+
+
 def test_extract_url_rejects_a_malformed_snapshot() -> None:
     result = run("geofabrik_extract_url", "schleswig-holstein", "../x")
     assert result.returncode != 0
@@ -192,11 +197,6 @@ def mirror(tmp_path: Path, name: str, data: bytes) -> str:
     (europe / name).write_bytes(data)
     (europe / f"{name}.md5").write_text(f"{md5_of(data)}  {name}\n")
     return (tmp_path / "mirror").as_uri()
-
-
-def test_extract_url_is_on_the_server_geofabrik_url_names(tmp_path: Path) -> None:
-    result = run("geofabrik_extract_url", "europe/denmark", GEOFABRIK_URL="file:///mirror")
-    assert result.stdout.strip() == "file:///mirror/europe/denmark-latest.osm.pbf"
 
 
 def test_a_missing_extract_is_downloaded_into_the_directory(tmp_path: Path) -> None:

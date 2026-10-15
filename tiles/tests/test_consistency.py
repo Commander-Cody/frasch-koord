@@ -80,6 +80,8 @@ NODES = (
         ),
         14: ((9.7, 54.85), {"name": "Wisch"}),  # e Wäsk, in its area
         15: ((10.2, 54.2), {"name": "Wisch"}),  # e Wäsk, outside every area
+        16: ((9.4, 54.42), {"name": "Nordwarft", "name:frr": "Nöördweerew"}),  # on the Hallig
+        17: ((9.12, 54.42), {"name": "Nordwarft"}),  # Noordweerw, in Nordergoesharde
     }
     | SYLT_NODES
     | OLAND_NODES
@@ -161,6 +163,14 @@ ROWS = [
         "wieding": "e Wäsk",
         "de": "Wisch",
         "osm": "node/14; node/15",
+    },
+    {
+        "id": "noordweerw",
+        "kind": "warft",
+        "mooring": "Nordwärw",
+        "nordgoes": "Noordweerw",
+        "de": "Nordwarft",
+        "osm": "node/16; node/17",
     },
 ]
 
@@ -282,9 +292,9 @@ LISTED_SCENARIOS = {
     # #81: the row has no name in the dialect of its area, so the local name
     # is OSM's `name:frr`, ahead of another dialect's
     "a listed place whose local name is OSM’s Frisian one": ("hamborjer-hali", "node/13"),
-    # the entry stands for the row's first object, the clicked one lies in
-    # another dialect area
-    "the second object of a listed row, in another dialect area": ("nordwarw", "node/2"),
+    # the entry stands for the row's first object, on the Hallig, whose local
+    # name is OSM's; the clicked one lies in another dialect area
+    "the second object of a listed row, in another dialect area": ("noordweerw", "node/17"),
     # #89: the entry's object has a local name, the clicked one, outside
     # every dialect area, has none
     "the second object of a listed row, outside every dialect area": ("e-wask", "node/15"),

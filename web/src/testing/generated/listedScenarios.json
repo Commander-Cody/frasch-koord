@@ -90,29 +90,29 @@
   },
   "the second object of a listed row, in another dialect area": {
     "entry": {
-      "id": "nordwarw",
+      "id": "noordweerw",
       "names": {
         "frr-x-mooring": "Nordwärw",
-        "frr-x-nordgoes": "Noordweerw",
-        "frr-x-hallig": "Nordwärw"
+        "frr-x-nordgoes": "Noordweerw"
       },
-      "name_de": "",
-      "lon": 9.15,
-      "lat": 54.45,
+      "name_de": "Nordwarft",
+      "lon": 9.4,
+      "lat": 54.42,
       "kind": "warft",
-      "local": "Noordweerw",
-      "dialect": "frr-x-nordgoes",
-      "osm": "way/12; node/2"
+      "local": "Nöördweerew",
+      "dialect": "frr-x-hallig",
+      "name_osm": "Nordwarft",
+      "osm": "node/16; node/17"
     },
     "props": {
       "name": "Nordwarft",
       "name:frr-x-mooring": "Nordwärw",
       "name:frr-x-nordgoes": "Noordweerw",
-      "name:frr-x-hallig": "Nordwärw",
-      "frasch:ref": "nordwarw",
+      "frasch:ref": "noordweerw",
       "frasch:kind": "warft",
-      "frasch:dialect": "frr-x-hallig",
-      "frasch:local": "Nordwärw"
+      "name:de": "Nordwarft",
+      "frasch:dialect": "frr-x-nordgoes",
+      "frasch:local": "Noordweerw"
     }
   },
   "the second object of a listed row, outside every dialect area": {

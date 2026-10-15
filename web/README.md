@@ -160,10 +160,10 @@ under the name it was published by (the last part of its `ARCHIVE_URL`,
 handed to `src/site.ts` by `vite-plugins/tilesArchive.ts`):
 
 ```
-pmtiles://<site>/tiles/schleswig-holstein.pmtiles
+pmtiles://<site>/tiles/<name>
 ```
 
-i.e. `web/public/tiles/schleswig-holstein.pmtiles`, resolved against the page
+i.e. `web/public/tiles/<name>`, currently `schleswig-holstein.pmtiles`, resolved against the page
 and the site's base path (`siteUrl()` in `src/site.ts`). That path is gitignored (`public/tiles/*.pmtiles`) — only
 `public/tiles/.gitkeep` is tracked.
 
@@ -179,7 +179,9 @@ from `tiles/` with `uv run just publish-tiles`, which rewrites `tiles.lock`
 (see `tiles/README.md`).
 
 **Your own tiles.** If you build tiles yourself (`tiles/README.md`), link the
-build there instead, for the dev server:
+build there instead, for the dev server. The dev server serves only the
+archive of the pinned name, so the link has to carry it (currently
+`schleswig-holstein.pmtiles`):
 
 ```sh
 ln -sfn ../../../tiles/data/schleswig-holstein.pmtiles \
