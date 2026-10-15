@@ -1614,6 +1614,8 @@ skipped the output check, which ran after it in `npm run build`.
 | `useProvenanceCheck` opening a second `PMTiles` in every visitor's browser | the build compares the pinned archive's `built_from` with `names.json`'s (`vite-plugins/build/provenance.ts`) |
 | `smoke` opening `?curate` only | `?curate` and `?areas` |
 
+*Superseded 2026-10-16 (#109): `ARCHIVE_NAME` is gone; `readTilesPin` returns the archive's `name`, the last part of its `ARCHIVE_URL`.*
+
 - **A differing `built_from` warns, it does not fail** (owner's decision):
   the archive pinned today was built from older name files than
   `names.json`, and it is published on its own (`just publish-tiles`).
@@ -1635,3 +1637,36 @@ skipped the output check, which ran after it in `npm run build`.
   `checkBuild` passes, for what only a build shows (what it ships, that
   `buildStart`'s problems and warnings reach Vite, the output check);
   `checkBuild` and `provenanceWarning` as pure functions.
+
+## Decided 2026-10-16: one extract list, every pin a lock file, the site serves what is published (issue #109)
+
+The extract regions, "missing or `REFRESH=1` → download", the archive's name
+and the listed scenarios of the place card were each written down more than
+once, and `just publish-tiles` could publish an archive `just check-tiles`
+rejects.
+
+| was | is |
+| --- | --- |
+| the extracts spelt out in the `justfile` three times, the "fetch if missing" rule in the `justfile` and `build.sh` | `extract_regions` in the `justfile`, the paths derived by `geofabrik_extract_name`; `fetch_geofabrik_extract <region> <dir> [snapshot]` for both |
+| `tiles/fetch.sh` the download core and Geofabrik's naming | `fetch.sh` the core (with a public `checksum_of`, `fetch_text`), `geofabrik.sh` Geofabrik's extracts (`GEOFABRIK_URL` overridable) |
+| eight pin constants in `build.sh` | `tiles/sources.lock`, read by `tiles/lock.sh`'s `lock_get` |
+| `publish.sh` rewriting the whole of `web/tiles.lock` with a heredoc | `lock_set` on its two `ARCHIVE_*` lines |
+| `schleswig-holstein.pmtiles` hard-coded in `pins.ts` and `site.ts`, whatever `publish.sh` uploaded | the last part of `ARCHIVE_URL` (`readTilesPin`'s `name`): the fetch links `public/tiles/<name>`, the build ships `dist/tiles/<name>`, `vite-plugins/tilesArchive.ts` hands it to `site.ts` |
+| `publish-tiles` unchecked | `publish-tiles: (check-tiles region)` |
+| the listed scenarios of `mapCardConsistency.test.ts` hand-written | `web/src/testing/generated/listedScenarios.json`, written by `tiles/tests/test_consistency.py` from its extract, which fails when it is stale (`--write-scenarios` rewrites it) |
+
+- **The archive's name comes from `tiles.lock`** (owner's choice over a
+  fixed site name and over `publish.sh` losing its region): whatever
+  `publish.sh` pins, the site serves under that name.
+- **Every pin is a lock file** (owner's decision): `tiles/sources.lock` in
+  the `KEY=value` form of `web/tiles.lock`.
+- **pytest guards the scenarios** (owner's choice over an entry of the
+  pipeline table): they are test data, not a pipeline output.
+- **The generated scenarios replace the hand-written listed ones** (owner's
+  decision): the fixture extract has a place for each; the unlisted
+  scenarios stay hand-written.
+- **Test seams** (owner's decision): `checksum_of`, `fetch_geofabrik_extract`,
+  `lock_get` / `lock_set` through a real bash; `osm_ref`, `tile_of` /
+  `lonlat`, `tile_features`; the committed scenarios against the fixture;
+  `readTilesPin`'s `name`, `fetchTiles`' link. `publish.sh` (it calls `gh`)
+  only through shellcheck and `lock_set`.

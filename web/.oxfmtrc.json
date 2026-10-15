@@ -8,6 +8,7 @@
     "public/data/",
     "public/sprites/",
     "src/dialects/generated/",
+    "src/testing/generated/",
     "src/map/style/*.json",
     "src/map/style/LICENSE-osm-bright.md"
   ]
