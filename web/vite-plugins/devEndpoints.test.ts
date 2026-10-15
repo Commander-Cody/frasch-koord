@@ -13,7 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createAreasMiddleware } from './areas.ts';
 import { createCurateMiddleware } from './curate.ts';
 import { devEndpoints, sendJson, serveFile } from './devEndpoints.ts';
-import { fakeReq, fakeRes } from './testHttp.ts';
+import { fakeReq, fakeRes, type CapturedResponse } from './testHttp.ts';
 
 const noopNext = () => {
   throw new Error('next() should not be called for a URL under the base');
@@ -70,13 +70,24 @@ describe('devEndpoints', () => {
     expect(JSON.parse(res.body)).toEqual({ pong: true });
   });
 
-  it('answers a failing route with a 500 that keeps its error to the server log', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-    const failing = devEndpoints('/__test/', {
-      'GET fail': () => Promise.reject(new Error('EACCES: /home/someone/names/secret')),
+  describe('a failing route', () => {
+    const error = new Error('EACCES: /home/someone/names/secret');
+    const failing = devEndpoints('/__test/', { 'GET fail': () => Promise.reject(error) });
+
+    it('is answered with a 500 that points to the server log, not with its error', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const res = await request(failing, { method: 'GET', url: '/__test/fail' });
+      expect([res.status, JSON.parse(res.body)]).toEqual([
+        500,
+        { error: 'internal error, see the dev server log' },
+      ]);
     });
-    const res = await request(failing, { method: 'GET', url: '/__test/fail' });
-    expect([res.status, JSON.parse(res.body)]).toEqual([500, { error: 'internal error' }]);
+
+    it('is logged with the request that failed', async () => {
+      const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+      await request(failing, { method: 'GET', url: '/__test/fail' });
+      expect(log).toHaveBeenCalledWith('[dev endpoints] GET /__test/fail failed:', error);
+    });
   });
 });
 
@@ -167,23 +178,36 @@ describe.each(Object.entries(TOOLS))('the gates of %s', (_, tool) => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  /** The status of a GET of the tool's file, from `remoteAddress` with `headers`. */
-  async function statusOf(headers: Record<string, string>, remoteAddress = '127.0.0.1') {
-    const res = await request(middleware, { method: 'GET', url: tool.url, headers, remoteAddress });
-    return res.status;
+  /** A GET of the tool's file from `remoteAddress` with `headers`, answered. */
+  function get(headers: Record<string, string>, remoteAddress = '127.0.0.1') {
+    return request(middleware, { method: 'GET', url: tool.url, headers, remoteAddress });
   }
 
-  it('refuses a caller from another machine', async () => {
-    expect(await statusOf({}, '10.0.0.5')).toBe(403);
+  /** The status of an answer, and the error it gives. */
+  function refusal(res: CapturedResponse) {
+    return [res.status, (JSON.parse(res.body) as { error?: string }).error];
+  }
+
+  it('refuses a caller from another machine, naming it', async () => {
+    expect(refusal(await get({}, '10.0.0.5'))).toEqual([
+      403,
+      'forbidden: 10.0.0.5 is another machine; the dev tools answer this one only',
+    ]);
   });
 
-  it('refuses a page of another origin', async () => {
+  it('refuses a page of another origin, naming it', async () => {
     const headers = { host: 'localhost:5173', origin: 'http://evil.example' };
-    expect(await statusOf(headers)).toBe(403);
+    expect(refusal(await get(headers))).toEqual([
+      403,
+      'forbidden: a page of http://evil.example; the dev tools answer their own pages only',
+    ]);
   });
 
-  it('refuses a fetch the browser marks as not same-origin', async () => {
-    expect(await statusOf({ 'sec-fetch-site': 'cross-site' })).toBe(403);
+  it('refuses a fetch the browser marks as not same-origin, saying how it was marked', async () => {
+    expect(refusal(await get({ 'sec-fetch-site': 'cross-site' }))).toEqual([
+      403,
+      'forbidden: Sec-Fetch-Site is cross-site; the dev tools answer their own pages only',
+    ]);
   });
 
   it.each(['127.0.0.1', '::1', '::ffff:127.0.0.1'])(
@@ -194,7 +218,7 @@ describe.each(Object.entries(TOOLS))('the gates of %s', (_, tool) => {
         origin: 'http://localhost:5173',
         'sec-fetch-site': 'same-origin',
       };
-      expect(await statusOf(headers, address)).toBe(200);
+      expect((await get(headers, address)).status).toBe(200);
     },
   );
 });

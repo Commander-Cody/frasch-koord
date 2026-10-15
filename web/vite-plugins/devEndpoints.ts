@@ -69,44 +69,51 @@ function isLoopbackAddress(address: string | undefined): boolean {
 }
 
 /**
- * True if the request does not look same-origin. Browsers send
- * `Sec-Fetch-Site` on every fetch, so `same-origin` is the only value the
- * tools' own calls carry; `Origin`, where present, must be this server's own
- * (scheme from its config, host from the `Host` header, so `vite --host`
- * still works). A request with neither header (curl, a local script) is let
- * through: no page on another site can steer those.
+ * What gives the request away as not same-origin, or undefined. Browsers
+ * send `Sec-Fetch-Site` on every fetch, so `same-origin` is the only value
+ * the tools' own calls carry (`none` is a URL typed into the address bar);
+ * `Origin`, where present, must be this server's own (scheme from its config,
+ * host from the `Host` header, so `vite --host` still works). A request with
+ * neither header (curl, a local script) is let through: no page on another
+ * site can steer those.
  */
-function isCrossOrigin(req: IncomingMessage, https: boolean): boolean {
+function crossOriginSign(req: IncomingMessage, https: boolean): string | undefined {
   const secFetchSite = req.headers['sec-fetch-site'];
-  if (typeof secFetchSite === 'string' && secFetchSite !== 'same-origin') return true;
-
+  if (typeof secFetchSite === 'string' && secFetchSite !== 'same-origin') {
+    return `Sec-Fetch-Site is ${secFetchSite}`;
+  }
   const origin = req.headers.origin;
-  if (typeof origin !== 'string') return false;
+  if (typeof origin !== 'string') return undefined;
   const expected = `${https ? 'https' : 'http'}://${req.headers.host ?? ''}`;
-  return origin !== expected;
+  return origin === expected ? undefined : `a page of ${origin}`;
 }
 
 /**
- * Whether the request is turned away (403) before any endpoint sees it. Both
- * gates hold for every route, the read-only GETs included: the tools' own
- * pages are local and same-origin, so they cost them nothing.
+ * Why the request is turned away (403) before any endpoint sees it, or
+ * undefined. Both gates hold for every route, the read-only GETs included:
+ * the tools' own pages are local and same-origin, so they cost them nothing.
  */
-function isForbidden(req: IncomingMessage, https: boolean): boolean {
-  return !isLoopbackAddress(req.socket.remoteAddress) || isCrossOrigin(req, https);
+function refusalOf(req: IncomingMessage, https: boolean): string | undefined {
+  const address = req.socket.remoteAddress;
+  if (!isLoopbackAddress(address)) {
+    return `${address ?? 'an unknown address'} is another machine; the dev tools answer this one only`;
+  }
+  const sign = crossOriginSign(req, https);
+  return sign && `${sign}; the dev tools answer their own pages only`;
 }
 
-function failRequest(res: ServerResponse, err: unknown): void {
+function failRequest(req: IncomingMessage, res: ServerResponse, err: unknown): void {
   // The message can hold an absolute filesystem path; that goes to the
-  // server log only, never into the response.
-  console.error('[dev endpoints] request failed', err);
-  sendJson(res, 500, { error: 'internal error' });
+  // server log only, never into the response, which points there instead.
+  console.error(`[dev endpoints] ${req.method} ${req.url} failed:`, err);
+  sendJson(res, 500, { error: 'internal error, see the dev server log' });
 }
 
 /** How the dev server is set up, as far as the gates need to know. */
 export interface DevEndpointOptions {
   /**
    * Whether the dev server itself runs https, i.e. `server.config.server.https`.
-   * Defaults to false (Vite's own default) — see `isCrossOrigin` for why the
+   * Defaults to false (Vite's own default) — see `crossOriginSign` for why the
    * expected Origin's scheme is pinned to this rather than accepted as-is.
    */
   https?: boolean;
@@ -124,8 +131,9 @@ export function devEndpoints(
       next();
       return;
     }
-    if (isForbidden(req, https)) {
-      sendJson(res, 403, { error: 'forbidden' });
+    const refusal = refusalOf(req, https);
+    if (refusal) {
+      sendJson(res, 403, { error: `forbidden: ${refusal}` });
       return;
     }
     // Strip a query string / hash; no endpoint takes one.
@@ -135,6 +143,6 @@ export function devEndpoints(
       sendJson(res, 404, { error: `unknown endpoint ${req.method} ${base}${route}` });
       return;
     }
-    routes[key](req, res).catch((err: unknown) => failRequest(res, err));
+    routes[key](req, res).catch((err: unknown) => failRequest(req, res, err));
   };
 }

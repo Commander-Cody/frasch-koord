@@ -1573,13 +1573,17 @@ file were readable from the local network.
 | --- | --- |
 | `sendJson`, `isMissing`, the prefix match, the "read the file or 404 with a hint", the catch, in each plugin | `vite-plugins/devEndpoints.ts`: `devEndpoints(base, routes, {https})`, `serveFile(path, mediaType, missingHint)`, `sendJson`, `isMissing` |
 | the loopback and same-origin gates in `curate.ts` only | in `devEndpoints`, for every route of both tools |
-| `areas.ts` answering `String(err)` | one 500 for both, `internal error`; the error goes to the server log |
+| `areas.ts` answering `String(err)`; a bare `forbidden` and a log line without the request in `curate.ts` | one 500 for both, `internal error, see the dev server log`; the log line names the request and holds the error. A 403 says which gate refused and why (`10.0.0.5 is another machine`, `a page of <origin>`, `Sec-Fetch-Site is none`) |
 | `'__curate'`, `'__areas'`, `'dialect_areas_parts'` typed again in `scripts/check-build.mjs` | `vite-plugins/devToolNames.ts`, imported by both plugins and the build check (Node 24 strips its types) |
 
 - **The panel title left the build check** (owner's decision): every chunk
   with the curation panel also fetches through `/__curate/`, so
   `'Curation review'` added no coverage, only a silent coupling to
   `CuratePanel.tsx`.
+- **Every refusal and failure says what went wrong** (owner, 2026-10-15):
+  a dev tool's error has to hint at the cause, so the 403 names the gate
+  and what tripped it; the 500 can only point to the log, since its error
+  may hold an absolute path.
 - **The client's fetch URLs keep their literals** (owner's decision): the
   shared names are for the plugins and the build check.
 - **Test seams** (owner's decision): the gates through both tools'
