@@ -41,20 +41,27 @@ checksum_of() {
   esac
 }
 
+# Downloads <url> to <file>; removes it again when the download fails or is
+# an HTML page.
+_fetch_to() {
+  local url=$1 file=$2
+  if ! curl --fail -sS -L -o "$file" "$url"; then
+    rm -f "$file"
+    echo "fetch: download failed: $url" >&2
+    return 1
+  fi
+  if _fetch_looks_like_html "$file"; then
+    rm -f "$file"
+    echo "fetch: $url returned an HTML page, not the expected file" >&2
+    return 1
+  fi
+}
+
 fetch_verified() {
   local url=$1 dest=$2 algo=$3 expected=$4
   local part="${dest}.part"
   rm -f "$part"
-  if ! curl --fail -sS -L -o "$part" "$url"; then
-    rm -f "$part"
-    echo "fetch: download failed: $url" >&2
-    return 1
-  fi
-  if _fetch_looks_like_html "$part"; then
-    rm -f "$part"
-    echo "fetch: $url returned an HTML page, not the expected file" >&2
-    return 1
-  fi
+  _fetch_to "$url" "$part" || return 1
   local actual
   if ! actual=$(checksum_of "$algo" "$part"); then
     rm -f "$part"
@@ -72,16 +79,7 @@ fetch_text() {
   local url=$1
   local part
   part=$(mktemp)
-  if ! curl --fail -sS -L -o "$part" "$url"; then
-    rm -f "$part"
-    echo "fetch: download failed: $url" >&2
-    return 1
-  fi
-  if _fetch_looks_like_html "$part"; then
-    rm -f "$part"
-    echo "fetch: $url returned an HTML page, not the expected file" >&2
-    return 1
-  fi
+  _fetch_to "$url" "$part" || return 1
   cat "$part"
   rm -f "$part"
 }

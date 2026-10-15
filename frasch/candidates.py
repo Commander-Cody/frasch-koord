@@ -23,7 +23,7 @@ from frasch.refs import OsmRef
 
 
 # Geofabrik's file of a region ends in the day it is of: `-latest`, or the
-# day of a snapshot (`-260923`, see tiles/fetch.sh)
+# day of a snapshot (`-260923`, see tiles/geofabrik.sh)
 _DAY = re.compile(r"-(?:latest|\d{6})$")
 _SH = "schleswig-holstein"
 
