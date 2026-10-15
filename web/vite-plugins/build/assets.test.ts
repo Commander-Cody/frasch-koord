@@ -24,6 +24,8 @@ import assets from './assets.ts';
 import { writeTestArchive } from './testArchive.ts';
 
 const STACKS = ['Noto Sans Regular', 'Noto Sans Italic', 'Noto Sans Bold'];
+/** What names.json and, unless a test says otherwise, the tiles were built from. */
+const BUILT_FROM = { 'places.csv': 'aaa', 'osm_objects.json': 'bbb', extracts: [] };
 
 /** The web/ root of the site, and the dist/ a build writes. */
 let root: string;
@@ -36,13 +38,17 @@ function put(path: string, content: string): void {
 }
 
 /**
- * Pins and fetches an archive with one place feature of these properties:
- * writes it to the cache under its sha256, and tiles.lock pinning it.
+ * Pins and fetches an archive with one place feature of these properties,
+ * built from `builtFrom`: writes it to the cache under its sha256, and
+ * tiles.lock pinning it.
  */
-function pinArchive(place: Record<string, string>): string {
+function pinArchive(place: Record<string, string>, builtFrom = BUILT_FROM): string {
   const file = join(root, '.cache/tiles/new.pmtiles');
   mkdirSync(dirname(file), { recursive: true });
-  writeTestArchive(file, [{ z: 0, x: 0, y: 0, layers: { place: [place] } }]);
+  const description = JSON.stringify({ built_from: builtFrom });
+  writeTestArchive(file, [{ z: 0, x: 0, y: 0, layers: { place: [place] } }], {
+    metadata: { description },
+  });
   const sha256 = createHash('sha256').update(readFileSync(file)).digest('hex');
   renameSync(file, join(root, `.cache/tiles/${sha256}.pmtiles`));
   put('tiles.lock', `ARCHIVE_URL=https://example.org/sh.pmtiles\nARCHIVE_SHA256=${sha256}\n`);
@@ -65,6 +71,7 @@ beforeEach(() => {
     "import workerUrl from './maplibre-gl-worker.js?worker&url';\nconsole.log(workerUrl);\n",
   );
   put('maplibre-gl-worker.js', 'self.onmessage = () => {};\n');
+  put('public/data/names.json', JSON.stringify({ built_from: BUILT_FROM, places: [] }));
   put('fonts.lock', `STACKS=${STACKS.join(',')}\nRANGES=0-255 256-511\n`);
   for (const stack of STACKS) {
     put(`public/fonts/${stack}/0-255.pbf`, '');
@@ -194,5 +201,20 @@ describe('a vite build with the plugin', () => {
     );
 
     await expect(viteBuild()).rejects.toThrow('a dev tool is in the build');
+  });
+
+  it('warns when the archive was built from other name files than names.json', async () => {
+    pinArchive({ 'frasch:local': 'Hoorne' }, { ...BUILT_FROM, 'places.csv': 'older' });
+    const logger = createLogger('silent');
+    const warn = vi.spyOn(logger, 'warn');
+
+    await viteBuild(logger);
+
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining(
+        'the pinned tile archive and public/data/names.json were built from different places.csv',
+      ),
+      expect.anything(),
+    );
   });
 });

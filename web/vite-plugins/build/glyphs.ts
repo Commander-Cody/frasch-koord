@@ -19,7 +19,7 @@ import { ALL_VIEW_TAGS } from '../../src/dialects/views.ts';
 import { labelLayers } from '../../src/map/style/labels.ts';
 import { glyphInstall, type GlyphInstall } from './glyphInstall.ts';
 import { readFontsPin } from './pins.ts';
-import { vectorTiles } from './vectorTiles.ts';
+import { vectorTiles } from './archive.ts';
 
 /** web/, whose src/ holds the site's style, whatever root a build runs in. */
 const WEB = fileURLToPath(new URL('../..', import.meta.url));

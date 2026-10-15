@@ -14,7 +14,6 @@ import { useSheetHeight } from './selection/useSheetHeight';
 import { useView } from './dialects/useView';
 import { useNames } from './names/load';
 import { mapPick, markerOf } from './selection/placeSelection';
-import { useProvenanceCheck } from './map/provenance';
 import './App.css';
 
 function App() {
@@ -25,7 +24,6 @@ function App() {
   const searchFieldRef = useRef<HTMLInputElement | null>(null);
   // One fetch of the name list for both the search and the card.
   const names = useNames();
-  useProvenanceCheck(names.builtFrom);
   const [view, changeView] = useView();
   const { selection, select, close } = usePlaceSelection(names, {
     map: mapRef,

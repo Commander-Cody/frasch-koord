@@ -6,6 +6,8 @@
  *  - when it starts, what it needs: the pinned tile archive
  *    (vite-plugins/build/tiles.ts) and the listed glyphs, covering every
  *    label of that archive (glyphs.ts). Every problem is reported at once.
+ *    It warns when that archive and names.json were built from different
+ *    name files (provenance.ts).
  *  - once it is written: the pinned archive in place of whatever
  *    public/tiles/ held, then the output itself (checkBuild.ts).
  *
@@ -18,6 +20,7 @@ import type { Plugin } from 'vite';
 import { checkBuild } from './checkBuild.ts';
 import { fontProblems } from './glyphs.ts';
 import { readTilesPin } from './pins.ts';
+import { builtFromWarning } from './provenance.ts';
 import { shipTiles, type TilesBuild, tilesProblems } from './tiles.ts';
 
 /** What stops a build, and what it should know but builds anyway. */
@@ -38,7 +41,7 @@ async function fetchedArchive(root: string): Promise<string | undefined> {
 }
 
 /** Everything that stands in a build's way when it starts, and what it should warn about. */
-export async function buildProblems({
+async function buildProblems({
   root,
   external,
 }: Omit<TilesBuild, 'outDir'>): Promise<BuildProblems> {
@@ -47,14 +50,28 @@ export async function buildProblems({
     ...(await tilesProblems({ root, external })),
     ...(await fontProblems(root, archive)),
   ];
-  // Without VITE_TILES_URL tilesProblems already stops a build that has no archive.
-  const warnings =
-    external && archive === undefined
-      ? [
-          'the pinned tile archive is not fetched, so the labels were not checked against the glyph ranges fonts.lock lists (`npm run fetch-assets` fetches it)',
-        ]
-      : [];
-  return { problems, warnings };
+  return { problems, warnings: await archiveWarnings(root, archive, external) };
+}
+
+/**
+ * What the build should know about the archive: that names.json was built
+ * from other files, or with VITE_TILES_URL that there was none to check.
+ * Without VITE_TILES_URL, tilesProblems already stops a build that has none.
+ */
+async function archiveWarnings(
+  root: string,
+  archive: string | undefined,
+  external: boolean,
+): Promise<string[]> {
+  if (archive !== undefined) {
+    const warning = await builtFromWarning(root, archive);
+    return warning === undefined ? [] : [warning];
+  }
+  return external
+    ? [
+        "the pinned tile archive is not fetched, so the labels were not checked against the glyph ranges fonts.lock lists, nor its built_from against names.json's (`npm run fetch-assets` fetches it)",
+      ]
+    : [];
 }
 
 export default function assets(): Plugin {

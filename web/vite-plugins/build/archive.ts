@@ -1,6 +1,7 @@
 /**
- * Reads the vector tiles of a local PMTiles archive, every distinct tile
- * once: the archive's own directory walked, leaf directories included.
+ * Reads a local PMTiles archive: its vector tiles, every distinct tile once
+ * (the archive's own directory walked, leaf directories included), and its
+ * metadata.
  */
 import { closeSync, openSync, readSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
@@ -69,6 +70,16 @@ export async function* vectorTiles(path: string): AsyncGenerator<VectorTile> {
     const header = await archive.getHeader();
     const root = { offset: header.rootDirectoryOffset, length: header.rootDirectoryLength };
     yield* tilesOf(archive, header, root, new Set());
+  } finally {
+    source.close();
+  }
+}
+
+/** The archive's JSON metadata, where tiles/build.sh stamps what it was built from. */
+export async function archiveMetadata(path: string): Promise<Record<string, unknown>> {
+  const source = fileSource(path);
+  try {
+    return (await new PMTiles(source).getMetadata()) as Record<string, unknown>;
   } finally {
     source.close();
   }

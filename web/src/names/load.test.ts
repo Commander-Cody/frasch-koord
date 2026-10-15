@@ -32,19 +32,14 @@ describe('parseNames', () => {
   };
   const quiet = () => vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-  it('is the places of the file and what it was built from', () => {
-    const builtFrom = { 'places.csv': 'aaa', extracts: [] };
-
-    expect(parseNames({ built_from: builtFrom, places: [NAIBEL] })).toEqual({
-      entries: [NAIBEL],
-      builtFrom,
-    });
+  it('is the places of the file', () => {
+    expect(parseNames({ built_from: { 'places.csv': 'aaa' }, places: [NAIBEL] })).toEqual([NAIBEL]);
   });
 
   it('drops a place without an id', () => {
     quiet();
 
-    const { entries } = parseNames({ places: [{ ...NAIBEL, id: undefined }, NAIBEL] });
+    const entries = parseNames({ places: [{ ...NAIBEL, id: undefined }, NAIBEL] });
 
     expect(entries).toEqual([NAIBEL]);
   });
@@ -53,7 +48,7 @@ describe('parseNames', () => {
     quiet();
     const twin = { ...NAIBEL, name_de: 'Naibel' };
 
-    const { entries } = parseNames({ places: [NAIBEL, twin] });
+    const entries = parseNames({ places: [NAIBEL, twin] });
 
     expect(entries).toEqual([NAIBEL]);
   });
@@ -91,7 +86,6 @@ describe('useNames', () => {
     expect(result.current.status).toBe('loading');
     await waitFor(() => expect(result.current.status).toBe('ready'));
     expect(result.current.find('naibel')?.name_de).toBe('Niebüll');
-    expect(result.current.builtFrom).toEqual({ 'places.csv': 'aaa' });
   });
 
   it('searches the list once it has loaded', async () => {
