@@ -150,6 +150,89 @@ def test_only_entries_whose_own_object_is_labelled_count_as_checked() -> None:
     assert check_tiles.checked_entries(entries, features) == {"pelweerm"}
 
 
+# ------------------------------------------------------ reading the tiles ---
+@pytest.mark.parametrize("feature_id, ref", [(11, "node/1"), (22, "way/2"), (1233, "relation/123")])
+def test_a_feature_id_is_the_osm_id_times_ten_plus_the_type(feature_id: int, ref: str) -> None:
+    assert check_tiles.osm_ref(feature_id) == ref
+
+
+@pytest.mark.parametrize("feature_id", [None, 0, -11, 14])
+def test_a_feature_id_no_osm_object_has_is_none(feature_id: int | None) -> None:
+    assert check_tiles.osm_ref(feature_id) is None
+
+
+def test_a_point_lies_in_the_tile_of_its_quadrant() -> None:
+    # at zoom 1 the world is four tiles, numbered from the north-west
+    assert check_tiles.tile_of(90, -45, 1) == (1, 1)
+
+
+def test_a_tiles_north_west_corner_is_where_web_mercator_ends() -> None:
+    lon, lat = check_tiles.lonlat(1, 0, 0, 0, 0, 4096)
+    assert (lon, lat) == pytest.approx((-180, 85.0511288))
+
+
+def test_the_middle_of_a_tile_lies_in_that_tile() -> None:
+    assert check_tiles.tile_of(*check_tiles.lonlat(14, 8669, 5300, 2048, 2048, 4096), 14) == (
+        8669,
+        5300,
+    )
+
+
+def encoded_tile(*features: dict[str, object]) -> bytes:
+    """A gzip-compressed vector tile of one layer, as an archive holds it;
+    point coordinates in tile units, y pointing down."""
+    tile = mapbox_vector_tile.encode(
+        [{"name": "place", "features": list(features)}], default_options={"y_coord_down": True}
+    )
+    return gzip.compress(tile)
+
+
+def test_a_tile_yields_its_labelled_features_with_their_object_and_position() -> None:
+    # the south-west corner of zoom 1's north-east tile: lon 0, lat 0
+    data = encoded_tile(
+        {
+            "id": 11,
+            "geometry": {"type": "Point", "coordinates": [0, 4096]},
+            "properties": {"frasch:ref": "stiardebel", "name": "Stadum"},
+        }
+    )
+
+    (label,) = check_tiles.tile_features(data, 1, 1, 0)
+
+    assert label == {
+        "osm": "node/1",
+        "props": {"frasch:ref": "stiardebel", "name": "Stadum"},
+        "lon": pytest.approx(0),
+        "lat": pytest.approx(0),
+    }
+
+
+def test_a_labelled_shape_has_no_position() -> None:
+    data = encoded_tile(
+        {
+            "id": 22,
+            "geometry": {"type": "LineString", "coordinates": [[0, 0], [10, 10]]},
+            "properties": {"frasch:ref": "nordwarw"},
+        }
+    )
+
+    assert check_tiles.tile_features(data, 1, 1, 0) == [
+        {"osm": "way/2", "props": {"frasch:ref": "nordwarw"}}
+    ]
+
+
+def test_a_tiles_features_without_a_row_are_left_out() -> None:
+    data = encoded_tile(
+        {
+            "id": 31,
+            "geometry": {"type": "Point", "coordinates": [0, 0]},
+            "properties": {"name": "Kiel"},
+        }
+    )
+
+    assert check_tiles.tile_features(data, 1, 1, 0) == []
+
+
 # ---------------------------------------------------------- the command ---
 def write_archive(path: Path, entry: SearchEntry, **props: check_tiles.PropValue) -> Path:
     """A PMTiles archive of one z14 tile: the tile `entry` lies in, holding
