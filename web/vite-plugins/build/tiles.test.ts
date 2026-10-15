@@ -94,7 +94,7 @@ describe('assetProblems', () => {
     link('public/tiles/schleswig-holstein.pmtiles', '../../own-tiles/schleswig-holstein.pmtiles');
 
     expect(await assetProblems({ root, external: false })).toEqual([
-      'public/tiles/schleswig-holstein.pmtiles links to ../../own-tiles/schleswig-holstein.pmtiles, which does not exist: build the tiles, or remove the link and run `npm run fetch-tiles`',
+      'public/tiles/schleswig-holstein.pmtiles links to ../../own-tiles/schleswig-holstein.pmtiles, which does not exist: the dev server shows no map and `npm run build` stops. Build the tiles, or remove the link and run `npm run fetch-assets`',
     ]);
   });
 
@@ -115,7 +115,7 @@ describe('assetProblems', () => {
     link('public/tiles/denmark.pmtiles', '../../own-tiles/denmark.pmtiles');
 
     expect(await assetProblems({ root, external: true })).toEqual([
-      'public/tiles/denmark.pmtiles links to ../../own-tiles/denmark.pmtiles, which does not exist: build the tiles, or remove the link and run `npm run fetch-tiles`',
+      'public/tiles/denmark.pmtiles links to ../../own-tiles/denmark.pmtiles, which does not exist: the dev server shows no map and `npm run build` stops. Build the tiles, or remove the link and run `npm run fetch-assets`',
     ]);
   });
 });
@@ -135,7 +135,7 @@ describe('a vite build with the plugin', () => {
   it('stops at a dangling link in public/tiles/ with the ways out', async () => {
     link('public/tiles/schleswig-holstein.pmtiles', '../../own-tiles/schleswig-holstein.pmtiles');
 
-    await expect(viteBuild()).rejects.toThrow('remove the link and run `npm run fetch-tiles`');
+    await expect(viteBuild()).rejects.toThrow('remove the link and run `npm run fetch-assets`');
   });
 
   it("ships the pinned archive in place of public/tiles' own", async () => {

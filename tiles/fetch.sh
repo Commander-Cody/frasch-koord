@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Download helper for tiles/build.sh, tiles/publish.sh and
-# web/scripts/fetch-{tiles,fonts}.sh: fetch a file to a `.part` sibling,
-# reject it if it looks like an HTML error page, verify its checksum, and
-# only then move it into place. On any failure: non-zero exit, a message on
-# stderr, and neither the destination nor the `.part` file left behind.
+# Download helper for tiles/build.sh and tiles/publish.sh: fetch a file to
+# a `.part` sibling, reject it if it looks like an HTML error page, verify its
+# checksum, and only then move it into place. On any failure: non-zero exit,
+# a message on stderr, and neither the destination nor the `.part` file left
+# behind.
 #
 # Meant to be sourced, not run: `source ./fetch.sh` from build.sh, or from
 # tiles/tests/test_fetch.py via a subprocess.

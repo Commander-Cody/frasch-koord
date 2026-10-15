@@ -14,14 +14,13 @@
  *
  * Build only (`apply: 'build'`); the dev server reads public/ in place.
  */
-import { createHash } from 'node:crypto';
-import { createReadStream, type Dirent } from 'node:fs';
+import type { Dirent } from 'node:fs';
 import { copyFile, mkdir, readdir, readlink, rm, stat } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { pipeline } from 'node:stream/promises';
 import type { Plugin } from 'vite';
 
 import { ARCHIVE_NAME, readTilesPin } from './pins.ts';
+import { sha256Of } from './sha256.ts';
 
 /** Where the site serves its own archive from, under dist/ (see src/site.ts). */
 const ARCHIVE = `tiles/${ARCHIVE_NAME}`;
@@ -39,18 +38,6 @@ export interface TilesBuild {
 /** Where `npm run fetch-assets` puts the archive tiles.lock pins. */
 export async function pinnedArchive(root: string): Promise<string> {
   return join(root, (await readTilesPin(root)).cachePath);
-}
-
-/** The file's sha256, or undefined when there is no such file. */
-async function sha256Of(file: string): Promise<string | undefined> {
-  const hash = createHash('sha256');
-  try {
-    await pipeline(createReadStream(file), hash);
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
-    throw err;
-  }
-  return hash.digest('hex');
 }
 
 async function archiveProblem(root: string): Promise<string | undefined> {
@@ -93,12 +80,12 @@ async function danglingLinks(dir: string): Promise<string[]> {
  * an archive that is not built yet: Vite's copy of public/ into the build
  * fails on it with a bare ENOENT.
  */
-async function danglingLinkProblems(root: string): Promise<string[]> {
+export async function danglingLinkProblems(root: string): Promise<string[]> {
   const dir = join(root, PUBLIC_TILES);
   return Promise.all(
     (await danglingLinks(dir)).map(async (name) => {
       const target = await readlink(join(dir, name));
-      return `${PUBLIC_TILES}/${name} links to ${target}, which does not exist: build the tiles, or remove the link and run \`npm run fetch-tiles\``;
+      return `${PUBLIC_TILES}/${name} links to ${target}, which does not exist: the dev server shows no map and \`npm run build\` stops. Build the tiles, or remove the link and run \`npm run fetch-assets\``;
     }),
   );
 }

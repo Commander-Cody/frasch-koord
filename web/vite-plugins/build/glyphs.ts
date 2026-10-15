@@ -14,15 +14,16 @@
  *
  * Build only (`apply: 'build'`); the dev server reads public/ in place.
  */
-import { access, readdir, readFile } from 'node:fs/promises';
-import { join, relative } from 'node:path';
+import { access, readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { StyleSpecification } from 'maplibre-gl';
 import type { Plugin } from 'vite';
 
 import { ALL_VIEW_TAGS } from '../../src/dialects/views.ts';
 import { labelLayers } from '../../src/map/style/labels.ts';
-import { type FontsPin, readFontsPin } from './pins.ts';
+import { glyphInstall, type GlyphInstall } from './glyphInstall.ts';
+import { readFontsPin } from './pins.ts';
 import { pinnedArchive } from './tiles.ts';
 import { vectorTiles } from './vectorTiles.ts';
 
@@ -115,16 +116,6 @@ export async function archiveLabels(path: string, fields: readonly Field[]): Pro
   return [...labels.values()];
 }
 
-/** The files under public/fonts/, as `<stack>/<range>.pbf`. */
-async function installedGlyphs(root: string): Promise<string[]> {
-  const fonts = join(root, 'public/fonts');
-  const entries = await readdir(fonts, { recursive: true, withFileTypes: true }).catch(() => []);
-  return entries
-    .filter((entry) => !entry.isDirectory())
-    .map((entry) => relative(fonts, join(entry.parentPath, entry.name)).split('\\').join('/'))
-    .sort();
-}
-
 /** The first few of a list of files, and how many more there are. */
 function few(files: string[]): string {
   const shown = files.slice(0, 3).join(', ');
@@ -132,9 +123,7 @@ function few(files: string[]): string {
 }
 
 /** Whether public/fonts/ holds anything but the listed ranges of the listed stacks. */
-function installProblem({ listedFiles }: FontsPin, installed: string[]): string | undefined {
-  const missing = listedFiles.filter((file) => !installed.includes(file));
-  const extra = installed.filter((file) => !listedFiles.includes(file));
+function installProblem({ missing, extra }: GlyphInstall): string | undefined {
   if (missing.length === 0 && extra.length === 0) return undefined;
   const what = [
     missing.length > 0 ? `missing: ${few(missing)}` : '',
@@ -197,7 +186,7 @@ export default function glyphs(): Plugin {
     async buildStart() {
       const lock = await readFontsPin(root);
       const problems = [
-        installProblem(lock, await installedGlyphs(root)),
+        installProblem(await glyphInstall(root, lock)),
         ...(await labelProblems(root, lock.ranges, { external, warn: (m) => this.warn(m) })),
       ].filter((p) => p !== undefined);
       if (problems.length > 0) this.error(problems.join('\n'));

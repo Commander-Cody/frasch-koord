@@ -47,6 +47,6 @@ export default defineConfig({
     // curate.test.ts) override this to 'node' themselves (a
     // `// @vitest-environment node` docblock): they drive a Vite dev-server
     // middleware directly and have no business needing a DOM.
-    include: ['src/**/*.test.{ts,tsx}', 'vite-plugins/**/*.test.ts', 'scripts/**/*.test.mjs'],
+    include: ['src/**/*.test.{ts,tsx}', 'vite-plugins/**/*.test.ts', 'scripts/**/*.test.ts'],
   },
 });

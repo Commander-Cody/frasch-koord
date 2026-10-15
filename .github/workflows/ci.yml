@@ -41,7 +41,7 @@ jobs:
           path: |
             web/public/fonts
             web/.cache/tiles
-          key: web-assets-${{ hashFiles('web/tiles.lock', 'web/fonts.lock', 'web/scripts/fetch-fonts.sh') }}
+          key: web-assets-${{ hashFiles('web/tiles.lock', 'web/fonts.lock', 'web/scripts/fetch-assets.ts') }}
       - run: npm run fetch-assets
       - run: npx playwright install --with-deps chromium-headless-shell
       # builds the site (checking dist/), then smoke-tests it
