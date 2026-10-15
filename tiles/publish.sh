@@ -20,6 +20,9 @@ STEM=$(region_stem "${1:?region name, e.g. schleswig-holstein}")
 ARCHIVE="data/${STEM}.pmtiles"
 LOCK="../web/tiles.lock"
 [ -f "$ARCHIVE" ] || { echo "publish.sh: no $ARCHIVE -- build it first (just tiles)" >&2; exit 1; }
+# before anything is published: a lock the pin cannot be written into stops here
+lock_get "$LOCK" ARCHIVE_URL > /dev/null
+lock_get "$LOCK" ARCHIVE_SHA256 > /dev/null
 
 SHA256=$(checksum_of sha256 "$ARCHIVE")
 TAG="tiles-$(date -u +%Y%m%d)-${SHA256:0:8}"

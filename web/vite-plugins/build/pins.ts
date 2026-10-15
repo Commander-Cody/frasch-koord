@@ -10,6 +10,9 @@ import { join } from 'node:path';
 /** Where the fetched archives are kept, under the web/ root, one file per sha256. */
 export const TILE_CACHE_DIR = '.cache/tiles';
 
+/** Where the dev server's archives are linked, under the web/ root. */
+export const PUBLIC_TILES = 'public/tiles';
+
 /** The tile archive tiles.lock pins. */
 export interface TilesPin {
   url: string;

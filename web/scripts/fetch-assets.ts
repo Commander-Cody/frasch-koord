@@ -38,6 +38,7 @@ import { unzipSync } from 'fflate';
 
 import {
   type FontsPin,
+  PUBLIC_TILES,
   readFontsPin,
   readTilesPin,
   TILE_CACHE_DIR,
@@ -98,9 +99,6 @@ async function fetchPinned(url: string, dest: string, sha256: string): Promise<v
   await fetchVerified(url, dest, sha256);
 }
 
-/** Where the dev server's archives are linked, under the web/ root. */
-const PUBLIC_TILES = 'public/tiles';
-
 /** Whether a link in public/tiles/ leads into the fetch cache: one a fetch made. */
 function isFetchedArchive(target: string): boolean {
   return target.startsWith(`../../${TILE_CACHE_DIR}/`);
@@ -128,15 +126,15 @@ async function linkTarget(path: string): Promise<string | undefined> {
  * one that leads nowhere is danglingLinkProblems' to warn about.
  */
 async function linkForDevServer(root: string, pin: TilesPin, report: Report): Promise<void> {
-  const name = `${PUBLIC_TILES}/${pin.name}`;
-  const link = join(root, name);
+  const linkPath = `${PUBLIC_TILES}/${pin.name}`;
+  const link = join(root, linkPath);
   const target = await linkTarget(link);
   if (target === undefined || isFetchedArchive(target)) {
     await rm(link, { force: true });
     await symlink(`../../${pin.cachePath}`, link);
   } else if (await exists(link)) {
     report.info(
-      `kept ${name} (-> ${target}): the dev server serves that, a build the fetched archive`,
+      `kept ${linkPath} (-> ${target}): the dev server serves that, a build the fetched archive`,
     );
   }
 }

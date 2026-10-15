@@ -16,11 +16,8 @@ import type { Dirent } from 'node:fs';
 import { copyFile, mkdir, readdir, readlink, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { readTilesPin } from './pins.ts';
+import { PUBLIC_TILES, readTilesPin } from './pins.ts';
 import { exists, sha256Of } from './files.ts';
-
-/** Where the dev server's archive is linked, under the web/ root. */
-const PUBLIC_TILES = 'public/tiles';
 
 /** The web/ root a build runs in, the dist/ it writes, and whether VITE_TILES_URL is set. */
 export interface TilesBuild {
