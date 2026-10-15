@@ -16,11 +16,8 @@ import type { Dirent } from 'node:fs';
 import { copyFile, mkdir, readdir, readlink, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { ARCHIVE_NAME, readTilesPin } from './pins.ts';
+import { readTilesPin } from './pins.ts';
 import { exists, sha256Of } from './files.ts';
-
-/** Where the site serves its own archive from, under dist/ (see src/site.ts). */
-const ARCHIVE = `tiles/${ARCHIVE_NAME}`;
 
 /** Where the dev server's archive is linked, under the web/ root. */
 const PUBLIC_TILES = 'public/tiles';
@@ -114,6 +111,7 @@ async function dropCopiedArchives(tilesDir: string): Promise<void> {
 export async function shipTiles({ root, outDir, external }: TilesBuild): Promise<void> {
   await dropCopiedArchives(join(outDir, 'tiles'));
   if (external) return;
+  const pin = await readTilesPin(root);
   await mkdir(join(outDir, 'tiles'), { recursive: true });
-  await copyFile(join(root, (await readTilesPin(root)).cachePath), join(outDir, ARCHIVE));
+  await copyFile(join(root, pin.cachePath), join(outDir, 'tiles', pin.name));
 }

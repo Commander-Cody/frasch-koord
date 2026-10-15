@@ -18,11 +18,12 @@ function textField(layerId: string): unknown {
 
 it("reads the tiles from the site's archive", async () => {
   vi.stubEnv('VITE_TILES_URL', '');
+  vi.stubEnv('TILES_ARCHIVE', 'sh.pmtiles');
   vi.resetModules();
   // TILES_URL is read at module load: load the style afresh under the stubbed env.
   const { styleFor } = await import('./index');
   const source = styleFor(LOCAL_TAG).sources.openmaptiles as VectorSourceSpecification;
-  expect(source.url).toBe(`pmtiles://${origin}/tiles/schleswig-holstein.pmtiles`);
+  expect(source.url).toBe(`pmtiles://${origin}/tiles/sh.pmtiles`);
 });
 
 it("labels places with the view's label expression", () => {

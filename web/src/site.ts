@@ -25,10 +25,11 @@ export function siteUrl(path: string): string {
  * URL of the PMTiles archive (or any MapLibre-compatible vector source URL).
  * The ONLY place the frontend depends on how/where tiles are hosted.
  *
- * Defaults to a PMTiles file served from this site's own tiles/ directory
- * (see web/public/tiles/), under the site's base path. Override via the
- * VITE_TILES_URL environment variable, e.g. to point at a CDN-hosted PMTiles
- * archive.
+ * Defaults to the PMTiles archive web/tiles.lock pins, served from this
+ * site's own tiles/ directory (see web/public/tiles/) under the name it was
+ * published by, under the site's base path. Override via the VITE_TILES_URL
+ * environment variable, e.g. to point at a CDN-hosted PMTiles archive.
  */
 export const TILES_URL: string =
-  import.meta.env.VITE_TILES_URL || `pmtiles://${siteUrl('tiles/schleswig-holstein.pmtiles')}`;
+  import.meta.env.VITE_TILES_URL ||
+  `pmtiles://${siteUrl(`tiles/${import.meta.env.TILES_ARCHIVE}`)}`;

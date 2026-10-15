@@ -30,8 +30,20 @@ describe('readTilesPin', () => {
     expect(await readTilesPin(root)).toEqual({
       url: 'https://example.org/sh.pmtiles',
       sha256: SHA256,
+      name: 'sh.pmtiles',
       cachePath: `.cache/tiles/${SHA256}.pmtiles`,
     });
+  });
+
+  it('refuses a lock whose URL names no archive file', async () => {
+    writeFileSync(
+      join(root, 'tiles.lock'),
+      `ARCHIVE_URL=https://example.org/tiles/\nARCHIVE_SHA256=${SHA256}\n`,
+    );
+
+    await expect(readTilesPin(root)).rejects.toThrow(
+      'tiles.lock pins no tile archive (ARCHIVE_URL=https://example.org/tiles/): it has to end in <name>.pmtiles',
+    );
   });
 
   it('refuses a lock whose sha256 is not one', async () => {
