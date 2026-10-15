@@ -32,6 +32,8 @@ set -euo pipefail
 cd "$(dirname "$0")"
 # shellcheck source=tiles/fetch.sh
 source ./fetch.sh
+# shellcheck source=tiles/geofabrik.sh
+source ./geofabrik.sh
 # shellcheck source=tiles/java.sh
 source ./java.sh
 # shellcheck source=tiles/workspace.sh
@@ -78,7 +80,6 @@ fi
 [ -x "$FRASCH" ] || { echo "build.sh: $FRASCH not found or not executable -- run 'uv sync' first" >&2; exit 1; }
 
 STEM=$(region_stem "$REGION_ARG")
-SRC_URL=$(geofabrik_extract_url "$REGION_ARG" "${SNAPSHOT:-}")
 SRC="data/$(geofabrik_extract_name "$REGION_ARG" "${SNAPSHOT:-}")"
 INJECTED_TMP="data/${STEM}-frasch.tmp.osm.pbf"
 INJECTED="data/${STEM}-frasch.osm.pbf"
@@ -106,9 +107,7 @@ fetch_pinned "$NATURAL_EARTH_URL" "$NATURAL_EARTH" "$NATURAL_EARTH_SHA256"
 fetch_pinned "$WATER_POLYGONS_URL" "$WATER_POLYGONS" "$WATER_POLYGONS_SHA256"
 fetch_pinned "$LAKE_CENTERLINES_URL" "$LAKE_CENTERLINES" "$LAKE_CENTERLINES_SHA256"
 
-if [ "${REFRESH:-}" = "1" ] || [ ! -f "$SRC" ]; then
-  fetch_geofabrik_verified "$SRC_URL" "$SRC"
-fi
+fetch_geofabrik_extract "$REGION_ARG" data "${SNAPSHOT:-}"
 
 workspace_options names dialects areas objects curation
 # the stamp first: it stops on a name file that is not there, before the

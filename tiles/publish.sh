@@ -9,15 +9,15 @@
 # Needs: gh, logged in with the right to create releases.
 set -euo pipefail
 cd "$(dirname "$0")"
-# shellcheck source=tiles/fetch.sh
-source ./fetch.sh
+# shellcheck source=tiles/geofabrik.sh
+source ./geofabrik.sh
 
 STEM=$(region_stem "${1:?region name, e.g. schleswig-holstein}")
 ARCHIVE="data/${STEM}.pmtiles"
 LOCK="../web/tiles.lock"
 [ -f "$ARCHIVE" ] || { echo "publish.sh: no $ARCHIVE -- build it first (just tiles)" >&2; exit 1; }
 
-SHA256=$(sha256sum "$ARCHIVE" | cut -d' ' -f1)
+SHA256=$(checksum_of sha256 "$ARCHIVE")
 TAG="tiles-$(date -u +%Y%m%d)-${SHA256:0:8}"
 REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
 URL="https://github.com/${REPO}/releases/download/${TAG}/${STEM}.pmtiles"

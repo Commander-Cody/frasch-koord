@@ -40,12 +40,15 @@
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
 frasch := "uv run frasch"
-# the region the tiles are built for, and the extracts the name list's
-# objects are found in -- North Frisia reaches into Denmark (Fanø, Röm, Ripen)
+# the region the tiles are built for, and the regions of the extracts the
+# name list's objects are found in -- North Frisia reaches into Denmark
+# (Fanø, Röm, Ripen); Geofabrik paths, see tiles/geofabrik.sh
 region := "schleswig-holstein"
-extracts := "tiles/data/schleswig-holstein-latest.osm.pbf tiles/data/denmark-latest.osm.pbf"
-# the one of them the dialect areas are built from
-area_extract := "tiles/data/schleswig-holstein-latest.osm.pbf"
+extract_regions := region + " europe/denmark"
+# their files in tiles/data, as `extracts` downloads them; the tile region's
+# is the one the dialect areas are built from
+extracts := trim(shell('source tiles/geofabrik.sh && for r in $1; do printf "tiles/data/%s " "$(geofabrik_extract_name "$r")"; done', extract_regions))
+area_extract := "tiles/data/" + shell('source tiles/geofabrik.sh && geofabrik_extract_name "$1"', region)
 # in CI, where GITHUB_STEP_SUMMARY names the run's summary page, pytest and
 # `frasch check-inputs` write their overviews onto it
 summary := env("GITHUB_STEP_SUMMARY", "")
@@ -136,16 +139,7 @@ publish-tiles:
 # download (or with REFRESH=1 re-download) and verify the OSM extracts
 [group('pipeline steps')]
 extracts:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    source tiles/fetch.sh
-    mkdir -p tiles/data
-    for region in schleswig-holstein europe/denmark; do
-      dest="tiles/data/$(geofabrik_extract_name "$region")"
-      if [ "${REFRESH:-}" = "1" ] || [ ! -f "$dest" ]; then
-        fetch_geofabrik_verified "$(geofabrik_extract_url "$region")" "$dest"
-      fi
-    done
+    source tiles/geofabrik.sh && for r in {{extract_regions}}; do fetch_geofabrik_extract "$r" tiles/data; done
 
 # build one generated file of the pipeline by its name (`uv run frasch build --help` lists them)
 [group('pipeline steps')]
