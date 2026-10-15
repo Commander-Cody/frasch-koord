@@ -1,6 +1,6 @@
 // @vitest-environment node
 /**
- * vite-plugins/glyphs.ts: which glyph ranges the labels need, read off the
+ * vite-plugins/build/glyphs.ts: which glyph ranges the labels need, read off the
  * style and the tile archive, and what a build refuses.
  */
 import { mkdtempSync, rmSync } from 'node:fs';

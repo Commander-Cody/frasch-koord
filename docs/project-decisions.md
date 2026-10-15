@@ -1591,3 +1591,39 @@ file were readable from the local network.
   routing, the 404s, the 500 and `serveFile` through `devEndpoints`
   directly; the POST's own checks stay in `curate.test.ts`. The fake
   request and response are `vite-plugins/testHttp.ts`.
+
+## Decided 2026-10-15: the web fetch in Node, one pins module, every build check inside the Vite build (issue #108)
+
+"What the lock pins is what is on disk" was written in TypeScript and again in
+bash, and a plain `vite build` — the GitHub Pages command the README gave —
+skipped the output check, which ran after it in `npm run build`.
+
+| was | is |
+| --- | --- |
+| `scripts/fetch-fonts.sh`, `scripts/fetch-tiles.sh` (bash, `tiles/fetch.sh`, `unzip`; tests spawning bash and `zip`) | `scripts/fetch-assets.ts`, run by Node 24 as it is: `fetchTiles`, `fetchFonts`; `npm run fetch-assets` is the only npm script for it |
+| the lock parsed in `lock.ts` and by `sed` in both scripts; the sha256 shape check, the cache path and the archive name in four places | `vite-plugins/build/pins.ts`: `readTilesPin`, `readFontsPin`, `ARCHIVE_NAME`, `TILE_CACHE_DIR` |
+| "public/fonts/ is exactly the listed files" in `glyphs.ts` and `fetch-fonts.sh`; the dangling-link message in `tiles.ts` and `fetch-tiles.sh` | `glyphInstall.ts` and `danglingLinkProblems`, used by both |
+| the `tiles` and `glyphs` plugins, each with its own `root`/`VITE_TILES_URL` and `this.error`; `glyphs` relying on `tiles` to stop a build without an archive | one plugin, `vite-plugins/build/assets.ts`: one `buildStart` reports every problem at once, `writeBundle` ships the archive and then runs `checkBuild` |
+| `scripts/check-build.mjs` after `vite build` | `vite-plugins/build/checkBuild.ts`, run by the plugin; `npm run build` is `tsc -b && vite build` |
+| `useProvenanceCheck` opening a second `PMTiles` in every visitor's browser | the build compares the pinned archive's `built_from` with `names.json`'s (`vite-plugins/build/provenance.ts`) |
+| `smoke` opening `?curate` only | `?curate` and `?areas` |
+
+- **A differing `built_from` warns, it does not fail** (owner's decision):
+  the archive pinned today was built from older name files than
+  `names.json`, and it is published on its own (`just publish-tiles`).
+- **The runtime check is gone, not kept for dev** (owner's decision): the
+  build covers what is deployed, `just check-tiles` a tile builder's own
+  archive. `builtFrom` left `NamesData`, `pmtilesArchive` left `pmtiles.ts`.
+- **fflate unzips the glyph zip** (owner's choice over a hand-written reader
+  and yauzl): no dependencies, maintained, and the tests build their zip
+  with it, so the host needs neither `zip` nor `unzip`.
+- **`tsc -b` stays outside the plugin** (owner's choice over spawning it in
+  `buildStart`): the README's Pages command is
+  `npm run build -- --base /frasch-koord/`; a bare `vite build` runs every
+  check but the type check.
+- **`tiles/fetch.sh` stays** for the tile build and `just extracts`.
+- **Test seams** (owner's decision): `fetchTiles` and `fetchFonts` against a
+  local HTTP server; `readTilesPin`, `readFontsPin`; the plugin through a
+  real `vite build` of a tiny site with a stand-in MapLibre worker, so
+  `checkBuild` passes; `checkBuild`, `provenanceWarning` and the tile and
+  glyph checks as functions.

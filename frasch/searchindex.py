@@ -31,8 +31,8 @@ export -- it is on the map, and would be missing from search
 QID alone (the countries) have no position and are left out.
 
 The output records what it was built from (`built_from`, see
-frasch.provenance); the tiles carry the same stamp, and the frontend warns
-when the two differ.
+frasch.provenance); the tiles carry the same stamp, and the site's build
+warns when the two differ.
 
 An entry's `id` is its row's `id` -- the same string the injector writes into
 the tiles as `frasch:ref`, which is how a click on a map label finds the entry

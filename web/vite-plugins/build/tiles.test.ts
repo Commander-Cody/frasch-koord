@@ -1,7 +1,7 @@
 // @vitest-environment node
 /**
- * vite-plugins/tiles.ts on a temp web/ root: what a build lets
- * into dist/tiles/, and what makes it refuse to build.
+ * vite-plugins/build/tiles.ts on a temp web/ root: what about the pinned
+ * archive and public/tiles/ makes a build refuse.
  */
 import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
