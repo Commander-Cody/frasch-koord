@@ -21,10 +21,10 @@ import { join, resolve } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import type { Plugin } from 'vite';
 
-import { lockValue } from './lock.ts';
+import { ARCHIVE_NAME, readTilesPin } from './pins.ts';
 
 /** Where the site serves its own archive from, under dist/ (see src/site.ts). */
-const ARCHIVE = 'tiles/schleswig-holstein.pmtiles';
+const ARCHIVE = `tiles/${ARCHIVE_NAME}`;
 
 /** Where the dev server's archive is linked, under the web/ root. */
 const PUBLIC_TILES = 'public/tiles';
@@ -36,17 +36,9 @@ export interface TilesBuild {
   external: boolean;
 }
 
-function pinnedSha256(root: string): Promise<string> {
-  return lockValue(join(root, 'tiles.lock'), 'ARCHIVE_SHA256');
-}
-
-function cachedArchive(root: string, sha256: string): string {
-  return join(root, '.cache/tiles', `${sha256}.pmtiles`);
-}
-
 /** Where `npm run fetch-assets` puts the archive tiles.lock pins. */
 export async function pinnedArchive(root: string): Promise<string> {
-  return cachedArchive(root, await pinnedSha256(root));
+  return join(root, (await readTilesPin(root)).cachePath);
 }
 
 /** The file's sha256, or undefined when there is no such file. */
@@ -62,15 +54,18 @@ async function sha256Of(file: string): Promise<string | undefined> {
 }
 
 async function archiveProblem(root: string): Promise<string | undefined> {
-  const pinned = await pinnedSha256(root);
-  // It names a file in .cache/tiles/, so it has to be a hash and nothing else.
-  if (!/^[0-9a-f]{64}$/.test(pinned)) return `tiles.lock pins no sha256 (ARCHIVE_SHA256=${pinned})`;
-  const actual = await sha256Of(cachedArchive(root, pinned));
+  let pin;
+  try {
+    pin = await readTilesPin(root);
+  } catch (err) {
+    return (err as Error).message;
+  }
+  const actual = await sha256Of(join(root, pin.cachePath));
   if (actual === undefined) {
     return 'the pinned tile archive is not fetched: run `npm run fetch-assets` (or set VITE_TILES_URL)';
   }
-  if (actual !== pinned) {
-    return `.cache/tiles/${pinned}.pmtiles does not match tiles.lock: run \`npm run fetch-assets\` again`;
+  if (actual !== pin.sha256) {
+    return `${pin.cachePath} does not match tiles.lock: run \`npm run fetch-assets\` again`;
   }
 }
 

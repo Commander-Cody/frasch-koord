@@ -22,7 +22,7 @@ import type { Plugin } from 'vite';
 
 import { ALL_VIEW_TAGS } from '../../src/dialects/views.ts';
 import { labelLayers } from '../../src/map/style/labels.ts';
-import { lockValue } from './lock.ts';
+import { type FontsPin, readFontsPin } from './pins.ts';
 import { pinnedArchive } from './tiles.ts';
 import { vectorTiles } from './vectorTiles.ts';
 
@@ -115,20 +115,6 @@ export async function archiveLabels(path: string, fields: readonly Field[]): Pro
   return [...labels.values()];
 }
 
-/** What web/fonts.lock asks for: these ranges of each of these stacks. */
-interface FontsLock {
-  stacks: string[];
-  ranges: string[];
-}
-
-async function readFontsLock(root: string): Promise<FontsLock> {
-  const file = join(root, 'fonts.lock');
-  return {
-    stacks: (await lockValue(file, 'STACKS')).split(',').filter(Boolean),
-    ranges: (await lockValue(file, 'RANGES')).split(/\s+/).filter(Boolean),
-  };
-}
-
 /** The files under public/fonts/, as `<stack>/<range>.pbf`. */
 async function installedGlyphs(root: string): Promise<string[]> {
   const fonts = join(root, 'public/fonts');
@@ -146,10 +132,9 @@ function few(files: string[]): string {
 }
 
 /** Whether public/fonts/ holds anything but the listed ranges of the listed stacks. */
-function installProblem({ stacks, ranges }: FontsLock, installed: string[]): string | undefined {
-  const listed = stacks.flatMap((stack) => ranges.map((range) => `${stack}/${range}.pbf`));
-  const missing = listed.filter((file) => !installed.includes(file));
-  const extra = installed.filter((file) => !listed.includes(file));
+function installProblem({ listedFiles }: FontsPin, installed: string[]): string | undefined {
+  const missing = listedFiles.filter((file) => !installed.includes(file));
+  const extra = installed.filter((file) => !listedFiles.includes(file));
   if (missing.length === 0 && extra.length === 0) return undefined;
   const what = [
     missing.length > 0 ? `missing: ${few(missing)}` : '',
@@ -210,7 +195,7 @@ export default function glyphs(): Plugin {
       external = Boolean(config.env.VITE_TILES_URL);
     },
     async buildStart() {
-      const lock = await readFontsLock(root);
+      const lock = await readFontsPin(root);
       const problems = [
         installProblem(lock, await installedGlyphs(root)),
         ...(await labelProblems(root, lock.ranges, { external, warn: (m) => this.warn(m) })),
