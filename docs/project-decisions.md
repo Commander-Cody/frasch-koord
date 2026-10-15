@@ -394,6 +394,7 @@ carry the same `built_from` (git blob hashes of `places.csv`,
 plus the objects' extracts) in the PMTiles `description`. The frontend warns
 in the console when they differ. The dialect areas record the hashes of
 `dialect_areas.csv` and `dialects.csv` and their extract.
+*Superseded 2026-10-15 (#108): the build warns instead, see the entry of that date.*
 
 **Drift check.** `just check-outputs` runs in CI: it regenerates `names.json`
 and `dialects.json` and diffs them, and checks the stamps of the extract-derived
@@ -447,6 +448,7 @@ their own build there. `vite-plugins/tiles.ts` drops whatever Vite copied from
 it, and puts the verified pinned archive into `dist/`, or none with
 `VITE_TILES_URL`. It also stops the build at its start when the glyphs or the
 archive are missing (owner's choice over a warning).
+*Superseded 2026-10-15 (#108): it is `vite-plugins/build/tiles.ts`, run by the one build plugin.*
 
 **Planetiler's own inputs are pinned.** `build.sh` no longer uses
 `--download`. Natural Earth 5.1.2 and the water polygons (2026-09-14) have no
@@ -526,7 +528,8 @@ removing them). Commands that take arguments (`check.py --fix`, `curate.py`,
   `npm run smoke` hold the web side's steps, and the `just` recipes only call
   them.
 - **Every build is checked**: `npm run build` ends with `check-build.mjs`
-  (owner's choice), and `npm run smoke` builds first.
+  (owner's choice), and `npm run smoke` builds first. *Superseded 2026-10-15 (#108): the check
+  runs inside the Vite build, `vite-plugins/build/checkBuild.ts`.*
 - **CI calls the composite commands** (`just check-python`, `npm run check`,
   `npm run smoke`), so CI and a local run cannot drift. The price is one CI
   step per side instead of one per check: a failure is found in the log
@@ -561,7 +564,8 @@ routine recipes and the pipeline's internals side by side.
 - **`fetch-fonts.sh` keeps only the listed ranges** (owner's choice over
   trimming them in the build): the dev server serves what production
   serves. The list lives in `web/fonts.lock` with the zip's URL and sha256
-  (owner's choice over a separate ranges file).
+  (owner's choice over a separate ranges file). *Superseded 2026-10-15 (#108): `npm run
+  fetch-assets` (`scripts/fetch-assets.ts`) does it.*
 - **With `VITE_TILES_URL`** the fetched archive is checked if there is one,
   else the build warns (owner's choice over requiring the archive).
 
@@ -634,6 +638,8 @@ copy of `public/` and builds anyway). It does so with `VITE_TILES_URL` too.
 `npm run fetch-tiles` keeps a link that is not its own even when it dangles,
 but warns instead of saying the dev server serves it (owner's choice over
 replacing it: the link may have been set ahead of the first tile build).
+*Superseded 2026-10-15 (#108): `vite-plugins/build/tiles.ts` and `npm run fetch-assets`, with one
+message.*
 
 ## Decided 2026-10-06: one `frasch` command, no launchers (issue #91)
 
