@@ -2,7 +2,7 @@
  * The fields of a curation patch entry, read off the patch contract
  * (names/curate-patch.schema.json). Said once, here, for the dev server that
  * stores entries (curate.ts) and for the test that pins the browser's
- * hand-written `PatchEntry` to the contract (src/dev/curatePatch.test.ts) —
+ * hand-written `PatchEntry` to the contract (src/dev/curate/patch.test.ts) —
  * which is why this module imports nothing but the schema: it is compiled for
  * Node and for the browser.
  */

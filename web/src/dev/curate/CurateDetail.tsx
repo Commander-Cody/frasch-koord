@@ -1,0 +1,435 @@
+/**
+ * The selected row of the curation view and every way to decide it: pick a
+ * candidate or a lookup result (or several, ticked), an OSM reference by
+ * hand, a local reference at a position set on the map, or skip it.
+ *
+ * Everything typed or ticked here belongs to this one row: CuratePanel keys
+ * the component by the row id, so moving to another row starts afresh.
+ */
+import { useCallback, useState } from 'react';
+import type { Map as MapLibreMap } from 'maplibre-gl';
+
+import { errorMessage } from '../shell/fetchJson';
+import { flyTo } from '../shell/mapMoves';
+import CurateLookup from './CurateLookup';
+import { useHintCircle } from './hintCircle';
+import {
+  decisionLabel,
+  isValidSlug,
+  singleWikidataId,
+  type Decision,
+  type PatchEntry,
+} from './patch';
+import { candidateColor, hasPoint, type Position, usePositionPin, useRowPins } from './pins';
+import { parseRefs } from './refs';
+import type { Bbox, CurateCandidate, CurateRow } from './worklist';
+import { useOsmLookup } from './osmLookup';
+import RefItem from './RefItem';
+
+/** How many ticked refs the selection summary spells out ("select all" can tick hundreds). */
+const MAX_LISTED_REFS = 12;
+
+export interface CurateDetailProps {
+  row: CurateRow;
+  /** The row's current decision, if it has one. */
+  done: PatchEntry | null;
+  /** The worklist's bbox, which the lookups search in. */
+  bbox: Bbox;
+  /** The worklist's class tags, by which a lookup result is summed up. */
+  classKeys: readonly string[];
+  /** The worklist's settlement classes: their candidates get the settlement colour. */
+  settlementPlaces: readonly string[];
+  /** Whether a local reference of the row's kind can carry an area instead of a bare point. */
+  canBePolygon: boolean;
+  /** The map the row's pins go on. */
+  map: MapLibreMap;
+  /** Stores a decision; rejects with a message fit for the panel. */
+  onSave: (row: CurateRow, decision: Decision) => Promise<void>;
+}
+
+/** An OSM object ticked for a multi-object pick. */
+interface CheckedRef {
+  ref: string;
+  wikidata?: string;
+}
+
+function checkedRef(ref: string, wikidata?: string): CheckedRef {
+  return { ref, ...(wikidata ? { wikidata } : {}) };
+}
+
+/** An `osm` decision, with the object's wikidata id if its tag names exactly one. */
+function osmDecision(ref: string, wikidataTag?: string): Decision {
+  const wikidata = singleWikidataId(wikidataTag);
+  return { action: 'osm', osm: ref, ...(wikidata ? { wikidata } : {}) };
+}
+
+/** Every decision but `clear` takes the note along. */
+function withNote(decision: Decision, note: string): Decision {
+  const trimmed = note.trim();
+  return decision.action !== 'clear' && trimmed ? { ...decision, note: trimmed } : decision;
+}
+
+/**
+ * The refs ticked for a multi-object pick, in tick order (= order in the
+ * cell). The functions are stable, so the map's pin effects can take them
+ * without re-running — which would re-fit the map.
+ */
+function useCheckedRefs() {
+  const [checked, setChecked] = useState<CheckedRef[]>([]);
+  const toggle = useCallback((ref: string, wikidata?: string) => {
+    setChecked((prev) =>
+      prev.some((item) => item.ref === ref)
+        ? prev.filter((item) => item.ref !== ref)
+        : [...prev, checkedRef(ref, wikidata)],
+    );
+  }, []);
+  /** Ticks every given candidate, keeping what is already ticked (and its order). */
+  const checkAll = useCallback((candidates: CurateCandidate[]) => {
+    setChecked((prev) => {
+      const have = new Set(prev.map((item) => item.ref));
+      const added = candidates
+        .filter((candidate) => !have.has(candidate.ref))
+        .map(({ ref, wikidata }) => checkedRef(ref, wikidata));
+      return added.length > 0 ? [...prev, ...added] : prev;
+    });
+  }, []);
+  const clear = useCallback(() => setChecked([]), []);
+  return { checked, toggle, checkAll, clear };
+}
+
+export default function CurateDetail({
+  row,
+  done,
+  bbox,
+  classKeys,
+  settlementPlaces,
+  canBePolygon,
+  map,
+  onSave,
+}: CurateDetailProps) {
+  const lookup = useOsmLookup({ bbox, classKeys }, row.name_de || row.name_da || row.name);
+  const { checked, toggle, checkAll, clear } = useCheckedRefs();
+  const [activeRef, setActiveRef] = useState<string | null>(null);
+  const [note, setNote] = useState('');
+  const [postError, setPostError] = useState<string | null>(null);
+  // One decision at a time: a double click must not append two patch lines.
+  const [saving, setSaving] = useState(false);
+
+  useRowPins(map, {
+    row,
+    bbox,
+    settlementPlaces,
+    lookupResults: lookup.results,
+    checked,
+    onActivate: setActiveRef,
+    onToggle: toggle,
+  });
+  useHintCircle(map, row.hint_point);
+
+  const decide = (decision: Decision) => {
+    if (saving) return;
+    setSaving(true);
+    setPostError(null);
+    onSave(row, withNote(decision, note))
+      .catch((err: unknown) => setPostError(errorMessage(err)))
+      .finally(() => setSaving(false));
+  };
+  const pick = (ref: string, wikidata?: string) => decide(osmDecision(ref, wikidata));
+  const isChecked = (ref: string) => checked.some((item) => item.ref === ref);
+
+  return (
+    <section className="dev-panel-detail">
+      <h2 className="dev-panel-detail-title curate-detail-title">
+        {row.name}
+        <span className="curate-detail-line">
+          {row.id} · places.csv line {row.line}
+        </span>
+      </h2>
+      <RowFacts row={row} />
+      {done && <p className="curate-done">already decided: {decisionLabel(done)}</p>}
+
+      {/* Inert while a decision is on its way to the patch. */}
+      <fieldset className="curate-decisions" disabled={saving} aria-busy={saving}>
+        <Candidates
+          candidates={row.candidates}
+          colorOf={(candidate) => candidateColor(candidate, settlementPlaces)}
+          activeRef={activeRef}
+          isChecked={isChecked}
+          onToggle={toggle}
+          onCheckAll={checkAll}
+          onShow={(candidate) => {
+            setActiveRef(candidate.ref);
+            if (hasPoint(candidate)) flyTo(map, [candidate.lon, candidate.lat]);
+          }}
+          onPick={pick}
+        />
+        <CurateLookup
+          lookup={lookup}
+          isChecked={isChecked}
+          onToggle={toggle}
+          onShow={(result) => flyTo(map, [result.lon, result.lat])}
+          onPick={pick}
+        />
+        {checked.length > 0 && <CheckedPick checked={checked} onClear={clear} decide={decide} />}
+        <ManualRef decide={decide} />
+        <LocalRef
+          initialSlug={row.slug_suggestion}
+          canBePolygon={canBePolygon}
+          map={map}
+          decide={decide}
+        />
+
+        <h3 className="dev-panel-section">Note / skip</h3>
+        <input
+          className="dev-panel-input"
+          placeholder="note (optional, any action)"
+          value={note}
+          aria-label="note"
+          onChange={(event) => setNote(event.target.value)}
+        />
+        <div className="curate-row">
+          <button type="button" onClick={() => decide({ action: 'skip' })}>
+            Skip
+          </button>
+          {done && (
+            <button type="button" onClick={() => decide({ action: 'clear' })}>
+              Clear
+            </button>
+          )}
+        </div>
+      </fieldset>
+      {postError && <p className="dev-panel-error">could not save: {postError}</p>}
+    </section>
+  );
+}
+
+/** What the worklist knows about the row. */
+function RowFacts({ row }: { row: CurateRow }) {
+  const facts: [string, string][] = [
+    ...Object.entries(row.names),
+    ['de', row.de],
+    ['da', row.da],
+    ['hint', row.hint],
+    ['note', row.note],
+    ['kind', `${row.kind} · ${row.result}`],
+    ['why', row.why],
+  ];
+  return (
+    <dl className="dev-panel-facts">
+      {facts
+        .filter(([, value]) => value)
+        .map(([term, value]) => (
+          <div key={term}>
+            <dt>{term}</dt>
+            <dd>{value}</dd>
+          </div>
+        ))}
+    </dl>
+  );
+}
+
+interface CandidatesProps {
+  candidates: CurateCandidate[];
+  /** A candidate's colour, as on its pin. */
+  colorOf: (candidate: CurateCandidate) => string;
+  activeRef: string | null;
+  isChecked: (ref: string) => boolean;
+  onToggle: (ref: string, wikidata?: string) => void;
+  onCheckAll: (candidates: CurateCandidate[]) => void;
+  onShow: (candidate: CurateCandidate) => void;
+  onPick: (ref: string, wikidata?: string) => void;
+}
+
+/** The matcher's candidates, numbered and coloured like their pins. */
+function Candidates({
+  candidates,
+  colorOf,
+  activeRef,
+  isChecked,
+  onToggle,
+  onCheckAll,
+  onShow,
+  onPick,
+}: CandidatesProps) {
+  const inSh = candidates.filter((candidate) => candidate.in_sh);
+  return (
+    <>
+      <h3 className="dev-panel-section">Candidates ({candidates.length})</h3>
+      {candidates.length === 0 && (
+        <p className="dev-panel-hint">no candidates — use the lookups below</p>
+      )}
+      {candidates.length > 1 && (
+        <div className="curate-row">
+          <button type="button" onClick={() => onCheckAll(candidates)}>
+            select all
+          </button>
+          <button type="button" disabled={inSh.length === 0} onClick={() => onCheckAll(inSh)}>
+            select all in Schleswig-Holstein ({inSh.length})
+          </button>
+        </div>
+      )}
+      <ul className="dev-panel-list curate-candidates">
+        {candidates.map((candidate, i) => (
+          <RefItem
+            key={candidate.ref}
+            osmRef={candidate.ref}
+            number={i + 1}
+            color={colorOf(candidate)}
+            name={candidate.name}
+            meta={candidateMeta(candidate)}
+            wikidataTag={candidate.wikidata}
+            active={candidate.ref === activeRef}
+            checked={isChecked(candidate.ref)}
+            onToggle={() => onToggle(candidate.ref, candidate.wikidata)}
+            onShow={() => onShow(candidate)}
+            onPick={() => onPick(candidate.ref, candidate.wikidata)}
+          />
+        ))}
+      </ul>
+    </>
+  );
+}
+
+function candidateMeta(candidate: CurateCandidate): string {
+  const wikidata = singleWikidataId(candidate.wikidata);
+  return [
+    candidate.class,
+    candidate.km !== null ? ` · ${candidate.km} km` : '',
+    candidate.tags ? ` · ${candidate.tags}` : '',
+    wikidata ? ` · ${wikidata}` : '',
+  ].join('');
+}
+
+interface CheckedPickProps {
+  checked: CheckedRef[];
+  onClear: () => void;
+  decide: (decision: Decision) => void;
+}
+
+/** The ticked objects, picked together as one `osm` cell. */
+function CheckedPick({ checked, onClear, decide }: CheckedPickProps) {
+  // Only an unambiguous wikidata id goes along; `apply` cannot choose between two.
+  const qids = [...new Set(checked.flatMap((item) => singleWikidataId(item.wikidata) ?? []))];
+  const refs = checked.map((item) => item.ref);
+  const pick = () => decide(osmDecision(refs.join('; '), qids.length === 1 ? qids[0] : undefined));
+  return (
+    <div className="curate-multi">
+      <span className="dev-panel-mono curate-mono">
+        {checked.length} selected: {refs.slice(0, MAX_LISTED_REFS).join('; ')}
+        {checked.length > MAX_LISTED_REFS ? '; …' : ''}
+      </span>
+      {qids.length > 1 && (
+        <p className="dev-panel-hint">different wikidata ids ({qids.join(', ')}) — none saved</p>
+      )}
+      <div className="curate-row">
+        <button type="button" onClick={pick}>
+          Pick {checked.length} selected
+        </button>
+        <button type="button" onClick={onClear}>
+          clear selection
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** An OSM reference typed or pasted in. */
+function ManualRef({ decide }: { decide: (decision: Decision) => void }) {
+  const [text, setText] = useState('');
+  const refs = parseRefs(text);
+  return (
+    <>
+      <h3 className="dev-panel-section">OSM reference by hand</h3>
+      <input
+        className="dev-panel-input"
+        placeholder="way/177387348; node/123 or an openstreetmap.org URL"
+        value={text}
+        aria-label="osm reference"
+        onChange={(event) => setText(event.target.value)}
+      />
+      <div className="curate-row">
+        <button
+          type="button"
+          disabled={!refs}
+          onClick={() => refs && decide(osmDecision(refs.join('; ')))}
+        >
+          Pick reference
+        </button>
+        {text.trim() && !refs && (
+          <span className="dev-panel-error">node/way/relation id or OSM URL expected</span>
+        )}
+      </div>
+    </>
+  );
+}
+
+interface LocalRefProps {
+  initialSlug: string;
+  canBePolygon: boolean;
+  map: MapLibreMap;
+  decide: (decision: Decision) => void;
+}
+
+/** A place OSM does not have: a slug and a position set on the map. */
+function LocalRef({ initialSlug, canBePolygon, map, decide }: LocalRefProps) {
+  const [slug, setSlug] = useState(initialSlug);
+  const [position, setPosition] = useState<Position | null>(null);
+  const [picking, setPicking] = useState(false);
+  const [polygonKm2, setPolygonKm2] = useState('');
+  usePositionPin(map, { position, setPosition, picking, setPicking });
+
+  const save = (at: Position) =>
+    decide({
+      action: 'local',
+      slug,
+      lat: Number(at.lat.toFixed(6)),
+      lon: Number(at.lon.toFixed(6)),
+      ...(canBePolygon && polygonKm2.trim() ? { polygon_km2: Number(polygonKm2) } : {}),
+    });
+
+  return (
+    <>
+      <h3 className="dev-panel-section">Local reference (place OSM does not have)</h3>
+      <input
+        className="dev-panel-input"
+        value={slug}
+        aria-label="slug"
+        onChange={(event) => setSlug(event.target.value)}
+      />
+      {!isValidSlug(slug) && (
+        <p className="dev-panel-error">slug must look like `toftem-emmelsbull`</p>
+      )}
+      <div className="curate-row">
+        <button
+          type="button"
+          className={picking ? 'is-armed' : undefined}
+          onClick={() => setPicking(!picking)}
+        >
+          {picking ? 'click the map…' : 'set position on map'}
+        </button>
+        <span className="dev-panel-mono curate-mono">
+          {position ? `${position.lat.toFixed(6)}, ${position.lon.toFixed(6)}` : 'no position'}
+        </span>
+      </div>
+      {canBePolygon && (
+        <input
+          className="dev-panel-input"
+          type="number"
+          min="0"
+          step="0.1"
+          placeholder="polygon_km2 (optional area label)"
+          aria-label="polygon_km2"
+          value={polygonKm2}
+          onChange={(event) => setPolygonKm2(event.target.value)}
+        />
+      )}
+      <button
+        type="button"
+        disabled={!isValidSlug(slug) || !position}
+        onClick={() => position && save(position)}
+      >
+        Save local
+      </button>
+    </>
+  );
+}

@@ -116,7 +116,6 @@ def test_a_municipality_no_row_claims_is_a_part_without_a_dialect() -> None:
 
     assert parts is not None
     assert parts.fc["features"][1]["properties"] == {
-        "fid": 2,
         "assigned": False,
         "name": "Freetown",
         "osm": "relation/200",
@@ -293,7 +292,6 @@ def test_a_full_build_reports_every_step(ws: Workspace, capsys: pytest.CaptureFi
     assert parts_fc["properties"]["unassigned_ags"] == "01054"
     assert [f["properties"] for f in parts_fc["features"]] == [
         {
-            "fid": 1,
             "assigned": True,
             "dialect": "frr-x-mooring",
             "name": "Existing",
@@ -303,7 +301,6 @@ def test_a_full_build_reports_every_step(ws: Workspace, capsys: pytest.CaptureFi
             "km2": 1.4,
         },
         {
-            "fid": 2,
             "assigned": True,
             "dialect": "frr-x-solring",
             "name": "Claimedtown",
@@ -313,7 +310,6 @@ def test_a_full_build_reports_every_step(ws: Workspace, capsys: pytest.CaptureFi
             "km2": 2.9,
         },
         {
-            "fid": 3,
             "assigned": True,
             "dialect": "frr-x-solring",
             "name": "Second",
@@ -322,8 +318,8 @@ def test_a_full_build_reports_every_step(ws: Workspace, capsys: pytest.CaptureFi
             "line": 4,
             "km2": 1.4,
         },
-        {"fid": 4, "assigned": False, "name": "", "osm": "relation/300", "km2": 2.9},
-        {"fid": 5, "assigned": False, "name": "Freetown", "osm": "relation/200", "km2": 2.9},
+        {"assigned": False, "name": "", "osm": "relation/300", "km2": 2.9},
+        {"assigned": False, "name": "Freetown", "osm": "relation/200", "km2": 2.9},
     ]
 
 

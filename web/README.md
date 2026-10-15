@@ -116,8 +116,8 @@ touch devices and copies it everywhere else (`src/ui/ShareButton.tsx`).
 
 `src/url/queryParams.ts` is the one module that touches `window.location` and
 `window.history` (a test scans `src/` for it); `src/url/linkState.ts` knows
-the two parameters above, and `src/url/useOpenLinked.ts` opens what a dev
-panel's link names (`?curate&row=`, `?areas&area=`).
+the two parameters above; a dev panel keeps its own in its link
+(`?curate&row=`, `?areas&area=`, `src/dev/shell/useSelection.ts`).
 
 **The selected place** is one model (`src/selection/placeSelection.ts`): a pick says
 how the place was chosen, `{via: 'map' | 'search' | 'link', ...}`, and
@@ -142,7 +142,7 @@ derived from the selection and the view.
 | `url/`       | the query string and what a link carries                                                                                                                                 |
 | `selection/` | the selected place (`placeSelection.ts`, `usePlaceSelection.ts`), the sheet's height, Escape                                                                             |
 | `ui/`        | the components of the side panel, each with its stylesheet                                                                                                               |
-| `dev/`       | the curation view and the dialect-area review (dev only)                                                                                                                 |
+| `dev/`       | the dev views (dev only): `curate/` the curation view, `areas/` the dialect-area review, `shell/` what both are built on (frame, loading, selection, map overlays)       |
 | `testing/`   | helpers of the tests                                                                                                                                                     |
 
 ## Tile hosting
@@ -608,7 +608,7 @@ or missing name" link is issue #8.
 ## Curation view (dev only)
 
 `http://localhost:5173/?curate` swaps the control bar for
-`src/dev/CuratePanel.tsx`: the rows `frasch match` left `ambiguous`
+`src/dev/curate/CuratePanel.tsx`: the rows `frasch match` left `ambiguous`
 or `not_found`, each with its candidates as numbered pins on the map. Export
 the worklist first — `frasch curate export` writes `names/work/curate.json`
 (its contract: [`names/curate-worklist.schema.json`](../names/curate-worklist.schema.json))
@@ -632,7 +632,9 @@ several OSM objects is picked by ticking candidates and lookup results (or
 shift-clicking their pins) and "Pick N selected": one entry with
 `osm: "a; b; c"`, plus a wikidata id only when the ticked objects agree on one.
 A place OSM does not have gets a `local/<slug>`; the form starts with the
-worklist's `slug_suggestion` — the browser folds no name itself.
+worklist's `slug_suggestion` — the browser folds no name itself. After
+another `frasch curate export` or an `apply`, _Reload_ reads the worklist and
+the patch again, and stays on the selected row.
 
 The "Nominatim" and "Overpass" lookups are **called from the browser** against
 the public instances (`nominatim.openstreetmap.org`, `overpass-api.de`), bounded
@@ -643,7 +645,7 @@ message in the panel.
 ## Dialect-area review (dev only)
 
 `http://localhost:5173/?areas` swaps the control bar for
-`src/dev/AreaPanel.tsx`: every municipality of
+`src/dev/areas/AreaPanel.tsx`: every municipality of
 `names/dialect_areas.csv` drawn in its dialect's colour, so the mainland
 assignments — a researched draft nobody has checked — can be reviewed on the
 map instead of in a spreadsheet. Clicking a polygon or a list row shows the
@@ -663,9 +665,11 @@ endpoint is a Vite plugin with `apply: 'serve'` (`vite-plugins/areas.ts`,
 as well as tidy: the notes quote research prose about assignments nobody has
 confirmed ("best guess only", "no direct source found"), which should not ship
 to the public site. **The view is read-only** — unlike `?curate`, nothing
-writes back. Edit `names/dialect_areas.csv`, re-run the build, press _Reload_.
+writes back. Edit `names/dialect_areas.csv`, re-run the build, press _Reload_:
+the selected municipality stays selected, since the view knows it by its
+first OSM reference, not by its place in the rebuilt file.
 
-The four layers (`src/dev/areaLayers.ts`) are inserted before
+The four layers (`src/dev/areas/areaLayers.ts`) are inserted before
 `waterway-name`, the style's first symbol layer, so no place label is ever
 covered. The outline is drawn in the **same hue as the fill at ~3x the alpha**:
 that is what keeps two adjacent municipalities _of the same dialect_ apart,

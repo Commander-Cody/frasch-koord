@@ -1,0 +1,74 @@
+/* Dialect-area review view (?areas): its own rules. What it shares with the
+   curation view is in shell/DevPanel.css. */
+
+/* Legend. Doubles as the map filter, so every row is a button. */
+.area-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.area-legend-item {
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 6px;
+  border: 1px solid transparent;
+  background: none;
+}
+
+.area-legend-item:hover {
+  background: var(--dev-panel-hover);
+}
+
+.area-legend-item.is-active {
+  background: var(--dev-panel-selected);
+  border-color: #b5cbf5;
+}
+
+.area-legend-count {
+  color: #888;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The one place colour is shown next to its name, in the legend and again in
+   the detail block — identity is never colour alone. */
+.area-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  border: 1px solid rgba(0, 0, 0, 0.25);
+  vertical-align: -1px;
+  flex: none;
+}
+
+.area-refs a {
+  margin-right: 8px;
+}
+
+/* The research note, verbatim: it is the reason the row says what it says. */
+.area-note {
+  margin: 0;
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: #333;
+  border-left: 3px solid #ddd;
+  padding-left: 7px;
+}
+
+.area-add {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  align-items: flex-start;
+}
+
+.area-line {
+  margin-left: auto;
+  color: #aaa;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}

@@ -5,7 +5,7 @@ The matcher leaves two kinds of row for a human: `ambiguous` (several
 plausible OSM objects) and `not_found` (no object, or only near misses).
 `export` writes those the matcher still owns, with the candidates'
 coordinates and the row's location hint, as names/curate-worklist.schema.json
-defines the file and web/src/dev/curateWorklist.ts reads it.
+defines the file and web/src/dev/curate/worklist.ts reads it.
 
 It reads no candidates: everything the worklist shows of them the matcher
 wrote into names/work/matches.jsonl (frasch.matchfile).  The file is

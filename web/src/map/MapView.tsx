@@ -38,9 +38,11 @@ export interface MapViewProps {
   view: string;
   /** Left out by the dev views, which bring their own click handling. */
   onSelectFeature?: SelectFeature;
+  /** Called with the map once its first style has loaded: the dev views draw on it. */
+  onReady?: (map: MapLibreMap) => void;
   /** The marker to show, if any (see selection/placeSelection.ts `markerOf`). */
   marker?: MapMarker | null;
-  /** The imperative handle below, for App's map moves and the dev views. */
+  /** The imperative handle below, for App's map moves. */
   ref?: Ref<MapViewHandle>;
 }
 
@@ -59,25 +61,26 @@ export interface MapMoves {
   reveal(center: LngLatLike, inset: number): void;
 }
 
-/** The map itself, for the dev views, which draw layers of their own on it. */
-export interface MapAccess {
-  /** The underlying maplibre-gl Map, or null before mount / after unmount. */
-  getMap(): MapLibreMap | null;
-}
-
 /**
  * Imperative API exposed to parents via ref. Methods read the live map
  * instance lazily, so they work regardless of when the map finished
  * initialising relative to the parent's render.
  */
-export type MapViewHandle = MapAccess & MapMoves;
+export type MapViewHandle = MapMoves;
 
 /** Full-viewport MapLibre map, labelled in `view`. */
-export default function MapView({ view, onSelectFeature, marker = null, ref }: MapViewProps) {
+export default function MapView({
+  view,
+  onSelectFeature,
+  onReady,
+  marker = null,
+  ref,
+}: MapViewProps) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const { mapRef, map } = useMapInstance(containerRef, view);
   useMapHandle(ref, mapRef);
+  useReady(map, onReady);
   useViewStyle(map, view);
   usePlaceClicks(map, onSelectFeature);
   useMarker(map, marker);
@@ -132,7 +135,6 @@ function useMapHandle(ref: Ref<MapViewHandle> | undefined, mapRef: RefObject<Map
   useImperativeHandle(
     ref,
     () => ({
-      getMap: () => mapRef.current,
       flyTo: (center, zoom, inset) => {
         // A one-off offset rather than map padding: padding would stay on
         // the map after the sheet closes, and shift every later view.
@@ -153,6 +155,18 @@ function revealAbove(map: MapLibreMap, center: LngLatLike, inset: number): void 
   const { y } = map.project(center);
   if (y < height - inset - REVEAL_MARGIN) return;
   map.panBy([0, y - (height - inset) / 2]);
+}
+
+/** Hands `map` to `onReady` once its first style has loaded. */
+function useReady(map: MapLibreMap | null, onReady?: (map: MapLibreMap) => void): void {
+  useEffect(() => {
+    if (!map || !onReady) return;
+    const ready = () => onReady(map);
+    map.once('load', ready);
+    return () => {
+      map.off('load', ready);
+    };
+  }, [map, onReady]);
 }
 
 /**

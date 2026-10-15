@@ -274,7 +274,10 @@ the research `note`.
 So `build_dialect_areas.py` gained a **second output**,
 `names/dialect_areas_parts.geojson`: one Feature per municipality
 (`fid`, `assigned`, `dialect`, `label`, `name`, `note`, `osm`, `line`, `km2`;
-*since 2026-10-08 (#96) without `label`, see `names/dialect-area-parts.schema.json`*),
+*since 2026-10-08 (#96) without `label`, since 2026-10-14 (#106) without
+`fid` -- the view selects a municipality by its first OSM reference, which
+stays put when a rebuild reorders the features; see
+`names/dialect-area-parts.schema.json`*),
 written from the same in-memory geometry in the same run, so the two files
 cannot disagree. It also carries the Kreis Nordfriesland municipalities that
 **no row claims**, marked `assigned: false` — a hole in the coverage is a bug
@@ -1506,3 +1509,54 @@ label option, tag, dialect), and `Map.tsx` set the whole map up in one
   `placeHitTest` and `useMapFailure` against a small fake of the MapLibre map,
   `pmtilesArchive`, the Python export, `siteFields`, and the German UI's
   dialect name on the card. The rest moved with its module.
+
+## Decided 2026-10-14: a shared shell for the dev panels; areas selected by OSM reference (issue #106)
+
+The two dev views were decomposed at different levels — `AreaPanel.tsx` was
+one 449-line component, the curation view nine files — and wrote loading,
+reloading, selection, scrolling and map overlays twice. The area view kept
+its selection by `fid`, a counter the build assigns in CSV order, so a
+Reload after adding a row highlighted another municipality than `?area=`
+named.
+
+| was | is |
+| --- | --- |
+| a fetch, its error idiom and a cancel flag in each panel; Reload in the area view only, twice | `dev/shell/`: `fetchJson`, `errorMessage`, `useDevResource(load)` → `{data, error, reload, update}`; `DevPanel` takes it as one prop and has the Reload button for both views |
+| state, a ref mirror, a URL write, `useOpenLinked` and `useListNavigation` in each panel; two ways to scroll the selected row into view | `useSelection({param, keys, ready, resolve, show})` → `{selected, select, selectInPlace, itemRef}` |
+| `ensure` on `load`/`styledata`, `addHintCircle`/`removeHintCircle`/`drawHintCircle`, filters set in three places | `useGeoJsonOverlay(map, {source, data, layers, beforeId})`; the layers, filters included, are computed from state (`areaLayers({selectedOsm, shown})`, `hintCircle.ts`) |
+| `MapAccess.getMap()` and nine null guards; the panel worked because `<MapView>` came first | `MapView`'s `onReady(map)`; `DevApp` renders the panel once the map has loaded, with `map: MapLibreMap`; `MapViewHandle` is `MapMoves` again |
+| two `flyTo` helpers, zoom 14 three times | `dev/shell/mapMoves.ts`: `flyTo`, `fitTo`, `CLOSE_ZOOM` |
+| `fid` in `PartProperties`, the parts schema and file | gone; the key is a row's first OSM reference (`areaKey`) |
+| `AreaPanel.tsx` | `dev/areas/`: `AreaPanel` (container), `AreaFilters`, `AreaLegend`, `AreaDetail`, `AreaList`, `Swatch`, `areas.ts` (types, `bboxOf`, `groupByDialect`, `filterAreas`), `areaLayers.ts`, `useAreaSelection.ts`, `useAreaMap.ts` |
+| `curateWorklist.ts`, `curateMapLayers.ts`, `curatePatch.ts` | `dev/curate/`: `worklist.ts` (types, loading, filter), `refs.ts` (`parseRefs`), `pins.ts`, `hintCircle.ts`, `patch.ts` (with `decisionLabel`, the one formatter of a decision) |
+| one button style three times, three `!important`s, four list resets, `#e8f0fe`/`#2e7d32` spelled out | `DevPanel.css`: buttons under `:where(.dev-panel)` (any class rule wins), `.dev-panel-list`, `.dev-panel-rowbutton`, `.dev-panel-detail`, `--dev-panel-*` colours |
+
+- **The map comes by `onReady`, not the handle** (owner's decision): the
+  panel mounts on a loaded map, so an overlay is added once, without waiting
+  for `load`, and no dev module asks the map whether it exists yet.
+- **Reload keeps what is on screen** until the new data is there (owner's
+  decision); the selection stays on its item: `useSelection` asks the
+  reloaded data for the item's key (a rebuild that changed a row's first
+  reference moves it along) and empties the selection and the link if the
+  item is gone, so a later reload cannot bring it back unasked. Both panels
+  count as `ready` once loaded, an empty worklist included. The curation view's own saves go into the loaded data with
+  `update`, so a reload replaces them with the patch as stored.
+- **No style-rebuild handling** (owner's decision): the dev views never
+  change the view, so the `styledata` re-add, its try/catch and the
+  half-built filter restore went. An overlay's paint is fixed when it is
+  added; only its data and filters follow a change.
+- **The selected municipality is filtered by its `osm` cell**, not the key:
+  a reference is on one row only, so the cell names it as well, and MapLibre
+  compares it without splitting it. A link with any of a row's references
+  still opens it.
+- **`useOpenLinked` lost `hasSelection`** and moved into `dev/shell/`: the
+  public app does not use it, and in neither panel is anything selectable
+  before `ready`.
+- **Test seams** (owner's decision): `fetchJson`, `useDevResource`,
+  `useSelection`, `useGeoJsonOverlay` (against `testing/fakeMap.ts`),
+  `bboxOf`, `groupByDialect`, `filterAreas`, `findByRef`, `areaLayers` (which
+  municipalities each layer draws, through the style spec's own
+  `featureFilter`), `decisionLabel`, `AreaPanel` (Reload after a
+  rebuild that moved the selected municipality), `CuratePanel` (Reload, the
+  selected row kept in view; MapLibre's `Marker` replaced by a fake, since it
+  needs a real map's camera), and the parts without `fid`.

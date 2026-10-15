@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/Commander-Cody/frasch-koord/names/dialect-area-parts.schema.json",
   "title": "Dialect area parts",
-  "description": "names/dialect_areas_parts.geojson: one Feature per municipality of names/dialect_areas.csv, and one per municipality of Kreis Nordfriesland no row claims. `frasch build areas` writes it (frasch/build_dialect_areas.py) for the dialect-area review view alone (web `?areas`, web/src/dev/AreaPanel.tsx); nothing in the Python pipeline reads it.",
+  "description": "names/dialect_areas_parts.geojson: one Feature per municipality of names/dialect_areas.csv, and one per municipality of Kreis Nordfriesland no row claims. `frasch build areas` writes it (frasch/build_dialect_areas.py) for the dialect-area review view alone (web `?areas`, web/src/dev/areas/AreaPanel.tsx); nothing in the Python pipeline reads it.",
   "type": "object",
   "required": ["type", "properties", "features"],
   "additionalProperties": false,
@@ -57,13 +57,9 @@
     "part": {
       "description": "One municipality. One that a row of the area list assigns has that row's dialect, note and line; one that no row claims has none of them -- above all no `dialect`, which is what keeps the dialect lookup from ever loading this file.",
       "type": "object",
-      "required": ["fid", "assigned", "name", "osm", "km2"],
+      "required": ["assigned", "name", "osm", "km2"],
       "additionalProperties": false,
       "properties": {
-        "fid": {
-          "description": "The feature's number, stable within one build: the view's selection key.",
-          "type": "integer"
-        },
         "assigned": {
           "description": "Whether a row of the area list claims the municipality.",
           "type": "boolean"
@@ -79,7 +75,7 @@
         },
         "note": { "description": "The row's research note, verbatim.", "type": "string" },
         "osm": {
-          "description": "The row's `osm` cell, `relation/1; relation/2`; of an unclaimed municipality its relation. A reference is on one row only, so the first is the view's deep-link key.",
+          "description": "The row's `osm` cell, `relation/1; relation/2`; of an unclaimed municipality its relation. A reference is on one row only, so the first is the view's selection and deep-link key.",
           "type": "string",
           "minLength": 1
         },
