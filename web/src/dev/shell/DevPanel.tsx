@@ -12,7 +12,7 @@ import './DevPanel.css';
 
 export interface DevPanelProps {
   title: string;
-  /** The panel's own class, for its own rules (and scripts/smoke.mjs). */
+  /** The panel's own class, for its own rules (and scripts/smoke.ts). */
   className: string;
   /** What the panel loads, for the error line: "the worklist". */
   what: string;

@@ -39,7 +39,7 @@ export function createMap(container: HTMLElement, style: StyleSpecification): Ma
   });
   map.addControl(new NavigationControl(), 'top-right');
   map.addControl(new AttributionControl({ compact: false }), 'bottom-right');
-  // For the production-build smoke check (scripts/smoke.mjs), which has no
+  // For the production-build smoke check (scripts/smoke.ts), which has no
   // other way to see the map load.
   map.once('load', () => {
     map.getContainer().dataset.state = 'loaded';
