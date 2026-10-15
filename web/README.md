@@ -616,7 +616,9 @@ the worklist first — `frasch curate export` writes `names/work/curate.json`
 `apply: 'serve'` (`vite-plugins/curate.ts`, `GET /__curate/worklist`,
 `GET`/`POST /__curate/patch`), and `src/main.tsx` only loads the view under
 `vite dev` (`import.meta.env.DEV`), so a production build has neither the
-endpoints nor the panel: `?curate` there is just the public map. The `POST` stores only an
+endpoints nor the panel: `?curate` there is just the public map. The endpoints
+answer only this machine's own same-origin pages, even under `vite --host`
+(`vite-plugins/devEndpoints.ts`, shared with `?areas`). The `POST` stores only an
 entry that keeps [`names/curate-patch.schema.json`](../names/curate-patch.schema.json) and answers
 400 with the reason otherwise. English only on purpose: it
 is a tool for the name list, not part of the map.
@@ -660,7 +662,7 @@ Build the geometry first —
 `uv run just rebuild areas`
 writes `names/dialect_areas_parts.geojson` — and run under `npm run dev`; the
 endpoint is a Vite plugin with `apply: 'serve'` (`vite-plugins/areas.ts`,
-`GET /__areas/parts`), and like the curation view it is only loaded under
+`GET /__areas/parts`, behind the same gates), and like the curation view it is only loaded under
 `vite dev`, so a production build has none of it. That is deliberate
 as well as tidy: the notes quote research prose about assignments nobody has
 confirmed ("best guess only", "no direct source found"), which should not ship

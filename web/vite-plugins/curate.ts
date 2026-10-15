@@ -24,10 +24,16 @@ import { BASIC } from '@hyperjump/json-schema/experimental';
 import type { Connect, Plugin } from 'vite';
 
 import patchSchema from '../../names/curate-patch.schema.json' with { type: 'json' };
+import {
+  devEndpoints,
+  isMissing,
+  sendJson,
+  serveFile,
+  type DevEndpointOptions,
+  type RouteHandler,
+} from './devEndpoints.ts';
+import { CURATE_BASE } from './devToolNames.ts';
 import { PATCH_FIELDS } from './patchFields.ts';
-
-/** Everything this plugin answers lives under here; anything else falls through. */
-const BASE = '/__curate/';
 
 /** A patch entry is a handful of short strings; anything bigger is a mistake. */
 const MAX_BODY = 64 * 1024;
@@ -42,33 +48,6 @@ const MAX_BODY = 64 * 1024;
  */
 const PATCH_ENTRY_KEYS = PATCH_FIELDS.filter((key) => key !== 'at');
 
-function sendJson(res: ServerResponse, status: number, body: unknown): void {
-  const text = JSON.stringify(body);
-  res.statusCode = status;
-  res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  // A stale worklist would silently hide rows the exporter just added.
-  res.setHeader('Cache-Control', 'no-store');
-  res.end(text);
-}
-
-function isMissing(err: unknown): boolean {
-  return (err as NodeJS.ErrnoException | null)?.code === 'ENOENT';
-}
-
-/**
- * True for loopback addresses only: 127.0.0.0/8, ::1, and the IPv4-mapped
- * ::ffff:127.x.x.x that Node reports for a dual-stack socket. `vite --host`
- * can bind this server to the LAN, and nothing under BASE — including the
- * read-only GETs — is meant to be reachable from another machine on it.
- */
-function isLoopbackAddress(address: string | undefined): boolean {
-  if (!address) return false;
-  const stripped = address.replace(/^::ffff:/i, '');
-  if (stripped === '::1') return true;
-  const match = /^(\d{1,3})\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.exec(stripped);
-  return match !== null && Number(match[1]) === 127;
-}
-
 /**
  * True unless the request's `Content-Type` is `application/json` (parameters
  * like `; charset=utf-8` are fine; the check is case-insensitive). This is
@@ -81,31 +60,13 @@ function isLoopbackAddress(address: string | undefined): boolean {
  * preflight without `Access-Control-Allow-Origin` for any origin but
  * localhost, so the browser never sends the POST. A page on another localhost
  * port does pass the preflight (Vite's default allows every localhost
- * origin); `isCrossOrigin` turns that one away.
+ * origin); the same-origin gate of `devEndpoints` turns that one away.
  */
 function hasJsonContentType(req: IncomingMessage): boolean {
   const header = req.headers['content-type'];
   if (typeof header !== 'string') return false;
   const mediaType = header.split(';', 1)[0]?.trim().toLowerCase();
   return mediaType === 'application/json';
-}
-
-/**
- * True if the request does not look same-origin. Browsers send
- * `Sec-Fetch-Site` on every fetch, so `same-origin` is the only value the
- * panel's own calls carry; `Origin`, where present, must be this server's own
- * (scheme from its config, host from the `Host` header, so `vite --host`
- * still works). A request with neither header (curl, a local script) is let
- * through: no page on another site can steer those.
- */
-function isCrossOrigin(req: IncomingMessage, https: boolean): boolean {
-  const secFetchSite = req.headers['sec-fetch-site'];
-  if (typeof secFetchSite === 'string' && secFetchSite !== 'same-origin') return true;
-
-  const origin = req.headers.origin;
-  if (typeof origin !== 'string') return false;
-  const expected = `${https ? 'https' : 'http'}://${req.headers.host ?? ''}`;
-  return origin !== expected;
 }
 
 /** Drops every field `apply` does not read; see PATCH_ENTRY_KEYS. */
@@ -230,59 +191,23 @@ function parsePatch(text: string): unknown[] {
 }
 
 /** Where the plugin instance reads and writes; see `curate()`'s `configResolved`. */
-export interface CuratePaths {
+export interface CuratePaths extends DevEndpointOptions {
   worklistPath: string;
   patchPath: string;
-  /**
-   * Whether the dev server itself runs https, i.e. `server.config.server.https`.
-   * Defaults to false (Vite's own default) — see `isCrossOrigin` for why the
-   * expected Origin's scheme is pinned to this rather than accepted as-is.
-   */
-  https?: boolean;
 }
 
-/** Answers one endpoint; what it throws is `failRequest`'s. */
-type RouteHandler = (
-  req: IncomingMessage,
-  res: ServerResponse,
-  paths: CuratePaths,
-) => Promise<void>;
-
-/** `GET /__curate/worklist`: the worklist `frasch curate export` wrote. */
-async function sendWorklist(
-  _req: IncomingMessage,
-  res: ServerResponse,
-  { worklistPath }: CuratePaths,
-): Promise<void> {
-  let text: string;
-  try {
-    text = await readFile(worklistPath, 'utf8');
-  } catch (err) {
-    if (!isMissing(err)) throw err;
-    sendJson(res, 404, { error: 'run frasch curate export' });
-    return;
-  }
-  // Passed through verbatim: the exporter owns the schema.
-  res.statusCode = 200;
-  res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  res.setHeader('Cache-Control', 'no-store');
-  res.end(text);
-}
-
-/** `GET /__curate/patch`: every entry stored so far. */
-async function sendPatch(
-  _req: IncomingMessage,
-  res: ServerResponse,
-  { patchPath }: CuratePaths,
-): Promise<void> {
-  let text = '';
-  try {
-    text = await readFile(patchPath, 'utf8');
-  } catch (err) {
-    // No picks yet is the normal first-run state, not an error.
-    if (!isMissing(err)) throw err;
-  }
-  sendJson(res, 200, { entries: parsePatch(text) });
+/** `GET /__curate/patch`: every entry stored in `patchPath` so far. */
+function getPatch(patchPath: string): RouteHandler {
+  return async (_req, res) => {
+    let text = '';
+    try {
+      text = await readFile(patchPath, 'utf8');
+    } catch (err) {
+      // No picks yet is the normal first-run state, not an error.
+      if (!isMissing(err)) throw err;
+    }
+    sendJson(res, 200, { entries: parsePatch(text) });
+  };
 }
 
 /**
@@ -318,56 +243,27 @@ async function readPostedObject(
   return posted as Record<string, unknown>;
 }
 
-/** `POST /__curate/patch`: appends the posted entry, if it keeps the contract. */
-async function appendEntry(
-  req: IncomingMessage,
-  res: ServerResponse,
-  { patchPath }: CuratePaths,
-): Promise<void> {
-  const entry = await readPostedObject(req, res);
-  if (entry === undefined) return;
-  // Only known fields survive, and the server's clock — not whatever `at` a
-  // caller may have sent — is the one `apply` can trust; see PATCH_ENTRY_KEYS
-  // and pickKnownFields.
-  const stored = { ...pickKnownFields(entry), at: new Date().toISOString() };
-  // What is stored is what `apply` reads, so that is what must keep the
-  // contract: `apply` refuses a line that does not.
-  const problem = await schemaProblem(stored);
-  if (problem !== undefined) {
-    sendJson(res, 400, { error: problem });
-    return;
-  }
-  // `appendFile` creates the file on first pick, and O_APPEND keeps concurrent
-  // tabs from interleaving half lines.
-  await appendFile(patchPath, `${JSON.stringify(stored)}\n`, 'utf8');
-  sendJson(res, 200, { ok: true, entry: stored });
-}
-
-/** The endpoints under BASE, by method and route. */
-const ROUTES = new Map<string, RouteHandler>([
-  ['GET worklist', sendWorklist],
-  ['GET patch', sendPatch],
-  ['POST patch', appendEntry],
-]);
-
-/** Whether the request is turned away (403) before any endpoint sees it. */
-function isForbidden(req: IncomingMessage, https: boolean): boolean {
-  // LAN safety net, checked before anything else and for every route
-  // (including the read-only GETs): `vite --host` can expose this server
-  // beyond localhost, and none of it is meant for another machine.
-  if (!isLoopbackAddress(req.socket.remoteAddress)) return true;
-  // Browser same-origin check. Applied to every route, not just the POST
-  // that writes: the panel's own GETs are same-origin too, so this costs
-  // it nothing, and a page on another site has no business reading the
-  // worklist or the patch log either.
-  return isCrossOrigin(req, https);
-}
-
-function failRequest(res: ServerResponse, err: unknown): void {
-  // The message can hold an absolute filesystem path; that goes to the
-  // server log only, never into the response.
-  console.error('[curate] request failed', err);
-  sendJson(res, 500, { error: 'internal error' });
+/** `POST /__curate/patch`: appends the posted entry to `patchPath`, if it keeps the contract. */
+function appendPatch(patchPath: string): RouteHandler {
+  return async (req, res) => {
+    const entry = await readPostedObject(req, res);
+    if (entry === undefined) return;
+    // Only known fields survive, and the server's clock — not whatever `at` a
+    // caller may have sent — is the one `apply` can trust; see PATCH_ENTRY_KEYS
+    // and pickKnownFields.
+    const stored = { ...pickKnownFields(entry), at: new Date().toISOString() };
+    // What is stored is what `apply` reads, so that is what must keep the
+    // contract: `apply` refuses a line that does not.
+    const problem = await schemaProblem(stored);
+    if (problem !== undefined) {
+      sendJson(res, 400, { error: problem });
+      return;
+    }
+    // `appendFile` creates the file on first pick, and O_APPEND keeps
+    // concurrent tabs from interleaving half lines.
+    await appendFile(patchPath, `${JSON.stringify(stored)}\n`, 'utf8');
+    sendJson(res, 200, { ok: true, entry: stored });
+  };
 }
 
 /**
@@ -375,26 +271,21 @@ function failRequest(res: ServerResponse, err: unknown): void {
  * drive it directly with fake req/res objects instead of a real Vite dev
  * server. `curate()`'s `configureServer` is the only real caller.
  */
-export function createCurateMiddleware(paths: CuratePaths): Connect.NextHandleFunction {
-  return (req, res, next) => {
-    const url = req.url ?? '';
-    if (!url.startsWith(BASE)) {
-      next();
-      return;
-    }
-    if (isForbidden(req, paths.https ?? false)) {
-      sendJson(res, 403, { error: 'forbidden' });
-      return;
-    }
-    // Strip a query string / hash; these endpoints take none.
-    const route = url.slice(BASE.length).split(/[?#]/)[0];
-    const handle = ROUTES.get(`${req.method} ${route}`);
-    if (!handle) {
-      sendJson(res, 404, { error: `unknown endpoint ${BASE}${route}` });
-      return;
-    }
-    handle(req, res, paths).catch((err: unknown) => failRequest(res, err));
-  };
+export function createCurateMiddleware({
+  worklistPath,
+  patchPath,
+  https,
+}: CuratePaths): Connect.NextHandleFunction {
+  return devEndpoints(
+    CURATE_BASE,
+    {
+      // Passed through verbatim: the exporter owns the schema.
+      'GET worklist': serveFile(worklistPath, 'application/json', 'run frasch curate export'),
+      'GET patch': getPatch(patchPath),
+      'POST patch': appendPatch(patchPath),
+    },
+    { https },
+  );
 }
 
 export default function curate(): Plugin {
