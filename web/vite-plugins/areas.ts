@@ -9,33 +9,33 @@
  * file quotes the research notes (`low: … best-guess Bökingharde`) about
  * assignments the owner has not confirmed yet. The file and the notes are no
  * secret — they are in the repository — but the map should not present them
- * as fact. `npm run build` fails when either reaches dist/ (check-build.mjs).
+ * as fact, so only the local machine's own pages get them (devEndpoints).
+ * `npm run build` fails when either reaches dist/ (check-build.mjs).
  *
  * Read-only, unlike vite-plugins/curate.ts: the review writes nothing back,
  * `names/dialect_areas.csv` is edited by hand.
  */
-import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import type { ServerResponse } from 'node:http';
-import type { Plugin } from 'vite';
+import type { Connect, Plugin } from 'vite';
 
-/** Everything this plugin answers lives under here; anything else falls through. */
-const BASE = '/__areas/';
+import { devEndpoints, serveFile, type DevEndpointOptions } from './devEndpoints.ts';
+import { AREAS_BASE, AREA_PARTS_FILE } from './devToolNames.ts';
 
-/** Told to the user when the file is not there yet; the only way to make one. */
-const BUILD_HINT = 'run `just rebuild areas`';
-
-function sendJson(res: ServerResponse, status: number, body: unknown): void {
-  res.statusCode = status;
-  res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  // The reviewer re-runs the build and hits Reload; a cached copy would show
-  // them the assignments they just changed.
-  res.setHeader('Cache-Control', 'no-store');
-  res.end(JSON.stringify(body));
+/** Where the plugin instance reads; see `areas()`'s `configResolved`. */
+export interface AreasPaths extends DevEndpointOptions {
+  partsPath: string;
 }
 
-function isMissing(err: unknown): boolean {
-  return (err as NodeJS.ErrnoException | null)?.code === 'ENOENT';
+/** `GET /__areas/parts`: the file `frasch build areas` wrote. */
+export function createAreasMiddleware({
+  partsPath,
+  https,
+}: AreasPaths): Connect.NextHandleFunction {
+  return devEndpoints(
+    AREAS_BASE,
+    { 'GET parts': serveFile(partsPath, 'application/geo+json', 'run `just rebuild areas`') },
+    { https },
+  );
 }
 
 export default function areas(): Plugin {
@@ -47,44 +47,11 @@ export default function areas(): Plugin {
     name: 'frasch-areas',
     apply: 'serve',
     configResolved(config) {
-      partsPath = resolve(config.root, '../names/dialect_areas_parts.geojson');
+      partsPath = resolve(config.root, '../names', AREA_PARTS_FILE);
     },
     configureServer(server) {
-      server.middlewares.use((req, res, next) => {
-        const url = req.url ?? '';
-        if (!url.startsWith(BASE)) {
-          next();
-          return;
-        }
-        // Strip a query string / hash; this endpoint takes none.
-        const route = url.slice(BASE.length).split(/[?#]/)[0];
-
-        void (async () => {
-          try {
-            if (route === 'parts' && req.method === 'GET') {
-              let text: string;
-              try {
-                text = await readFile(partsPath, 'utf8');
-              } catch (err) {
-                if (!isMissing(err)) throw err;
-                sendJson(res, 404, { error: BUILD_HINT });
-                return;
-              }
-              // Passed through verbatim: the build script owns the schema.
-              res.statusCode = 200;
-              res.setHeader('Content-Type', 'application/geo+json; charset=utf-8');
-              res.setHeader('Cache-Control', 'no-store');
-              res.end(text);
-              return;
-            }
-
-            sendJson(res, 404, { error: `unknown endpoint ${BASE}${route}` });
-          } catch (err) {
-            console.error('[areas] request failed', err);
-            sendJson(res, 500, { error: String(err) });
-          }
-        })();
-      });
+      const https = Boolean(server.config.server.https);
+      server.middlewares.use(createAreasMiddleware({ partsPath, https }));
     },
   };
 }
