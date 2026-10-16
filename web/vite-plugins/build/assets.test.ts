@@ -203,12 +203,12 @@ describe('buildProblems', () => {
 });
 
 describe('a vite build with the plugin', () => {
-  it('ships the pinned archive and the listed glyphs', async () => {
+  it('ships the pinned archive, under the name it is pinned by, and the listed glyphs', async () => {
     const sha256 = pinArchive({ 'frasch:local': 'Hoorne' });
 
     await viteBuild();
 
-    expect(readFileSync(join(outDir, 'tiles/schleswig-holstein.pmtiles'))).toEqual(
+    expect(readFileSync(join(outDir, 'tiles/sh.pmtiles'))).toEqual(
       readFileSync(join(root, `.cache/tiles/${sha256}.pmtiles`)),
     );
     expect(readdirSync(join(outDir, 'fonts/Noto Sans Bold')).sort()).toEqual([
@@ -224,10 +224,7 @@ describe('a vite build with the plugin', () => {
 
     await viteBuild();
 
-    expect(readdirSync(join(outDir, 'tiles')).sort()).toEqual([
-      '.gitkeep',
-      'schleswig-holstein.pmtiles',
-    ]);
+    expect(readdirSync(join(outDir, 'tiles')).sort()).toEqual(['.gitkeep', 'sh.pmtiles']);
   });
 
   it('ships no archive with VITE_TILES_URL', async () => {

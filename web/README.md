@@ -155,13 +155,15 @@ derived from the selection and the view.
 The **only** place this frontend depends on how/where tiles are hosted is
 `VITE_TILES_URL`, read in `src/site.ts`. Copy `.env.example` to `.env` to
 override it (e.g. to point at a CDN-hosted PMTiles archive). Unset, it
-defaults to a PMTiles file served by this site itself:
+defaults to the PMTiles archive `tiles.lock` pins, served by this site itself
+under the name it was published by (the last part of its `ARCHIVE_URL`,
+handed to `src/site.ts` by `vite-plugins/tilesArchive.ts`):
 
 ```
-pmtiles://<site>/tiles/schleswig-holstein.pmtiles
+pmtiles://<site>/tiles/<name>
 ```
 
-i.e. `web/public/tiles/schleswig-holstein.pmtiles`, resolved against the page
+i.e. `web/public/tiles/<name>`, currently `schleswig-holstein.pmtiles`, resolved against the page
 and the site's base path (`siteUrl()` in `src/site.ts`). That path is gitignored (`public/tiles/*.pmtiles`) — only
 `public/tiles/.gitkeep` is tracked.
 
@@ -170,13 +172,16 @@ assets of this repository (`tiles-<yyyymmdd>-<sha8>`), and `tiles.lock` pins
 the one the site uses: its URL and sha256. `npm run fetch-assets`
 downloads it into `.cache/tiles/<sha256>.pmtiles`
 (gitignored), verifies it and links
-`public/tiles/schleswig-holstein.pmtiles` to it. It skips an archive that is
-already there, and drops those of earlier pins. A new archive is published
+`public/tiles/<its name>` to it. It skips an archive that is
+already there, and drops those of earlier pins, and its own links of them
+under another name. A new archive is published
 from `tiles/` with `uv run just publish-tiles`, which rewrites `tiles.lock`
 (see `tiles/README.md`).
 
 **Your own tiles.** If you build tiles yourself (`tiles/README.md`), link the
-build there instead, for the dev server:
+build there instead, for the dev server. The dev server serves only the
+archive of the pinned name, so the link has to carry it (currently
+`schleswig-holstein.pmtiles`):
 
 ```sh
 ln -sfn ../../../tiles/data/schleswig-holstein.pmtiles \

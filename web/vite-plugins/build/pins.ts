@@ -7,16 +7,22 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-/** The archive's name, under public/tiles/ for the dev server and dist/tiles/ for a build. */
-export const ARCHIVE_NAME = 'schleswig-holstein.pmtiles';
-
 /** Where the fetched archives are kept, under the web/ root, one file per sha256. */
 export const TILE_CACHE_DIR = '.cache/tiles';
+
+/** Where the dev server's archives are linked, under the web/ root. */
+export const PUBLIC_TILES = 'public/tiles';
 
 /** The tile archive tiles.lock pins. */
 export interface TilesPin {
   url: string;
   sha256: string;
+  /**
+   * Its file name, the last part of `url`: the site serves it as
+   * tiles/<name>, from public/tiles/ in the dev server and dist/tiles/ in a
+   * build (see src/site.ts).
+   */
+  name: string;
   /** Where `npm run fetch-assets` keeps it, relative to the web/ root. */
   cachePath: string;
 }
@@ -46,9 +52,18 @@ export async function readTilesPin(root: string): Promise<TilesPin> {
   if (!/^[0-9a-f]{64}$/.test(sha256)) {
     throw new Error(`tiles.lock pins no sha256 (ARCHIVE_SHA256=${sha256})`);
   }
+  const url = lock.get('ARCHIVE_URL') ?? '';
+  // It names a file the site serves, so it has to be a plain file name.
+  const name = /\/([\w.-]+\.pmtiles)$/.exec(url)?.[1];
+  if (name === undefined) {
+    throw new Error(
+      `tiles.lock pins no tile archive (ARCHIVE_URL=${url}): it has to end in <name>.pmtiles`,
+    );
+  }
   return {
-    url: lock.get('ARCHIVE_URL') ?? '',
+    url,
     sha256,
+    name,
     cachePath: `${TILE_CACHE_DIR}/${sha256}.pmtiles`,
   };
 }

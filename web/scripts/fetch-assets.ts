@@ -3,7 +3,8 @@
  * the build look for it. Neither is in git.
  *
  *  - The tile archive web/tiles.lock pins (~125 MB) goes into
- *    .cache/tiles/<sha256>.pmtiles, and public/tiles/schleswig-holstein.pmtiles
+ *    .cache/tiles/<sha256>.pmtiles, and public/tiles/<its name> (the last
+ *    part of its URL)
  *    is linked to it for the dev server. The build takes it from the cache
  *    (vite-plugins/build/tiles.ts).
  *  - The glyph ranges web/fonts.lock lists (~2.6 MB), and nothing else, go
@@ -36,11 +37,12 @@ import { pipeline } from 'node:stream/promises';
 import { unzipSync } from 'fflate';
 
 import {
-  ARCHIVE_NAME,
   type FontsPin,
+  PUBLIC_TILES,
   readFontsPin,
   readTilesPin,
   TILE_CACHE_DIR,
+  type TilesPin,
 } from '../vite-plugins/build/pins.ts';
 import { exists, sha256Of } from '../vite-plugins/build/files.ts';
 import { FONTS_DIR, glyphInstall } from '../vite-plugins/build/glyphInstall.ts';
@@ -51,9 +53,6 @@ export interface Report {
   info(line: string): void;
   warn(line: string): void;
 }
-
-/** The dev server's archive, under the web/ root. */
-const LINK = `public/tiles/${ARCHIVE_NAME}`;
 
 /** Where the glyphs are put together before they replace public/fonts/, under the web/ root. */
 const FONTS_PART = '.cache/fonts.part';
@@ -100,6 +99,11 @@ async function fetchPinned(url: string, dest: string, sha256: string): Promise<v
   await fetchVerified(url, dest, sha256);
 }
 
+/** Whether a link in public/tiles/ leads into the fetch cache: one a fetch made. */
+function isFetchedArchive(target: string): boolean {
+  return target.startsWith(`../../${TILE_CACHE_DIR}/`);
+}
+
 /**
  * Where the dev server's archive link leads: undefined when there is none,
  * `a file` when it is a file of its own.
@@ -121,16 +125,32 @@ async function linkTarget(path: string): Promise<string | undefined> {
  * else is someone's own archive, e.g. a link to tiles/data/, and is kept;
  * one that leads nowhere is danglingLinkProblems' to warn about.
  */
-async function linkForDevServer(root: string, cachePath: string, report: Report): Promise<void> {
-  const link = join(root, LINK);
+async function linkForDevServer(root: string, pin: TilesPin, report: Report): Promise<void> {
+  const linkPath = `${PUBLIC_TILES}/${pin.name}`;
+  const link = join(root, linkPath);
   const target = await linkTarget(link);
-  if (target === undefined || target.startsWith(`../../${TILE_CACHE_DIR}/`)) {
+  if (target === undefined || isFetchedArchive(target)) {
     await rm(link, { force: true });
-    await symlink(`../../${cachePath}`, link);
+    await symlink(`../../${pin.cachePath}`, link);
   } else if (await exists(link)) {
     report.info(
-      `kept ${LINK} (-> ${target}): the dev server serves that, a build the fetched archive`,
+      `kept ${linkPath} (-> ${target}): the dev server serves that, a build the fetched archive`,
     );
+  }
+}
+
+/**
+ * Drops the links an earlier fetch made under another name than the pinned
+ * archive's: it was published by another one, and the link would soon lead
+ * nowhere.
+ */
+async function dropLinksOfOtherNames(root: string, pin: TilesPin): Promise<void> {
+  const dir = join(root, PUBLIC_TILES);
+  for (const file of await readdir(dir).catch(() => [] as string[])) {
+    const target = await linkTarget(join(dir, file));
+    if (file !== pin.name && target !== undefined && isFetchedArchive(target)) {
+      await rm(join(dir, file));
+    }
   }
 }
 
@@ -146,7 +166,8 @@ async function pruneEarlierArchives(root: string, cachePath: string): Promise<vo
 export async function fetchTiles(root: string, report: Report): Promise<void> {
   const pin = await readTilesPin(root);
   await fetchPinned(pin.url, join(root, pin.cachePath), pin.sha256);
-  await linkForDevServer(root, pin.cachePath, report);
+  await dropLinksOfOtherNames(root, pin);
+  await linkForDevServer(root, pin, report);
   // Someone's own link to an archive that is not built yet: theirs to keep.
   for (const problem of await danglingLinkProblems(root)) report.warn(problem);
   await pruneEarlierArchives(root, pin.cachePath);

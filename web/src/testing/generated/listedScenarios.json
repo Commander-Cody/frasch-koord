@@ -1,0 +1,141 @@
+{
+  "a listed Danish place whose German name only the list has": {
+    "entry": {
+      "id": "tingle",
+      "names": {
+        "frr-x-wieding": "Tingle"
+      },
+      "name_de": "Tingleff",
+      "lon": 9.3,
+      "lat": 55.0,
+      "kind": "settlement",
+      "name_osm": "Tinglev",
+      "name_da": "Tinglev",
+      "osm": "node/7"
+    },
+    "props": {
+      "name": "Tinglev",
+      "name:da": "Tinglev",
+      "name:frr-x-wieding": "Tingle",
+      "frasch:ref": "tingle",
+      "frasch:kind": "settlement",
+      "name:de": "Tingleff"
+    }
+  },
+  "a listed place whose object has no generic OSM name": {
+    "entry": {
+      "id": "listlai",
+      "names": {
+        "frr-x-solring": "Listlai"
+      },
+      "name_de": "Lister Ley",
+      "lon": 8.5,
+      "lat": 55.2,
+      "kind": "settlement",
+      "osm": "node/8"
+    },
+    "props": {
+      "name:frr-x-solring": "Listlai",
+      "frasch:ref": "listlai",
+      "frasch:kind": "settlement",
+      "name:de": "Lister Ley"
+    }
+  },
+  "a listed place with only OSM’s German name and no generic OSM name": {
+    "entry": {
+      "id": "satj",
+      "names": {
+        "frr-x-mooring": "Sätj",
+        "frr-x-wieding": "Säit"
+      },
+      "name_de": "",
+      "lon": 9.0,
+      "lat": 55.3,
+      "kind": "settlement",
+      "osm": "node/9"
+    },
+    "props": {
+      "name:de": "Seth",
+      "name:frr-x-mooring": "Sätj",
+      "name:frr-x-wieding": "Säit",
+      "frasch:ref": "satj",
+      "frasch:kind": "settlement"
+    }
+  },
+  "a listed place whose local name is OSM’s Frisian one": {
+    "entry": {
+      "id": "hamborjer-hali",
+      "names": {
+        "frr-x-mooring": "Hamborjer Håli"
+      },
+      "name_de": "Hamburger Hallig",
+      "lon": 9.15,
+      "lat": 54.42,
+      "kind": "hallig",
+      "local": "Hamborjer Hali",
+      "dialect": "frr-x-nordgoes",
+      "name_osm": "Hamburger Hallig",
+      "osm": "node/13"
+    },
+    "props": {
+      "name": "Hamburger Hallig",
+      "name:frr": "Hamborjer Hali",
+      "name:frr-x-mooring": "Hamborjer Håli",
+      "frasch:ref": "hamborjer-hali",
+      "frasch:kind": "hallig",
+      "name:de": "Hamburger Hallig",
+      "frasch:dialect": "frr-x-nordgoes",
+      "frasch:local": "Hamborjer Hali"
+    }
+  },
+  "the second object of a listed row, in another dialect area": {
+    "entry": {
+      "id": "noordweerw",
+      "names": {
+        "frr-x-mooring": "Nordwärw",
+        "frr-x-nordgoes": "Noordweerw"
+      },
+      "name_de": "Nordwarft",
+      "lon": 9.4,
+      "lat": 54.42,
+      "kind": "warft",
+      "local": "Nöördweerew",
+      "dialect": "frr-x-hallig",
+      "name_osm": "Nordwarft",
+      "osm": "node/16; node/17"
+    },
+    "props": {
+      "name": "Nordwarft",
+      "name:frr-x-mooring": "Nordwärw",
+      "name:frr-x-nordgoes": "Noordweerw",
+      "frasch:ref": "noordweerw",
+      "frasch:kind": "warft",
+      "name:de": "Nordwarft",
+      "frasch:dialect": "frr-x-nordgoes",
+      "frasch:local": "Noordweerw"
+    }
+  },
+  "the second object of a listed row, outside every dialect area": {
+    "entry": {
+      "id": "e-wask",
+      "names": {
+        "frr-x-wieding": "e Wäsk"
+      },
+      "name_de": "Wisch",
+      "lon": 9.7,
+      "lat": 54.85,
+      "kind": "settlement",
+      "local": "e Wäsk",
+      "dialect": "frr-x-wieding",
+      "name_osm": "Wisch",
+      "osm": "node/14; node/15"
+    },
+    "props": {
+      "name": "Wisch",
+      "name:frr-x-wieding": "e Wäsk",
+      "frasch:ref": "e-wask",
+      "frasch:kind": "settlement",
+      "name:de": "Wisch"
+    }
+  }
+}

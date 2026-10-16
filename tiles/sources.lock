@@ -1,0 +1,19 @@
+# What tiles/build.sh builds the tiles with besides the OSM extract, each
+# pinned by its sha256 (lock.sh reads this file): a missing file, or one that
+# does not match, is downloaded again and checked (fetch_pinned, fetch.sh).
+#
+# Planetiler, the version the current tiles were built with.
+PLANETILER_URL=https://github.com/onthegomap/planetiler/releases/download/v0.10.2/planetiler.jar
+PLANETILER_SHA256=f310bd0413e2e4512b27f4046d418664e8e1d3bf31603c2a70e23de06c167e4d
+# Planetiler's global inputs, pinned instead of its unpinned `--download`.
+# Natural Earth (5.1.2, public domain) and the water polygons
+# (osmdata.openstreetmap.de of 2026-09-14, ODbL, (c) OpenStreetMap
+# contributors) have no versioned upstream URL, so they are mirrored as assets
+# of a release of this repo; the lake centerlines are the release Planetiler
+# 0.10.2 pins.
+NATURAL_EARTH_URL=https://github.com/Commander-Cody/frasch-koord/releases/download/tile-sources-2026-09-30/natural_earth_vector.sqlite.zip
+NATURAL_EARTH_SHA256=375da61836d4779dffa8b87887bc4faa94dac77745ba0ee3914bd7cbedf40a02
+WATER_POLYGONS_URL=https://github.com/Commander-Cody/frasch-koord/releases/download/tile-sources-2026-09-30/water-polygons-split-3857.zip
+WATER_POLYGONS_SHA256=e10d8462782b41bbc280bef91a979786b77ff85ccdb2107dac6570972735f8c6
+LAKE_CENTERLINES_URL=https://github.com/acalcutt/osm-lakelines/releases/download/v12/lake_centerline.shp.zip
+LAKE_CENTERLINES_SHA256=6c900507c88fc9f5b5a386f90fd0a42d0495e8755a03d075538fb9a6801a3192

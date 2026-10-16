@@ -87,6 +87,38 @@ describe('fetchTiles', () => {
     expect(readlinkSync(join(root, LINK))).toBe(`../../.cache/tiles/${PUBLISHED_SHA256}.pmtiles`);
   });
 
+  it('links the archive under the name it is published by', async () => {
+    published.set('denmark.pmtiles', PUBLISHED);
+    pinTiles(`${serverUrl}/denmark.pmtiles`, PUBLISHED_SHA256);
+
+    await fetchTiles(root, report);
+
+    expect(readlinkSync(join(root, 'public/tiles/denmark.pmtiles'))).toBe(
+      `../../.cache/tiles/${PUBLISHED_SHA256}.pmtiles`,
+    );
+  });
+
+  it('drops its own link of an archive published by another name', async () => {
+    link(LINK, `../../.cache/tiles/${'0'.repeat(64)}.pmtiles`);
+    published.set('denmark.pmtiles', PUBLISHED);
+    pinTiles(`${serverUrl}/denmark.pmtiles`, PUBLISHED_SHA256);
+
+    await fetchTiles(root, report);
+
+    expect(readdirSync(join(root, 'public/tiles')).sort()).toEqual(['.gitkeep', 'denmark.pmtiles']);
+  });
+
+  it("keeps a tile builder's own link of another name than the pinned archive's", async () => {
+    put('own-tiles/schleswig-holstein.pmtiles', 'a local build');
+    link(LINK, '../../own-tiles/schleswig-holstein.pmtiles');
+    published.set('denmark.pmtiles', PUBLISHED);
+    pinTiles(`${serverUrl}/denmark.pmtiles`, PUBLISHED_SHA256);
+
+    await fetchTiles(root, report);
+
+    expect(readlinkSync(join(root, LINK))).toBe('../../own-tiles/schleswig-holstein.pmtiles');
+  });
+
   it('fetches nothing when the pinned archive is already there', async () => {
     await fetchTiles(root, report);
     published.clear();

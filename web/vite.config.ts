@@ -5,6 +5,7 @@ import { defineConfig } from 'vite';
 import areas from './vite-plugins/areas.ts';
 import assets from './vite-plugins/build/assets.ts';
 import curate from './vite-plugins/curate.ts';
+import tilesArchive from './vite-plugins/tilesArchive.ts';
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -14,7 +15,8 @@ export default defineConfig({
   // (read-only). `vite preview` loads them too, since Vite resolves it as
   // 'serve' as well, but they only add dev-server endpoints, so there they do
   // nothing. `assets` only runs on a build: it checks what the build ships.
-  plugins: [react(), curate(), areas(), assets()],
+  // `tilesArchive` names the archive tiles.lock pins to the site.
+  plugins: [react(), tilesArchive(), curate(), areas(), assets()],
   // MapLibre's worker is bundled on its own (see src/map/createMap.ts) and
   // started as a module worker, so it is built as an ES module too.
   worker: { format: 'es' },

@@ -32,6 +32,10 @@ set -euo pipefail
 cd "$(dirname "$0")"
 # shellcheck source=tiles/fetch.sh
 source ./fetch.sh
+# shellcheck source=tiles/geofabrik.sh
+source ./geofabrik.sh
+# shellcheck source=tiles/lock.sh
+source ./lock.sh
 # shellcheck source=tiles/java.sh
 source ./java.sh
 # shellcheck source=tiles/workspace.sh
@@ -39,27 +43,21 @@ source ./workspace.sh
 # shellcheck source=tiles/nametags.sh
 source ./nametags.sh
 
-# Planetiler pinned to the version the current tiles were built with, and
-# verified by sha256 -- see fetch.sh for why a plain download is not enough.
-PLANETILER_VERSION="0.10.2"
-PLANETILER_URL="https://github.com/onthegomap/planetiler/releases/download/v${PLANETILER_VERSION}/planetiler.jar"
-PLANETILER_SHA256="f310bd0413e2e4512b27f4046d418664e8e1d3bf31603c2a70e23de06c167e4d"
-
-# Planetiler's global inputs, pinned the same way instead of its unpinned
-# `--download`. Natural Earth (5.1.2, public domain) and the water polygons
-# (osmdata.openstreetmap.de of 2026-09-14, ODbL, (c) OpenStreetMap contributors)
-# have no versioned upstream URL, so they are mirrored as assets of a release
-# of this repo; the lake centerlines are the release Planetiler 0.10.2 pins.
+# Planetiler and its global inputs, each pinned in sources.lock; see fetch.sh
+# for why a plain download is not enough.
 SOURCES_DIR="data/sources"
 NATURAL_EARTH="$SOURCES_DIR/natural_earth_vector.sqlite.zip"
-NATURAL_EARTH_URL="https://github.com/Commander-Cody/frasch-koord/releases/download/tile-sources-2026-09-30/natural_earth_vector.sqlite.zip"
-NATURAL_EARTH_SHA256="375da61836d4779dffa8b87887bc4faa94dac77745ba0ee3914bd7cbedf40a02"
 WATER_POLYGONS="$SOURCES_DIR/water-polygons-split-3857.zip"
-WATER_POLYGONS_URL="https://github.com/Commander-Cody/frasch-koord/releases/download/tile-sources-2026-09-30/water-polygons-split-3857.zip"
-WATER_POLYGONS_SHA256="e10d8462782b41bbc280bef91a979786b77ff85ccdb2107dac6570972735f8c6"
 LAKE_CENTERLINES="$SOURCES_DIR/lake_centerline.shp.zip"
-LAKE_CENTERLINES_URL="https://github.com/acalcutt/osm-lakelines/releases/download/v12/lake_centerline.shp.zip"
-LAKE_CENTERLINES_SHA256="6c900507c88fc9f5b5a386f90fd0a42d0495e8755a03d075538fb9a6801a3192"
+
+# fetch_source <NAME> <dest>: the file sources.lock pins as <NAME>_URL and
+# <NAME>_SHA256, at <dest> -- kept when it is there and matches
+fetch_source() {
+  local url sha256
+  url=$(lock_get sources.lock "${1}_URL")
+  sha256=$(lock_get sources.lock "${1}_SHA256")
+  fetch_pinned "$url" "$2" "$sha256"
+}
 
 REGION_ARG="${1:?region name, e.g. schleswig-holstein or europe/denmark}"; shift || true
 XMX="${XMX:-3g}"
@@ -78,7 +76,6 @@ fi
 [ -x "$FRASCH" ] || { echo "build.sh: $FRASCH not found or not executable -- run 'uv sync' first" >&2; exit 1; }
 
 STEM=$(region_stem "$REGION_ARG")
-SRC_URL=$(geofabrik_extract_url "$REGION_ARG" "${SNAPSHOT:-}")
 SRC="data/$(geofabrik_extract_name "$REGION_ARG" "${SNAPSHOT:-}")"
 INJECTED_TMP="data/${STEM}-frasch.tmp.osm.pbf"
 INJECTED="data/${STEM}-frasch.osm.pbf"
@@ -101,14 +98,12 @@ trap cleanup EXIT
 name_tag_options "$FRASCH"
 
 # a missing jar or source, or one that fails its pin, is downloaded again
-fetch_pinned "$PLANETILER_URL" planetiler.jar "$PLANETILER_SHA256"
-fetch_pinned "$NATURAL_EARTH_URL" "$NATURAL_EARTH" "$NATURAL_EARTH_SHA256"
-fetch_pinned "$WATER_POLYGONS_URL" "$WATER_POLYGONS" "$WATER_POLYGONS_SHA256"
-fetch_pinned "$LAKE_CENTERLINES_URL" "$LAKE_CENTERLINES" "$LAKE_CENTERLINES_SHA256"
+fetch_source PLANETILER planetiler.jar
+fetch_source NATURAL_EARTH "$NATURAL_EARTH"
+fetch_source WATER_POLYGONS "$WATER_POLYGONS"
+fetch_source LAKE_CENTERLINES "$LAKE_CENTERLINES"
 
-if [ "${REFRESH:-}" = "1" ] || [ ! -f "$SRC" ]; then
-  fetch_geofabrik_verified "$SRC_URL" "$SRC"
-fi
+fetch_geofabrik_extract "$REGION_ARG" data "${SNAPSHOT:-}"
 
 workspace_options names dialects areas objects curation
 # the stamp first: it stops on a name file that is not there, before the

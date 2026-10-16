@@ -7,6 +7,7 @@ import { cardModel } from './names/card';
 import type { NameEntry } from './names/entry';
 import type { TileProps } from './names/tile';
 import { nameExpression } from './map/style/labels';
+import listedScenarios from './testing/generated/listedScenarios.json';
 
 // Issue #16: the place card once showed German while the map label showed
 // Low Saxon for the same place, because the card's label chain and the map's
@@ -91,117 +92,13 @@ const SCENARIOS: Record<string, TileProps> = {
   },
 };
 
-/** A names.json entry with the fields no scenario here is about filled in. */
-function listed(
-  entry: Pick<NameEntry, 'id' | 'names' | 'name_de'> & Partial<NameEntry>,
-): NameEntry {
-  return { lon: 0, lat: 0, kind: 'settlement', ...entry };
-}
-
 // A clicked label of a place in the name list: its names.json entry together
-// with the tile properties of its object, as `frasch inject` writes
-// them. The card then reads the entry first, so these exercise the card's
-// merge of the two as well. Since issue #61 the injector writes the list's `de` as
-// `name:de`, the step where the card's German name comes from the list.
-const LISTED_SCENARIOS: Record<string, ClickedLabel & { entry: NameEntry }> = {
-  'a listed Danish place whose German name only the list has': {
-    entry: listed({
-      id: 'tingle',
-      names: { 'frr-x-wieding': 'Tingle' },
-      name_de: 'Tingleff',
-      name_osm: 'Tinglev',
-      name_da: 'Tinglev',
-    }),
-    props: {
-      'frasch:ref': 'tingle',
-      'name:frr-x-wieding': 'Tingle',
-      'name:de': 'Tingleff',
-      'name:da': 'Tinglev',
-      name: 'Tinglev',
-    },
-  },
-  // the local view falls through to `name:de`, its last step
-  'a listed place whose object has no generic OSM name': {
-    entry: listed({ id: 'listlai', names: { 'frr-x-solring': 'Listlai' }, name_de: 'Lister Ley' }),
-    props: { 'frasch:ref': 'listlai', 'name:frr-x-solring': 'Listlai', 'name:de': 'Lister Ley' },
-  },
-  // the list has no German name, so the tile keeps OSM's
-  'a listed place with only OSM’s German name and no generic OSM name': {
-    entry: listed({
-      id: 'satj',
-      names: { 'frr-x-mooring': 'Sätj', 'frr-x-wieding': 'Säit' },
-      name_de: '',
-    }),
-    props: {
-      'frasch:ref': 'satj',
-      'name:frr-x-mooring': 'Sätj',
-      'name:frr-x-wieding': 'Säit',
-      'name:de': 'Seth',
-    },
-  },
-  // Issue #81: the row has no name in the dialect of its area, so both sides
-  // take OSM's `name:frr` as the local name, ahead of another dialect's.
-  'a listed place whose local name is OSM’s Frisian one': {
-    entry: listed({
-      id: 'hamborjer-hali',
-      names: { 'frr-x-mooring': 'Hamborjer Håli' },
-      name_de: 'Hamburger Hallig',
-      name_osm: 'Hamburger Hallig',
-      local: 'Hamborjer Hali',
-      dialect: 'frr-x-nordgoes',
-      kind: 'hallig',
-    }),
-    props: {
-      'frasch:ref': 'hamborjer-hali',
-      'frasch:local': 'Hamborjer Hali',
-      'frasch:dialect': 'frr-x-nordgoes',
-      'name:frr-x-mooring': 'Hamborjer Håli',
-      'name:frr': 'Hamborjer Hali',
-      'name:de': 'Hamburger Hallig',
-      name: 'Hamburger Hallig',
-    },
-  },
-  // A row with two objects: the entry stands for the first (the way on the
-  // Hallig, whose local name is OSM's), the clicked one lies in another area.
-  'the second object of a listed row, in another dialect area': {
-    entry: listed({
-      id: 'nordwarw',
-      names: { 'frr-x-mooring': 'Nordwärw', 'frr-x-nordgoes': 'Noordweerw' },
-      name_de: 'Nordwarft',
-      name_osm: 'Nordwarft',
-      local: 'Nöördweerew',
-      dialect: 'frr-x-hallig',
-      kind: 'warft',
-    }),
-    props: {
-      'frasch:ref': 'nordwarw',
-      'frasch:local': 'Noordweerw',
-      'frasch:dialect': 'frr-x-nordgoes',
-      'name:frr-x-mooring': 'Nordwärw',
-      'name:frr-x-nordgoes': 'Noordweerw',
-      'name:de': 'Nordwarft',
-      name: 'Nordwarft',
-    },
-  },
-  // Issue #89: the entry stands for the row's first object, which has a
-  // local name; the clicked one lies outside every dialect area and has none.
-  'the second object of a listed row, outside every dialect area': {
-    entry: listed({
-      id: 'e-wask',
-      names: { 'frr-x-wieding': 'e Wäsk' },
-      name_de: 'Wisch',
-      name_osm: 'Wisch',
-      local: 'e Wäsk',
-      dialect: 'frr-x-wieding',
-    }),
-    props: {
-      'frasch:ref': 'e-wask',
-      'name:frr-x-wieding': 'e Wäsk',
-      'name:de': 'Wisch',
-      name: 'Wisch',
-    },
-  },
-};
+// with the tile properties of its object, as the pipeline writes them --
+// tiles/tests/test_consistency.py builds both from one small extract and
+// commits them here, and fails when they are no longer what the pipeline
+// gives (#109). The card reads the entry first, so these exercise the card's
+// merge of the two as well.
+const LISTED_SCENARIOS = listedScenarios as Record<string, ClickedLabel & { entry: NameEntry }>;
 
 const CASES = [
   ...Object.entries(SCENARIOS).map(([scenario, props]): [string, ClickedLabel] => [
