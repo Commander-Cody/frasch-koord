@@ -57,6 +57,9 @@
   .app {
     --bar-inset: 8px;
     --bar-height: 52px;
+    /* MapLibre's zoom buttons (29 px) and their margin (10 px), the column
+       at the right edge below the bar. */
+    --map-controls-width: 39px;
   }
 
   .side-panel {
