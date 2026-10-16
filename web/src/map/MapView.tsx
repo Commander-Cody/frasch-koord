@@ -90,7 +90,7 @@ export default function MapView({
     <>
       <div ref={containerRef} className="map-container" />
       {failure && (
-        <div className="map-error" role="alert">
+        <div className="map-error panel" role="alert">
           <span>{t('errors.map')}</span>
           <CloseButton label={t('errors.dismiss')} onClick={dismiss} />
         </div>

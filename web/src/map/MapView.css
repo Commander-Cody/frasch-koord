@@ -6,13 +6,17 @@
   z-index: 0;
 }
 
-/* A map that failed to load: a strip at the top centre, above the map but
-   below the side panel, which it must not hide. */
+/* A map that failed to load: a panel in the error colours, a strip at the
+   top centre, above the map but below the side panel, which it must not hide.
+   Centred by its insets, not by `left: 50%`, which would cap its width at
+   half the screen. */
 .map-error {
   position: absolute;
   top: calc(12px + var(--safe-top));
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
+  right: 0;
+  margin: 0 auto;
+  width: fit-content;
   z-index: 1;
   max-width: min(420px, calc(100vw - 24px));
   box-sizing: border-box;
@@ -20,31 +24,19 @@
   align-items: center;
   gap: 8px;
   padding: 6px 6px 6px 12px;
-  border-radius: 8px;
-  background: #fdecea;
-  color: #7a1c14;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-  font:
-    13px system-ui,
-    sans-serif;
-}
-
-.map-error button {
-  flex: none;
-  border: none;
-  background: none;
-  padding: 2px 6px;
-  font: inherit;
-  font-size: 18px;
-  line-height: 1;
-  color: inherit;
-  cursor: pointer;
+  background: var(--error-surface);
+  color: var(--error);
+  font-size: 13px;
 }
 
 /* Phone width (PHONE_MEDIA in layout.ts): below the search bar, whose
-   size App.css sets. */
+   size App.css sets, from its left edge to the zoom buttons. */
 @media (max-width: 600px) {
   .map-error {
-    top: calc(var(--bar-inset) + var(--bar-height) + 8px);
+    top: calc(var(--bar-inset) + var(--bar-height) + var(--safe-top) + 8px);
+    left: calc(var(--bar-inset) + var(--safe-left));
+    right: calc(var(--map-controls-width) + 8px + var(--safe-right));
+    width: auto;
+    max-width: none;
   }
 }

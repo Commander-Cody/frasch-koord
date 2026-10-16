@@ -92,9 +92,9 @@ function App() {
 function PanelError({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
   return (
-    <div className="panel-error" role="alert">
+    <div className="panel-error panel" role="alert">
       <span>{t('errors.panel')}</span>
-      <CloseButton className="place-card-close" label={t('card.close')} onClick={onClose} />
+      <CloseButton inCorner label={t('card.close')} onClick={onClose} />
     </div>
   );
 }

@@ -97,10 +97,10 @@ export default function PlaceCard({
   // The "report a wrong or missing name" link belongs here; it is issue #8.
 
   return (
-    <aside ref={cardRef} className="place-card" aria-label={t('card.title')}>
+    <aside ref={cardRef} className="place-card panel" aria-label={t('card.title')}>
       {/* A click from Enter or Space has no pointer clicks to count. */}
       <CloseButton
-        className="place-card-close"
+        inCorner
         label={t('card.close')}
         onClick={(e) => onClose(e.detail === 0 ? 'keyboard' : 'pointer')}
       />
@@ -109,7 +109,7 @@ export default function PlaceCard({
       </h2>
       <p className="place-card-meta">
         {sourceLabel(card.source, t)}
-        {card.note && <span className="place-card-note">{card.note}</span>}
+        {card.note && <span className="place-card-note parenthetical">{card.note}</span>}
         {kind && <span className="place-card-kind">{kind}</span>}
       </p>
       {card.lines.length > 0 && (
@@ -122,7 +122,7 @@ export default function PlaceCard({
               </dt>
               <dd>
                 {line.name}
-                {line.note && <span className="place-card-note">{line.note}</span>}
+                {line.note && <span className="place-card-note parenthetical">{line.note}</span>}
               </dd>
             </div>
           ))}

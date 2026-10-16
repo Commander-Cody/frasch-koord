@@ -1,0 +1,33 @@
+.close-button {
+  flex: none;
+  border: none;
+  background: none;
+  padding: 4px 8px;
+  font: inherit;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.close-button:hover {
+  color: var(--text);
+}
+
+.close-button.is-in-corner {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+}
+
+/* Phone width (PHONE_MEDIA in layout.ts): a bigger target for a finger. */
+@media (max-width: 600px) {
+  .close-button {
+    padding: 8px 12px;
+    font-size: 24px;
+  }
+
+  .close-button.is-in-corner {
+    top: 6px;
+  }
+}

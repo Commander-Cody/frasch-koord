@@ -21,11 +21,6 @@
   bottom: var(--safe-bottom);
 }
 
-.app .maplibregl-ctrl-bottom-left {
-  left: var(--safe-left);
-  bottom: var(--safe-bottom);
-}
-
 /* The left column of the public view: the control bar and, below it, the
    place card. A column rather than two absolutely positioned panels so the
    card never has to know how tall the control bar is. */
@@ -48,18 +43,11 @@
   pointer-events: auto;
 }
 
-/* What the side panel shows after it crashed (App.tsx), styled like a card. */
+/* What the side panel shows after it crashed (App.tsx), a panel like the card. */
 .panel-error {
   position: relative;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
   padding: 12px 36px 12px 12px;
-  font:
-    14px system-ui,
-    sans-serif;
-  color-scheme: light;
-  color: #222;
+  font-size: 14px;
 }
 
 /* Phone width. The control bar becomes a one-row bar across the top (see
@@ -69,6 +57,9 @@
   .app {
     --bar-inset: 8px;
     --bar-height: 52px;
+    /* MapLibre's zoom buttons (29 px) and their margin (10 px), the column
+       at the right edge below the bar. */
+    --map-controls-width: 39px;
   }
 
   .side-panel {
@@ -87,8 +78,7 @@
   /* The attribution rides on top of the open sheet;
      selection/useSheetHeight.ts keeps --sheet-height at the sheet's height
      while there is one, which covers the bottom's unsafe strip itself. */
-  .app .maplibregl-ctrl-bottom-right,
-  .app .maplibregl-ctrl-bottom-left {
+  .app .maplibregl-ctrl-bottom-right {
     bottom: var(--sheet-height, var(--safe-bottom));
   }
 }

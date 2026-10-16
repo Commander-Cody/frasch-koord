@@ -1670,3 +1670,41 @@ rejects.
   `lonlat`, `tile_features`; the committed scenarios against the fixture;
   `readTilesPin`'s `name`, `fetchTiles`' link. `publish.sh` (it calls `gh`)
   only through shellcheck and `lock_set`.
+
+## Decided 2026-10-16: the public site's colours as tokens, one panel surface, one close button (issue #110)
+
+Every panel spelt out its white, its shadow, its radius, `#222` and
+`color-scheme: light` (against `index.css`'s `light dark`) again; the ×
+was styled from the card's `.place-card-close` and from `.map-error button`;
+the bracketed note was written twice. On a phone the map error strip ignored
+the notch and, placed by `left: 50%`, could only be half the screen wide.
+
+| was | is |
+| --- | --- |
+| colours, shadows and the panel radius in every stylesheet | tokens on `index.css`'s `:root` (`--surface`, `--text`, `--muted`, `--border`, `--divider`, `--hover`, `--link`, `--error`, `--error-surface`, `--shadow`, `--sheet-shadow`, `--radius`); `theme.test.ts` keeps colours out of the other public stylesheets |
+| a white, shadowed, rounded box in five rules | `.panel` (`index.css`): the control bar, the place card, the panel error, the map error strip, the dev panels |
+| `color-scheme: light dark`, overridden by every panel | `color-scheme: light` on `:root` |
+| `font-family` on four panels | `body`'s |
+| `.place-card-close`, `.map-error button` and a phone override | `ui/CloseButton.css`; `CloseButton`'s `inCorner` for the top right corner of a panel, in place of `className` |
+| `.search-result-de` and `.place-card-note` with their own brackets | `.parenthetical` (`index.css`) |
+| `.app .maplibregl-ctrl-bottom-left` | gone: there is no bottom-left control |
+| the phone `.map-error` at `--bar-inset + --bar-height + 8px`, centred by `left: 50%` | `+ var(--safe-top)` (`layout.test.ts`: whatever sits below the phone bar clears the notch); centred by its insets, on a phone from the bar's left edge to the zoom buttons (`--map-controls-width`) |
+| the stylesheet glob in `layout.test.ts` | `src/testing/stylesheets.ts`: the stylesheets without comments, their declarations |
+
+- **Near-duplicate colours are merged** (owner's decision): one `--divider`
+  for every rule line (was `#eee` and `#f0f0f0`), the share icon in `--text`
+  (was `#444`), one `--error` for the search error line and the map error
+  strip (was `#a1260d` and `#7a1c14`).
+- **The dev panels share the surface only** (owner's decision): `.panel`,
+  `--surface` and `--text`; their greys stay in `DevPanel.css`, and
+  `theme.test.ts` leaves `dev/` alone.
+- **The × is muted grey everywhere** (owner's decision), the error strip's
+  too, and the bigger phone size applies to every one of them.
+- **The map error strip's width** was fixed along (owner's decision); on a
+  phone it keeps clear of the zoom buttons, which sit at its height.
+- **Test seams** (owner's decision): the stylesheets read as text, in
+  `layout.test.ts` (the notch) and `theme.test.ts` (no colour literals; a
+  colour name is what jsdom takes for one). The look was checked by
+  screenshots of the build before and after (desktop and phone: bar,
+  results, card, share, map error); the differences are the merged colours,
+  the error strip's × and its width.

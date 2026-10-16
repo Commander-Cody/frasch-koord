@@ -44,6 +44,6 @@ it('keeps the map when the place card crashes', async () => {
 
   render(<App />);
 
-  expect(await screen.findByRole('alert')).toHaveProperty('className', 'panel-error');
+  expect((await screen.findByRole('alert')).classList.contains('panel-error')).toBe(true);
   expect(screen.getByTestId('map')).toBeDefined();
 });

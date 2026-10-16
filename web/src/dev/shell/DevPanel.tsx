@@ -46,7 +46,7 @@ export default function DevPanel({
   );
   const loaded = resource.error === null && resource.data !== null;
   return (
-    <div className={`dev-panel ${className}`} style={WIDTH_STYLE}>
+    <div className={`dev-panel panel ${className}`} style={WIDTH_STYLE}>
       {loaded ? (
         <>
           <header className="dev-panel-header">

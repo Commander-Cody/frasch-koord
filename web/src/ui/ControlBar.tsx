@@ -16,7 +16,7 @@ export type ControlBarProps = SearchBoxProps & ViewSelectProps;
  */
 export default function ControlBar({ view, onViewChange, ...searchBox }: ControlBarProps) {
   return (
-    <div className="control-bar">
+    <div className="control-bar panel">
       <SearchBox view={view} {...searchBox} />
       <ViewSelect view={view} onViewChange={onViewChange} />
       <ShareButton />
