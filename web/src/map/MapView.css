@@ -45,6 +45,6 @@
    size App.css sets. */
 @media (max-width: 600px) {
   .map-error {
-    top: calc(var(--bar-inset) + var(--bar-height) + 8px);
+    top: calc(var(--bar-inset) + var(--bar-height) + var(--safe-top) + 8px);
   }
 }
