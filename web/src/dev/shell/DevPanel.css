@@ -1,6 +1,6 @@
-/* What both dev panels (?curate, ?areas) share. Dev tools: dense, plain,
-   always light — the map behind them is light too. Never ship to the public
-   site: main.tsx only loads them under `vite dev`. */
+/* What both dev panels (?curate, ?areas) share. Dev tools: dense and plain,
+   on the public site's panel surface (index.css), with greys of their own.
+   Never ship to the public site: main.tsx only loads them under `vite dev`. */
 
 /* The colours both panels mark things with; on the root, since the map's
    pins are outside the panel. */
@@ -21,17 +21,11 @@
      derived from too (panelLayout.ts). */
   width: min(var(--dev-panel-width), calc(100vw - 24px));
   overflow-y: auto;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
   padding: 10px;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  font-family: system-ui, sans-serif;
   font-size: 13px;
-  color-scheme: light;
-  color: #222;
 }
 
 /* Every button of a panel, unless a class of its own says otherwise: kept
@@ -42,7 +36,7 @@
   border: 1px solid #bbb;
   border-radius: 4px;
   background: #f7f7f7;
-  color: #222;
+  color: var(--text);
   cursor: pointer;
 }
 
@@ -61,7 +55,7 @@
   gap: 6px;
   position: sticky;
   top: -10px;
-  background: white;
+  background: var(--surface);
   padding-top: 2px;
   padding-bottom: 6px;
   border-bottom: 1px solid #eee;
@@ -93,8 +87,8 @@
   border-radius: 4px;
   width: 100%;
   box-sizing: border-box;
-  background: #fff;
-  color: #222;
+  background: var(--surface);
+  color: var(--text);
 }
 
 .dev-panel-section {

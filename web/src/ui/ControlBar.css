@@ -3,9 +3,6 @@
    refine that look. */
 .control-bar {
   flex: none;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
   padding: 10px;
   /* Flat markup (see ControlBar.tsx), placed by area: selector and share
      button on top, the search field below, the results (when there are
@@ -17,23 +14,18 @@
     'input input';
   row-gap: 8px;
   column-gap: 6px;
-  font-family: system-ui, sans-serif;
-  /* The panel is always white, so pin its widgets to the light palette even
-     when the OS/browser is in dark mode (index.css opts into `light dark`). */
-  color-scheme: light;
-  color: #222;
 }
 
 .view-select,
 .search-input {
   font-size: 14px;
   padding: 6px 8px;
-  border: 1px solid #ccc;
+  border: 1px solid var(--border);
   border-radius: 4px;
   width: 100%;
   box-sizing: border-box;
-  background: #fff;
-  color: #222;
+  background: var(--surface);
+  color: var(--text);
 }
 
 /* Placed by area. */

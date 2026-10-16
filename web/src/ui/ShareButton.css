@@ -6,10 +6,10 @@
 .share-button {
   width: 32px;
   padding: 0;
-  border: 1px solid #ccc;
+  border: 1px solid var(--border);
   border-radius: 4px;
-  background: #fff;
-  color: #444;
+  background: var(--surface);
+  color: var(--text);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -17,7 +17,7 @@
 }
 
 .share-button:hover {
-  background: #f0f0f0;
+  background: var(--hover);
 }
 
 .share-button svg {
@@ -38,8 +38,8 @@
   right: 0;
   white-space: nowrap;
   font-size: 12px;
-  background: #222;
-  color: #fff;
+  background: var(--text);
+  color: var(--surface);
   border-radius: 4px;
   padding: 3px 6px;
   pointer-events: none;

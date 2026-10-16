@@ -156,7 +156,7 @@ export default function SearchBox({ search, status, view, onSelect, ref }: Searc
                 >
                   <span className="search-result-name">{name}</span>
                   {entry.name_de && entry.name_de !== name && (
-                    <span className="search-result-de">{entry.name_de}</span>
+                    <span className="parenthetical">{entry.name_de}</span>
                   )}
                 </button>
               </li>
