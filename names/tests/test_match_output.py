@@ -12,9 +12,17 @@ from pathlib import Path
 
 import pytest
 
-from frasch import match, matchfile, placelist
+from frasch import matchfile, placelist
 from frasch.__main__ import main
-from conftest import REGISTRY, cand, path_options, places_text, workspace, write_candidates
+from conftest import (
+    REGISTRY,
+    cand,
+    path_options,
+    places_text,
+    run_matcher,
+    workspace,
+    write_candidates,
+)
 
 TOFTUM = cand("n", 240044107, 8.83, 54.71, place="village", name="Toftum")
 UPHUSUM = [
@@ -33,12 +41,11 @@ def write_inputs(world: Path) -> None:
 
 
 def match_main(world: Path, dry_run: bool = False) -> None:
-    assert match.run(workspace(world), REGISTRY, offline=True, dry_run=dry_run) == 0
+    assert run_matcher(world, dry_run=dry_run) == 0
 
 
 def run_match(world: Path) -> None:
-    write_inputs(world)
-    match_main(world)
+    assert run_matcher(world, ROWS, [TOFTUM, *UPHUSUM]) == 0
 
 
 def matches(world: Path) -> dict[str, matchfile.Entry]:

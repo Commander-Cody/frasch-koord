@@ -10,13 +10,12 @@ from pathlib import Path
 
 import pytest
 
-from frasch import match
 from frasch import placelist
 from frasch.errors import PipelineError
 from frasch.nameindex import NameIndex
 from frasch.candidates import read_records
 from frasch.provenance import ExtractStamp, Stamp, blob_hash
-from conftest import REGISTRY, cand, places_text, workspace, write_candidates
+from conftest import REGISTRY, cand, places_text, run_matcher, write_candidates
 
 SH: ExtractStamp = {
     "file": "schleswig-holstein-latest.osm.pbf",
@@ -56,11 +55,8 @@ def run_match(world: Path, extracts: list[ExtractStamp], dry_run: bool = False) 
     """The matcher on ROWS against candidates built from `extracts`; the
     extracts of HOYER's are DK's only."""
     recs = [TOFTUM] + ([HOYER] if DK["file"] in {e["file"] for e in extracts} else [])
-    write_candidates(world / "work" / "candidates.jsonl", *recs, extracts=extracts)
-    places = world / "places.csv"
-    if not places.exists():
-        places.write_text(places_text(ROWS), encoding="utf-8")
-    assert match.run(workspace(world), REGISTRY, offline=True, dry_run=dry_run) == 0
+    rows = None if (world / "places.csv").exists() else ROWS
+    assert run_matcher(world, rows, recs, extracts=extracts, dry_run=dry_run) == 0
 
 
 def recorded(world: Path) -> Sequence[ExtractStamp] | None:
@@ -122,7 +118,7 @@ def test_candidates_that_name_no_extracts_stop_the_match(world: Path) -> None:
     # a record where the header belongs: nothing says which extracts it is from
     candidates.write_text(json.dumps(TOFTUM) + "\n", encoding="utf-8")
     with pytest.raises(PipelineError) as stop:
-        match.run(workspace(world), REGISTRY, offline=True)
+        run_matcher(world)
     assert str(stop.value) == (
         f"{candidates} does not say what it was built from -- "
         "build it with `just rebuild candidates`"
@@ -143,4 +139,4 @@ def test_a_match_without_candidates_stops_with_how_to_scan_them(world: Path) -> 
     with pytest.raises(
         PipelineError, match="candidates.jsonl not found -- build it with `just rebuild candidates`"
     ):
-        match.run(workspace(world), REGISTRY, offline=True)
+        run_matcher(world)

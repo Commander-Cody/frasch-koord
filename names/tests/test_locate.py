@@ -15,7 +15,7 @@ from frasch import locate
 from frasch.__main__ import main
 from frasch.objects import read_objects
 from conftest import REGISTRY, REGISTRY_CSV, path_options, places_text, workspace
-from osm_fixture import ring, write_extract
+from osm_fixture import U_SHAPE, ring, write_extract
 from shapely.geometry import Point, Polygon
 
 NAIBEL = 240042766
@@ -47,18 +47,6 @@ def test_a_node_is_where_it_is(run_locate: RunLocate, tmp_path: Path) -> None:
     assert objects["objects"] == {f"node/{NAIBEL}": {"lon": 8.8285, "lat": 54.7868}}
 
 
-# A U-shaped island: the mean of its corners (8.5, 54.5375) lies in the bay
-# between the two arms, outside the island itself.
-U_SHAPE = [
-    (8.0, 54.0),
-    (9.0, 54.0),
-    (9.0, 55.0),
-    (8.8, 55.0),
-    (8.8, 54.2),
-    (8.2, 54.2),
-    (8.2, 55.0),
-    (8.0, 55.0),
-]
 U_WAY = 1000
 
 

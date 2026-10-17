@@ -8,15 +8,15 @@ from pathlib import Path
 
 import pytest
 
-from frasch import match, matchfile, worklist
+from frasch import matchfile, worklist
 from conftest import (
     REGISTRY,
     cand,
     places_text,
     read_schema,
+    run_matcher,
     schema_problems,
     workspace,
-    write_candidates,
 )
 
 
@@ -278,9 +278,7 @@ def test_a_candidate_named_with_a_semicolon_and_a_colon_reaches_the_worklist(wor
     odd = cand("n", 1, 8.54, 54.57, name="Kirchwarft; Hooge: Schörkewärw", place="hamlet")
     plain = cand("n", 2, 8.83, 54.66, name="Kirchwarft", place="hamlet")
     warft = {"id": "schoerkewaerw", "kind": "warft", "mooring": "Schörkewärw", "de": "Kirchwarft"}
-    (world / "places.csv").write_text(places_text([warft]), encoding="utf-8")
-    write_candidates(world / "work" / "candidates.jsonl", odd, plain)
-    match.run(workspace(world), REGISTRY, offline=True)
+    run_matcher(world, [warft], [odd, plain])
     worklist.export(workspace(world), REGISTRY)
     (row,) = json.loads((world / "work" / "curate.json").read_text(encoding="utf-8"))["rows"]
     assert [c["name"] for c in row["candidates"]] == [

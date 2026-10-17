@@ -13,7 +13,6 @@ the Mooring box of AREAS)."""
 from __future__ import annotations
 
 import contextlib
-import csv
 import io
 import json
 import math
@@ -21,13 +20,11 @@ import re
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 
-import osmium
 import pytest
 
 from frasch.errors import PipelineError
 from frasch import inject_names
 from frasch import locate
-from frasch import placelist
 from frasch import refs
 from frasch.__main__ import main
 from frasch.geo import LonLat
@@ -35,8 +32,16 @@ from frasch.inject import claims, synthetic
 from frasch.inject.report import Report
 from frasch.objects import Objects, objects_json
 from frasch.provenance import Stamp
-from conftest import REGISTRY, curation_file, flat_workspace, path_options
-from osm_fixture import Nodes, write_extract as write_osm
+from conftest import REGISTRY, curation_file, flat_workspace, path_options, places_text
+from osm_fixture import (
+    Extra,
+    ExtractObject,
+    Nodes,
+    areas_geojson,
+    box,
+    read_extract,
+    write_extract,
+)
 
 
 # ------------------------------------------------------------- square_around ---
@@ -178,37 +183,22 @@ CURATION = [
 ]
 
 
-def box(west: float, south: float, east: float, north: float) -> list[list[list[float]]]:
-    return [[[west, south], [east, south], [east, north], [west, north], [west, south]]]
-
-
 # Amrum; Ockholm (Nordergoesharde); Reußenköge (Mooring) with the Hamburger
 # Hallig (Halligfriesisch) inside it -- the smaller area must win
-AREAS = {
-    "type": "FeatureCollection",
-    "features": [
-        {
-            "type": "Feature",
-            "properties": {"dialect": tag},
-            "geometry": {"type": "Polygon", "coordinates": box(*bounds)},
-        }
-        for tag, bounds in [
-            ("frr-x-oomrang", (8.30, 54.62, 8.40, 54.70)),
-            ("frr-x-nordgoes", (8.78, 54.64, 8.90, 54.70)),
-            ("frr-x-mooring", (8.80, 54.55, 8.95, 54.63)),
-            ("frr-x-hallig", (8.82, 54.58, 8.86, 54.605)),
-        ]
-    ],
-}
+AREAS = areas_geojson(
+    [
+        ("frr-x-oomrang", box(8.30, 54.62, 8.40, 54.70)),
+        ("frr-x-nordgoes", box(8.78, 54.64, 8.90, 54.70)),
+        ("frr-x-mooring", box(8.80, 54.55, 8.95, 54.63)),
+        ("frr-x-hallig", box(8.82, 54.58, 8.86, 54.605)),
+    ]
+)
 
 
-def write_extract(path: Path) -> None:
-    Node, Way, Relation = (
-        osmium.osm.mutable.Node,
-        osmium.osm.mutable.Way,
-        osmium.osm.mutable.Relation,
-    )
-    nodes = {
+def write_scene(path: Path) -> None:
+    """The extract of the whole run: the villages and Warften of PLACES, the
+    Hamburger Hallig and the objects no row names."""
+    nodes: dict[int, tuple[LonLat, dict[str, str]]] = {
         NORDSTRAND: ((8.865286, 54.487378), {"place": "village", "name": "Nordstrand"}),
         HOLM: ((8.866668, 54.833305), {"place": "village", "name": "Holm", "wikidata": "Q559369"}),
         UNTOUCHED_NODE: ((8.9, 54.6), {"place": "village", "name": "Bredstedt"}),
@@ -219,61 +209,32 @@ def write_extract(path: Path) -> None:
         ),
         PINNEBERG: ((9.80, 53.66), {"place": "town", "name": "Pinneberg", "name:frr": "Pinebärj"}),
     }
-    nodes.update({i: (loc, {}) for i, loc in NORDWARFT_NODES.items()})
-    nodes.update({i: (loc, {}) for i, loc in JENSWARFT_NODES.items()})
-    nodes.update({i: (loc, {}) for i, loc in HALLIG_NODES.items()})
-    w = osmium.SimpleWriter(str(path))
-    try:
-        for nid in sorted(nodes):
-            loc, tags = nodes[nid]
-            w.add_node(Node(id=nid, version=1, visible=True, location=loc, tags=tags))
-        # ways in ascending id order, like any extract
-        ring = list(JENSWARFT_NODES)
-        w.add_way(
-            Way(
-                id=JENSWARFT,
-                version=1,
-                visible=True,
-                nodes=ring + ring[:1],
-                tags={"name": "Jenswarft", "name:frr": "Jenswäärw", "landuse": "residential"},
-            )
-        )
-        ring = list(HALLIG_NODES)
-        w.add_way(
-            Way(
-                id=HALLIG_RING,
-                version=1,
-                visible=True,
-                nodes=ring + ring[:1],
-                tags={"natural": "coastline"},
-            )
-        )
-        w.add_way(
-            Way(
-                id=UNTOUCHED_WAY,
-                version=1,
-                visible=True,
-                nodes=[NORDSTRAND, HOLM],
-                tags={"highway": "track"},
-            )
-        )
-        ring = list(NORDWARFT_NODES)
-        w.add_way(
-            Way(
-                id=NORDWARFT,
-                version=1,
-                visible=True,
-                nodes=ring + ring[:1],
-                tags={"name": "Nordwarft", "name:frr": "Nöördweerew", "landuse": "residential"},
-            )
-        )
-        w.add_relation(
-            Relation(
-                id=KREIS,
-                version=1,
-                visible=True,
-                members=[("w", HALLIG_RING, "outer")],
-                tags={
+    for ring_nodes in (NORDWARFT_NODES, JENSWARFT_NODES, HALLIG_NODES):
+        nodes.update({i: (loc, {}) for i, loc in ring_nodes.items()})
+
+    def closed(ring_nodes: Mapping[int, LonLat]) -> list[int]:
+        return [*ring_nodes, next(iter(ring_nodes))]
+
+    hallig_boundary = [("w", HALLIG_RING, "outer")]
+    write_extract(
+        path,
+        nodes,
+        {
+            JENSWARFT: (
+                closed(JENSWARFT_NODES),
+                {"name": "Jenswarft", "name:frr": "Jenswäärw", "landuse": "residential"},
+            ),
+            HALLIG_RING: (closed(HALLIG_NODES), {"natural": "coastline"}),
+            UNTOUCHED_WAY: ([NORDSTRAND, HOLM], {"highway": "track"}),
+            NORDWARFT: (
+                closed(NORDWARFT_NODES),
+                {"name": "Nordwarft", "name:frr": "Nöördweerew", "landuse": "residential"},
+            ),
+        },
+        {
+            KREIS: (
+                hallig_boundary,
+                {
                     "type": "boundary",
                     "boundary": "administrative",
                     "admin_level": "6",
@@ -281,62 +242,26 @@ def write_extract(path: Path) -> None:
                     "name:de": "Nordfriesland",
                     "name:frr": "Nuurdfresklun",
                 },
-            )
-        )
-        w.add_relation(
-            Relation(
-                id=HAMBURGER_HALLIG,
-                version=1,
-                visible=True,
-                members=[("w", HALLIG_RING, "outer")],
-                tags={
+            ),
+            HAMBURGER_HALLIG: (
+                hallig_boundary,
+                {
                     "type": "boundary",
                     "boundary": "administrative",
                     "admin_level": "10",
                     "name": "Hamburger Hallig",
                     "name:frr": "Hamborjer Hali",
                 },
-            )
-        )
-    finally:
-        w.close()
+            ),
+        },
+    )
 
 
-# a node's (lon, lat), a way's node ids, nothing for a relation
-Extra = LonLat | list[int] | None
-# (type letter, id, tags, extra)
-ExtractObject = tuple[str, int, dict[str, str], Extra]
 # the objects in file order, and by (type letter, id)
 Injected = tuple[list[ExtractObject], dict[tuple[str, int], tuple[dict[str, str], Extra]]]
 
 
-def read_extract(path: Path) -> list[ExtractObject]:
-    """-> [(type letter, id, tags, extra)] in file order; `extra` is a
-    node's (lon, lat) or a way's node ids."""
-    out: list[ExtractObject] = []
-    for o in osmium.FileProcessor(str(path)):
-        t = o.type_str()
-        extra: Extra = (
-            (o.location.lon, o.location.lat)
-            if isinstance(o, osmium.osm.Node)
-            else [n.ref for n in o.nodes]
-            if isinstance(o, osmium.osm.Way)
-            else None
-        )
-        out.append((t, o.id, dict(o.tags), extra))
-    return out
-
-
-def places_csv(rows: Iterable[Mapping[str, str]]) -> str:
-    buf = io.StringIO(newline="")
-    w = csv.DictWriter(buf, fieldnames=placelist.columns(REGISTRY), lineterminator="\n")
-    w.writeheader()
-    for r in rows:
-        w.writerow({k: r.get(k, "") for k in placelist.columns(REGISTRY)})
-    return buf.getvalue()
-
-
-NO_AREAS = {"type": "FeatureCollection", "features": []}
+NO_AREAS = areas_geojson([])
 
 
 def run(d: Path, *, dry_run: bool = False) -> Report:
@@ -399,10 +324,10 @@ def log_lines(report: Report, directory: Path) -> list[str]:
 def injected_run(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, list[str]]:
     """-> (the run's directory, the lines of its log)"""
     d = tmp_path_factory.mktemp("inject")
-    (d / "places.csv").write_text(places_csv(PLACES), encoding="utf-8")
+    (d / "places.csv").write_text(places_text(PLACES), encoding="utf-8")
     curation_file(d, *CURATION)
     (d / "areas.geojson").write_text(json.dumps(AREAS), encoding="utf-8")
-    write_extract(d / "in.osm.pbf")
+    write_scene(d / "in.osm.pbf")
     return d, log_lines(inject(d), d)
 
 
@@ -563,12 +488,12 @@ def test_osms_german_name_stays_where_the_list_has_none(injected: Injected) -> N
 
 
 def test_an_object_nobody_located_stops_the_build(tmp_path: Path) -> None:
-    (tmp_path / "places.csv").write_text(places_csv([PLACES[0]]), encoding="utf-8")
+    (tmp_path / "places.csv").write_text(places_text([PLACES[0]]), encoding="utf-8")
     (tmp_path / "areas.geojson").write_text(json.dumps(AREAS), encoding="utf-8")
     (tmp_path / "osm_objects.json").write_text(
         objects_json(Objects({}, Stamp({}, []))), encoding="utf-8"
     )
-    write_extract(tmp_path / "in.osm.pbf")
+    write_scene(tmp_path / "in.osm.pbf")
     with pytest.raises(PipelineError, match=f"node/{HOLM} is not located yet"):
         inject(tmp_path)
     assert not (tmp_path / "out.osm.pbf").exists()
@@ -756,7 +681,7 @@ REPORT_CURATION = [
 
 
 def write_report_extract(path: Path) -> None:
-    write_osm(
+    write_extract(
         path,
         nodes={
             1: ((8.9, 54.6), {"place": "village", "name": "Holm"}),
@@ -787,10 +712,10 @@ def write_report_inputs(
     located in that extract and in a second one, which holds Bredstedt: the
     row that names it is in the objects file, its object not in the extract
     the run tags."""
-    (d / "places.csv").write_text(places_csv(places), encoding="utf-8")
+    (d / "places.csv").write_text(places_text(places), encoding="utf-8")
     write_report_extract(d / "in.osm.pbf")
     curation_file(d, *curation)
-    elsewhere = write_osm(
+    elsewhere = write_extract(
         d / "elsewhere.osm.pbf", nodes={99: ((8.97, 54.62), {"place": "town", "name": "Bredstedt"})}
     )
     locate_objects(d, elsewhere)
@@ -869,7 +794,7 @@ def test_a_run_prints_nothing(tmp_path: Path, capsys: pytest.CaptureFixture[str]
 
 
 def test_the_command_prints_the_report(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    (tmp_path / "places.csv").write_text(places_csv(REPORT_PLACES[:1]), encoding="utf-8")
+    (tmp_path / "places.csv").write_text(places_text(REPORT_PLACES[:1]), encoding="utf-8")
     write_report_extract(tmp_path / "in.osm.pbf")
     fill_in(tmp_path)
     main(["inject", *extracts(tmp_path), *input_options(tmp_path), "--dry-run"])
@@ -953,7 +878,7 @@ def test_report_when_no_object_lies_in_a_dialect_area(tmp_path: Path) -> None:
 def test_the_member_ways_of_a_matched_waterway_relation_are_found(tmp_path: Path) -> None:
     # the Arlau: the row names the river relation, the labels go on its ways
     nodes: Nodes = {i: ((8.9 + i / 100, 54.6), {}) for i in range(1, 5)}
-    path = write_osm(
+    path = write_extract(
         tmp_path / "river.osm.pbf",
         nodes=nodes,
         ways={
@@ -980,9 +905,9 @@ def test_a_member_way_inherits_the_frisian_name_of_its_waterway_relation(tmp_pat
     # the row has a Mooring name only; the river starts in the Nordergoesharde
     # box of AREAS, so OSM's name:frr of the relation is the local name (#81)
     arlau = dict(id="arlou", kind="water", mooring="Arlou", de="Arlau", osm="relation/20")
-    (tmp_path / "places.csv").write_text(places_csv([arlau]), encoding="utf-8")
+    (tmp_path / "places.csv").write_text(places_text([arlau]), encoding="utf-8")
     (tmp_path / "areas.geojson").write_text(json.dumps(AREAS), encoding="utf-8")
-    write_osm(
+    write_extract(
         tmp_path / "in.osm.pbf",
         nodes={1: ((8.80, 54.66), {}), 2: ((8.82, 54.66), {})},
         ways={10: ([1, 2], {"waterway": "river", "name": "Arlau"})},
@@ -1008,12 +933,12 @@ NORDSIIE = dict(id="nordsiie", kind="water", mooring="Nordsiie", de="Nordsee", w
 
 def carrier_tags_after_run(tmp_path: Path, t: str, tags: dict[str, str]) -> dict[str, str]:
     """The tags an object of type `t` carrying the North Sea's QID comes out with."""
-    (tmp_path / "places.csv").write_text(places_csv([NORDSIIE]), encoding="utf-8")
+    (tmp_path / "places.csv").write_text(places_text([NORDSIIE]), encoding="utf-8")
     tags = tags | {"name": "Carrier", "wikidata": "Q1693"}
     nodes: Nodes = {1: ((7.5, 54.5), tags if t == "n" else {}), 2: ((7.6, 54.5), {})}
     ways = {10: ([1, 2], tags)} if t == "w" else {}
     relations = {20: ([("n", 1, "")], tags)} if t == "r" else {}
-    write_osm(tmp_path / "in.osm.pbf", nodes=nodes, ways=ways, relations=relations)
+    write_extract(tmp_path / "in.osm.pbf", nodes=nodes, ways=ways, relations=relations)
     inject(tmp_path)
     out = {(o[0], o[1]): o[2] for o in read_extract(tmp_path / "out.osm.pbf")}
     return out[(t, {"n": 1, "w": 10, "r": 20}[t])]
@@ -1043,9 +968,9 @@ def test_a_qid_counts_as_present_whatever_matched_its_carrier(tmp_path: Path) ->
     # Holm is matched by its id and carries its row's QID; no object
     # carries the North Sea's
     hulm = REPORT_PLACES[0] | {"osm": "node/1"}
-    (tmp_path / "places.csv").write_text(places_csv([hulm, NORDSIIE]), encoding="utf-8")
+    (tmp_path / "places.csv").write_text(places_text([hulm, NORDSIIE]), encoding="utf-8")
     holm = {"place": "village", "name": "Holm", "wikidata": "Q559369"}
-    write_osm(tmp_path / "in.osm.pbf", nodes={1: ((8.9, 54.6), holm)})
+    write_extract(tmp_path / "in.osm.pbf", nodes={1: ((8.9, 54.6), holm)})
     lines = inject(tmp_path, dry_run=True).log
     assert (
         "tagged  1 objects: 1 nodes, 0 ways, 0 relations "
@@ -1058,11 +983,11 @@ def test_a_node_found_by_its_qid_is_asked_for_its_own_frisian_name(tmp_path: Pat
     # no reference, so the objects file does not know it: like its dialect,
     # its Frisian name is the node's own
     hulm = dict(id="hulm", kind="settlement", mooring="Hulm", de="Holm", wikidata="Q559369")
-    (tmp_path / "places.csv").write_text(places_csv([hulm]), encoding="utf-8")
+    (tmp_path / "places.csv").write_text(places_text([hulm]), encoding="utf-8")
     (tmp_path / "areas.geojson").write_text(json.dumps(AREAS), encoding="utf-8")
     holm = {"place": "village", "name": "Holm", "name:frr": "Hoolm", "wikidata": "Q559369"}
     # in the Nordergoesharde box of AREAS
-    write_osm(tmp_path / "in.osm.pbf", nodes={1: ((8.85, 54.66), holm)})
+    write_extract(tmp_path / "in.osm.pbf", nodes={1: ((8.85, 54.66), holm)})
     inject(tmp_path)
     ((_, _, tags, _),) = read_extract(tmp_path / "out.osm.pbf")
     assert tags["frasch:local"] == "Hoolm"

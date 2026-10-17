@@ -14,7 +14,6 @@ import pytest
 from frasch import curate
 from frasch import patch
 from frasch.__main__ import main
-from frasch import match
 from frasch import placelist
 from frasch import worklist
 from frasch.errors import PipelineError
@@ -24,8 +23,8 @@ from conftest import (
     REGISTRY,
     path_options,
     places_text,
+    run_matcher,
     workspace,
-    write_candidates,
 )
 
 ROWS = [
@@ -309,9 +308,7 @@ SESSION = [
 
 def test_a_curation_session_survives_hand_edits_to_the_list(w: World) -> None:
     # the worklist: every row is `not_found` (no candidates at all)
-    w.places.write_text(places_text(SESSION), encoding="utf-8")
-    write_candidates(w.work / "candidates.jsonl")
-    assert match.run(w.ws, REGISTRY, offline=True) == 0
+    assert run_matcher(w.places.parent, SESSION, []) == 0
     worklist_file = w.work / "curate.json"
     worklist.export(w.ws, REGISTRY)
     # the browser decides every row of it, one object each

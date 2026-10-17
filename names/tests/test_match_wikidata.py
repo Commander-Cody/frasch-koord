@@ -10,9 +10,9 @@ from typing import NoReturn, Protocol
 import pytest
 import requests
 
-from frasch import match, matchfile
+from frasch import matchfile
 from frasch.errors import PipelineError
-from conftest import REGISTRY, places_text, workspace, write_candidates
+from conftest import places_text, run_matcher, write_candidates
 
 COUNTRIES = [
     {
@@ -48,7 +48,7 @@ def run(world: Path) -> tuple[RunMatch, Path, Path]:
     cache = world / "work" / "wikidata-countries.json"
 
     def run_match(offline: bool = False) -> int:
-        return match.run(workspace(world), REGISTRY, offline=offline)
+        return run_matcher(world, offline=offline)
 
     return run_match, places, cache
 
@@ -140,8 +140,7 @@ def test_each_country_answer_shows_in_the_matches_file_and_the_summary(
     write_candidates(world / "work" / "candidates.jsonl")
     cache = world / "work" / "wikidata-countries.json"
     cache.write_text(json.dumps({"Dänemark": "Q35", "Niederlande": ""}), encoding="utf-8")
-    code = match.run(workspace(world), REGISTRY, offline=True)
-    assert code == 1
+    assert run_matcher(world) == 1
     got = [
         (m["wikidata"], m["result"], m["match_name"], m["match_tags"], m["why"])
         for m in matchfile.read(world / "work" / "matches.jsonl")

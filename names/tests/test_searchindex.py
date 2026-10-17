@@ -29,6 +29,7 @@ from conftest import (
     schema_problems,
     workspace,
 )
+from osm_fixture import areas_geojson, box
 
 Rows = Iterable[Mapping[str, str]]
 # the `export` fixture: `rows` exported -> {id: entry}
@@ -112,24 +113,12 @@ EXTRACTS: list[ExtractStamp] = [
 ]
 
 
-def box(west: float, south: float, east: float, north: float) -> list[list[list[float]]]:
-    return [[[west, south], [east, south], [east, north], [west, north], [west, south]]]
-
-
-AREAS = {
-    "type": "FeatureCollection",
-    "features": [
-        {
-            "type": "Feature",
-            "properties": {"dialect": tag},
-            "geometry": {"type": "Polygon", "coordinates": box(*bounds)},
-        }
-        for tag, bounds in [
-            ("frr-x-nordgoes", (8.78, 54.64, 9.00, 54.75)),
-            ("frr-x-suedgoes", (9.00, 54.64, 9.10, 54.75)),
-        ]
-    ],
-}
+AREAS = areas_geojson(
+    [
+        ("frr-x-nordgoes", box(8.78, 54.64, 9.00, 54.75)),
+        ("frr-x-suedgoes", box(9.00, 54.64, 9.10, 54.75)),
+    ]
+)
 
 
 @pytest.fixture

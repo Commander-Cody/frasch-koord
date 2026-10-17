@@ -17,6 +17,7 @@ from frasch.dialect_areas import dialect_at
 from frasch.errors import Problem
 from frasch.objects import LocatedObject
 from conftest import REGISTRY
+import osm_fixture
 
 
 @pytest.fixture(scope="module")
@@ -153,29 +154,17 @@ def test_area_rows_needs_every_column_of_the_file(tmp_path: Path, reg: dialects.
 
 
 # --------------------------------------------------------------- dialect_at ---
-def ring(west: float, south: float, east: float, north: float) -> list[list[list[float]]]:
-    return [[[west, south], [east, south], [east, north], [west, north], [west, south]]]
-
-
 @pytest.fixture
 def area_index(tmp_path: Path) -> dialect_areas.AreaIndex:
     """Reußenköge (Mooring) with the Hamburger Hallig (Halligfriesisch)
     inside it, and a strip of Langeneß covering only part of Oland."""
-    fc = {
-        "type": "FeatureCollection",
-        "features": [
-            {
-                "type": "Feature",
-                "properties": {"dialect": tag},
-                "geometry": {"type": "Polygon", "coordinates": ring(*bounds)},
-            }
-            for tag, bounds in [
-                ("frr-x-mooring", (8.80, 54.55, 8.95, 54.63)),
-                ("frr-x-hallig", (8.82, 54.58, 8.86, 54.605)),
-                ("frr-x-hallig", (8.60, 54.60, 8.62, 54.62)),
-            ]
-        ],
-    }
+    fc = osm_fixture.areas_geojson(
+        [
+            ("frr-x-mooring", osm_fixture.box(8.80, 54.55, 8.95, 54.63)),
+            ("frr-x-hallig", osm_fixture.box(8.82, 54.58, 8.86, 54.605)),
+            ("frr-x-hallig", osm_fixture.box(8.60, 54.60, 8.62, 54.62)),
+        ]
+    )
     path = tmp_path / "areas.geojson"
     path.write_text(json.dumps(fc), encoding="utf-8")
     return dialect_areas.AreaIndex.from_geojson(str(path))
