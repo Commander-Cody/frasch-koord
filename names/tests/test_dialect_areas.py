@@ -12,7 +12,7 @@ import pytest
 from shapely.geometry import box
 from shapely.geometry.base import BaseGeometry
 
-from frasch import dialect_areas, dialects, tables
+from frasch import dialect_areas, dialects
 from frasch.dialect_areas import dialect_at
 from frasch.errors import Problem
 from frasch.objects import LocatedObject
@@ -112,16 +112,8 @@ def test_area_rows_still_accepts_way_and_relation_references(
 
 
 # What a spreadsheet does to the file is reported as for the other three
-# hand-edited files (#92): the area list used to have a reader of its own.
-def test_area_rows_reports_a_semicolon_separated_export_as_such(
-    tmp_path: Path, reg: dialects.Registry
-) -> None:
-    areas = tmp_path / "dialect_areas.csv"
-    areas.write_text("dialect;osm;name;note\nfrr-x-mooring;relation/1;Fine;\n", encoding="utf-8")
-    _, problems = dialect_areas.area_rows(str(areas), reg)
-    assert problems == [Problem(str(areas), 1, tables.SEMICOLON_SEPARATED)]
-
-
+# hand-edited files (#92, the rules are tables'): the area list used to have a
+# reader of its own.
 def test_area_rows_reports_a_row_with_the_wrong_number_of_cells(
     tmp_path: Path, reg: dialects.Registry
 ) -> None:

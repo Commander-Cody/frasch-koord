@@ -44,6 +44,52 @@ def test_every_broken_row_is_reported_at_once(tmp_path: Path) -> None:
     ]
 
 
+BAD_TAG = "-- expected frr-x-<subtag>, subtags [a-z0-9] and at most 8 characters each"
+
+
+@pytest.mark.parametrize(
+    "row, problem",
+    [
+        ("frr-x-mooringen,mooringen,Mooring,living,yes,", f"bad tag 'frr-x-mooringen' {BAD_TAG}"),
+        ("mooring,mooring,Mooring,living,yes,", f"bad tag 'mooring' {BAD_TAG}"),
+        ("frr-x-mooring,Mooring,Mooring,living,yes,", "bad column name 'Mooring'"),
+        (
+            "frr-x-local,local,Local,living,yes,",
+            "'local' is a reserved column of places.csv, not a dialect",
+        ),
+        ("frr-x-mooring,mooring,Mooring,alive,yes,", "status 'alive' (living / extinct)"),
+        ("frr-x-mooring,mooring,Mooring,living,maybe,", "view 'maybe' (yes / no)"),
+        ("frr-x-mooring,mooring,,living,yes,", "no label"),
+    ],
+    ids=[
+        "subtag too long",
+        "not frr-x",
+        "column not lowercase",
+        "local",
+        "status",
+        "view",
+        "label",
+    ],
+)
+def test_a_row_that_breaks_a_rule_is_reported_with_it(
+    tmp_path: Path, row: str, problem: str
+) -> None:
+    path = write(tmp_path, HEADER + row + "\n")
+    assert dialects.rows(path)[1] == [Problem(path, 2, problem)]
+
+
+@pytest.mark.parametrize(
+    "second",
+    ["frr-x-mooring,mooring,Mooring,living,yes,", "frr-x-moring,mooring,Moring,living,no,"],
+    ids=["the same row", "a new tag for the same column"],
+)
+def test_a_column_registered_twice_is_reported_on_the_second_row(
+    tmp_path: Path, second: str
+) -> None:
+    path = write(tmp_path, HEADER + MOORING + second + "\n")
+    assert [p.line for p in dialects.rows(path)[1]] == [3]
+
+
 def test_the_problems_are_in_the_order_of_the_lines(tmp_path: Path) -> None:
     # Whatever kind they are of: a broken rule above a comma too few.
     path = write(
