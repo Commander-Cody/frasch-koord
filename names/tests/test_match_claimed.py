@@ -74,8 +74,8 @@ def test_the_rest_of_a_river_a_human_gave_in_part_to_another_row_is_not_matched(
     # them names the river already; handing this row the other pieces would
     # label one river with two names.
     pieces = [
-        cand("w", i, 9.0, 54.6 + 0.01 * i, name="Arlau", waterway="river")
-        for i in (44051131, 44051132, 44051133)
+        cand("w", i, 9.0, 54.6 + 0.01 * n, name="Arlau", waterway="river")
+        for n, i in enumerate((44051131, 44051132, 44051133))
     ]
     checked = {
         "kind": "water",

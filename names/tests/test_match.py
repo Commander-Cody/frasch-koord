@@ -527,8 +527,8 @@ def test_the_municipality_lends_its_wikidata_rather_than_the_nearer_amt(tmp_path
 
 def test_all_pieces_of_a_river_are_matched(tmp_path: Path) -> None:
     pieces = [
-        cand("w", i, 9.0, 54.6 + 0.01 * i, name="Arlau", waterway="river")
-        for i in (44051133, 44051131, 44051132)
+        cand("w", i, 9.0, 54.6 + 0.01 * n, name="Arlau", waterway="river")
+        for n, i in enumerate((44051133, 44051131, 44051132))
     ]
     out = run(tmp_path, row(kind="water", mooring="Arlou", de="Arlau"), *pieces)
     assert out.result is Outcome.MATCHED
