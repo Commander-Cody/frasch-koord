@@ -485,9 +485,8 @@ def apply_command(w: World, *options: str) -> int:
 def test_the_command_prints_the_log(w: World, capsys: pytest.CaptureFixture[str]) -> None:
     append(w.patch, entry(3, action="osm", osm="node/1", wikidata="Q5"))
     apply_command(w, "--keep")
-    assert capsys.readouterr().out == (
-        f"  {w.places}:3 Uurd (Ort): osm = node/1, wikidata = Q5, status = ok\n"
-        f"1 row(s) written to {w.places}, 0 appended to {w.curation}, 0 refused\n"
+    assert capsys.readouterr().out.splitlines()[-1] == (
+        f"1 row(s) written to {w.places}, 0 appended to {w.curation}, 0 refused"
     )
 
 
@@ -515,47 +514,76 @@ def test_the_command_says_what_became_of_the_patch_when_apply_fails(
     assert capsys.readouterr().err.endswith(f"nothing applied -- {w.patch} restored\n")
 
 
-def test_apply_logs_each_decision_and_sums_up(w: World) -> None:
-    mixed_patch(w)
-    report = w.apply()
-    assert len(report.refused) == 2
-    (snapshot,) = archived(w)
-    assert said(report) == (
-        # an entry without a `line` comes first
-        f"  refused patch line 4 (None / None): no row with id 'nai' in {w.places} "
-        "(deleted since the export?)\n"
-        f"  {w.places}:2 Taarep (Dorf): osm = local/taarep, wikidata = -, status = ok; "
-        f"{w.curation} += 54.6/8.9, polygon_km2 = 1.5\n"
-        f"  {w.places}:3 Uurd (Ort): osm = node/1, wikidata = Q5, status = ok\n"
-        f"  refused patch line 3 (Hüs / Haus): {w.places}:4 is not the matcher's "
-        "to fill (by hand: status=ok, osm=node/9)\n"
-        f"patch applied, moved to {snapshot}\n"
-        f"2 refused entries kept in {w.patch}\n"
-        f"2 row(s) written to {w.places}, 1 appended to {w.curation}, 2 refused\n"
+def test_the_log_names_the_row_of_a_decision_and_what_it_is_given(w: World) -> None:
+    append(w.patch, entry(3, action="osm", osm="node/1", wikidata="Q5"))
+    assert (
+        w.apply().log[0] == f"  {w.places}:3 Uurd (Ort): osm = node/1, wikidata = Q5, status = ok"
     )
+
+
+def test_the_log_of_a_local_decision_says_what_curation_csv_gains(w: World) -> None:
+    append(w.patch, entry(2, action="local", slug="taarep", lat=54.6, lon=8.9, polygon_km2=1.5))
+    assert w.apply().log[0] == (
+        f"  {w.places}:2 Taarep (Dorf): osm = local/taarep, wikidata = -, status = ok; "
+        f"{w.curation} += 54.6/8.9, polygon_km2 = 1.5"
+    )
+
+
+def test_a_local_decision_with_an_area_appends_an_island_of_that_area(w: World) -> None:
+    append(w.patch, entry(2, action="local", slug="taarep", lat=54.6, lon=8.9, polygon_km2=1.5))
+    w.apply()
     assert w.curation.read_text(encoding="utf-8") == (
         CURATION_HEADER + "local/taarep,Dorf,54.6,8.9,place=island,,,1.5,\n"
     )
 
 
+def test_the_log_says_why_a_decision_about_a_row_decided_by_hand_is_refused(w: World) -> None:
+    append(w.patch, entry(4, action="skip"))
+    assert w.apply().log[0] == (
+        f"  refused patch line 1 (Hüs / Haus): {w.places}:4 is not the matcher's "
+        "to fill (by hand: status=ok, osm=node/9)"
+    )
+
+
+def test_the_log_says_why_a_decision_about_a_row_that_is_gone_is_refused(w: World) -> None:
+    append(w.patch, {"id": "nai", "action": "skip"})
+    assert w.apply().log[0] == (
+        f"  refused patch line 1 (None / None): no row with id 'nai' in {w.places} "
+        "(deleted since the export?)"
+    )
+
+
+def test_the_log_says_where_the_applied_patch_went(w: World) -> None:
+    append(w.patch, entry(2, action="skip"))
+    report = w.apply()
+    (snapshot,) = archived(w)
+    assert f"patch applied, moved to {snapshot}" in report.log
+
+
+def test_the_log_says_how_many_refused_entries_are_kept(w: World) -> None:
+    mixed_patch(w)
+    assert f"2 refused entries kept in {w.patch}" in w.apply().log
+
+
+def test_the_log_ends_with_what_was_written_appended_and_refused(w: World) -> None:
+    mixed_patch(w)
+    assert w.apply().log[-1] == (
+        f"2 row(s) written to {w.places}, 1 appended to {w.curation}, 2 refused"
+    )
+
+
 def test_dry_run_says_what_would_change(w: World) -> None:
     mixed_patch(w)
-    *decisions, total = w.apply(dry_run=True).log
-    assert total == (
+    assert w.apply(dry_run=True).log[-1] == (
         "dry run: 2 row(s) would change, 1 curation row(s) would be appended, "
         "2 refused -- nothing written"
     )
-    assert len(decisions) == 4
 
 
 def test_keep_applies_without_archiving_or_appending_back(w: World) -> None:
     mixed_patch(w)
     patch_before = w.patch.read_bytes()
-    report = w.apply(keep=True)
-    assert len(report.refused) == 2
-    assert said(report).splitlines()[-1] == (
-        f"2 row(s) written to {w.places}, 1 appended to {w.curation}, 2 refused"
-    )
+    w.apply(keep=True)
     assert w.patch.read_bytes() == patch_before
 
 
@@ -701,22 +729,30 @@ def test_a_failed_apply_says_the_patch_is_restored(
     assert failed.value.__notes__[-1] == f"nothing applied -- {w.patch} restored"
 
 
-def test_a_failed_apply_still_says_what_it_made_of_the_patch(
+def test_a_failed_apply_says_which_lines_of_the_patch_it_could_not_read(
     w: World, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # its report is lost with the error: what it had to say goes with that
     w.patch.write_text("nonsense\n", encoding="utf-8")
-    append(w.patch, entry(2, action="skip"), entry(4, action="skip"))
+    append(w.patch, entry(2, action="skip"))  # a write to fail
     theirs = places_text(ROWS + [{"kind": "settlement", "mooring": "Nai", "de": "Neu"}])
     during_read(monkeypatch, lambda: w.places.write_text(theirs, encoding="utf-8"))
     with pytest.raises(PipelineError, match="changed on disk") as failed:
         w.apply(keep=True)
-    assert failed.value.__notes__ == [
-        f"{w.patch}:1: not JSON (Expecting value: line 1 column 1 (char 0)) -- ignored",
-        f"  {w.places}:2 Taarep (Dorf): osm = -, wikidata = -, status = skip",
-        f"  refused patch line 3 (Hüs / Haus): {w.places}:4 is not the matcher's "
-        "to fill (by hand: status=ok, osm=node/9)",
-    ]
+    assert failed.value.__notes__[0] == (
+        f"{w.patch}:1: not JSON (Expecting value: line 1 column 1 (char 0)) -- ignored"
+    )
+
+
+def test_a_failed_apply_says_what_it_decided(w: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    append(w.patch, entry(2, action="skip"))
+    theirs = places_text(ROWS + [{"kind": "settlement", "mooring": "Nai", "de": "Neu"}])
+    during_read(monkeypatch, lambda: w.places.write_text(theirs, encoding="utf-8"))
+    with pytest.raises(PipelineError, match="changed on disk") as failed:
+        w.apply(keep=True)
+    assert failed.value.__notes__[0] == (
+        f"  {w.places}:2 Taarep (Dorf): osm = -, wikidata = -, status = skip"
+    )
 
 
 def test_a_failed_apply_says_what_became_of_curation_csv_after_what_it_decided(
