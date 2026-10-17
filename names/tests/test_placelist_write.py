@@ -28,6 +28,29 @@ def test_round_trip_is_byte_identical(places: Path) -> None:
     assert places.read_bytes() == before
 
 
+def test_cells_that_need_quotes_and_an_editors_own_column_round_trip_byte_identical(
+    world: Path,
+) -> None:
+    # the guarantee that the matcher and the curation only ever touch the
+    # cells they mean to; the quoting is spelled out, as an editor saves it
+    columns = [*placelist.columns(REGISTRY), "mine"]
+
+    def line(**cells: str) -> str:
+        return ",".join(cells.get(c, "") for c in columns) + "\n"
+
+    path = world / "places.csv"
+    path.write_text(
+        ",".join(columns)
+        + "\n"
+        + line(kind="settlement", mooring="Taarep", de="Dorf", note='"a ""b"", c"', id="taarep")
+        + line(kind="warft", solring="Wärw; Werw (old)", note='"one\ntwo"', id="warw", mine="x"),
+        encoding="utf-8",
+    )
+    before = path.read_bytes()
+    placelist.read(str(path), REGISTRY).write()
+    assert path.read_bytes() == before
+
+
 def test_interrupted_write_leaves_the_file_alone(
     places: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

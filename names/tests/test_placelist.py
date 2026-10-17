@@ -9,17 +9,13 @@ from __future__ import annotations
 
 import json
 import re
-import shutil
-from pathlib import Path
 from typing import Any
 
 import pytest
 
 from frasch import paths, placelist, refs
-from frasch.paths import Workspace
 from frasch.placelist import Reference, RowState
 from conftest import REGISTRY
-from frasch.dialects import LOCAL_COLUMN, Dialect, Registry
 
 
 # ------------------------------------------------------------------- rows ---
@@ -193,34 +189,6 @@ def test_a_place_keyed_by_its_wikidata_item_alone_is_on_the_map() -> None:
 )
 def test_a_row_that_puts_no_name_on_the_map_is_not_on_it(cells: dict[str, str]) -> None:
     assert not placelist.on_map(place(**cells), REGISTRY)
-
-
-# --------------------------------------------------- the real name list ---
-def registry_of(header: str) -> Registry:
-    """A registry of the dialect columns a places.csv header has: those
-    between `kind` and `de`, but for `local`."""
-    columns = header.split(",")
-    names = columns[columns.index("kind") + 1 : columns.index("de")]
-    return Registry(
-        [
-            Dialect(tag=f"frr-x-{c}", column=c, label=c, status="living", view="no", note="")
-            for c in names
-            if c != LOCAL_COLUMN
-        ]
-    )
-
-
-def test_real_name_list_round_trips_byte_identical(tmp_path: Path) -> None:
-    """Reading and writing back the real places.csv changes nothing -- the
-    guarantee that the matcher and the curation only ever touch the cells
-    they mean to (a copy: the real file is never written).  It is read by
-    the dialect columns of its own header."""
-    copy = tmp_path / "places.csv"
-    shutil.copyfile(Workspace.default().names, copy)
-    before = copy.read_bytes()
-    header = before.decode("utf-8").splitlines()[0]
-    placelist.read(str(copy), registry_of(header)).write()
-    assert copy.read_bytes() == before
 
 
 # ------------------------------------------------------------------- slug ---

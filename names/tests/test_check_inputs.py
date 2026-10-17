@@ -4,7 +4,7 @@ its line, instead of stopping at the first one (#22, M3)."""
 from __future__ import annotations
 
 import os
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Protocol
 
@@ -82,10 +82,24 @@ def test_every_problem_is_reported_not_only_the_first(names: CheckNames) -> None
     ]
 
 
-def test_a_byte_order_mark_from_a_spreadsheet_export_is_fine(names: CheckNames) -> None:
-    # Excel's "CSV UTF-8" puts one in front of the header, which used to turn
-    # `kind` into `﻿kind`: "missing column(s) ['kind']".
-    assert names("﻿" + places_text([TOFTUM])) == []
+@pytest.mark.parametrize(
+    "edit, line",
+    [
+        (lambda text: "\ufeff" + text, 1),  # Excel's "CSV UTF-8"
+        (lambda text: text.replace("\n", "\r\n"), 1),
+        (lambda text: text.replace("Naibel", '"Naibel"'), 3),
+        (lambda text: text.replace("Naibel", "Naibel "), 3),
+        (lambda text: text.replace("\nsettlement,Naibel", "\n\nsettlement,Naibel"), 3),
+    ],
+    ids=["byte order mark", "windows line ends", "quoted cell", "spaces in a cell", "blank line"],
+)
+def test_a_list_not_in_the_form_the_pipeline_writes_is_reported_where_it_differs(
+    names: CheckNames, edit: Callable[[str], str], line: int
+) -> None:
+    # the next write by the matcher or the curation would change more than
+    # the cells it means to
+    problems = names(edit(places_text([TOFTUM, NIEBUELL])))
+    assert [(p.line, "check-inputs --fix" in p.message) for p in problems] == [(line, True)]
 
 
 def test_a_semicolon_separated_export_gets_one_clear_message(names: CheckNames) -> None:
@@ -398,13 +412,12 @@ def test_a_dialect_row_with_the_wrong_number_of_cells_is_reported(names: CheckNa
     assert "cells" in problems[0].message
 
 
-def test_a_blank_line_is_no_problem_and_keeps_the_line_numbers(names: CheckNames) -> None:
-    # The reader skips it, so the check does too; the rows after it are
-    # still reported at the line an editor sees them on.
+def test_a_row_after_a_blank_line_is_reported_at_the_line_an_editor_sees_it_on(
+    names: CheckNames,
+) -> None:
     head, first, second, _ = places_text([TOFTUM, {**NIEBUELL, "kind": "town"}]).split("\n")
     problems = names("\n".join([head, first, "", second]) + "\n")
-    assert lines(problems) == [4]
-    assert "town" in problems[0].message
+    assert [p.line for p in problems if "town" in p.message] == [4]
 
 
 # ------------------------------------------------------------------ ids ---
@@ -494,6 +507,13 @@ def test_fix_run_twice_changes_nothing(ws: Workspace, world: Path) -> None:
     once = places.read_bytes()
     fix(ws)
     assert places.read_bytes() == once
+
+
+def test_fix_writes_the_list_in_the_form_the_pipeline_writes_it(ws: Workspace, world: Path) -> None:
+    text = places_text([TOFTUM, NIEBUELL])
+    (world / "places.csv").write_bytes(("\ufeff" + text.replace("\n", "\r\n")).encode())
+    fix(ws)
+    assert (world / "places.csv").read_bytes() == text.encode()
 
 
 def test_a_hand_set_frasch_ref_must_name_a_row(names: CheckNames) -> None:

@@ -76,12 +76,16 @@ Conventions that apply to every name cell:
 * no `?` inside names — say `uncertain` in `note`
 
 After editing, `uv run frasch check-inputs --fix` gives new rows their
-`id`, then reports every problem in `places.csv`, `curation.csv`,
+`id` and writes `places.csv` in the form the pipeline writes it, then
+reports every problem in `places.csv`, `curation.csv`,
 `dialects.csv` and `dialect_areas.csv` with its line: a comma too many or too
 few, unbalanced brackets, a `?`, variants not separated by `; `, a repeated
 variant, an unknown `kind` or `status`, a bad reference, one OSM object or
 Wikidata item on two rows, a `local/` reference without a position, a
-missing or repeated `id`, a hand-set `frasch:ref` in `curation.csv` that names
+missing or repeated `id`, a `places.csv` not in the pipeline's form (a
+spreadsheet's byte order mark, a blank line, Windows line ends, quotes or
+spaces the next write by the matcher or the curation would drop), a
+hand-set `frasch:ref` in `curation.csv` that names
 no row, one OSM object on two `dialect_areas.csv` rows. Without `--fix` it
 only reports; CI runs it that way on every push. The other commands refuse a
 `places.csv` with a row without an `id`, and one in which two rows claim the

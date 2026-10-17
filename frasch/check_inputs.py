@@ -114,10 +114,13 @@ def check_places(
     names: Table, curation: str, positioned: Container[str], reg: Registry
 ) -> list[Problem]:
     """The problems in the name list (`names`), whose columns `reg` says:
-    those `placelist.read` refuses it for, the stricter rules of its name
-    cells, and a local reference `curation` has no position for
-    (`positioned`: those it has one for)."""
+    those `placelist.read` refuses it for, a form other than the one the
+    pipeline writes it in, the stricter rules of its name cells, and a local
+    reference `curation` has no position for (`positioned`: those it has one
+    for)."""
     rows, problems = placelist.rows(names, reg)
+    if what := placelist.form_problem(names):
+        problems.append(what)
     for row in rows:
         whats = _cell_problems(row, reg) + _position_problems(row, curation, positioned)
         problems += [Problem(names.path, row.line, what) for what in whats]
