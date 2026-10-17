@@ -22,7 +22,7 @@ def run(*args: str, **env: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["bash", "-c", f'source "{GEOFABRIK_SH}" && "$@"', "bash", *args],
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         env={k: v for k, v in os.environ.items() if k not in OWN_ENV} | env,
     )
 
@@ -36,7 +36,7 @@ def test_geofabrik_variant_verifies_against_the_md5_sidecar(tmp_path: Path) -> N
     pbf = tmp_path / "region-latest.osm.pbf"
     pbf.write_bytes(b"fake extract data\n")
     md5_file = tmp_path / "region-latest.osm.pbf.md5"
-    md5_file.write_text(f"{md5_of(pbf.read_bytes())}  region-latest.osm.pbf\n")
+    md5_file.write_text(f"{md5_of(pbf.read_bytes())}  region-latest.osm.pbf\n", encoding="utf-8")
     dest = tmp_path / "data" / "region-latest.osm.pbf"
     dest.parent.mkdir()
 
@@ -64,7 +64,7 @@ def test_geofabrik_variant_rejects_an_unparsable_md5_file(tmp_path: Path) -> Non
     pbf = tmp_path / "region-latest.osm.pbf"
     pbf.write_bytes(b"fake extract data\n")
     md5_file = tmp_path / "region-latest.osm.pbf.md5"
-    md5_file.write_text("not a checksum line\n")
+    md5_file.write_text("not a checksum line\n", encoding="utf-8")
     dest = tmp_path / "data" / "region-latest.osm.pbf"
     dest.parent.mkdir()
 
@@ -78,7 +78,7 @@ def test_geofabrik_variant_rejects_a_wrong_md5(tmp_path: Path) -> None:
     pbf = tmp_path / "region-latest.osm.pbf"
     pbf.write_bytes(b"fake extract data\n")
     md5_file = tmp_path / "region-latest.osm.pbf.md5"
-    md5_file.write_text("0" * 32 + "  region-latest.osm.pbf\n")
+    md5_file.write_text("0" * 32 + "  region-latest.osm.pbf\n", encoding="utf-8")
     dest = tmp_path / "data" / "region-latest.osm.pbf"
     dest.parent.mkdir()
 
@@ -195,7 +195,7 @@ def mirror(tmp_path: Path, name: str, data: bytes) -> str:
     europe = tmp_path / "mirror" / "europe"
     europe.mkdir(parents=True)
     (europe / name).write_bytes(data)
-    (europe / f"{name}.md5").write_text(f"{md5_of(data)}  {name}\n")
+    (europe / f"{name}.md5").write_text(f"{md5_of(data)}  {name}\n", encoding="utf-8")
     return (tmp_path / "mirror").as_uri()
 
 

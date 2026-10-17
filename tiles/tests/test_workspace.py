@@ -18,7 +18,11 @@ def workspace_options(env: dict[str, str], *files: str) -> list[str]:
         'for option in "${WORKSPACE_OPTIONS[@]}"; do printf "%s\\n" "$option"; done'
     )
     result = subprocess.run(
-        ["bash", "-c", script, "bash", *files], capture_output=True, text=True, env=env, check=True
+        ["bash", "-c", script, "bash", *files],
+        capture_output=True,
+        encoding="utf-8",
+        env=env,
+        check=True,
     )
     return result.stdout.splitlines()
 

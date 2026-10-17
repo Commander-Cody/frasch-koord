@@ -84,7 +84,7 @@ check-python:
       "uv run ruff check ." \
       "uv run ruff format --check ." \
       "uv run mypy" \
-      "uv run pytest {{pytest_summary}}" \
+      "PYTHONWARNDEFAULTENCODING=1 uv run pytest {{pytest_summary}}" \
       "{{frasch}} check-inputs {{names_check_summary}}" \
       "{{just_executable()}} check-outputs" \
       "uv run shellcheck scripts/*.sh tiles/*.sh"

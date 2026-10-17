@@ -169,9 +169,9 @@ def test_output_is_stamped_with_its_inputs(ws: Workspace) -> None:
         "dialects.csv": provenance.blob_hash(ws.dialects),
         "extracts": [{"file": "extract.osm.pbf", "replication_timestamp": "2026-09-22T20:22:59Z"}],
     }
-    fc = json.loads(out.read_text())
+    fc = json.loads(out.read_text(encoding="utf-8"))
     assert fc["properties"]["built_from"] == expected
-    parts_fc = json.loads(parts_out.read_text())
+    parts_fc = json.loads(parts_out.read_text(encoding="utf-8"))
     assert parts_fc["properties"]["built_from"] == expected
     # AreaIndex.from_geojson must keep working with the stamped file
     idx = dialect_areas.AreaIndex.from_geojson(str(out))
@@ -276,7 +276,7 @@ def test_a_full_build_reports_every_step(ws: Workspace, capsys: pytest.CaptureFi
         "reads back as 3 polygon(s): frr-x-mooring (1), frr-x-solring (2)\n"
         f"wrote {parts_out} (5 features: 3 assigned, 2 unassigned, 2 kB)\n"
     )
-    fc = json.loads(out.read_text())
+    fc = json.loads(out.read_text(encoding="utf-8"))
     assert [f["properties"] for f in fc["features"]] == [
         {"dialect": "frr-x-mooring", "label": "Mooring"},
         {"dialect": "frr-x-solring", "label": "Sölring"},
@@ -288,7 +288,7 @@ def test_a_full_build_reports_every_step(ws: Workspace, capsys: pytest.CaptureFi
             [[[8.9, 54.62], [8.92, 54.62], [8.92, 54.6], [8.9, 54.6], [8.9, 54.62]]],
         ],
     }
-    parts_fc = json.loads(parts_out.read_text())
+    parts_fc = json.loads(parts_out.read_text(encoding="utf-8"))
     assert parts_fc["properties"]["unassigned_ags"] == "01054"
     assert [f["properties"] for f in parts_fc["features"]] == [
         {

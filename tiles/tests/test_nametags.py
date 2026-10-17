@@ -31,7 +31,7 @@ def options(tmp_path_factory: pytest.TempPathFactory) -> dict[str, list[str]]:
     result = subprocess.run(
         ["bash", "-c", script, "bash", str(FRASCH)],
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         env={"DIALECTS": str(dialects)},
         check=True,
     )

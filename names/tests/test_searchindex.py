@@ -270,7 +270,7 @@ def test_a_row_keyed_by_wikidata_alone_is_left_out(export: Export) -> None:
 
 def git_hash(path: StrPath) -> str:
     return subprocess.run(
-        ["git", "hash-object", str(path)], capture_output=True, text=True, check=True
+        ["git", "hash-object", str(path)], capture_output=True, encoding="utf-8", check=True
     ).stdout.strip()
 
 
