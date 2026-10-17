@@ -12,6 +12,7 @@ the Mooring box of AREAS)."""
 
 from __future__ import annotations
 
+import collections
 import contextlib
 import io
 import json
@@ -30,6 +31,7 @@ from frasch.__main__ import main
 from frasch.geo import LonLat
 from frasch.inject import claims, synthetic
 from frasch.inject.report import Report
+from frasch.inject.stats import SkippedCarrier, Stats
 from frasch.objects import Objects, objects_json
 from frasch.provenance import Stamp
 from conftest import REGISTRY, curation_file, flat_workspace, path_options, places_text
@@ -311,78 +313,32 @@ def input_options(d: Path) -> list[str]:
 
 
 def normalized(text: str, directory: Path) -> str:
-    """`text` with the run's directory as `<dir>` and its time as `0s`."""
-    return re.sub(r" in \d+s$", " in 0s", text.replace(str(directory), "<dir>"), flags=re.M)
-
-
-def log_lines(report: Report, directory: Path) -> list[str]:
-    """The lines of a run's log, normalized."""
-    return normalized("\n".join(report.log), directory).splitlines()
+    """`text` with the run's directory as `<dir>`."""
+    return text.replace(str(directory), "<dir>")
 
 
 @pytest.fixture(scope="module")
-def injected_run(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, list[str]]:
-    """-> (the run's directory, the lines of its log)"""
+def injected_run(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, Stats]:
+    """-> (the run's directory, what it counted)"""
     d = tmp_path_factory.mktemp("inject")
     (d / "places.csv").write_text(places_text(PLACES), encoding="utf-8")
     curation_file(d, *CURATION)
     (d / "areas.geojson").write_text(json.dumps(AREAS), encoding="utf-8")
     write_scene(d / "in.osm.pbf")
-    return d, log_lines(inject(d), d)
+    return d, inject(d).stats
 
 
 @pytest.fixture(scope="module")
-def injected(injected_run: tuple[Path, list[str]]) -> Injected:
+def injected(injected_run: tuple[Path, Stats]) -> Injected:
     d, _ = injected_run
     objs = read_extract(d / "out.osm.pbf")
     return objs, {(t, i): (tags, extra) for t, i, tags, extra in objs}
 
 
-def test_report_of_a_run(injected_run: tuple[Path, list[str]]) -> None:
-    _, lines = injected_run
-    assert lines[1].startswith("dialects  : <dir>/dialects.csv -> ")
-    assert lines[:1] + lines[2:] == [
-        "name list : <dir>/places.csv",
-        "usable    : 5 rows -> 4 OSM ids + 1 wikidata QIDs + 1 local reference(s)",
-        "areas     : <dir>/areas.geojson -> 4 polygon(s): frr-x-hallig (1), frr-x-mooring (1), "
-        "frr-x-nordgoes (1), frr-x-oomrang (1)",
-        "curation  : <dir>/curation.csv -> 3 OSM ids (3 with frasch:minzoom, 0 with frasch:maxzoom)",
-        "synthetic : 1 polygon(s) to add around nodes",
-        "local     : 1 local reference(s) positioned in <dir>/curation.csv",
-        "objects   : <dir>/osm_objects.json -> 4 located object(s)",
-        "name:frr  : 2 object(s) in a dialect area that no row holds by reference have one in OSM",
-        "",
-        "scanned 24 objects in 0s",
-        "tagged  5 objects: 2 nodes, 1 ways, 2 relations "
-        "(of these 0 matched by wikidata: 1 of 1 QIDs present)",
-        "names written per dialect:",
-        "  name:frr-x-mooring       4  Mooring",
-        "  name:frr-x-nordgoes      2  Nordergoesharder",
-        "  name:frr-x-oomrang       1  Öömrang",
-        "  frasch:local             3  local form (1 of them OSM's name:frr)",
-        "  frasch:local             2  OSM's name:frr on objects no row claims",
-        "objects per dialect area:",
-        "  frasch:dialect=frr-x-oomrang       1",
-        "  frasch:dialect=frr-x-nordgoes      1",
-        "  frasch:dialect=frr-x-hallig        1",
-        "",
-        "added 1 node(s) for places that are not in OSM:",
-        f"  node/{MAX_NODE + 1}  local/westerheide-amrum Waasterhias (Westerheide) "
-        "at 54.65097, 8.34019: frasch:dialect=frr-x-oomrang, frasch:kind=settlement, "
-        "frasch:local=Waasterhias, frasch:ref=waasterhias, place=hamlet",
-        "",
-        "curated 3 objects: 2 nodes, 0 ways, 1 relations",
-        f"  node/{NORDSTRAND}  Nordstrand (village node): frasch:minzoom=12, "
-        "frasch:ref=relation/1420555, name:frr-x-mooring=e Strönj",
-        f"  node/{TAMMENSIEL}  Tammensiel: frasch:minzoom=10",
-        f"  relation/{HAMBURGER_HALLIG}  Hamburger Hallig: frasch:minzoom=12, place=island",
-        "",
-        "added 1 synthetic polygon(s):",
-        f"  way/{MAX_WAY + 1} (node/{MAX_NODE + 2}..node/{MAX_NODE + 5})  "
-        "Nordstrand (synthetic island polygon): 50 km²",
-        "",
-        "wrote <dir>/out.osm.pbf (0.0 MB)",
-    ]
+@pytest.fixture(scope="module")
+def stats(injected_run: tuple[Path, Stats]) -> Stats:
+    _, counted = injected_run
+    return counted
 
 
 def test_output_is_nodes_then_ways_then_relations(injected: Injected) -> None:
@@ -637,8 +593,60 @@ def test_synthetic_square_carries_the_nodes_names_and_its_own_tags(injected: Inj
     }
 
 
-# ------------------------------------------------------------ the report ---
-# a dry run over a second extract, for what the report says about rows and
+# ------------------------------------------------- what the run counted ---
+def test_the_objects_a_row_tags_are_counted_by_type(stats: Stats) -> None:
+    # Holm and the node added for Westerheide, the Nordwarft, the Hamburger
+    # Hallig and the Kreis -- not what curation alone or OSM's name:frr tags
+    assert stats.tagged == collections.Counter(n=2, w=1, r=2)
+
+
+def test_the_names_written_are_counted_per_key(stats: Stats) -> None:
+    assert stats.names == collections.Counter(
+        {
+            "name:frr-x-mooring": 4,
+            "name:de": 4,
+            "name:frr-x-nordgoes": 2,
+            "name:frr-x-oomrang": 1,
+        }
+    )
+
+
+def test_the_tagged_objects_are_counted_per_dialect(stats: Stats) -> None:
+    # Holm and the Kreis lie in no dialect area
+    assert stats.dialects == collections.Counter(
+        {"frr-x-oomrang": 1, "frr-x-nordgoes": 1, "frr-x-hallig": 1}
+    )
+
+
+def test_the_local_forms_rows_give_are_counted(stats: Stats) -> None:
+    # the Nordwarft, the Hamburger Hallig, Westerheide
+    assert stats.local == 3
+
+
+def test_the_local_forms_rows_take_from_osms_frisian_name_are_counted(stats: Stats) -> None:
+    # the Hamburger Hallig
+    assert stats.osm_local_claimed == 1
+
+
+def test_osms_frisian_names_on_objects_no_row_claims_are_counted(stats: Stats) -> None:
+    # the Kirchwarft and the Jenswarft
+    assert stats.osm_local_unclaimed == 2
+
+
+def test_the_added_node_is_recorded_with_its_local_reference(stats: Stats) -> None:
+    assert [(point.node_id, point.key) for point in stats.added_points] == [
+        (MAX_NODE + 1, ("l", "westerheide-amrum"))
+    ]
+
+
+def test_the_synthetic_square_is_recorded_with_its_curation_row(stats: Stats) -> None:
+    assert [(square.key, square.label, square.km2) for square in stats.added_squares] == [
+        (("n", NORDSTRAND), "Nordstrand (synthetic island polygon)", 50.0)
+    ]
+
+
+# ------------------------------------- rows that do not fit the extract ---
+# a dry run over a second extract, for what a run counts of rows and
 # curation rows that do not fit: two rows on Holm, a QID-only row (the North
 # Sea), the Arlau with one same-named and one renamed member way, ids and
 # local references nobody can place, a shop that carries Holm's QID
@@ -730,62 +738,51 @@ def report_run(
     return inject(d, dry_run=True)
 
 
-def test_report_of_rows_and_curation_rows_that_do_not_fit(tmp_path: Path) -> None:
-    lines = log_lines(report_run(tmp_path, REPORT_PLACES, REPORT_CURATION), tmp_path)
-    assert lines[1].startswith("dialects  : <dir>/dialects.csv -> ")
-    assert lines[:1] + lines[2:] == [
-        "name list : <dir>/places.csv",
-        "usable    : 5 rows -> 3 OSM ids + 2 wikidata QIDs + 1 local reference(s)",
-        "areas     : <dir>/areas.geojson -> 0 polygon(s): ",
-        "curation  : <dir>/curation.csv -> 2 OSM ids (2 with frasch:minzoom, 0 with frasch:maxzoom)",
-        "synthetic : 1 polygon(s) to add around nodes",
-        "local     : 2 local reference(s) positioned in <dir>/curation.csv",
-        "  ! local/nowhere (Nowhere) is positioned in <dir>/curation.csv but no row of "
-        "<dir>/places.csv uses it -- nothing added",
-        "objects   : <dir>/osm_objects.json -> 3 located object(s)",
-        "waterways : 2 member ways of matched waterway relations",
-        "",
-        "scanned 9 objects in 0s",
-        "tagged  5 objects: 2 nodes, 2 ways, 1 relations (of these 1 matched by wikidata: "
-        "2 of 2 QIDs present); 1 same-named member ways of waterway relations",
-        "names written per dialect:",
-        "  name:frr-x-mooring       5  Mooring",
-        "  frasch:local             0  local form",
-        "objects per dialect area:",
-        "  (none -- no tagged object lies in a dialect area)",
-        "",
-        "1 rows reference ids that are not in in.osm.pbf:",
-        "  node/99  Bräist",
-        "",
-        "1 objects carry a QID of the list but are not place-like -- not tagged:",
-        "  node/6  Rosen-Huus: Q559369 (Hulm)",
-        "",
-        "curated 1 objects: 1 nodes, 0 ways, 0 relations",
-        "  node/1  Holm: frasch:minzoom=11",
-        "",
-        "1 curation rows reference ids that are not in in.osm.pbf:",
-        "  node/98  Gone",
-        "",
-        "added 1 synthetic polygon(s):",
-        "  way/12 (node/7..node/10)  Sophien-Koog: 2 km²",
-        "  ! node/97 Gone island: node not in in.osm.pbf, no polygon added",
-        "",
-        "(dry run -- nothing written)",
-    ]
+@pytest.fixture(scope="module")
+def misfits(tmp_path_factory: pytest.TempPathFactory) -> Stats:
+    """What the dry run over the report extract with REPORT_PLACES and
+    REPORT_CURATION counted."""
+    return report_run(tmp_path_factory.mktemp("misfits"), REPORT_PLACES, REPORT_CURATION).stats
+
+
+def test_every_object_of_the_extract_is_scanned(misfits: Stats) -> None:
+    # six nodes, two ways, one relation
+    assert misfits.scanned == 9
+
+
+def test_only_the_references_the_extract_has_are_found(misfits: Stats) -> None:
+    # not Bredstedt, node/99, which lies in the other extract
+    assert misfits.found == {("n", 1), ("r", 20), ("l", "sophien-koog")}
+
+
+def test_an_object_tagged_through_its_qid_alone_is_counted(misfits: Stats) -> None:
+    # the North Sea
+    assert misfits.qid_carriers == 1
+
+
+def test_a_same_named_member_way_of_a_waterway_is_counted(misfits: Stats) -> None:
+    # the Arlau's way 10, not the Alte Arlau
+    assert misfits.member_ways == 1
+
+
+def test_a_qid_carrier_that_is_not_place_like_is_recorded(misfits: Stats) -> None:
+    assert misfits.skipped_carriers == [SkippedCarrier(("n", 6), "Rosen-Huus", "Q559369")]
+
+
+def test_only_the_curated_objects_the_extract_has_are_recorded(misfits: Stats) -> None:
+    # not node/98
+    assert misfits.curated == {("n", 1)}
+
+
+def test_no_square_is_added_around_a_node_the_extract_lacks(misfits: Stats) -> None:
+    # the Sophien-Koog's square, not the one around node/97
+    assert [square.key for square in misfits.added_squares] == [("l", "sophien-koog")]
 
 
 def test_the_report_spells_no_reference_by_its_type_letter(tmp_path: Path) -> None:
     # node/6, not n/6: the one form the cells of the lists have
     log = report_run(tmp_path, REPORT_PLACES, REPORT_CURATION).log
     assert [line for line in log if re.search(r"\b[nwr]/\d", line)] == []
-
-
-def test_report_names_a_curation_file_without_osm_ids(tmp_path: Path) -> None:
-    # only the Sophien-Koog's label square
-    lines = log_lines(report_run(tmp_path, REPORT_PLACES[4:], REPORT_CURATION[3:4]), tmp_path)
-    assert (
-        "curation  : <dir>/curation.csv -> 0 OSM ids (0 with frasch:minzoom, 0 with frasch:maxzoom)"
-    ) in lines
 
 
 def test_a_run_prints_nothing(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -862,16 +859,10 @@ def test_the_command_stops_on_a_missing_dialect_area_file(
     )
 
 
-def test_report_when_no_object_lies_in_a_dialect_area(tmp_path: Path) -> None:
+def test_an_object_outside_every_dialect_area_counts_for_no_dialect(tmp_path: Path) -> None:
     (tmp_path / "areas.geojson").write_text(json.dumps(AREAS), encoding="utf-8")
     # only the North Sea, found through its QID, far out of every area
-    report = report_run(tmp_path, REPORT_PLACES[1:2], [])
-    assert report.log[-4:] == [
-        "objects per dialect area:",
-        "  (none -- no tagged object lies in a dialect area)",
-        "",
-        "(dry run -- nothing written)",
-    ]
+    assert report_run(tmp_path, REPORT_PLACES[1:2], []).stats.dialects == collections.Counter()
 
 
 # ------------------------------------------------------------- waterways ---
@@ -971,12 +962,7 @@ def test_a_qid_counts_as_present_whatever_matched_its_carrier(tmp_path: Path) ->
     (tmp_path / "places.csv").write_text(places_text([hulm, NORDSIIE]), encoding="utf-8")
     holm = {"place": "village", "name": "Holm", "wikidata": "Q559369"}
     write_extract(tmp_path / "in.osm.pbf", nodes={1: ((8.9, 54.6), holm)})
-    lines = inject(tmp_path, dry_run=True).log
-    assert (
-        "tagged  1 objects: 1 nodes, 0 ways, 0 relations "
-        "(of these 0 matched by wikidata: 1 of 2 QIDs present)"
-    ) in lines
-    assert "1 wikidata QIDs not present in the file: Q1693 (Nordsiie)" in lines
+    assert inject(tmp_path, dry_run=True).stats.present_qids == {"Q559369"}
 
 
 def test_a_node_found_by_its_qid_is_asked_for_its_own_frisian_name(tmp_path: Path) -> None:
