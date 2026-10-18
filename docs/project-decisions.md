@@ -1739,3 +1739,37 @@ the notch and, placed by `left: 50%`, could only be half the screen wide.
 - **One deliberate exception** (owner's decision): `areaLayers.test.ts` fails
   when a dialect is added without a colour in the area review view's
   `DIALECT_COLORS`. Every other test passes with a dialect added.
+
+## Decided 2026-10-18: the sweep of dead code, style leftovers and stale text (issue #112)
+
+Every item of the 2026-10-05 review was checked again against `main`; what
+each became is in the issue's spec comment. The ones that change how
+something works:
+
+- **Name layers are marked** (owner's decision): a symbol layer that labels
+  a feature by its name carries `"metadata": {"frasch:label": true}` and
+  `["get", "name"]` as its text-field in `frasch-bright.json`; `labelLayers`
+  rewrites marked layers only. It used to rewrite any text-field whose
+  string contained `name`, which is why the file kept 27 legacy
+  `{name:latin}\n{name:nonlatin}` templates.
+- **The style file names no URL**: the source URL, sprite and glyphs of
+  upstream's hosting (MapTiler, GitHub Pages) are gone, as `styleFor` always
+  set its own; so are the Mapbox Studio metadata, the camera and
+  `visibility: visible`. A test keeps URLs out of the file.
+- **Layers for the planet stay** (owner's decision): `highway-shield-us-*`,
+  `landcover-glacier`, `landcover-ice-shelf`, `place-continent` and
+  `place-country-*` match nothing in Schleswig-Holstein but do on the planet
+  build that launch needs.
+- **No `housenumber` and `mountain_peak` in the tiles** (owner's decision):
+  `tiles/build.sh` passes `--exclude_layers=housenumber,mountain_peak`, as no
+  style layer reads them (279 451 house numbers in the 2026-10-03 archive).
+  It takes effect with the next published archive (#140).
+- **Old `?place=` links** (owner's decision): `entryLookup` still finds an
+  entry by any of its OSM references and ignores a `#<line>`; the QID keys
+  are gone, as no entry of `names.json` lacks an OSM reference.
+- **`frasch dialects --columns` is gone** (owner's decision), as are the kind
+  names `farm`, `islet`, `locality`, `county`, `municipality` and `region`
+  (owner's decision): no row and no place class of the archive has them.
+- **`errors.Invalid` takes the reason alone**: no production call passed a
+  location to `refs.parse`, `parse_point` or `parse_set_tags`; every reader
+  names the file and line of the row itself.
