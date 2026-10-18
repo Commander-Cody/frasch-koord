@@ -6,7 +6,7 @@ import type {
 } from 'maplibre-gl';
 
 import { LOCAL_TAG } from '../../dialects/views';
-import { placeLayerIds, styleFor } from './index';
+import { BASE_STYLE, placeLayerIds, styleFor } from './index';
 import { nameExpression } from './labels';
 
 const origin = window.location.origin;
@@ -28,6 +28,10 @@ it("reads the tiles from the site's archive", async () => {
   const { styleFor } = await import('./index');
   const source = styleFor(LOCAL_TAG).sources.openmaptiles as VectorSourceSpecification;
   expect(source.url).toBe(`pmtiles://${origin}/tiles/sh.pmtiles`);
+});
+
+it('names no third-party URL in the style file', () => {
+  expect(JSON.stringify(BASE_STYLE)).not.toMatch(/[a-z]+:\/\//);
 });
 
 it("labels places with the view's label expression", () => {

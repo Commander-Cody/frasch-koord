@@ -213,14 +213,21 @@ then reads TileJSON straight out of the archive itself.
   `openmaptiles:version` "3.x", downloaded as-is on 2026-09-15 — see
   `docs/project-decisions.md`) and was renamed from `osm-bright.json` on
   2026-09-15, when the `place`-layer label group was restructured for
-  Frisian place kinds (see "Label classes" below). Everything else in the
-  file is still stock OSM Bright.
+  Frisian place kinds (see "Label classes" below). Since then it has lost
+  what upstream needed and we do not (issue #112): the Mapbox Studio
+  metadata, the camera, and the source URL, sprite and glyphs, which named
+  MapTiler and GitHub Pages; the file names no URL. Everything else in it is
+  still stock OSM Bright.
+- **A layer that labels a feature by its name is marked**
+  `"metadata": {"frasch:label": true}`, with `["get", "name"]` as its
+  `text-field` in the file. A new name layer needs the marker, or it shows
+  the OSM `name` in every view.
 - `src/map/style/index.ts` — `styleFor(view)` takes it (`BASE_STYLE`, the
   one place the JSON is cast to a `StyleSpecification`) and keeps doing only
   what has to stay dynamic at runtime:
   - points the `openmaptiles` source at `TILES_URL` and adds OSM/OpenMapTiles
     attribution to it;
-  - rewrites every name-based symbol layer's `text-field` to
+  - rewrites the `text-field` of every marked layer to
     `nameExpression(view)` below (`labelLayers` in `src/map/style/labels.ts`,
     which needs no `import.meta.env`, so the glyphs check of the build
     imports it too);
@@ -228,8 +235,7 @@ then reads TileJSON straight out of the archive itself.
     as absolute URLs against the page origin (MapLibre requires this for
     sprites).
 
-  Layers labelling something else (e.g. `{ref}` road shields) are left
-  untouched. Changing the selector calls `map.setStyle()` with a freshly
+  Unmarked layers, such as the `{ref}` road shields, are left untouched. Changing the selector calls `map.setStyle()` with a freshly
   built style for the new view.
 
 ### Dialect registry and the selector
@@ -271,7 +277,7 @@ run over it.
 
 `labelChain(tag)` in `src/dialects/labelChain.ts` is the one definition of which name
 a place is shown by. `nameExpression(tag)` in `src/map/style/labels.ts` turns it
-into the `text-field` of every name-based symbol layer, and `resolveName` in
+into the `text-field` of every marked symbol layer, and `resolveName` in
 `src/names/resolveName.ts` walks the same chain over a place's names for the
 place card and the search results — so neither can drift from the map label again (it
 did once: the card said Flensburg where the map said Flensborg). Dialect view

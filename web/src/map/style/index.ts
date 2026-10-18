@@ -35,8 +35,8 @@ export const BASE_STYLE = fraschBright as unknown as StyleSpecification;
 /**
  * The site's style in `view` (a dialect tag or LOCAL_TAG): BASE_STYLE with
  *  - its `openmaptiles` source pointed at TILES_URL
- *  - every symbol layer's name-based `text-field` rewritten to the view's
- *    label chain (labels.ts)
+ *  - the `text-field` of every layer marked `frasch:label` rewritten to the
+ *    view's label chain (labels.ts)
  *  - `glyphs`/`sprite` pointed at the copies this site hosts itself
  */
 export function styleFor(view: string): StyleSpecification {
@@ -55,7 +55,7 @@ export function styleFor(view: string): StyleSpecification {
     },
   };
 
-  // (b) Rewrite name-based text-fields to follow the view's label chain.
+  // (b) Label the marked layers by the view's label chain.
   style.layers = labelLayers(style.layers, view);
 
   // (c) Serve glyphs and sprites locally rather than from a third party.
