@@ -56,14 +56,8 @@
     "quarter": "Ortsteil",
     "neighbourhood": "Ortsteil",
     "isolated_dwelling": "Einzelsiedlung",
-    "farm": "Hof",
-    "islet": "Insel",
-    "locality": "Flur",
     "state": "Bundesland",
     "province": "Provinz",
-    "county": "Kreis",
-    "municipality": "Gemeinde",
-    "region": "Region",
     "continent": "Kontinent"
   }
 }

@@ -16,7 +16,7 @@ export const LOCAL_TAG = 'frr-x-local';
  * single dialect of its own, so the chrome has to pick one; the owner chose
  * Mooring. One place to change if that ever becomes e.g. a "mixed" UI.
  */
-export const LOCAL_VIEW_UI_LANGUAGE = 'frr-x-mooring';
+const LOCAL_VIEW_UI_LANGUAGE = 'frr-x-mooring';
 
 /** View selected on first load. */
 export const DEFAULT_VIEW = 'frr-x-mooring';
