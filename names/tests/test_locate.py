@@ -63,7 +63,7 @@ def u_island(
 
 def test_a_concave_island_is_located_inside_itself(run_locate: RunLocate, tmp_path: Path) -> None:
     island = Polygon(U_SHAPE)
-    assert not island.contains(Point(8.5, 54.5375))  # the vertex average
+    assert not island.contains(Point(8.5, 54.55))  # the vertex average
     objects = run_locate(
         [{"kind": "island", "mooring": "U", "osm": f"way/{U_WAY}"}], u_island(tmp_path)
     )

@@ -23,7 +23,7 @@ Extra = LonLat | list[int] | None
 # (type letter, id, tags, extra)
 ExtractObject = tuple[str, int, dict[str, str], Extra]
 
-# A U-shaped island: the mean of its corners (8.5, 54.5375) lies in the bay
+# A U-shaped island: the mean of its corners (8.5, 54.55) lies in the bay
 # between the two arms, outside the island itself.
 U_SHAPE: list[LonLat] = [
     (8.0, 54.0),
