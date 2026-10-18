@@ -3,15 +3,14 @@
  * vite-plugins/build/glyphs.ts: which glyph ranges the labels need, read off the
  * style and the tile archive, and what a build refuses.
  */
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { StyleSpecification } from 'maplibre-gl';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { archiveLabels, glyphProblems, renderedFields, siteFields } from './glyphs.ts';
 import { DIALECTS } from '../../src/dialects/registry.ts';
 import { type TestTile, writeTestArchive } from './testArchive.ts';
+import { tempDirPerTest } from '../testDir.ts';
 
 const LATIN = ['0-255', '256-511'];
 
@@ -146,15 +145,7 @@ describe('siteFields', () => {
 });
 
 describe('archiveLabels', () => {
-  let dir: string;
-
-  beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'glyphs-archive-'));
-  });
-
-  afterEach(() => {
-    rmSync(dir, { recursive: true, force: true });
-  });
+  const dir = tempDirPerTest('glyphs-archive-');
 
   const TILES: TestTile[] = [
     {
@@ -175,7 +166,7 @@ describe('archiveLabels', () => {
   ];
 
   it('collects the values of the shown fields, each once', async () => {
-    const archive = join(dir, 'test.pmtiles');
+    const archive = join(dir.path, 'test.pmtiles');
     writeTestArchive(archive, TILES);
 
     expect(await archiveLabels(archive, FIELDS)).toEqual([
@@ -186,14 +177,14 @@ describe('archiveLabels', () => {
   });
 
   it('reads gzip-compressed tiles, as Planetiler writes them', async () => {
-    const archive = join(dir, 'test.pmtiles');
+    const archive = join(dir.path, 'test.pmtiles');
     writeTestArchive(archive, TILES, { gzip: true });
 
     expect(await archiveLabels(archive, FIELDS)).toHaveLength(3);
   });
 
   it('reads the tiles behind a leaf directory', async () => {
-    const archive = join(dir, 'test.pmtiles');
+    const archive = join(dir.path, 'test.pmtiles');
     writeTestArchive(archive, TILES, { leaf: true });
 
     expect(await archiveLabels(archive, FIELDS)).toHaveLength(3);

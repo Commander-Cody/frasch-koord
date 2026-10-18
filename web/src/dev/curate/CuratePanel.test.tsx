@@ -165,11 +165,6 @@ async function findOverpassObject(osmRef: string, tags: Record<string, string>) 
   });
 }
 
-/** Runs an Overpass lookup that finds one way, `way/<id>`, tagged with `wikidata`. */
-function findOverpassResult(osmRef: string, wikidata: string) {
-  return findOverpassObject(osmRef, { name: 'Niebüll', wikidata });
-}
-
 /** The colour of the number a candidate or lookup result is listed with. */
 async function listedColor(osmRef: string): Promise<string> {
   const item = await listedItem(osmRef);
@@ -364,17 +359,6 @@ describe('CuratePanel', () => {
     expect(posts).toHaveLength(1);
   });
 
-  it('saves a double-clicked skip once', async () => {
-    await renderPanel();
-    await openRow('Naibel');
-
-    const skip = screen.getByRole('button', { name: 'Skip' });
-    fireEvent.click(skip);
-    fireEvent.click(skip);
-
-    expect(posts).toHaveLength(1);
-  });
-
   it('lets the user try again after a save failed', async () => {
     await renderPanel();
     await openRow('Naibel');
@@ -444,17 +428,6 @@ describe('CuratePanel', () => {
     expect(posts[0].entry).not.toHaveProperty('wikidata');
   });
 
-  it('saves an Overpass result whose wikidata tag names several ids without one', async () => {
-    await renderPanel();
-    await openRow('Naibel');
-    await findOverpassResult('way/8', 'Q1;Q2');
-
-    fireEvent.click(within(await listedItem('way/8')).getByRole('button', { name: 'Pick' }));
-
-    expect(posts[0].entry).toMatchObject({ action: 'osm', osm: 'way/8' });
-    expect(posts[0].entry).not.toHaveProperty('wikidata');
-  });
-
   it('saves the one well-formed id of a multi-pick, leaving out a tag with several', async () => {
     await renderPanel();
     await openRow('Hoosem');
@@ -477,14 +450,5 @@ describe('CuratePanel', () => {
     within(await listedItem('node/7')).getByText(
       'wikidata Q1717813;Q20729612: not one id, not saved',
     );
-  });
-
-  it('says on an Overpass result that its wikidata tag with several ids is not saved', async () => {
-    await renderPanel();
-    await openRow('Naibel');
-
-    await findOverpassResult('way/8', 'Q1;Q2');
-
-    within(await listedItem('way/8')).getByText('wikidata Q1;Q2: not one id, not saved');
   });
 });

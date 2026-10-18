@@ -298,30 +298,26 @@ describe('the card of a clicked label of a listed place', () => {
 
   // The tile's own value is what the clicked label shows; the entry's comes
   // from the OSM extract the list was matched against, which may be older.
-  it("has the tile feature's Low Saxon name rather than the entry's", () => {
-    const card = cardModel(
-      clicked({ 'name:nds': 'Tile' }, listed({ name_nds: 'Listed' })),
-      LOCAL_TAG,
-    );
+  const TILE_FIRST_NAMES = [
+    { name: 'Low Saxon', tileKey: 'name:nds', entryField: 'name_nds' },
+    { name: 'generic', tileKey: 'name', entryField: 'name_osm' },
+  ] as const;
 
-    expect(card.headline).toBe('Tile');
-  });
+  it.each(TILE_FIRST_NAMES)(
+    "has the tile feature's $name name rather than the entry's",
+    ({ tileKey, entryField }) => {
+      const entry = listed({ [entryField]: 'Listed' });
 
-  it("has the entry's Low Saxon name where the tile feature has none", () => {
-    const card = cardModel(clicked({}, listed({ name_nds: 'Listed' })), LOCAL_TAG);
+      expect(cardModel(clicked({ [tileKey]: 'Tile' }, entry), LOCAL_TAG).headline).toBe('Tile');
+    },
+  );
 
-    expect(card.headline).toBe('Listed');
-  });
+  it.each(TILE_FIRST_NAMES)(
+    "has the entry's $name name where the tile feature has none",
+    ({ entryField }) => {
+      const entry = listed({ [entryField]: 'Listed' });
 
-  it("has the tile feature's generic name rather than the entry's", () => {
-    const card = cardModel(clicked({ name: 'Tile' }, listed({ name_osm: 'Listed' })), LOCAL_TAG);
-
-    expect(card.headline).toBe('Tile');
-  });
-
-  it("has the entry's generic name where the tile feature has none", () => {
-    const card = cardModel(clicked({}, listed({ name_osm: 'Listed' })), LOCAL_TAG);
-
-    expect(card.headline).toBe('Listed');
-  });
+      expect(cardModel(clicked({}, entry), LOCAL_TAG).headline).toBe('Listed');
+    },
+  );
 });

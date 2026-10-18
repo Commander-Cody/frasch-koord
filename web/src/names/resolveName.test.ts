@@ -62,6 +62,7 @@ describe('resolveName', () => {
     expect(resolveName(e, 'frr-x-local')).toEqual({ name: 'Niebüll', source: GERMAN });
   });
 
+  // Tønder, not Tondern: the local view also takes OSM's generic name before the German one.
   it("reports OSM's generic name as of unknown source where it is no name the entry knows a language of", () => {
     const e = entry({ name_osm: 'Tønder', name_de: 'Tondern' });
     expect(resolveName(e, 'frr-x-local')).toEqual({ name: 'Tønder', source: UNKNOWN });
@@ -81,11 +82,6 @@ describe('resolveName', () => {
     // Low Saxon still wins over OSM's generic name and the German one.
     const e = entry({ name_frr: 'Rüms', name_nds: 'Sölerloch', name_osm: 'Sylt', name_de: 'Sylt' });
     expect(resolveName(e, 'frr-x-local')).toEqual({ name: 'Sölerloch', source: LOW_SAXON });
-  });
-
-  it("the local view prefers OSM's generic name over the German one", () => {
-    const e = entry({ name_osm: 'Tønder', name_de: 'Tondern' });
-    expect(resolveName(e, 'frr-x-local').name).toBe('Tønder');
   });
 
   it('the local view falls back to German where there is no generic name', () => {
