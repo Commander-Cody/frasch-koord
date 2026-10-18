@@ -28,18 +28,16 @@ export type EntryLookup = (ref: string) => NameEntry | undefined;
  * Looks entries up by the row id — what the tiles carry as `frasch:ref` and a
  * `?place=` link names — and, for what was shared or built before the row
  * ids, by the reference that used to be the id: any of the row's OSM
- * references, or the QID of a row without one. No two rows have one object
- * or item (frasch/placelist.py refuses such a list), and ids are lowercase
- * slugs without a `/`, so they never clash with a reference or a QID. The
+ * references. No two rows have one object (frasch/placelist.py refuses such
+ * a list), and ids are lowercase slugs without a `/`, so they never clash
+ * with a reference. The
  * `#<csv line>` an old link may end in told two rows on one object apart;
  * it is ignored.
  */
 export function entryLookup(entries: NameEntry[]): EntryLookup {
   const byRef = new Map<string, NameEntry>();
   for (const entry of entries) {
-    for (const ref of [entry.id, ...osmRefs(entry.osm), entry.wikidata]) {
-      if (ref) byRef.set(ref, entry);
-    }
+    for (const ref of [entry.id, ...osmRefs(entry.osm)]) byRef.set(ref, entry);
   }
   return (ref) => byRef.get(ref) ?? byRef.get(ref.split('#')[0]);
 }

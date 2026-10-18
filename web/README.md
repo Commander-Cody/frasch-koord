@@ -347,8 +347,7 @@ OpenMapTiles schema plus our extras, injected by the `tiles/` build
   e.g. `Foortuftinge`. Shown by the place card; nothing in the style reads it.
 - `frasch:ref` (string, only on features from our name list): which row of
   `names/places.csv` the names come from — its `id`, e.g. `naibel` (tiles
-  built before the row ids carry the row's first OSM reference or its QID
-  instead). It is the `id` of that row's entry in the search index, which is how
+  built before the row ids carry the row's first OSM reference instead). It is the `id` of that row's entry in the search index, which is how
   a click on a label finds the rest of the place's names (see "Place info
   card"). Absent on everything the name list does not cover.
 - Names: `name:<tag>` for every dialect of the registry that has a name for
@@ -501,7 +500,7 @@ string as `frasch:ref`. That is the whole link between a label on the map and
 its row in the name list. It never changes, so a `?place=` link survives
 edits to the list and OSM id changes alike. Links shared before the row ids
 (`?place=node/240042766`, or `?place=way/28330569#679` for a second row on one
-object) and tiles built before them name the row's OSM reference (or its QID)
+object) and tiles built before them name the row's OSM reference
 instead; `entryLookup` in `src/names/load.ts` resolves those too. The
 `#<line>` told two rows on one object apart, which the name list no longer
 allows; it is ignored.

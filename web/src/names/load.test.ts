@@ -150,11 +150,10 @@ describe('namesUrl', () => {
 });
 
 describe('entryLookup', () => {
-  // A row with one object, a row claiming two, a country.
+  // A row with one object, a row claiming two.
   const lungedik = entry({ id: 'lungedik', osm: 'way/28330569', name_de: 'Langerdeich' });
   const nordwarw = entry({ id: 'nordwarw', osm: 'way/1347936331; node/1332249790' });
-  const danemark = entry({ id: 'danemark', wikidata: 'Q35' });
-  const find = entryLookup([lungedik, nordwarw, danemark]);
+  const find = entryLookup([lungedik, nordwarw]);
 
   it('finds an entry by its row id', () => {
     expect(find('nordwarw')).toBe(nordwarw);
@@ -170,10 +169,6 @@ describe('entryLookup', () => {
 
   it('still opens an old ?place=<ref>#<line> link, at the row of that object', () => {
     expect(find('way/28330569#679')).toBe(lungedik);
-  });
-
-  it('still opens an old ?place=<QID> link of a country', () => {
-    expect(find('Q35')).toBe(danemark);
   });
 
   it('finds nothing for an unknown reference', () => {
