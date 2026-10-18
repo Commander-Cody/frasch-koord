@@ -7,8 +7,7 @@
  * appends every pick to an append-only JSONL patch that `frasch curate apply`
  * consumes — every pick that keeps the patch's contract, that is
  * (names/curate-patch.schema.json): `apply` would refuse any other. Dev only
- * (`apply: 'serve'`) — a production build has no such thing, which is why the
- * panel tells the user to start the dev server when the fetch fails.
+ * (`apply: 'serve'`), as is the panel itself (src/main.tsx).
  */
 import { appendFile, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';

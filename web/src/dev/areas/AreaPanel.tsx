@@ -61,8 +61,7 @@ export default function AreaPanel({ map }: { map: MapLibreMap }) {
       what="the areas"
       needs={
         <>
-          This view needs the Vite dev server (<code>npm run dev</code>) and the geometry built by{' '}
-          <code>just rebuild areas</code>.
+          This view needs the geometry built by <code>just rebuild areas</code>.
         </>
       }
       resource={resource}

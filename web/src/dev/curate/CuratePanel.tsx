@@ -70,8 +70,7 @@ export default function CuratePanel({ map }: { map: MapLibreMap }) {
       what="the worklist"
       needs={
         <>
-          The curation view needs the Vite dev server (<code>npm run dev</code>) and a worklist
-          exported with <code>frasch curate export</code>.
+          The curation view needs a worklist exported with <code>frasch curate export</code>.
         </>
       }
       resource={resource}

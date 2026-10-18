@@ -284,14 +284,15 @@ did once: the card said Flensburg where the map said Flensborg). Dialect view
 (`tag = "frr-x-mooring"`):
 
 ```
-coalesce(name:frr-x-mooring, frasch:local, name:frr, name:nds, name:de, name:latin, name)
+coalesce(name:frr-x-mooring, frasch:local, name:frr-x-wieding, …, name:frr, name:nds, name:de, name:latin, name)
 ```
 
-i.e. `coalesce(get "name:frr-x-mooring", get "frasch:local", get "name:frr",
-get "name:nds", get "name:de", get "name:latin", get "name")`. `frasch:local`
-sits right behind the selected dialect so that a place the dialect has no
-name for still gets a _Frisian_ label (the Fering name on Föhr) rather than
-dropping to German.
+i.e. `coalesce(get "name:frr-x-mooring", get "frasch:local", …)`, where `…`
+is the `name:<tag>` of every other dialect of the registry, in registry
+order. `frasch:local` sits right behind the selected dialect so that a place
+the dialect has no name for still gets a _Frisian_ label (the Fering name on
+Föhr) rather than dropping to German; the other dialects come next, ahead of
+OSM's dialect-mixed `name:frr`.
 
 Local view (`tag = LOCAL_TAG`):
 
