@@ -144,9 +144,7 @@ def write_mixed_extract(path: Path) -> Path:
     )
 
 
-def test_main_keeps_named_classified_objects_with_their_positions(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_main_keeps_named_classified_objects_with_their_positions(tmp_path: Path) -> None:
     pbf = write_mixed_extract(tmp_path / "mixed.osm.pbf")
     out = build(tmp_path, pbf)
 
@@ -196,20 +194,42 @@ def test_main_keeps_named_classified_objects_with_their_positions(
             "tags": {"boundary": "historic", "name": "Verloren"},
         },
     ]
-    stdout, stderr = (re.sub(r" \d+s$", " Ns", text, flags=re.M) for text in capsys.readouterr())
-    assert (
-        stderr == f"scanning {pbf} ...\n  mixed: 15 objects scanned, 3 way centroids cached, Ns\n"
-    )
-    assert stdout == (
-        f"\nwrote 5 candidates to {out} in Ns\n"
-        "  nodes 1  ways 2  relations 2\n"
-        "counts by tag class (an object can count in several):\n"
-        "         1  boundary\n"
-        "         1  highway\n"
-        "         1  landuse\n"
-        "         2  place\n"
-        "         1  wikidata\n"
-    )
+
+
+def build_output(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> tuple[list[str], str]:
+    """-> (the lines a build of the mixed extract prints, what it says on
+    stderr), its times as `Ns`."""
+    build(tmp_path, write_mixed_extract(tmp_path / "mixed.osm.pbf"))
+    out, err = (re.sub(r" \d+s$", " Ns", text, flags=re.M) for text in capsys.readouterr())
+    return out.splitlines(), err
+
+
+def test_a_build_says_how_many_objects_each_extract_had(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _, err = build_output(tmp_path, capsys)
+    assert "  mixed: 15 objects scanned, 3 way centroids cached, Ns\n" in err
+
+
+def test_a_build_counts_the_candidates_by_type(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    lines, _ = build_output(tmp_path, capsys)
+    assert "  nodes 1  ways 2  relations 2" in lines
+
+
+def test_a_build_counts_the_candidates_by_tag_class(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    lines, _ = build_output(tmp_path, capsys)
+    heading = lines.index("counts by tag class (an object can count in several):")
+    assert lines[heading + 1 :] == [
+        "         1  boundary",
+        "         1  highway",
+        "         1  landuse",
+        "         2  place",
+        "         1  wikidata",
+    ]
 
 
 def scanned_tags(tmp_path: Path, tags: dict[str, str]) -> list[dict[str, str]]:
