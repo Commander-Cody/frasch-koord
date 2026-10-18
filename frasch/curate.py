@@ -38,7 +38,8 @@ What apply writes where
 Apply checks everything first and then writes curation.csv and places.csv, each
 in one step and only if it did not change on disk meanwhile; when the second
 write fails, the first is undone, so a failed apply changes neither file.
-names/work/.lock keeps it from running at the same time as `frasch match`.
+names/work/.lock keeps it from running at the same time as `frasch match` or
+`frasch check-inputs --fix`.
 
 Neither `apply` nor the export prints: each returns a report, and the command
 (as `frasch update`, which runs both) prints it.

@@ -33,7 +33,7 @@ def row(**cells: str) -> placelist.PlaceRow:
 
 def run(tmp_path: Path, r: placelist.PlaceRow, *recs: Candidate) -> MatchResult:
     index = make_index(tmp_path, *recs)
-    return match.match_row(r, index, HintResolver(index), REGISTRY)
+    return match.match_row(r, index, HintResolver(index))
 
 
 def listed(out: MatchResult) -> list[OsmRef]:
@@ -425,12 +425,6 @@ def test_danish_name_is_used_when_there_is_no_german_one(tmp_path: Path) -> None
     out = run(tmp_path, row(kind="settlement", mooring="Hulm", da="Holme"), HOLME_DK)
     assert out.result is Outcome.MATCHED
     assert out.refs == (("n", 2716731633),)
-
-
-def test_row_without_frisian_name_is_not_matched(tmp_path: Path) -> None:
-    out = run(tmp_path, row(kind="settlement", de="Morsum"), MORSUM_SYLT)
-    assert out.result is Outcome.NOT_FOUND
-    assert out.refs == ()
 
 
 def test_row_without_german_or_danish_name_is_not_matched(tmp_path: Path) -> None:

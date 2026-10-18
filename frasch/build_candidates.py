@@ -192,9 +192,7 @@ def has_name(tags: osmium.osm.TagList) -> bool:
     return any(key in tags for key in NAME_FIELDS)
 
 
-def process(
-    pbf: str, src: str, out: IO[str], counts: collections.Counter[str], idx: str = "flex_mem"
-) -> None:
+def process(pbf: str, src: str, out: IO[str], counts: collections.Counter[str], idx: str) -> None:
     ways = WayCentroids()
     t0 = time.time()
     n_seen = 0

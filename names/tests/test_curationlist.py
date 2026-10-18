@@ -204,7 +204,7 @@ def test_parse_point_of_two_empty_cells_is_no_point() -> None:
 @pytest.mark.parametrize("lat,lon", [("54.65097", ""), ("", "8.34019")])
 def test_parse_point_needs_both_cells(lat: str, lon: str) -> None:
     with pytest.raises(Invalid, match="go together"):
-        curationlist.parse_point(lat, lon, "curation.csv:15")
+        curationlist.parse_point(lat, lon)
 
 
 @pytest.mark.parametrize(

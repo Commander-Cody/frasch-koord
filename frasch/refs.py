@@ -31,7 +31,7 @@ Ref = tuple[str, int | str]
 OsmRef = tuple[str, int]
 
 
-def parse(cell: str | None, where: str = "") -> list[Ref]:
+def parse(cell: str | None) -> list[Ref]:
     """`"way/12; way/13"` -> `[("w", 12), ("w", 13)]`;
     `"local/westerheide-amrum"` -> `[("l", "westerheide-amrum")]`.
 
@@ -45,7 +45,6 @@ def parse(cell: str | None, where: str = "") -> list[Ref]:
         m = re.fullmatch(rf"(node|way|relation)/([0-9]+)|(local)/({SLUG.pattern})", ref)
         if not m:
             raise Invalid(
-                where,
                 f"bad reference {ref!r} (expected node/ID, "
                 f"way/ID, relation/ID or local/slug with a slug "
                 f"of lowercase letters, digits and hyphens)",
@@ -56,7 +55,6 @@ def parse(cell: str | None, where: str = "") -> list[Ref]:
             out.append((OSM_TYPES[m.group(1)], int(m.group(2))))
     if len(out) > 1 and any(t == LOCAL_TYPE for t, _ in out):
         raise Invalid(
-            where,
             f"a local reference stands alone, it cannot be "
             f"combined with other references: {cell!r}",
         )

@@ -40,7 +40,6 @@ class PlacedCluster(Cluster):
     against North Frisia."""
 
     hint_ok: bool
-    hint_d: float | None
     nf_d: float | None
     in_nf: bool
 
@@ -113,8 +112,8 @@ def _centred(members: list[Candidate]) -> Cluster:
 
 
 def placed(cl: Cluster, hint_pt: Circle | None) -> PlacedCluster:
-    """`cl` with its distance to the location hint and to North Frisia."""
-    hint_d = None
+    """`cl` with whether it lies at the location hint, and its distance to
+    North Frisia."""
     hint_ok = False
     if hint_pt and cl["lon"] is not None:
         hint_d = haversine(cl["lon"], cl["lat"], hint_pt[0], hint_pt[1])
@@ -122,7 +121,6 @@ def placed(cl: Cluster, hint_pt: Circle | None) -> PlacedCluster:
     return {
         **cl,
         "hint_ok": hint_ok,
-        "hint_d": hint_d,
         "nf_d": geo.from_centre(cl["lon"], cl["lat"]),
         "in_nf": geo.in_north_frisia(cl["lon"], cl["lat"]),
     }

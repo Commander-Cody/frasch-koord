@@ -83,19 +83,19 @@ def _area_refs(
     """The areas a row of the list names (`first_line`: those of the rows
     above it, with their line); `Invalid` when the row breaks a rule."""
     if row["dialect"] not in known:
-        raise Invalid("", f"unknown dialect {row['dialect']!r} (not in names/dialects.csv)")
+        raise Invalid(f"unknown dialect {row['dialect']!r} (not in names/dialects.csv)")
     named = refs.parse(row["osm"])
     if not named:
-        raise Invalid("", "no OSM reference")
+        raise Invalid("no OSM reference")
     area_refs = [osm for ref in named if (osm := refs.as_osm_ref(ref)) and osm[0] in ("w", "r")]
     if len(area_refs) < len(named):
         # a node can never be a polygon, and `local/` names an object of our
         # own invention (curation.csv), not an OSM boundary
         bad = [r for r in named if r not in area_refs]
-        raise Invalid("", f"{refs.format(bad)}: only way/ or relation/ references are allowed here")
+        raise Invalid(f"{refs.format(bad)}: only way/ or relation/ references are allowed here")
     taken = [r for r in area_refs if r in first_line]
     if taken:
-        raise Invalid("", f"{refs.format(taken[:1])} is already on line {first_line[taken[0]]}")
+        raise Invalid(f"{refs.format(taken[:1])} is already on line {first_line[taken[0]]}")
     return area_refs
 
 
@@ -123,25 +123,20 @@ class AreaIndex:
             raise PipelineError(f"{path} not found -- build it with {rebuild('areas')}")
         with open(path, encoding="utf-8") as fh:
             fc = json.load(fh)
+        # MultiPolygons exploded: one entry per island / municipality blob
         polygons: list[tuple[str, BaseGeometry]] = []
         for feat in fc.get("features", []):
             tag = (feat.get("properties") or {}).get("dialect")
             if not tag:
                 raise PipelineError(f"{path}: a feature has no `dialect` property")
             geom = shape(feat["geometry"])
-            polygons.append((tag, geom))
-        # explode MultiPolygons: one entry per island / municipality blob
-        flat: list[tuple[str, BaseGeometry]] = []
-        for tag, geom in polygons:
-            for g in getattr(geom, "geoms", [geom]):
-                flat.append((tag, g))
-        flat.sort(key=lambda tg: tg[1].area)  # smallest first -> first hit wins
-        return cls(flat)
+            polygons.extend((tag, g) for g in getattr(geom, "geoms", [geom]))
+        return cls(polygons)
 
-    def lookup(self, lon: float | str, lat: float | str) -> str | None:
+    def lookup(self, lon: float, lat: float) -> str | None:
         if self.tree is None:
             return None
-        pt = Point(float(lon), float(lat))
+        pt = Point(lon, lat)
         best: tuple[str, float] | None = None
         for i in self.tree.query(pt):
             tag, geom = self.polygons[i]
