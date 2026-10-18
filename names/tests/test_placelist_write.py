@@ -77,6 +77,15 @@ def test_a_list_in_the_written_form_has_no_form_problem(places: Path) -> None:
     assert placelist.form_problem(placelist.table(str(places))) is None
 
 
+def test_filling_the_ids_writes_a_list_whose_rows_all_have_one_in_the_written_form(
+    places: Path,
+) -> None:
+    text = places_text(ROWS)
+    places.write_text(text.replace(",Dorf 1,", '," Dorf 1 ",'), encoding="utf-8")
+    placelist.fill_ids(str(places), REGISTRY)
+    assert places.read_text(encoding="utf-8") == text
+
+
 def test_interrupted_write_leaves_the_file_alone(
     places: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
