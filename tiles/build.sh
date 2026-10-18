@@ -121,6 +121,10 @@ echo "== building $OUT"
 #                    compares it with names.json's
 #                    (web/vite-plugins/build/provenance.ts). Planetiler
 #                    records the extract's replication time by itself.
+# --exclude_layers:  OpenMapTiles layers no layer of the site's style reads
+#                    (web/src/map/style/frasch-bright.json); housenumber
+#                    alone was 279 451 features of the 2026-10-03 archive. A
+#                    style layer for one of them needs it taken off here.
 "$JAVA_BIN" -Xmx"$XMX" -jar planetiler.jar \
   --osm-path="$INJECTED" \
   --natural_earth_path="$NATURAL_EARTH" \
@@ -129,6 +133,7 @@ echo "== building $OUT"
   --output="$OUT_TMP" \
   "${NAME_TAG_OPTIONS[@]}" \
   --archive_description="$BUILT_FROM" \
+  --exclude_layers=housenumber,mountain_peak \
   --force "$@"
 mv "$OUT_TMP" "$OUT"
 ls -la "$OUT"
