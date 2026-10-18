@@ -123,7 +123,7 @@ def lock(lock_path: str) -> Iterator[None]:
     import fcntl  # POSIX only; the pipeline runs in WSL
 
     os.makedirs(os.path.dirname(os.path.abspath(lock_path)), exist_ok=True)
-    with open(lock_path, "a") as fh:
+    with open(lock_path, "ab") as fh:
         try:
             fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError as exc:

@@ -17,7 +17,7 @@ from typing import Any
 import jsonschema
 import pytest
 
-from frasch import candidates, curationlist, paths, placelist
+from frasch import candidates, curationlist, match, paths, placelist
 from frasch.candidates import Candidate
 from frasch.paths import Workspace
 from frasch.provenance import ExtractStamp
@@ -172,6 +172,25 @@ def path_options(ws: Workspace, *names: str) -> list[str]:
         for name in names
         for arg in ("--" + name.replace("_", "-"), paths.get(name) or getattr(ws, name))
     ]
+
+
+def run_matcher(
+    world: Path,
+    rows: Iterable[Mapping[str, str]] | None = None,
+    found: Iterable[Candidate] | None = None,
+    *,
+    extracts: Sequence[ExtractStamp] = (),
+    offline: bool = True,
+    dry_run: bool = False,
+) -> int:
+    """Run the matcher in `world` (`offline`: on the Wikidata cache only) on
+    `rows` as its places.csv and the candidates `found` in `extracts`; None
+    leaves the file that is there.  -> its exit status."""
+    if rows is not None:
+        (world / "places.csv").write_text(places_text(rows), encoding="utf-8")
+    if found is not None:
+        write_candidates(world / "work" / "candidates.jsonl", *found, extracts=extracts)
+    return match.run(workspace(world), REGISTRY, offline=offline, dry_run=dry_run)
 
 
 @pytest.fixture

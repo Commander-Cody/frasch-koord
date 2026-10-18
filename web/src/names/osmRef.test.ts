@@ -24,16 +24,12 @@ describe('osmRefs', () => {
 });
 
 describe('osmUrl', () => {
-  it('links a node', () => {
-    expect(osmUrl('node/240042766')).toBe('https://www.openstreetmap.org/node/240042766');
-  });
-
-  it('links a way', () => {
-    expect(osmUrl('way/1087160352')).toBe('https://www.openstreetmap.org/way/1087160352');
-  });
-
-  it('links a relation', () => {
-    expect(osmUrl('relation/3352541')).toBe('https://www.openstreetmap.org/relation/3352541');
+  it.each([
+    ['node/240042766', 'https://www.openstreetmap.org/node/240042766'],
+    ['way/1087160352', 'https://www.openstreetmap.org/way/1087160352'],
+    ['relation/3352541', 'https://www.openstreetmap.org/relation/3352541'],
+  ])('links %s', (ref, url) => {
+    expect(osmUrl(ref)).toBe(url);
   });
 
   it('returns null for a synthetic local/ place', () => {

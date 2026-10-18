@@ -8,13 +8,13 @@
  * route, and the 500 that never echoes the underlying error, are
  * devEndpoints.test.ts's.
  */
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createCurateMiddleware } from './curate.ts';
 import { PATCH_FIELDS } from './patchFields.ts';
+import { tempDirPerTest } from './testDir.ts';
 import { fakeReq, fakeRes } from './testHttp.ts';
 import patchSchema from '../../names/curate-patch.schema.json' with { type: 'json' };
 
@@ -26,20 +26,15 @@ const noopNext = () => {
 };
 
 describe('createCurateMiddleware', () => {
-  let dir: string;
+  const dir = tempDirPerTest('curate-test-');
   let worklistPath: string;
   let patchPath: string;
   let middleware: ReturnType<typeof createCurateMiddleware>;
 
-  beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'curate-test-'));
-    worklistPath = join(dir, 'curate.json');
-    patchPath = join(dir, 'curate-patch.jsonl');
+  beforeEach(() => {
+    worklistPath = join(dir.path, 'curate.json');
+    patchPath = join(dir.path, 'curate-patch.jsonl');
     middleware = createCurateMiddleware({ worklistPath, patchPath });
-  });
-
-  afterEach(async () => {
-    await rm(dir, { recursive: true, force: true });
   });
 
   /** POSTs a raw body with the given headers against a loopback caller. */
@@ -84,23 +79,20 @@ describe('createCurateMiddleware', () => {
     expect(await readPatchEntries()).toEqual([]);
   });
 
-  it('accepts a same-origin JSON POST, storing only the known fields', async () => {
-    const entry = { ...validEntry, action: 'osm', osm: 'node/1', evil: 'dropped' };
+  it('answers a same-origin JSON POST with the entry it stored', async () => {
     const res = await post(
       { ...jsonHeaders, host: 'localhost:5173', origin: 'http://localhost:5173' },
-      JSON.stringify(entry),
+      JSON.stringify({ ...validEntry, action: 'osm', osm: 'node/1' }),
     );
     expect(res.status).toBe(200);
-    const stored = JSON.parse(res.body) as { ok: boolean; entry: Record<string, unknown> };
-    expect(stored.ok).toBe(true);
-    expect(Object.keys(stored.entry).sort()).toEqual(
-      ['action', 'at', 'de', 'id', 'kind', 'line', 'name', 'osm'].sort(),
-    );
-    expect(stored.entry.evil).toBeUndefined();
-    expect(typeof stored.entry.at).toBe('string');
+    const [onDisk] = await readPatchEntries();
+    expect(JSON.parse(res.body)).toEqual({ ok: true, entry: onDisk });
+  });
 
+  it('stores only the known fields', async () => {
+    const entry = { ...validEntry, action: 'osm', osm: 'node/1', evil: 'dropped' };
+    await post(jsonHeaders, JSON.stringify(entry));
     const onDisk = await readPatchEntries();
-    expect(onDisk).toHaveLength(1);
     expect(Object.keys(onDisk[0]).sort()).toEqual(
       ['action', 'at', 'de', 'id', 'kind', 'line', 'name', 'osm'].sort(),
     );
@@ -133,32 +125,28 @@ describe('createCurateMiddleware', () => {
     expect(await readPatchEntries()).toEqual([]);
   });
 
-  it('rejects a local entry of zero area with 400, and appends nothing', async () => {
-    const res = await post(jsonHeaders, JSON.stringify({ ...localEntry, polygon_km2: 0 }));
-    expect(res.status).toBe(400);
-    expect(await readPatchEntries()).toEqual([]);
-  });
-
-  it('names the field and the rule of the schema it breaks', async () => {
-    const res = await post(jsonHeaders, JSON.stringify({ ...localEntry, polygon_km2: 0 }));
-    expect(JSON.parse(res.body)).toEqual({
-      error: 'polygon_km2: breaks exclusiveMinimum (curate-patch.schema.json)',
-    });
-  });
-
-  it('rejects an entry without a field its action requires with 400', async () => {
-    const res = await post(jsonHeaders, JSON.stringify({ ...localEntry, lon: undefined }));
-    expect(res.status).toBe(400);
-    expect(await readPatchEntries()).toEqual([]);
-  });
-
-  it('names the field an entry lacks', async () => {
+  it.each([
+    [
+      'of zero area',
+      { ...localEntry, polygon_km2: 0 },
+      'polygon_km2: breaks exclusiveMinimum (curate-patch.schema.json)',
+    ],
     // the schema finds a missing field at the entry, not at the field
-    const res = await post(jsonHeaders, JSON.stringify({ ...localEntry, lon: undefined }));
-    expect(JSON.parse(res.body)).toEqual({
-      error: 'lon: breaks required (curate-patch.schema.json)',
-    });
-  });
+    [
+      'without a field its action requires',
+      { ...localEntry, lon: undefined },
+      'lon: breaks required (curate-patch.schema.json)',
+    ],
+  ])(
+    'rejects a local entry %s with 400, naming the field and the rule it breaks',
+    async (_, entry, error) => {
+      const res = await post(jsonHeaders, JSON.stringify(entry));
+      expect({ status: res.status, body: JSON.parse(res.body) }).toEqual({
+        status: 400,
+        body: { error },
+      });
+    },
+  );
 
   it('rejects an entry with a field of another action with 400', async () => {
     const res = await post(jsonHeaders, JSON.stringify({ ...fullEntries.osm, polygon_km2: 2 }));

@@ -43,6 +43,9 @@ module-root = ""
 
 [tool.pytest.ini_options]
 testpaths = ["names/tests", "tiles/tests", "scripts/tests"]
+# text I/O that relies on the locale fails the test that does it (#111); the
+# warning is only raised with PYTHONWARNDEFAULTENCODING=1, which check-python sets
+filterwarnings = ["error::EncodingWarning"]
 
 [tool.ruff]
 target-version = "py312"

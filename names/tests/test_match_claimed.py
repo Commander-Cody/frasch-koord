@@ -10,9 +10,9 @@ import json
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 
-from frasch import match, matchfile, placelist
+from frasch import matchfile, placelist
 from frasch.candidates import Candidate
-from conftest import REGISTRY, cand, places_text, workspace, write_candidates
+from conftest import REGISTRY, cand, run_matcher
 
 LANGERDEICH = cand(
     "w", 28330569, 8.865771, 54.471785, man_made="dyke", highway="residential", name="Langerdeich"
@@ -23,11 +23,8 @@ LUNGEDIK = {"kind": "warft", "mooring": "Lungedik", "de": "Langerdeich"}
 def run_match(
     world: Path, rows: Iterable[Mapping[str, str]], candidates: Iterable[Candidate]
 ) -> list[placelist.PlaceRow]:
-    places = world / "places.csv"
-    places.write_text(places_text(rows), encoding="utf-8")
-    write_candidates(world / "work" / "candidates.jsonl", *candidates)
-    assert match.run(workspace(world), REGISTRY, offline=True) == 0
-    return placelist.read(str(places), REGISTRY).rows
+    assert run_matcher(world, rows, candidates) == 0
+    return placelist.read(str(world / "places.csv"), REGISTRY).rows
 
 
 def why(world: Path, row_id: str) -> str:
@@ -74,8 +71,8 @@ def test_the_rest_of_a_river_a_human_gave_in_part_to_another_row_is_not_matched(
     # them names the river already; handing this row the other pieces would
     # label one river with two names.
     pieces = [
-        cand("w", i, 9.0, 54.6 + 0.01 * i, name="Arlau", waterway="river")
-        for i in (44051131, 44051132, 44051133)
+        cand("w", i, 9.0, 54.6 + 0.01 * n, name="Arlau", waterway="river")
+        for n, i in enumerate((44051131, 44051132, 44051133))
     ]
     checked = {
         "kind": "water",
@@ -282,13 +279,10 @@ def rows_after_a_failed_lookup(
     world: Path, rows: Iterable[Mapping[str, str]], candidates: Iterable[Candidate]
 ) -> list[placelist.PlaceRow]:
     """The name list after a run that could not look `UNANSWERED` up."""
-    places = world / "places.csv"
-    places.write_text(places_text(rows), encoding="utf-8")
-    write_candidates(world / "work" / "candidates.jsonl", *candidates)
     cache = world / "work" / "wikidata-countries.json"
     cache.write_text(json.dumps({"Danmark": "Q35"}), encoding="utf-8")
-    assert match.run(workspace(world), REGISTRY, offline=True) == 1
-    return placelist.read(str(places), REGISTRY).rows
+    assert run_matcher(world, rows, candidates) == 1
+    return placelist.read(str(world / "places.csv"), REGISTRY).rows
 
 
 def test_the_item_of_a_country_row_left_unanswered_goes_to_no_later_row(world: Path) -> None:

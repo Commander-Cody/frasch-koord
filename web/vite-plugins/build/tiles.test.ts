@@ -4,48 +4,30 @@
  * archive and public/tiles/ makes a build refuse.
  */
 import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { checkTiles } from './tiles.ts';
+import { tempDirPerTest } from '../testDir.ts';
 
 const PINNED = 'the published archive';
 const PINNED_SHA256 = createHash('sha256').update(PINNED).digest('hex');
 
 /** A web/ checkout: the lock and the fetched archive in the cache. */
-let root: string;
-
-function put(path: string, text: string): void {
-  const file = join(root, path);
-  mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(file, text);
-}
-
-/** A symlink at `path` to `target`, which need not exist. */
-function link(path: string, target: string): void {
-  const file = join(root, path);
-  mkdirSync(dirname(file), { recursive: true });
-  symlinkSync(target, file);
-}
+const web = tempDirPerTest('tiles-plugin-');
 
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'tiles-plugin-'));
-  put(
+  web.put(
     'tiles.lock',
     `ARCHIVE_URL=https://example.org/schleswig-holstein.pmtiles\nARCHIVE_SHA256=${PINNED_SHA256}\n`,
   );
-  put(`.cache/tiles/${PINNED_SHA256}.pmtiles`, PINNED);
-});
-
-afterEach(() => {
-  rmSync(root, { recursive: true, force: true });
+  web.put(`.cache/tiles/${PINNED_SHA256}.pmtiles`, PINNED);
 });
 
 /** What a build would refuse, with VITE_TILES_URL set or not. */
 async function tilesProblems(external: boolean): Promise<string[]> {
-  return (await checkTiles({ root, external })).problems;
+  return (await checkTiles({ root: web.path, external })).problems;
 }
 
 describe('checkTiles', () => {
@@ -54,7 +36,7 @@ describe('checkTiles', () => {
   });
 
   it('refuses a build without the fetched archive', async () => {
-    rmSync(join(root, '.cache'), { recursive: true });
+    rmSync(join(web.path, '.cache'), { recursive: true });
 
     expect(await tilesProblems(false)).toEqual([
       'the pinned tile archive is not fetched: run `npm run fetch-assets` (or set VITE_TILES_URL)',
@@ -62,7 +44,7 @@ describe('checkTiles', () => {
   });
 
   it('refuses a fetched archive that is not the pinned one', async () => {
-    put(`.cache/tiles/${PINNED_SHA256}.pmtiles`, 'a truncated download');
+    web.put(`.cache/tiles/${PINNED_SHA256}.pmtiles`, 'a truncated download');
 
     expect(await tilesProblems(false)).toEqual([
       `.cache/tiles/${PINNED_SHA256}.pmtiles does not match tiles.lock: run \`npm run fetch-assets\` again`,
@@ -70,19 +52,25 @@ describe('checkTiles', () => {
   });
 
   it('refuses a lock that pins no archive', async () => {
-    put('tiles.lock', 'ARCHIVE_URL=https://example.org/schleswig-holstein.pmtiles\n');
+    web.put('tiles.lock', 'ARCHIVE_URL=https://example.org/schleswig-holstein.pmtiles\n');
 
     expect(await tilesProblems(false)).toEqual(['tiles.lock pins no sha256 (ARCHIVE_SHA256=)']);
   });
 
   it('passes a link in public/tiles/ to an archive that is there', async () => {
-    link('public/tiles/schleswig-holstein.pmtiles', `../../.cache/tiles/${PINNED_SHA256}.pmtiles`);
+    web.link(
+      'public/tiles/schleswig-holstein.pmtiles',
+      `../../.cache/tiles/${PINNED_SHA256}.pmtiles`,
+    );
 
     expect(await tilesProblems(false)).toEqual([]);
   });
 
   it('refuses a link in public/tiles/ to an archive that is not built', async () => {
-    link('public/tiles/schleswig-holstein.pmtiles', '../../own-tiles/schleswig-holstein.pmtiles');
+    web.link(
+      'public/tiles/schleswig-holstein.pmtiles',
+      '../../own-tiles/schleswig-holstein.pmtiles',
+    );
 
     expect(await tilesProblems(false)).toEqual([
       'public/tiles/schleswig-holstein.pmtiles links to ../../own-tiles/schleswig-holstein.pmtiles, which does not exist: the dev server shows no map and `npm run build` stops. Build the tiles, or remove the link and run `npm run fetch-assets`',
@@ -90,9 +78,12 @@ describe('checkTiles', () => {
   });
 
   it('names every dangling link in public/tiles/, and only those', async () => {
-    link('public/tiles/denmark.pmtiles', '../../own-tiles/denmark.pmtiles');
-    link('public/tiles/halligen.pmtiles', `../../.cache/tiles/${PINNED_SHA256}.pmtiles`);
-    link('public/tiles/schleswig-holstein.pmtiles', '../../own-tiles/schleswig-holstein.pmtiles');
+    web.link('public/tiles/denmark.pmtiles', '../../own-tiles/denmark.pmtiles');
+    web.link('public/tiles/halligen.pmtiles', `../../.cache/tiles/${PINNED_SHA256}.pmtiles`);
+    web.link(
+      'public/tiles/schleswig-holstein.pmtiles',
+      '../../own-tiles/schleswig-holstein.pmtiles',
+    );
 
     const problems = await tilesProblems(false);
 
@@ -103,7 +94,7 @@ describe('checkTiles', () => {
   });
 
   it('refuses a dangling link with VITE_TILES_URL too', async () => {
-    link('public/tiles/denmark.pmtiles', '../../own-tiles/denmark.pmtiles');
+    web.link('public/tiles/denmark.pmtiles', '../../own-tiles/denmark.pmtiles');
 
     expect(await tilesProblems(true)).toEqual([
       'public/tiles/denmark.pmtiles links to ../../own-tiles/denmark.pmtiles, which does not exist: the dev server shows no map and `npm run build` stops. Build the tiles, or remove the link and run `npm run fetch-assets`',

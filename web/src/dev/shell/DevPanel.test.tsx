@@ -42,13 +42,6 @@ describe('DevPanel', () => {
     expect(screen.queryByText('rows')).toBeNull();
   });
 
-  it('offers to load again after an error', () => {
-    const reload = vi.fn();
-    render(<DevPanel {...curation} resource={resource({ error: 'HTTP 404', reload })} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Reload' }));
-    expect(reload).toHaveBeenCalled();
-  });
-
   it('shows the panel once loaded', () => {
     render(
       <DevPanel {...curation} resource={resource({ data: 'worklist' })}>
@@ -59,9 +52,14 @@ describe('DevPanel', () => {
     expect(screen.queryByText('Loading…')).toBeNull();
   });
 
-  it('offers to load again once loaded', () => {
+  // The heading with its Reload button is in either frame: the one in place
+  // of the panel and the panel's sticky header.
+  it.each([
+    ['after an error', { error: 'HTTP 404' }],
+    ['once loaded', { data: 'worklist' }],
+  ])('offers to load again %s', (_, state) => {
     const reload = vi.fn();
-    render(<DevPanel {...curation} resource={resource({ data: 'worklist', reload })} />);
+    render(<DevPanel {...curation} resource={resource({ ...state, reload })} />);
     fireEvent.click(screen.getByRole('button', { name: 'Reload' }));
     expect(reload).toHaveBeenCalled();
   });

@@ -1708,3 +1708,34 @@ the notch and, placed by `left: 50%`, could only be half the screen wide.
   screenshots of the build before and after (desktop and phone: bar,
   results, card, share, map error); the differences are the merged colours,
   the error strip's × and its width.
+
+## Decided 2026-10-18: tests that check one thing, once, on data of their own (issue #111)
+
+- **No text I/O relies on the locale** (owner's decision): every text-mode
+  open, `read_text`/`write_text` and `subprocess` call names its encoding.
+  `check-python` runs pytest with `PYTHONWARNDEFAULTENCODING=1`, and pytest
+  turns `EncodingWarning` into an error, so CI fails on the next one.
+- **`check-inputs` reports a `places.csv` not in the pipeline's form**
+  (owner's decision): a byte order mark, a blank line, Windows line ends,
+  quotes or spaces that the next write by the matcher or the curation would
+  drop. It names the first line that differs, and `--fix` writes the list in
+  that form. This replaces the test that round-tripped the real
+  `names/places.csv`. A spreadsheet's BOM, which used to be fine, is now
+  reported.
+- **Reports are tested as values and per section** (owner's decision): no
+  test compares a whole multi-line report. The inject report
+  (`test_inject_report.py`, from hand-built `Inputs` and `Stats`), the area
+  build, `REPORT.md` and the curation log are checked one fact per test; what
+  a run counts is asserted on its result (`Report.stats`, `Areas`, `Parts`).
+- **Each rule is tested where it is made**: `test_tables` (BOM, `;`, cell
+  count), `test_dialects` (registry rows), `test_curationlist`,
+  `test_placelist_read` (ids). `check-inputs` and the other readers keep one
+  test of the wiring each.
+- **One home for shared fixtures**: `osm_fixture` (`box`, `areas_geojson`,
+  `U_SHAPE`, `read_extract`), `conftest.run_matcher`, and on the web side
+  `vite-plugins/testDir.ts`.
+- **The fixture registry keeps its 8 dialects** (owner's decision); it is
+  independent of `names/dialects.csv`.
+- **One deliberate exception** (owner's decision): `areaLayers.test.ts` fails
+  when a dialect is added without a colour in the area review view's
+  `DIALECT_COLORS`. Every other test passes with a dialect added.

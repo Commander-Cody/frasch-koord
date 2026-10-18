@@ -5,11 +5,20 @@ import { FakeMap } from '../../testing/fakeMap';
 import AreaPanel from './AreaPanel';
 import type { AreaCollection, AreaFeature } from './areas';
 
-/** A municipality the row on `line` assigns to Mooring. */
-function municipality(name: string, osm: string, line: number): AreaFeature {
+/** A municipality the row on `line` assigns to Mooring, with the row's research `note`. */
+function municipality(name: string, osm: string, line: number, note = ''): AreaFeature {
   return {
     type: 'Feature',
-    properties: { assigned: true, dialect: 'frr-x-mooring', name, note: '', osm, line, km2: 1 },
+    properties: { assigned: true, dialect: 'frr-x-mooring', name, note, osm, line, km2: 1 },
+    geometry: { type: 'Polygon', coordinates: [] },
+  };
+}
+
+/** A municipality no row claims. */
+function unclaimed(name: string, osm: string): AreaFeature {
+  return {
+    type: 'Feature',
+    properties: { assigned: false, name, osm, km2: 1 },
     geometry: { type: 'Polygon', coordinates: [] },
   };
 }
@@ -20,6 +29,18 @@ function parts(...features: AreaFeature[]): AreaCollection {
 
 /** What the dev server answers with, until a test rebuilds it. */
 let built: AreaCollection;
+
+/** The names of the municipalities the list shows, in its order. */
+function listedNames(): string[] {
+  const names = document.querySelectorAll('.dev-panel-rowbutton > span:first-child');
+  return [...names].map((name) => name.textContent ?? '');
+}
+
+/** Renders the panel and waits for the municipalities to be listed. */
+async function renderLoaded() {
+  render(<AreaPanel map={new FakeMap().map} />);
+  await screen.findByRole('button', { name: /Bargum/ });
+}
 
 beforeEach(() => {
   window.history.replaceState(null, '', '/?areas');
@@ -57,5 +78,53 @@ describe('AreaPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Reload' }));
     await screen.findByText('nothing matches that filter');
     expect(new URLSearchParams(window.location.search).get('area')).toBeNull();
+  });
+
+  it('lists only the municipalities the text filter lets through', async () => {
+    await renderLoaded();
+
+    fireEvent.change(screen.getByLabelText('filter by name, OSM reference or note'), {
+      target: { value: 'bar' },
+    });
+
+    expect(listedNames()).toEqual(['Bargum']);
+  });
+
+  it('lists only the group picked in the legend', async () => {
+    built = parts(municipality('Bargum', 'relation/1', 2), unclaimed('Nordstrand', 'relation/9'));
+    await renderLoaded();
+
+    fireEvent.click(screen.getByRole('button', { name: /^not assigned/ }));
+
+    expect(listedNames()).toEqual(['Nordstrand']);
+  });
+
+  it('lists every group again on a second click in the legend', async () => {
+    built = parts(municipality('Bargum', 'relation/1', 2), unclaimed('Nordstrand', 'relation/9'));
+    await renderLoaded();
+    const legendItem = screen.getByRole('button', { name: /^not assigned/ });
+
+    fireEvent.click(legendItem);
+    fireEvent.click(legendItem);
+
+    expect(listedNames()).toEqual(['Bargum', 'Nordstrand']);
+  });
+
+  it("shows the research note of the selected municipality's row", async () => {
+    built = parts(municipality('Bargum', 'relation/1', 2, 'Bökingharde, per the parish'));
+    await renderLoaded();
+
+    fireEvent.click(screen.getByRole('button', { name: /Bargum/ }));
+
+    expect(screen.getByText('Bökingharde, per the parish')).toBeDefined();
+  });
+
+  it('offers to copy the reference of a selected municipality no row claims', async () => {
+    built = parts(municipality('Bargum', 'relation/1', 2), unclaimed('Nordstrand', 'relation/9'));
+    await renderLoaded();
+
+    fireEvent.click(screen.getByRole('button', { name: /Nordstrand/ }));
+
+    expect(screen.getByRole('button', { name: 'copy relation/9' })).toBeDefined();
   });
 });

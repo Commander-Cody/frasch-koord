@@ -1,8 +1,12 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import type { SymbolLayerSpecification, VectorSourceSpecification } from 'maplibre-gl';
+import type {
+  StyleSpecification,
+  SymbolLayerSpecification,
+  VectorSourceSpecification,
+} from 'maplibre-gl';
 
 import { LOCAL_TAG } from '../../dialects/views';
-import { styleFor } from './index';
+import { placeLayerIds, styleFor } from './index';
 import { nameExpression } from './labels';
 
 const origin = window.location.origin;
@@ -42,4 +46,20 @@ it('respects a non-root base', () => {
   // The placeholders stay as they are, not percent-encoded.
   expect(style.glyphs).toBe(`${origin}/frasch-koord/fonts/{fontstack}/{range}.pbf`);
   expect(style.sprite).toBe(`${origin}/frasch-koord/sprites/sprite`);
+});
+
+it('takes the symbol layers of the place source-layer for the place labels, and no other', () => {
+  const style: StyleSpecification = {
+    version: 8,
+    sources: { tiles: { type: 'vector', url: 'pmtiles://tiles' } },
+    layers: [
+      { id: 'background', type: 'background' },
+      { id: 'place-town', type: 'symbol', source: 'tiles', 'source-layer': 'place' },
+      { id: 'place-dot', type: 'circle', source: 'tiles', 'source-layer': 'place' },
+      { id: 'water-name', type: 'symbol', source: 'tiles', 'source-layer': 'water_name' },
+      { id: 'place-city', type: 'symbol', source: 'tiles', 'source-layer': 'place' },
+    ],
+  };
+
+  expect(placeLayerIds(style)).toEqual(['place-town', 'place-city']);
 });

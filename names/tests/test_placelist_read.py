@@ -6,32 +6,15 @@ from pathlib import Path
 
 import pytest
 
-from frasch import dialects, placelist, tables
+from frasch import dialects, placelist
 from frasch.errors import PipelineError, Problem, ValidationError
 from conftest import REGISTRY, TOFTUM, places_text
-
-
-def test_reads_a_list_saved_with_a_byte_order_mark(tmp_path: Path) -> None:
-    # Excel's "CSV UTF-8" starts the file with one.
-    path = tmp_path / "places.csv"
-    path.write_bytes(b"\xef\xbb\xbf" + places_text([TOFTUM]).encode("utf-8"))
-    names = placelist.read(str(path), REGISTRY)
-    assert names.fields[0] == "kind"
-    assert names.rows[0]["mooring"] == "Toftem"
 
 
 def test_a_missing_list_is_a_pipeline_error_not_a_traceback(tmp_path: Path) -> None:
     path = tmp_path / "places.csv"
     with pytest.raises(PipelineError, match=f"^name list not found: {path}$"):
         placelist.read(str(path), REGISTRY)
-
-
-def test_refuses_a_semicolon_separated_list_with_a_clear_message(tmp_path: Path) -> None:
-    path = tmp_path / "places.csv"
-    path.write_text(places_text([TOFTUM]).replace(",", ";"), encoding="utf-8")
-    with pytest.raises(ValidationError) as exc:
-        placelist.read(str(path), REGISTRY)
-    assert exc.value.problems == [Problem(str(path), 1, tables.SEMICOLON_SEPARATED)]
 
 
 def test_refuses_a_row_with_a_comma_too_few_as_such(tmp_path: Path) -> None:

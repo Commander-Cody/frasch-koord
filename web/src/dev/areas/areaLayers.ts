@@ -70,17 +70,21 @@ const SELECTED = 'areas-selected';
  *  so no place label is ever covered by the overlay. */
 export const BEFORE_ID = 'waterway-name';
 
+/**
+ * Each dialect tag's colour, COLOR_UNKNOWN for any other. The first pair is
+ * taken apart because the type of a `match` asks for at least one.
+ */
+function dialectColor(): ExpressionSpecification {
+  const [[firstTag, firstColor], ...others] = Object.entries(DIALECT_COLORS);
+  return ['match', ['get', 'dialect'], firstTag, firstColor, ...others.flat(), COLOR_UNKNOWN];
+}
+
 const colorExpr: ExpressionSpecification = [
   'case',
   ['!', ['get', 'assigned']],
   COLOR_UNASSIGNED,
-  [
-    'match',
-    ['get', 'dialect'],
-    ...Object.entries(DIALECT_COLORS).flatMap(([tag, color]) => [tag, color]),
-    COLOR_UNKNOWN,
-  ],
-] as unknown as ExpressionSpecification;
+  dialectColor(),
+];
 
 export interface AreaLayerState {
   /** The `osm` cell of the selected municipality; null when none is. */
@@ -106,17 +110,7 @@ export function areaLayers({ selectedOsm, shown }: AreaLayerState): LayerSpecifi
         'fill-color': colorExpr,
         // Lighter as you zoom in: up close the boundary is the subject, not
         // the block, and the place labels have to stay readable through it.
-        'fill-opacity': [
-          'interpolate',
-          ['linear'],
-          ['zoom'],
-          8,
-          0.38,
-          12,
-          0.3,
-          15,
-          0.2,
-        ] as unknown as ExpressionSpecification,
+        'fill-opacity': ['interpolate', ['linear'], ['zoom'], 8, 0.38, 12, 0.3, 15, 0.2],
       },
     },
     {
@@ -132,17 +126,7 @@ export function areaLayers({ selectedOsm, shown }: AreaLayerState): LayerSpecifi
         // edge in the fill colour.
         'line-color': colorExpr,
         'line-opacity': 0.95,
-        'line-width': [
-          'interpolate',
-          ['linear'],
-          ['zoom'],
-          8,
-          0.6,
-          11,
-          1.2,
-          14,
-          2,
-        ] as unknown as ExpressionSpecification,
+        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 0.6, 11, 1.2, 14, 2],
       },
     },
     {

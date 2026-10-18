@@ -54,6 +54,13 @@ def test_patch_entries_come_back_in_line_order(tmp_path: Path) -> None:
     assert [e.get("line") for e in read_entries(p)] == [2, 7]
 
 
+def test_a_line_without_a_row_line_comes_before_the_entries(tmp_path: Path) -> None:
+    # one the schema refuses; apply lists it first
+    p = tmp_path / "curate-patch.jsonl"
+    write_patch(p, entry(2, "Mursem", "Morsum", action="skip"), {"id": "nai", "action": "skip"})
+    assert [line.number for line in patch.read_patch(p)] == [2, 1]
+
+
 def test_same_line_but_another_row_is_a_separate_decision(tmp_path: Path) -> None:
     # the line does not identify a row: it moves when rows are added
     p = tmp_path / "curate-patch.jsonl"

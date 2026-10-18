@@ -78,7 +78,7 @@ def test_the_package_runs_as_a_module(dialects_csv: str) -> None:
     result = subprocess.run(
         [sys.executable, "-m", "frasch", "dialects", "--tags", "--dialects", dialects_csv],
         capture_output=True,
-        text=True,
+        encoding="utf-8",
     )
     assert (result.returncode, result.stdout) == (0, "frr-x-mooring,frr-x-fering\n")
 

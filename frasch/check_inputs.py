@@ -1,7 +1,8 @@
 """Check the hand-edited name files for damage -- all of it, with line numbers.
 
     frasch check-inputs            # exit 1 if anything is wrong
-    frasch check-inputs --fix      # first give new rows an id
+    frasch check-inputs --fix      # first give new rows an id and write the
+                                   # name list in the form the pipeline writes it
 
 The commands refuse a file that breaks the rules they cannot live with, each
 its own file and only when it gets to it.  This reads all four with their
@@ -114,10 +115,13 @@ def check_places(
     names: Table, curation: str, positioned: Container[str], reg: Registry
 ) -> list[Problem]:
     """The problems in the name list (`names`), whose columns `reg` says:
-    those `placelist.read` refuses it for, the stricter rules of its name
-    cells, and a local reference `curation` has no position for
-    (`positioned`: those it has one for)."""
+    those `placelist.read` refuses it for, a form other than the one the
+    pipeline writes it in, the stricter rules of its name cells, and a local
+    reference `curation` has no position for (`positioned`: those it has one
+    for)."""
     rows, problems = placelist.rows(names, reg)
+    if what := placelist.form_problem(names):
+        problems.append(what)
     for row in rows:
         whats = _cell_problems(row, reg) + _position_problems(row, curation, positioned)
         problems += [Problem(names.path, row.line, what) for what in whats]
@@ -174,9 +178,10 @@ def _check(ws: Workspace, reg: Registry | None, registry_problems: list[Problem]
 
 
 def fill_ids(ws: Workspace, reg: Registry) -> None:
-    """Give every row of the name list without an `id` one, and say how many
-    got one -- or why none did: the report `check` gives lists that problem
-    and every other one."""
+    """Give every row of the name list without an `id` one and write the list
+    in the form the pipeline writes it, and say how many got one -- or why
+    none did: the report `check` gives lists that problem and every other
+    one."""
     try:
         with files.lock(ws.lock):
             print(f"gave {placelist.fill_ids(ws.names, reg)} row(s) an id", file=sys.stderr)
@@ -209,7 +214,8 @@ class Checked(NamedTuple):
 
 def run(ws: Workspace, *, fix: bool = False, summary: str | None = None) -> Checked:
     """Check the workspace's hand-edited files and print what is wrong with
-    them.  `fix`: first give the name list's new rows an id.  `summary`: a
+    them.  `fix`: first give the name list's new rows an id and write it in
+    the form the pipeline writes it.  `summary`: a
     file to append the result to as Markdown."""
     reg, registry_problems = check_dialects(ws.dialects)
     if fix and reg and not registry_problems:
@@ -233,7 +239,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument(
         "--fix",
         action="store_true",
-        help="first give every row of the name list without an `id` one (placelist.fill_ids)",
+        help="first give every row of the name list without an `id` one and write the list "
+        "in the form the pipeline writes it (placelist.fill_ids)",
     )
     ap.add_argument(
         "--summary",

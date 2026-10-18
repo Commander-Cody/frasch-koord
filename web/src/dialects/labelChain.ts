@@ -1,4 +1,4 @@
-import { DIALECTS } from './registry.ts';
+import { DIALECTS, type DialectEntry } from './registry.ts';
 import { LOCAL_TAG } from './views.ts';
 
 // Which name a place is labelled with, defined once for everything that shows
@@ -37,15 +37,21 @@ import { LOCAL_TAG } from './views.ts';
  * breaks as soon as the tiles leave northern Germany; the per-country
  * language zones of issue #15 are to replace the fixed Low Saxon/German steps
  * here, for the map and the card alike.
+ *
+ * `dialects` is the registry whose order the other dialects follow, the real
+ * one unless a test hands in its own.
  */
-export function labelChain(tag: string): string[] {
+export function labelChain(
+  tag: string,
+  dialects: readonly Pick<DialectEntry, 'tag'>[] = DIALECTS,
+): string[] {
   if (tag === LOCAL_TAG) {
     return ['frasch:local', 'name:nds', 'name:latin', 'name', 'name:de'];
   }
   return [
     `name:${tag}`,
     'frasch:local',
-    ...DIALECTS.filter((d) => d.tag !== tag).map((d) => `name:${d.tag}`),
+    ...dialects.filter((d) => d.tag !== tag).map((d) => `name:${d.tag}`),
     'name:frr',
     'name:nds',
     'name:de',

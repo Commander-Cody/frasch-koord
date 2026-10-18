@@ -39,26 +39,16 @@ from frasch import locate
 from frasch import refs
 from frasch import searchindex
 from frasch.check_tiles import Label, PropValue
-from frasch.geo import LonLat
 from frasch.paths import ROOT
 from frasch.placenames import SearchEntry
 from conftest import REGISTRY, flat_workspace, places_text
-from osm_fixture import ring, write_extract
+from osm_fixture import U_SHAPE, areas_geojson, box, ring, write_extract
 
 # the search entries by id, and the injected extract's labelled features
 Built = tuple[dict[str, SearchEntry], list[Label]]
 
 # U-shaped Sylt: the mean of its corners lies in the bay, outside its area
-SYLT = [
-    (8.0, 54.0),
-    (9.0, 54.0),
-    (9.0, 55.0),
-    (8.8, 55.0),
-    (8.8, 54.2),
-    (8.2, 54.2),
-    (8.2, 55.0),
-    (8.0, 55.0),
-]
+SYLT = U_SHAPE
 SYLT_NODES, SYLT_RING = ring(100, *SYLT)
 # Oland: its inside point lies east of the Langeneß strip, its first vertex in it
 OLAND_NODES, OLAND_RING = ring(200, (9.50, 54.60), (9.70, 54.60), (9.70, 54.62), (9.50, 54.62))
@@ -175,28 +165,16 @@ ROWS = [
 ]
 
 
-def box(west: float, south: float, east: float, north: float) -> list[LonLat]:
-    return [(west, south), (east, south), (east, north), (west, north)]
-
-
-AREAS = {
-    "type": "FeatureCollection",
-    "features": [
-        {
-            "type": "Feature",
-            "properties": {"dialect": tag},
-            "geometry": {"type": "Polygon", "coordinates": [corners + corners[:1]]},
-        }
-        for tag, corners in [
-            ("frr-x-solring", SYLT),
-            ("frr-x-nordgoes", box(9.1, 54.4, 9.3, 54.6)),
-            ("frr-x-suedgoes", box(9.2, 54.4, 9.3, 54.6)),
-            ("frr-x-hallig", box(9.3, 54.4, 9.45, 54.6)),
-            ("frr-x-hallig", box(9.45, 54.59, 9.55, 54.63)),
-            ("frr-x-wieding", box(9.6, 54.8, 9.8, 54.9)),
-        ]
-    ],
-}
+AREAS = areas_geojson(
+    [
+        ("frr-x-solring", SYLT),
+        ("frr-x-nordgoes", box(9.1, 54.4, 9.3, 54.6)),
+        ("frr-x-suedgoes", box(9.2, 54.4, 9.3, 54.6)),
+        ("frr-x-hallig", box(9.3, 54.4, 9.45, 54.6)),
+        ("frr-x-hallig", box(9.45, 54.59, 9.55, 54.63)),
+        ("frr-x-wieding", box(9.6, 54.8, 9.8, 54.9)),
+    ]
+)
 
 
 def injected_features(pbf: Path) -> list[Label]:

@@ -82,18 +82,10 @@ def test_every_problem_is_reported_not_only_the_first(names: CheckNames) -> None
     ]
 
 
-def test_a_byte_order_mark_from_a_spreadsheet_export_is_fine(names: CheckNames) -> None:
-    # Excel's "CSV UTF-8" puts one in front of the header, which used to turn
-    # `kind` into `﻿kind`: "missing column(s) ['kind']".
-    assert names("﻿" + places_text([TOFTUM])) == []
-
-
-def test_a_semicolon_separated_export_gets_one_clear_message(names: CheckNames) -> None:
-    # A German-locale spreadsheet saves "CSV" with `;` between the cells.
-    text = places_text([TOFTUM, NIEBUELL]).replace(",", ";")
-    problems = names(text)
-    assert lines(problems) == [1]
-    assert "`;`" in problems[0].message
+def test_a_list_not_in_the_form_the_pipeline_writes_is_reported(names: CheckNames) -> None:
+    # the rule is placelist's (test_placelist_write.py)
+    problems = names(places_text([TOFTUM, NIEBUELL]).replace("Naibel", '"Naibel"'))
+    assert [(p.line, "check-inputs --fix" in p.message) for p in problems] == [(3, True)]
 
 
 def test_a_missing_column_is_reported_on_the_header(names: CheckNames) -> None:
@@ -104,15 +96,6 @@ def test_a_missing_column_is_reported_on_the_header(names: CheckNames) -> None:
     problems = names(text)
     assert lines(problems) == [1]
     assert "hint" in problems[0].message
-
-
-def test_a_column_named_twice_is_reported(names: CheckNames) -> None:
-    # csv.DictReader keeps the last one and drops the other without a word.
-    head, *rest = places_text([TOFTUM]).split("\n")
-    text = "\n".join([head + ",de"] + [r + "," for r in rest if r]) + "\n"
-    problems = names(text)
-    assert lines(problems) == [1]
-    assert "de" in problems[0].message
 
 
 @pytest.mark.parametrize(
@@ -252,31 +235,10 @@ def test_a_local_reference_with_a_wikidata_id_is_reported(names: CheckNames) -> 
     assert "wikidata" in problems[0].message
 
 
-@pytest.mark.parametrize(
-    "row",
-    [
-        "node/abc,Toftum,,,,,,,",
-        "way/28330569,Lungendik,54.6,8.7,,,,,",  # lat/lon only go with local/
-        "local/westerheide-amrum,Westerheide,,,,,,,",  # ... and a local one needs them
-        "local/westerheide-amrum,Westerheide,54.65,,,,,,",
-        "local/westerheide-amrum,Westerheide,54°39',8.34,,,,,",
-        "local/westerheide-amrum,Westerheide,95,8.34,,,,,",
-        "way/177387348,Habel,,,place,,,,",  # set_tags are key=value
-        "way/177387348,Habel,,,=island,,,,",
-        "way/177387348,Habel,,,place=island,twelve,,,",
-        "way/177387348,Habel,,,place=island,,1.5,,",
-        "node/1,Pellworm,,,,,,-3,",  # polygon_km2 is a positive area
-        "way/1,Pellworm,,,,,,3,",  # ... around one node
-    ],
-)
-def test_a_damaged_curation_row_is_reported(names: CheckNames, row: str) -> None:
-    problems = names(places_text([TOFTUM]), CURATION_HEADER + row + "\n")
+def test_a_damaged_curation_row_is_reported(names: CheckNames) -> None:
+    # the rules are curationlist's (test_curationlist.py)
+    problems = names(places_text([TOFTUM]), CURATION_HEADER + "node/1,Pellworm,,,,,,-3,\n")
     assert [(os.path.basename(p.path), p.line) for p in problems] == [("curation.csv", 2)]
-
-
-def test_a_local_reference_positioned_twice_is_reported(names: CheckNames) -> None:
-    problems = names(places_text([HUELLTOFT]), CURATION_HEADER + HUELLTOFT_POS * 2)
-    assert [(os.path.basename(p.path), p.line) for p in problems] == [("curation.csv", 3)]
 
 
 def command(ws: Workspace, *options: str) -> int:
@@ -305,29 +267,14 @@ def test_the_command_succeeds_on_a_clean_list(ws: Workspace) -> None:
 
 
 REGISTRY_HEADER = "tag,column,label,status,view,note\n"
-MOORING = "frr-x-mooring,mooring,Mooring,living,yes,\n"
 
 
-@pytest.mark.parametrize(
-    "row",
-    [
-        "frr-x-mooringen,mooringen,Mooring,living,yes,\n",  # subtag longer than 8
-        "mooring,mooring,Mooring,living,yes,\n",  # not frr-x-…
-        "frr-x-mooring,Mooring,Mooring,living,yes,\n",  # column not lowercase
-        "frr-x-local,local,Local,living,yes,\n",  # `local` is reserved
-        "frr-x-mooring,mooring,Mooring,alive,yes,\n",
-        "frr-x-mooring,mooring,Mooring,living,maybe,\n",
-        "frr-x-mooring,mooring,,living,yes,\n",
-    ],
-)
-def test_a_damaged_dialect_row_is_reported(names: CheckNames, row: str) -> None:
-    problems = names(places_text([TOFTUM]), dialects=REGISTRY_HEADER + row)
+def test_a_damaged_dialect_row_is_reported(names: CheckNames) -> None:
+    # the rules are dialects' (test_dialects.py)
+    problems = names(
+        places_text([TOFTUM]), dialects=REGISTRY_HEADER + "frr-x-mooring,mooring,,living,yes,\n"
+    )
     assert [(os.path.basename(p.path), p.line) for p in problems] == [("dialects.csv", 2)]
-
-
-def test_a_dialect_registered_twice_is_reported(names: CheckNames) -> None:
-    problems = names(places_text([TOFTUM]), dialects=REGISTRY_HEADER + MOORING * 2)
-    assert [(os.path.basename(p.path), p.line) for p in problems] == [("dialects.csv", 3)]
 
 
 def test_a_registry_without_dialects_is_reported_not_a_crash(names: CheckNames) -> None:
@@ -358,65 +305,11 @@ def test_a_clean_list_says_so_in_the_summary(ws: Workspace, world: Path) -> None
     assert "no problems" in summary.read_text(encoding="utf-8")
 
 
-def test_a_second_polygon_for_one_node_is_reported(names: CheckNames) -> None:
-    # The tile build refuses it, so the check must too.
-    row = "node/85929111,Nordstrand,,,place=island,,,50,\n"
-    problems = names(places_text([TOFTUM]), CURATION_HEADER + row * 2)
-    assert [(os.path.basename(p.path), p.line) for p in problems] == [("curation.csv", 3)]
-
-
-@pytest.mark.parametrize(
-    "row",
-    [
-        "local/huelltoft,Hülltoft,54.881287,8.771304,,,,\n",  # a comma too few
-        "local/huelltoft,Hülltoft,54.881287,8.771304,,,,,,\n",  # a comma too many
-    ],
-)
-def test_a_curation_row_with_the_wrong_number_of_cells_is_reported(
-    names: CheckNames, row: str
-) -> None:
-    # Its columns shift: a zoom lands in `set_tags`, a position in `name`.
-    problems = names(places_text([HUELLTOFT]), CURATION_HEADER + row)
-    assert ("curation.csv", 2) in [(os.path.basename(p.path), p.line) for p in problems]
-    assert any("cells" in p.message for p in problems)
-
-
-def test_a_curation_file_without_one_of_its_columns_is_reported(names: CheckNames) -> None:
-    # `frasch curate apply` refuses such a file; the check must not pass it.
-    problems = names(places_text([TOFTUM]), "osm,name,lat,lon,minzoom,maxzoom,polygon_km2,note\n")
-    assert [(os.path.basename(p.path), p.line, p.message) for p in problems] == [
-        ("curation.csv", 1, "missing column(s) set_tags")
-    ]
-
-
-def test_a_dialect_row_with_the_wrong_number_of_cells_is_reported(names: CheckNames) -> None:
-    problems = names(
-        places_text([TOFTUM]),
-        dialects=REGISTRY_HEADER + "frr-x-mooring,mooring,Mooring,living,yes\n",
-    )
-    assert [(os.path.basename(p.path), p.line) for p in problems] == [("dialects.csv", 2)]
-    assert "cells" in problems[0].message
-
-
-def test_a_blank_line_is_no_problem_and_keeps_the_line_numbers(names: CheckNames) -> None:
-    # The reader skips it, so the check does too; the rows after it are
-    # still reported at the line an editor sees them on.
-    head, first, second, _ = places_text([TOFTUM, {**NIEBUELL, "kind": "town"}]).split("\n")
-    problems = names("\n".join([head, first, "", second]) + "\n")
-    assert lines(problems) == [4]
-    assert "town" in problems[0].message
-
-
 # ------------------------------------------------------------------ ids ---
 def test_a_row_without_an_id_is_reported(names: CheckNames) -> None:
     problems = names(places_text([TOFTUM, {**NIEBUELL, "id": ""}]))
     assert lines(problems) == [3]
     assert "check-inputs --fix" in problems[0].message
-
-
-def test_an_id_used_twice_is_reported_on_the_second_row(names: CheckNames) -> None:
-    problems = names(places_text([{**TOFTUM, "id": "toftem"}, {**NIEBUELL, "id": "toftem"}]))
-    assert [(p.line, p.message) for p in problems] == [(3, "id toftem is already used on line 2")]
 
 
 def fix(ws: Workspace) -> list[Problem]:
@@ -494,6 +387,13 @@ def test_fix_run_twice_changes_nothing(ws: Workspace, world: Path) -> None:
     once = places.read_bytes()
     fix(ws)
     assert places.read_bytes() == once
+
+
+def test_fix_writes_the_list_in_the_form_the_pipeline_writes_it(ws: Workspace, world: Path) -> None:
+    text = places_text([TOFTUM, NIEBUELL])
+    (world / "places.csv").write_bytes(("\ufeff" + text.replace("\n", "\r\n")).encode())
+    fix(ws)
+    assert (world / "places.csv").read_bytes() == text.encode()
 
 
 def test_a_hand_set_frasch_ref_must_name_a_row(names: CheckNames) -> None:

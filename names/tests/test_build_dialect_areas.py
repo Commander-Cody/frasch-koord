@@ -123,6 +123,150 @@ def test_a_municipality_no_row_claims_is_a_part_without_a_dialect() -> None:
     }
 
 
+def test_the_report_of_a_build_has_a_line_per_dialect() -> None:
+    rows = [_row(2, "frr-x-mooring", "way/1")]
+    found = bda.Scan({("w", 1): box(8.0, 54.0, 8.1, 54.1)})
+
+    assert bda.build(rows, REGISTRY, found, SOURCE).report == [
+        "  frr-x-mooring    1 object(s) ->  1 polygon(s),     72.8 km², valid=True, ~11 coords"
+    ]
+
+
+def test_the_report_of_a_build_flags_each_ring_problem_of_the_scan() -> None:
+    rows = [_row(2, "frr-x-mooring", "way/1")]
+    found = bda.Scan({("w", 1): box(8.0, 54.0, 8.1, 54.1)}, problems=["way/1: a problem"])
+
+    assert bda.build(rows, REGISTRY, found, SOURCE).report[1:] == ["  ! way/1: a problem"]
+
+
+def test_a_build_counts_the_polygons_of_every_dialect() -> None:
+    rows = [_row(2, "frr-x-mooring", "way/1"), _row(3, "frr-x-solring", "way/2; way/3")]
+    found = bda.Scan(
+        {
+            ("w", 1): box(8.0, 54.0, 8.1, 54.1),
+            ("w", 2): box(8.2, 54.0, 8.3, 54.1),
+            ("w", 3): box(8.4, 54.0, 8.5, 54.1),
+        }
+    )
+
+    assert bda.build(rows, REGISTRY, found, SOURCE).polygons == 3
+
+
+def test_the_feature_of_a_dialect_carries_its_tag_and_label() -> None:
+    rows = [_row(2, "frr-x-solring", "way/1")]
+    found = bda.Scan({("w", 1): box(8.0, 54.0, 8.1, 54.1)})
+
+    (feature,) = bda.build(rows, REGISTRY, found, SOURCE).dialects["features"]
+
+    assert feature["properties"] == {"dialect": "frr-x-solring", "label": "Sölring"}
+
+
+def test_an_assigned_part_carries_its_rows_dialect_name_note_and_line() -> None:
+    rows = [_row(2, "frr-x-mooring", "way/1", "Existing", "a way")]
+    found = bda.Scan({("w", 1): box(8.0, 54.0, 8.1, 54.1)})
+
+    parts = bda.build(rows, REGISTRY, found, SOURCE).parts
+
+    assert parts is not None
+    assert parts.fc["features"][0]["properties"] == {
+        "assigned": True,
+        "dialect": "frr-x-mooring",
+        "name": "Existing",
+        "note": "a way",
+        "osm": "way/1",
+        "line": 2,
+        "km2": 72.8,
+    }
+
+
+def _with_two_unclaimed() -> bda.Scan:
+    """A scan of one claimed way and two unclaimed municipalities, the one
+    with the lower id named last."""
+    return bda.Scan(
+        {("w", 1): box(8.0, 54.0, 8.1, 54.1)},
+        {
+            ("r", 100): bda.Municipality("Bdorf", box(8.1, 54.0, 8.2, 54.1)),
+            ("r", 200): bda.Municipality("Adorf", box(8.2, 54.0, 8.3, 54.1)),
+        },
+    )
+
+
+def test_the_unassigned_parts_follow_the_assigned_ones_by_name() -> None:
+    rows = [_row(2, "frr-x-mooring", "way/1", "Existing")]
+
+    parts = bda.build(rows, REGISTRY, _with_two_unclaimed(), SOURCE).parts
+
+    assert parts is not None
+    assert [f["properties"]["name"] for f in parts.fc["features"]] == [
+        "Existing",
+        "Adorf",
+        "Bdorf",
+    ]
+
+
+def test_a_build_counts_the_municipalities_no_row_claims() -> None:
+    rows = [_row(2, "frr-x-mooring", "way/1")]
+
+    parts = bda.build(rows, REGISTRY, _with_two_unclaimed(), SOURCE).parts
+
+    assert parts is not None
+    assert parts.unassigned == 2
+
+
+def test_the_parts_name_the_district_of_their_unassigned_municipalities() -> None:
+    rows = [_row(2, "frr-x-mooring", "way/1")]
+
+    parts = bda.build(rows, REGISTRY, _with_two_unclaimed(), SOURCE).parts
+
+    assert parts is not None
+    assert parts.fc["properties"]["unassigned_ags"] == "01054"
+
+
+def test_a_build_without_the_parts_scans_for_no_unclaimed_municipalities() -> None:
+    assert bda.Options(parts=False).scanned_ags is None
+
+
+# ------------------------------------------------------------------ write ---
+def _built() -> bda.Areas:
+    """The areas of one dialect of two rows, apart, with one unclaimed
+    municipality."""
+    rows = [_row(2, "frr-x-mooring", "way/1"), _row(3, "frr-x-mooring", "way/2")]
+    found = bda.Scan(
+        {("w", 1): box(8.0, 54.0, 8.1, 54.1), ("w", 2): box(8.2, 54.0, 8.3, 54.1)},
+        {("r", 200): bda.Municipality("Freetown", box(8.1, 54.0, 8.2, 54.1))},
+    )
+    return bda.build(rows, REGISTRY, found, SOURCE)
+
+
+def test_writing_the_areas_says_how_many_features_and_polygons_were_written(
+    ws: Workspace, capsys: pytest.CaptureFixture[str]
+) -> None:
+    bda.write(_built(), ws)
+
+    assert f"wrote {ws.areas} (1 features, 2 polygons, 0 kB)" in capsys.readouterr().out
+
+
+def test_writing_the_areas_says_what_they_read_back_as(
+    ws: Workspace, capsys: pytest.CaptureFixture[str]
+) -> None:
+    bda.write(_built(), ws)
+
+    assert "reads back as 2 polygon(s): frr-x-mooring (2)" in capsys.readouterr().out
+
+
+def test_writing_the_parts_says_how_many_are_assigned_and_unassigned(
+    ws: Workspace, capsys: pytest.CaptureFixture[str]
+) -> None:
+    parts = _built().parts
+    assert parts is not None
+
+    bda.write_parts(ws.parts, parts)
+
+    assert capsys.readouterr().out == (
+        f"wrote {ws.parts} (3 features: 2 assigned, 1 unassigned, 1 kB)\n"
+    )
+
+
 # ------------------------------------------------------------------- run ---
 # A tiny triangle way stands in for a whole municipality.
 def _write_fixture(ws: Workspace, csv_rows: str, timestamp: str | None = None) -> Path:
@@ -169,9 +313,9 @@ def test_output_is_stamped_with_its_inputs(ws: Workspace) -> None:
         "dialects.csv": provenance.blob_hash(ws.dialects),
         "extracts": [{"file": "extract.osm.pbf", "replication_timestamp": "2026-09-22T20:22:59Z"}],
     }
-    fc = json.loads(out.read_text())
+    fc = json.loads(out.read_text(encoding="utf-8"))
     assert fc["properties"]["built_from"] == expected
-    parts_fc = json.loads(parts_out.read_text())
+    parts_fc = json.loads(parts_out.read_text(encoding="utf-8"))
     assert parts_fc["properties"]["built_from"] == expected
     # AreaIndex.from_geojson must keep working with the stamped file
     idx = dialect_areas.AreaIndex.from_geojson(str(out))
@@ -240,10 +384,61 @@ def _write_district(ws: Workspace) -> tuple[Path, Path]:
     return first, second
 
 
-def _printed(capsys: pytest.CaptureFixture[str]) -> tuple[str, str]:
-    """-> (stdout, stderr), the scan times blanked."""
-    out, err = capsys.readouterr()
-    return re.sub(r"\(\d+s\)", "(Ns)", out), err
+CLAIMED = {("w", 1), ("r", 100), ("w", 8)}  # the references of the district's area list
+
+
+def _untimed(line: str) -> str:
+    """A line of the scan's report, its time blanked."""
+    return re.sub(r"\(\d+s\)", "(Ns)", line)
+
+
+def test_a_scan_finds_each_claimed_reference_in_whichever_extract_holds_it(
+    ws: Workspace,
+) -> None:
+    found = bda.scan(_write_district(ws), CLAIMED, "01054")
+
+    assert set(found.claimed) == {("w", 1), ("r", 100), ("w", 8)}
+
+
+def test_a_scan_finds_the_municipalities_of_the_district_that_no_row_claims(
+    ws: Workspace,
+) -> None:
+    # not those of another district, of another admin level or no
+    # administrative boundary, and not one whose ring is broken
+    found = bda.scan(_write_district(ws), CLAIMED, "01054")
+
+    assert {ref: m.name for ref, m in found.unclaimed.items()} == {
+        ("r", 200): "Freetown",
+        ("r", 300): "",
+    }
+
+
+def test_a_scan_without_a_district_finds_no_unclaimed_municipalities(ws: Workspace) -> None:
+    found = bda.scan(_write_district(ws), CLAIMED, None)
+
+    assert found.unclaimed == {}
+
+
+def test_a_scan_has_the_ring_problems_of_the_claimed_areas_only(ws: Workspace) -> None:
+    # Brokentown's broken ring is no problem: nobody claims it
+    found = bda.scan(_write_district(ws), CLAIMED, "01054")
+
+    assert found.problems == ["relation/100: 1 unclosed outer ring(s) -- skipped"]
+
+
+def test_a_scan_says_what_an_extract_held(ws: Workspace) -> None:
+    found = bda.scan(_write_district(ws), CLAIMED, "01054")
+
+    assert _untimed(found.report[0]) == (
+        "first.osm.pbf: 1/1 relations, 6 ways, 17 nodes, 3 unclaimed municipalities (Ns)"
+    )
+
+
+def test_a_later_extract_is_asked_only_for_what_the_earlier_ones_lacked(ws: Workspace) -> None:
+    # Freetown, found in the first extract already, is not counted again
+    found = bda.scan(_write_district(ws), CLAIMED, "01054")
+
+    assert _untimed(found.report[1]) == "second.osm.pbf: 0/0 relations, 1 ways, 3 nodes (Ns)"
 
 
 def test_the_parts_keep_their_schema(ws: Workspace) -> None:
@@ -253,100 +448,27 @@ def test_the_parts_keep_their_schema(ws: Workspace) -> None:
     assert schema_problems(parts, "dialect-area-parts") == []
 
 
-def test_a_full_build_reports_every_step(ws: Workspace, capsys: pytest.CaptureFixture[str]) -> None:
-    first, second = _write_district(ws)
-    areas, out, parts_out = ws.area_list, Path(ws.areas), Path(ws.parts)
-
-    bda.run(ws, REGISTRY, [first, second])
-
-    stdout, stderr = _printed(capsys)
-    assert stderr == ""
-    # the second extract is only asked for what the first one lacked, and
-    # Freetown, already found there, is not counted again; Brokentown's
-    # broken ring is not reported, nobody claims it
-    assert stdout == (
-        f"area list : {areas} -> 3 OSM objects, 2 dialects\n"
-        "first.osm.pbf: 1/1 relations, 6 ways, 17 nodes, 3 unclaimed municipalities (Ns)\n"
-        "second.osm.pbf: 0/0 relations, 1 ways, 3 nodes (Ns)\n"
-        "  frr-x-mooring    1 object(s) ->  1 polygon(s),      1.4 km², valid=True, ~9 coords\n"
-        "  frr-x-solring    2 object(s) ->  2 polygon(s),      4.3 km², valid=True, ~19 coords\n"
-        "  ! relation/100: 1 unclosed outer ring(s) -- skipped\n"
-        "\n"
-        f"wrote {out} (2 features, 3 polygons, 1 kB)\n"
-        "reads back as 3 polygon(s): frr-x-mooring (1), frr-x-solring (2)\n"
-        f"wrote {parts_out} (5 features: 3 assigned, 2 unassigned, 2 kB)\n"
-    )
-    fc = json.loads(out.read_text())
-    assert [f["properties"] for f in fc["features"]] == [
-        {"dialect": "frr-x-mooring", "label": "Mooring"},
-        {"dialect": "frr-x-solring", "label": "Sölring"},
-    ]
-    assert fc["features"][1]["geometry"] == {
-        "type": "MultiPolygon",
-        "coordinates": [
-            [[[8.72, 54.52], [8.72, 54.5], [8.7, 54.5], [8.72, 54.52]]],
-            [[[8.9, 54.62], [8.92, 54.62], [8.92, 54.6], [8.9, 54.6], [8.9, 54.62]]],
-        ],
-    }
-    parts_fc = json.loads(parts_out.read_text())
-    assert parts_fc["properties"]["unassigned_ags"] == "01054"
-    assert [f["properties"] for f in parts_fc["features"]] == [
-        {
-            "assigned": True,
-            "dialect": "frr-x-mooring",
-            "name": "Existing",
-            "note": "a way",
-            "osm": "way/1",
-            "line": 2,
-            "km2": 1.4,
-        },
-        {
-            "assigned": True,
-            "dialect": "frr-x-solring",
-            "name": "Claimedtown",
-            "note": "a municipality",
-            "osm": "relation/100",
-            "line": 3,
-            "km2": 2.9,
-        },
-        {
-            "assigned": True,
-            "dialect": "frr-x-solring",
-            "name": "Second",
-            "note": "only in the second extract",
-            "osm": "way/8",
-            "line": 4,
-            "km2": 1.4,
-        },
-        {"assigned": False, "name": "", "osm": "relation/300", "km2": 2.9},
-        {"assigned": False, "name": "Freetown", "osm": "relation/200", "km2": 2.9},
-    ]
+def test_a_build_adds_the_municipalities_no_row_claims_to_the_parts(ws: Workspace) -> None:
+    bda.run(ws, REGISTRY, _write_district(ws))
+    parts = json.loads(Path(ws.parts).read_text(encoding="utf-8"))
+    assert [f["properties"]["assigned"] for f in parts["features"]].count(False) == 2
 
 
-def test_a_build_without_the_parts_skips_the_unassigned_scan(
+def test_a_build_first_says_what_the_area_list_names(
     ws: Workspace, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    first, _second = _write_district(ws)
-    areas, out = ws.area_list, ws.areas
+    bda.run(ws, REGISTRY, _write_district(ws))
 
-    bda.run(ws, REGISTRY, [first], bda.Options(allow_missing=True, parts=False))
+    first_line = capsys.readouterr().out.splitlines()[0]
+    assert first_line == f"area list : {ws.area_list} -> 3 OSM objects, 2 dialects"
 
-    stdout, stderr = _printed(capsys)
-    assert stderr == ""
+
+def test_a_build_without_the_parts_writes_none(ws: Workspace) -> None:
+    pbf = _write_fixture(ws, "frr-x-mooring,way/1,Existing,\n")
+
+    bda.run(ws, REGISTRY, [pbf], bda.Options(parts=False))
+
     assert not Path(ws.parts).exists()
-    assert stdout == (
-        f"area list : {areas} -> 3 OSM objects, 2 dialects\n"
-        "first.osm.pbf: 1/1 relations, 3 ways, 9 nodes (Ns)\n"
-        "  frr-x-mooring    1 object(s) ->  1 polygon(s),      1.4 km², valid=True, ~9 coords\n"
-        "  frr-x-solring    1 object(s) ->  1 polygon(s),      2.9 km², valid=True, ~11 coords\n"
-        "  ! relation/100: 1 unclosed outer ring(s) -- skipped\n"
-        "\n"
-        "1 object(s) not found in the extract(s):\n"
-        "  way/8  Second (frr-x-solring)\n"
-        "\n"
-        f"wrote {out} (2 features, 2 polygons, 1 kB)\n"
-        "reads back as 2 polygon(s): frr-x-mooring (1), frr-x-solring (1)\n"
-    )
 
 
 def test_a_refused_build_has_listed_what_is_missing(
@@ -357,12 +479,7 @@ def test_a_refused_build_has_listed_what_is_missing(
     with pytest.raises(PipelineError):
         bda.run(ws, REGISTRY, [first])
 
-    assert _printed(capsys)[0].endswith(
-        "  ! relation/100: 1 unclosed outer ring(s) -- skipped\n"
-        "\n"
-        "1 object(s) not found in the extract(s):\n"
-        "  way/8  Second (frr-x-solring)\n"
-    )
+    assert "  way/8  Second (frr-x-solring)" in capsys.readouterr().out.splitlines()
 
 
 def test_a_refused_build_points_at_the_list_without_repeating_it(ws: Workspace) -> None:

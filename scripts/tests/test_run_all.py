@@ -14,7 +14,7 @@ RUN_ALL = Path(__file__).resolve().parent.parent / "run-all.sh"
 
 def run_all(cwd: Path, *commands: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["bash", str(RUN_ALL), *commands], cwd=cwd, capture_output=True, text=True
+        ["bash", str(RUN_ALL), *commands], cwd=cwd, capture_output=True, encoding="utf-8"
     )
 
 
@@ -22,14 +22,14 @@ def test_runs_every_command_and_passes_when_all_pass(tmp_path: Path) -> None:
     result = run_all(tmp_path, "echo lint >> ran", "echo test >> ran")
 
     assert result.returncode == 0, result.stderr
-    assert (tmp_path / "ran").read_text() == "lint\ntest\n"
+    assert (tmp_path / "ran").read_text(encoding="utf-8") == "lint\ntest\n"
 
 
 def test_keeps_going_after_a_failure_and_fails_at_the_end(tmp_path: Path) -> None:
     result = run_all(tmp_path, "echo lint >> ran; exit 3", "echo test >> ran")
 
     assert result.returncode == 1
-    assert (tmp_path / "ran").read_text() == "lint\ntest\n"
+    assert (tmp_path / "ran").read_text(encoding="utf-8") == "lint\ntest\n"
     assert result.stderr.splitlines()[-1] == "run-all: failed: echo lint >> ran; exit 3"
 
 

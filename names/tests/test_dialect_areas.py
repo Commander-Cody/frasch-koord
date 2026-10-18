@@ -12,11 +12,12 @@ import pytest
 from shapely.geometry import box
 from shapely.geometry.base import BaseGeometry
 
-from frasch import dialect_areas, dialects, tables
+from frasch import dialect_areas, dialects
 from frasch.dialect_areas import dialect_at
 from frasch.errors import Problem
 from frasch.objects import LocatedObject
 from conftest import REGISTRY
+import osm_fixture
 
 
 @pytest.fixture(scope="module")
@@ -110,40 +111,8 @@ def test_area_rows_still_accepts_way_and_relation_references(
     assert rows[0]["refs"] == [("w", 1), ("r", 2)]
 
 
-# What a spreadsheet does to the file is reported as for the other three
-# hand-edited files (#92): the area list used to have a reader of its own.
-def test_area_rows_reports_a_semicolon_separated_export_as_such(
-    tmp_path: Path, reg: dialects.Registry
-) -> None:
-    areas = tmp_path / "dialect_areas.csv"
-    areas.write_text("dialect;osm;name;note\nfrr-x-mooring;relation/1;Fine;\n", encoding="utf-8")
-    _, problems = dialect_areas.area_rows(str(areas), reg)
-    assert problems == [Problem(str(areas), 1, tables.SEMICOLON_SEPARATED)]
-
-
-def test_area_rows_reports_a_row_with_the_wrong_number_of_cells(
-    tmp_path: Path, reg: dialects.Registry
-) -> None:
-    areas = tmp_path / "dialect_areas.csv"
-    areas.write_text("dialect,osm,name,note\nfrr-x-mooring,relation/1,Fine\n", encoding="utf-8")
-    _, problems = dialect_areas.area_rows(str(areas), reg)
-    assert problems == [
-        Problem(str(areas), 2, "3 cells, the header has 4 (a comma too many or too few?)")
-    ]
-
-
-def test_area_rows_reports_a_problem_after_a_blank_line_on_its_own_line(
-    tmp_path: Path, reg: dialects.Registry
-) -> None:
-    areas = tmp_path / "dialect_areas.csv"
-    areas.write_text(
-        "dialect,osm,name,note\nfrr-x-mooring,relation/1,Fine,\n\nfrr-x-mooring,node/2,A node,\n",
-        encoding="utf-8",
-    )
-    _, problems = dialect_areas.area_rows(str(areas), reg)
-    assert [p.line for p in problems] == [4]
-
-
+# The area list is read by the reader of the other three hand-edited files
+# (#92, its rules are tested in test_tables.py); it used to have its own.
 def test_area_rows_needs_every_column_of_the_file(tmp_path: Path, reg: dialects.Registry) -> None:
     # `name` and `note` are what the review overlay shows of a row.
     areas = tmp_path / "dialect_areas.csv"
@@ -153,29 +122,17 @@ def test_area_rows_needs_every_column_of_the_file(tmp_path: Path, reg: dialects.
 
 
 # --------------------------------------------------------------- dialect_at ---
-def ring(west: float, south: float, east: float, north: float) -> list[list[list[float]]]:
-    return [[[west, south], [east, south], [east, north], [west, north], [west, south]]]
-
-
 @pytest.fixture
 def area_index(tmp_path: Path) -> dialect_areas.AreaIndex:
     """Reußenköge (Mooring) with the Hamburger Hallig (Halligfriesisch)
     inside it, and a strip of Langeneß covering only part of Oland."""
-    fc = {
-        "type": "FeatureCollection",
-        "features": [
-            {
-                "type": "Feature",
-                "properties": {"dialect": tag},
-                "geometry": {"type": "Polygon", "coordinates": ring(*bounds)},
-            }
-            for tag, bounds in [
-                ("frr-x-mooring", (8.80, 54.55, 8.95, 54.63)),
-                ("frr-x-hallig", (8.82, 54.58, 8.86, 54.605)),
-                ("frr-x-hallig", (8.60, 54.60, 8.62, 54.62)),
-            ]
-        ],
-    }
+    fc = osm_fixture.areas_geojson(
+        [
+            ("frr-x-mooring", osm_fixture.box(8.80, 54.55, 8.95, 54.63)),
+            ("frr-x-hallig", osm_fixture.box(8.82, 54.58, 8.86, 54.605)),
+            ("frr-x-hallig", osm_fixture.box(8.60, 54.60, 8.62, 54.62)),
+        ]
+    )
     path = tmp_path / "areas.geojson"
     path.write_text(json.dumps(fc), encoding="utf-8")
     return dialect_areas.AreaIndex.from_geojson(str(path))

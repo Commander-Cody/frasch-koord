@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { featureFilter } from '@maplibre/maplibre-gl-style-spec';
-import type { FilterSpecification } from 'maplibre-gl';
+import { featureFilter, validateStyleMin } from '@maplibre/maplibre-gl-style-spec';
+import type { FilterSpecification, StyleSpecification } from 'maplibre-gl';
 
 import { DIALECTS } from '../../dialects/registry';
 import { UNASSIGNED, type AreaProps } from './areas';
-import { areaLayers, DIALECT_COLORS, type AreaLayerState } from './areaLayers';
+import { areaLayers, DIALECT_COLORS, SOURCE, type AreaLayerState } from './areaLayers';
 
 const MULTI: AreaProps = {
   assigned: true,
@@ -28,11 +28,30 @@ function drawn(state: AreaLayerState, id: string): string[] {
     .map((properties) => properties.name);
 }
 
+/** A style of nothing but the overlay's layers in `state`, on an empty source. */
+function overlayStyle(state: AreaLayerState): StyleSpecification {
+  return {
+    version: 8,
+    sources: { [SOURCE]: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } } },
+    layers: areaLayers(state),
+  };
+}
+
+// Breaks on purpose when a dialect is added: it needs a colour of its own,
+// the one test that may (owner's decision, #111).
 it('has a colour for exactly the dialects of the registry', () => {
   expect(Object.keys(DIALECT_COLORS).sort()).toEqual(DIALECTS.map((dialect) => dialect.tag).sort());
 });
 
 describe('areaLayers', () => {
+  it.each<AreaLayerState>([
+    { selectedOsm: null, shown: null },
+    { selectedOsm: MULTI.osm, shown: UNASSIGNED },
+    { selectedOsm: null, shown: 'frr-x-fering' },
+  ])('keeps to the MapLibre style spec in the state %j', (state) => {
+    expect(validateStyleMin(overlayStyle(state))).toEqual([]);
+  });
+
   it('outlines the municipality of a row with several references, and no other', () => {
     expect(drawn({ selectedOsm: MULTI.osm, shown: null }, 'areas-selected')).toEqual(['Föhr']);
   });

@@ -18,7 +18,7 @@ def java_major(version_line: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["bash", "-c", f'source "{JAVA_SH}" && java_major "$1"', "bash", version_line],
         capture_output=True,
-        text=True,
+        encoding="utf-8",
     )
 
 

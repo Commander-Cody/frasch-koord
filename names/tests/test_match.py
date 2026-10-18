@@ -12,12 +12,12 @@ from pathlib import Path
 
 import pytest
 
-from frasch import match
+from frasch import kinds, match
 from frasch import placelist
 from frasch.nameindex import NameIndex
 from frasch.hints import HintResolver
 from frasch.candidates import Candidate, osm_key, read_records
-from frasch.matchresult import MatchResult, Outcome
+from frasch.matchresult import MatchResult, Outcome, RankedCandidate
 from frasch.refs import OsmRef
 from conftest import REGISTRY, cand, write_candidates
 
@@ -461,6 +461,36 @@ def test_the_place_node_wins_over_the_boundary_relation(tmp_path: Path) -> None:
     assert out.refs == (("n", 240102263),)
 
 
+# ------------------------------------------------ boundaries beside nodes ---
+def ranked(rec: Candidate) -> RankedCandidate:
+    return RankedCandidate(**rec, rank=0, byname=False)
+
+
+NORDFRIESLAND_KREIS = ranked(
+    cand("r", 1, 8.9, 54.6, name="Nordfriesland", boundary="administrative", admin_level="6")
+)
+NORDFRIESLAND_REGION = ranked(cand("n", 2, 8.9, 54.7, name="Nordfriesland", place="region"))
+
+
+def dropped_by(kind: str, *cands: RankedCandidate) -> list[OsmRef]:
+    _, dropped = match.absorb_boundaries(kinds.rule(kind), list(cands))
+    return [osm_key(c) for c in dropped]
+
+
+def test_a_harde_keeps_its_boundary_beside_a_place_node() -> None:
+    # the historic boundary is the Harde itself
+    assert dropped_by("harde", NORDFRIESLAND_KREIS, NORDFRIESLAND_REGION) == []
+
+
+def test_a_landscape_keeps_its_boundary_where_no_place_node_is() -> None:
+    bakery = ranked(cand("n", 3, 8.9, 54.6, name="Nordfriesland", shop="bakery"))
+    assert dropped_by("landscape", NORDFRIESLAND_KREIS, bakery) == []
+
+
+def test_a_landscape_drops_its_boundary_beside_a_place_node() -> None:
+    assert dropped_by("landscape", NORDFRIESLAND_KREIS, NORDFRIESLAND_REGION) == [("r", 1)]
+
+
 def test_the_boundary_relation_lends_its_wikidata_to_the_place_node(tmp_path: Path) -> None:
     """Kampen (Sylt): the village node has no `wikidata`, the municipality's
     boundary relation 1.8 km away has.  The node wins, with the relation's QID."""
@@ -527,8 +557,8 @@ def test_the_municipality_lends_its_wikidata_rather_than_the_nearer_amt(tmp_path
 
 def test_all_pieces_of_a_river_are_matched(tmp_path: Path) -> None:
     pieces = [
-        cand("w", i, 9.0, 54.6 + 0.01 * i, name="Arlau", waterway="river")
-        for i in (44051133, 44051131, 44051132)
+        cand("w", i, 9.0, 54.6 + 0.01 * n, name="Arlau", waterway="river")
+        for n, i in enumerate((44051133, 44051131, 44051132))
     ]
     out = run(tmp_path, row(kind="water", mooring="Arlou", de="Arlau"), *pieces)
     assert out.result is Outcome.MATCHED

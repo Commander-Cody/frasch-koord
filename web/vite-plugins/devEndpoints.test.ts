@@ -5,14 +5,13 @@
  * gates every dev tool's endpoints sit behind — through each tool's own
  * middleware, so a tool that skips them fails here.
  */
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createAreasMiddleware } from './areas.ts';
 import { createCurateMiddleware } from './curate.ts';
 import { devEndpoints, sendJson, serveFile } from './devEndpoints.ts';
+import { tempDirPerTest } from './testDir.ts';
 import { fakeReq, fakeRes, type CapturedResponse } from './testHttp.ts';
 
 const noopNext = () => {
@@ -92,17 +91,8 @@ describe('devEndpoints', () => {
 });
 
 describe('serveFile', () => {
-  let dir: string;
-  let path: string;
-
-  beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'dev-endpoints-test-'));
-    path = join(dir, 'parts.geojson');
-  });
-
-  afterEach(async () => {
-    await rm(dir, { recursive: true, force: true });
-  });
+  const dir = tempDirPerTest('dev-endpoints-test-');
+  const FILE = 'parts.geojson';
 
   /** A tool serving `file` as GeoJSON at `GET parts`, with `missingHint`. */
   function fileTool(file: string) {
@@ -111,9 +101,14 @@ describe('serveFile', () => {
     });
   }
 
+  /** `GET parts` of a tool serving `file`, by default the test's FILE. */
+  function getParts(file = join(dir.path, FILE)) {
+    return request(fileTool(file), { method: 'GET', url: '/__test/parts' });
+  }
+
   it('passes the file through as it is, under its content type', async () => {
-    await writeFile(path, '{ "type": "FeatureCollection" }');
-    const res = await request(fileTool(path), { method: 'GET', url: '/__test/parts' });
+    dir.put(FILE, '{ "type": "FeatureCollection" }');
+    const res = await getParts();
     expect([res.status, res.headers['content-type'], res.body]).toEqual([
       200,
       'application/geo+json; charset=utf-8',
@@ -122,21 +117,21 @@ describe('serveFile', () => {
   });
 
   it('tells the browser not to keep the file', async () => {
-    await writeFile(path, '{}');
-    const res = await request(fileTool(path), { method: 'GET', url: '/__test/parts' });
+    dir.put(FILE, '{}');
+    const res = await getParts();
     expect(res.headers['cache-control']).toBe('no-store');
   });
 
   it('answers a missing file with a 404 telling how to make it', async () => {
-    const res = await request(fileTool(path), { method: 'GET', url: '/__test/parts' });
+    const res = await getParts();
     expect([res.status, JSON.parse(res.body)]).toEqual([404, { error: 'run the build' }]);
   });
 
   it('answers a file it cannot read with a 500 that does not name its path', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     // a directory: readFile fails, and not because nothing is there
-    const res = await request(fileTool(dir), { method: 'GET', url: '/__test/parts' });
-    expect([res.status, res.body.includes(dir)]).toEqual([500, false]);
+    const res = await getParts(dir.path);
+    expect([res.status, res.body.includes(dir.path)]).toEqual([500, false]);
   });
 });
 
@@ -165,17 +160,12 @@ const TOOLS: Record<string, DevTool> = {
 };
 
 describe.each(Object.entries(TOOLS))('the gates of %s', (_, tool) => {
-  let dir: string;
+  const dir = tempDirPerTest('dev-gates-test-');
   let middleware: ReturnType<typeof devEndpoints>;
 
-  beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'dev-gates-test-'));
-    await writeFile(join(dir, tool.file), '{}');
-    middleware = tool.middleware(dir);
-  });
-
-  afterEach(async () => {
-    await rm(dir, { recursive: true, force: true });
+  beforeEach(() => {
+    dir.put(tool.file, '{}');
+    middleware = tool.middleware(dir.path);
   });
 
   /** A GET of the tool's file from `remoteAddress` with `headers`, answered. */

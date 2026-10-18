@@ -19,7 +19,7 @@ def run(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["bash", "-c", f'source "{FETCH_SH}" && "$@"', "bash", *args],
         capture_output=True,
-        text=True,
+        encoding="utf-8",
     )
 
 

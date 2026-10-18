@@ -23,13 +23,13 @@ def run(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["bash", "-c", f'source "{LOCK_SH}" && "$@"', "bash", *args],
         capture_output=True,
-        text=True,
+        encoding="utf-8",
     )
 
 
 def lock_file(tmp_path: Path) -> Path:
     lock = tmp_path / "tiles.lock"
-    lock.write_text(LOCK)
+    lock.write_text(LOCK, encoding="utf-8")
     return lock
 
 
@@ -57,7 +57,9 @@ def test_lock_set_rewrites_only_the_line_of_its_key(tmp_path: Path) -> None:
     result = run("lock_set", str(lock), "ARCHIVE_SHA256", "bbbb")
 
     assert result.returncode == 0, result.stderr
-    assert lock.read_text() == LOCK.replace("ARCHIVE_SHA256=aaaa", "ARCHIVE_SHA256=bbbb")
+    assert lock.read_text(encoding="utf-8") == LOCK.replace(
+        "ARCHIVE_SHA256=aaaa", "ARCHIVE_SHA256=bbbb"
+    )
 
 
 def test_lock_set_writes_a_url_as_it_is(tmp_path: Path) -> None:
@@ -66,7 +68,7 @@ def test_lock_set_writes_a_url_as_it_is(tmp_path: Path) -> None:
 
     run("lock_set", str(lock), "ARCHIVE_URL", url)
 
-    assert f"ARCHIVE_URL={url}\n" in lock.read_text()
+    assert f"ARCHIVE_URL={url}\n" in lock.read_text(encoding="utf-8")
 
 
 def test_lock_set_leaves_a_lock_without_the_key_alone(tmp_path: Path) -> None:
@@ -76,4 +78,4 @@ def test_lock_set_leaves_a_lock_without_the_key_alone(tmp_path: Path) -> None:
 
     assert result.returncode != 0
     assert f"{lock} has no ARCHIVE_NAME=" in result.stderr
-    assert lock.read_text() == LOCK
+    assert lock.read_text(encoding="utf-8") == LOCK

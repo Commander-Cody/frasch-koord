@@ -29,6 +29,7 @@ Which names a place gets from its row is frasch.placenames' rule.
 from __future__ import annotations
 
 import enum
+import itertools
 import os
 import re
 import unicodedata
@@ -348,11 +349,12 @@ def fill_ids(path: str, reg: Registry) -> int:
     """Give every row of the name list without an `id` one (`new_id`), and
     the file the `id` column when it has none -- the one step that both
     introduced the ids and keeps new rows keyed.  An id, once written, never
-    changes.  Writes nothing when every row has one.  -> the number of ids
-    given.
+    changes.  Writes the list in its `written_form`, and nothing when every
+    row has an id and the file is in that form already.  -> the number of
+    ids given.
 
-    It takes the file's cells as they are, because `read` refuses a row
-    without an id; a row whose cells do not line up with the header stops it,
+    It takes the file's cells, stripped, without `read`'s rules, because
+    `read` refuses a row without an id; a row whose cells do not line up with the header stops it,
     since there is no telling which cell would be the id."""
     found = table(path)
     if found.problems:
@@ -361,15 +363,15 @@ def fill_ids(path: str, reg: Registry) -> int:
     fields = header if "id" in header else header + ["id"]
     if what := header_problem(fields, reg):
         raise ValidationError([Problem(path, 1, what)])
-    rows = [PlaceRow(dict(zip(header, cells, strict=True)), n) for n, cells in found.rows]
-    taken = {r["id"].strip() for r in rows if r.get("id", "").strip()}
+    rows = [PlaceRow(cells, n) for n, cells in found.records()]
+    taken = {r["id"] for r in rows if r.get("id")}
     given = 0
     for r in rows:
-        if not r.get("id", "").strip():
+        if not r.get("id"):
             r["id"] = new_id(r, taken, reg)
             taken.add(r["id"])
             given += 1
-    if given or fields is not header:
+    if given or fields is not header or form_problem(found):
         PlaceList(path, reg, fields, rows, found.digest).write()
     return given
 
@@ -379,6 +381,34 @@ def table(path: str) -> Table:
     if not os.path.exists(path):
         raise PipelineError(f"name list not found: {path}")
     return tables.read_table(path)
+
+
+NOT_IN_WRITTEN_FORM = (
+    "not in the form the pipeline writes the list in (a byte order mark, a blank "
+    "line, Windows line ends, quotes or spaces it would drop) -- "
+    "`frasch check-inputs --fix` rewrites it"
+)
+
+
+def written_form(names: Table) -> bytes:
+    """The name list (`names`, see `table`) as `PlaceList.write` writes it
+    back.  Only for a list whose rows all line up with its header."""
+    return tables.write_rows(names.header, (cells for _, cells in names.records()))
+
+
+def form_problem(names: Table) -> Problem | None:
+    """The first line at which the name list differs from `written_form` --
+    the next write by the matcher or the curation would change more than the
+    cells it means to --, or None.  None also for a list whose rows do not
+    all line up with its header: there is no telling its written form."""
+    if names.problems:
+        return None
+    on_disk = names.data.decode("utf-8").splitlines(keepends=True)
+    written = written_form(names).decode("utf-8").splitlines(keepends=True)
+    for line, (was, would_be) in enumerate(itertools.zip_longest(on_disk, written), start=1):
+        if was != would_be:
+            return Problem(names.path, line, NOT_IN_WRITTEN_FORM)
+    return None
 
 
 def ids(names: Table) -> set[str]:
