@@ -1750,8 +1750,8 @@ something works:
   a feature by its name carries `"metadata": {"frasch:label": true}` and
   `["get", "name"]` as its text-field in `frasch-bright.json`; `labelLayers`
   rewrites marked layers only. It used to rewrite any text-field whose
-  string contained `name`, which is why the file kept 27 legacy
-  `{name:latin}\n{name:nonlatin}` templates.
+  string contained `name`, which is why the file kept 27 legacy templates
+  such as `{name:latin}\n{name:nonlatin}`.
 - **The style file names no URL**: the source URL, sprite and glyphs of
   upstream's hosting (MapTiler, GitHub Pages) are gone, as `styleFor` always
   set its own; so are the Mapbox Studio metadata, the camera and

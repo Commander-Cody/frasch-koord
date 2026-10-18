@@ -235,8 +235,9 @@ then reads TileJSON straight out of the archive itself.
     as absolute URLs against the page origin (MapLibre requires this for
     sprites).
 
-  Unmarked layers, such as the `{ref}` road shields, are left untouched. Changing the selector calls `map.setStyle()` with a freshly
-  built style for the new view.
+  Unmarked layers, such as the `{ref}` road shields, are left untouched.
+  Changing the selector calls `map.setStyle()` with a freshly built style
+  for the new view.
 
 ### Dialect registry and the selector
 
@@ -348,9 +349,10 @@ OpenMapTiles schema plus our extras, injected by the `tiles/` build
   e.g. `Foortuftinge`. Shown by the place card; nothing in the style reads it.
 - `frasch:ref` (string, only on features from our name list): which row of
   `names/places.csv` the names come from — its `id`, e.g. `naibel` (tiles
-  built before the row ids carry the row's first OSM reference instead). It is the `id` of that row's entry in the search index, which is how
-  a click on a label finds the rest of the place's names (see "Place info
-  card"). Absent on everything the name list does not cover.
+  built before the row ids carry the row's first OSM reference instead). It
+  is the `id` of that row's entry in the search index, which is how a click
+  on a label finds the rest of the place's names (see "Place info card").
+  Absent on everything the name list does not cover.
 - Names: `name:<tag>` for every dialect of the registry that has a name for
   the feature (`name:frr-x-mooring`, `name:frr-x-fering`, …), plus
   `name:frr`, `name:nds`, `name:de`, `name:da`, `name:latin`, `name`. On a

@@ -30,9 +30,8 @@ export type EntryLookup = (ref: string) => NameEntry | undefined;
  * ids, by the reference that used to be the id: any of the row's OSM
  * references. No two rows have one object (frasch/placelist.py refuses such
  * a list), and ids are lowercase slugs without a `/`, so they never clash
- * with a reference. The
- * `#<csv line>` an old link may end in told two rows on one object apart;
- * it is ignored.
+ * with a reference. The `#<csv line>` an old link may end in told two rows
+ * on one object apart; it is ignored.
  */
 export function entryLookup(entries: NameEntry[]): EntryLookup {
   const byRef = new Map<string, NameEntry>();

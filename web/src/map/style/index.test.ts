@@ -38,6 +38,10 @@ it("labels places with the view's label expression", () => {
   expect(textField('place-village')).toEqual(nameExpression(LOCAL_TAG));
 });
 
+it('leaves the road shields showing their ref', () => {
+  expect(textField('highway-shield')).toBe('{ref}');
+});
+
 it('serves glyphs and sprites from the site root by default', () => {
   const style = styleFor('frr-x-mooring');
   expect(style.glyphs).toBe(`${origin}/fonts/{fontstack}/{range}.pbf`);
