@@ -353,8 +353,8 @@ def fill_ids(path: str, reg: Registry) -> int:
     row has an id and the file is in that form already.  -> the number of
     ids given.
 
-    It takes the file's cells as they are, because `read` refuses a row
-    without an id; a row whose cells do not line up with the header stops it,
+    It takes the file's cells, stripped, without `read`'s rules, because
+    `read` refuses a row without an id; a row whose cells do not line up with the header stops it,
     since there is no telling which cell would be the id."""
     found = table(path)
     if found.problems:

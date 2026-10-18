@@ -728,7 +728,7 @@ the commands.
 |---|---|
 | `update` | `just update`: checks the inputs, applies the curation decisions and builds every generated file of the table in its order (see [Workflow](#workflow)), skipping a scan of the extracts whose output is not stale |
 | `build` | `just rebuild <name>`: builds one generated file of the table — `candidates`, `report`, `objects` (OSM extracts → `osm_objects.json`: where each object of the name list is), `areas`, `dialects` (→ `web/src/dialects/generated/dialects.json`) or `index` (`places.csv` + `osm_objects.json` + `dialect_areas.geojson` → `web/public/data/names.json`: every dialect name, the local form, OSM's Low Saxon name, German, Danish, the QID; keyed by the row `id`, the same string the tiles carry as `frasch:ref`; stamped with `built_from`) |
-| `check-inputs` | `just check-inputs`: checks the hand-edited files, every problem with its line (`--fix` gives new rows an id) |
+| `check-inputs` | `just check-inputs`: checks the hand-edited files, every problem with its line (`--fix` gives new rows an id and writes `places.csv` in the form the pipeline writes it) |
 | `candidates` | OSM extract(s) → `work/candidates.jsonl`, with the scan's own options |
 | `match` | fills `osm`/`wikidata` in `places.csv`; writes `work/matches.jsonl` and `REPORT.md` (`--dry-run`: only `work/matches.jsonl`) |
 | `curate` | the review worklist as pins on the map: `export` → `work/curate.json`, `apply` writes the browser's decisions back into `places.csv` / `curation.csv` |
