@@ -4,7 +4,7 @@ its line, instead of stopping at the first one (#22, M3)."""
 from __future__ import annotations
 
 import os
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Protocol
 
@@ -82,24 +82,10 @@ def test_every_problem_is_reported_not_only_the_first(names: CheckNames) -> None
     ]
 
 
-@pytest.mark.parametrize(
-    "edit, line",
-    [
-        (lambda text: "\ufeff" + text, 1),  # Excel's "CSV UTF-8"
-        (lambda text: text.replace("\n", "\r\n"), 1),
-        (lambda text: text.replace("Naibel", '"Naibel"'), 3),
-        (lambda text: text.replace("Naibel", "Naibel "), 3),
-        (lambda text: text.replace("\nsettlement,Naibel", "\n\nsettlement,Naibel"), 3),
-    ],
-    ids=["byte order mark", "windows line ends", "quoted cell", "spaces in a cell", "blank line"],
-)
-def test_a_list_not_in_the_form_the_pipeline_writes_is_reported_where_it_differs(
-    names: CheckNames, edit: Callable[[str], str], line: int
-) -> None:
-    # the next write by the matcher or the curation would change more than
-    # the cells it means to
-    problems = names(edit(places_text([TOFTUM, NIEBUELL])))
-    assert [(p.line, "check-inputs --fix" in p.message) for p in problems] == [(line, True)]
+def test_a_list_not_in_the_form_the_pipeline_writes_is_reported(names: CheckNames) -> None:
+    # the rule is placelist's (test_placelist_write.py)
+    problems = names(places_text([TOFTUM, NIEBUELL]).replace("Naibel", '"Naibel"'))
+    assert [(p.line, "check-inputs --fix" in p.message) for p in problems] == [(3, True)]
 
 
 def test_a_missing_column_is_reported_on_the_header(names: CheckNames) -> None:

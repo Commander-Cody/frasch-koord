@@ -111,32 +111,8 @@ def test_area_rows_still_accepts_way_and_relation_references(
     assert rows[0]["refs"] == [("w", 1), ("r", 2)]
 
 
-# What a spreadsheet does to the file is reported as for the other three
-# hand-edited files (#92, the rules are tables'): the area list used to have a
-# reader of its own.
-def test_area_rows_reports_a_row_with_the_wrong_number_of_cells(
-    tmp_path: Path, reg: dialects.Registry
-) -> None:
-    areas = tmp_path / "dialect_areas.csv"
-    areas.write_text("dialect,osm,name,note\nfrr-x-mooring,relation/1,Fine\n", encoding="utf-8")
-    _, problems = dialect_areas.area_rows(str(areas), reg)
-    assert problems == [
-        Problem(str(areas), 2, "3 cells, the header has 4 (a comma too many or too few?)")
-    ]
-
-
-def test_area_rows_reports_a_problem_after_a_blank_line_on_its_own_line(
-    tmp_path: Path, reg: dialects.Registry
-) -> None:
-    areas = tmp_path / "dialect_areas.csv"
-    areas.write_text(
-        "dialect,osm,name,note\nfrr-x-mooring,relation/1,Fine,\n\nfrr-x-mooring,node/2,A node,\n",
-        encoding="utf-8",
-    )
-    _, problems = dialect_areas.area_rows(str(areas), reg)
-    assert [p.line for p in problems] == [4]
-
-
+# The area list is read by the reader of the other three hand-edited files
+# (#92, its rules are tested in test_tables.py); it used to have its own.
 def test_area_rows_needs_every_column_of_the_file(tmp_path: Path, reg: dialects.Registry) -> None:
     # `name` and `note` are what the review overlay shows of a row.
     areas = tmp_path / "dialect_areas.csv"

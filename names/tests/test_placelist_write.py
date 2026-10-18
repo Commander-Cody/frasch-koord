@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import csv
 import os
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 
 import pytest
@@ -49,6 +49,32 @@ def test_cells_that_need_quotes_and_an_editors_own_column_round_trip_byte_identi
     before = path.read_bytes()
     placelist.read(str(path), REGISTRY).write()
     assert path.read_bytes() == before
+
+
+@pytest.mark.parametrize(
+    "edit, line",
+    [
+        (lambda text: "\ufeff" + text, 1),  # Excel's "CSV UTF-8"
+        (lambda text: text.replace("\n", "\r\n"), 1),
+        (lambda text: text.replace("Dorf 1", '"Dorf 1"'), 3),
+        (lambda text: text.replace("Dorf 1", "Dorf 1 "), 3),
+        (lambda text: text.replace("\nsettlement,Taarep 1,", "\n\nsettlement,Taarep 1,"), 3),
+    ],
+    ids=["byte order mark", "windows line ends", "quoted cell", "spaces in a cell", "blank line"],
+)
+def test_a_list_not_in_the_written_form_differs_from_it_at_its_first_such_line(
+    world: Path, edit: Callable[[str], str], line: int
+) -> None:
+    # the next write by the matcher or the curation would change more than
+    # the cells it means to
+    path = world / "places.csv"
+    path.write_bytes(edit(places_text(ROWS[:2])).encode())
+    problem = placelist.form_problem(placelist.table(str(path)))
+    assert problem is not None and problem.line == line
+
+
+def test_a_list_in_the_written_form_has_no_form_problem(places: Path) -> None:
+    assert placelist.form_problem(placelist.table(str(places))) is None
 
 
 def test_interrupted_write_leaves_the_file_alone(
