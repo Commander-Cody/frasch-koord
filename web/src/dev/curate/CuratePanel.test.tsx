@@ -538,7 +538,7 @@ describe('CuratePanel, new places', () => {
     fireEvent.click(savePlaceButton());
 
     expect(posts[0].entry).toMatchObject({
-      id: expect.stringMatching(/^new:[a-z0-9]+$/),
+      id: expect.stringMatching(/^new:[0-9a-f]+$/),
       action: 'create',
       kind: 'warft',
       names: { mooring: 'Hoorne', de: 'Horne' },
@@ -702,6 +702,70 @@ describe('CuratePanel, new places', () => {
     fireEvent.click(screen.getByRole('button', { name: 'New place from this' }));
 
     expect(screen.queryByRole('button', { name: 'New place from this' })).toBeNull();
+  });
+
+  it('says why a discard could not be saved', async () => {
+    await renderWithHoorne();
+    fireEvent.click(within(newPlacesList()).getByText('Hoorne'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Discard' }));
+
+    await act(async () => {
+      posts[0].reply.resolve(
+        new Response(JSON.stringify({ ok: false, error: 'disk full' }), { status: 500 }),
+      );
+      await posts[0].reply.promise;
+    });
+
+    await screen.findByText('could not save: /__curate/patch: disk full');
+  });
+
+  it('offers a new place for a clicked label once the form took over from an armed row', async () => {
+    const map = new FakeMap();
+    render(<CuratePanel map={map.map} />);
+    await screen.findByText('Naibel');
+    await openRow('Naibel');
+    fireEvent.click(screen.getByRole('button', { name: 'set position on map' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New place' }));
+
+    act(() => map.click(AT, NIEBUELL_LABEL));
+
+    expect(screen.queryByRole('button', { name: 'New place from this' })).not.toBeNull();
+  });
+
+  it('warns of another created place that has a name typed for a new place', async () => {
+    await renderWithHoorne();
+    fireEvent.click(screen.getByRole('button', { name: 'New place' }));
+
+    fillPlace({ 'new place de': 'Horne' });
+
+    within(screen.getByRole('list', { name: 'already in the list' })).getByText(new RegExp(KEY));
+  });
+
+  it('does not warn of the created place being edited itself', async () => {
+    await renderWithHoorne();
+    fireEvent.click(within(newPlacesList()).getByText('Hoorne'));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+
+    expect(screen.queryByRole('list', { name: 'already in the list' })).toBeNull();
+  });
+
+  it('lists no created place the kind filter leaves out', async () => {
+    await renderWithHoorne();
+
+    fireEvent.change(screen.getByLabelText('kind'), { target: { value: 'settlement' } });
+
+    expect(screen.queryByRole('list', { name: /^New places/ })).toBeNull();
+  });
+
+  it('lists no created place the text filter leaves out', async () => {
+    await renderWithHoorne();
+
+    fireEvent.change(screen.getByPlaceholderText('filter: Frisian, German, hint'), {
+      target: { value: 'Niebüll' },
+    });
+
+    expect(screen.queryByRole('list', { name: /^New places/ })).toBeNull();
   });
 
   it('offers no new place for the label of a row of the list', async () => {

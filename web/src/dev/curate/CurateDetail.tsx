@@ -7,7 +7,7 @@
  * Everything typed or ticked here belongs to this one row: CuratePanel keys
  * the component by the row id, so moving to another row starts afresh.
  */
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { Map as MapLibreMap } from 'maplibre-gl';
 
 import { errorMessage } from '../shell/fetchJson';
@@ -46,9 +46,11 @@ export interface CurateDetailProps {
   map: MapLibreMap;
   /**
    * Whether the next map click sets the position of a local reference: the
-   * panel's, which then takes that click for no label.
+   * panel's, which then takes that click for no label. Disarmed when the
+   * detail goes, so that the row starts afresh next time.
    */
   picking: boolean;
+  /** Must be stable: the detail disarms with it when it goes. */
   setPicking: (picking: boolean) => void;
   /** Stores a decision; rejects with a message fit for the panel. */
   onSave: (row: ListRow, decision: Decision) => Promise<void>;
@@ -404,6 +406,7 @@ function LocalRef({ initialSlug, canBePolygon, map, picking, setPicking, decide 
   const [slug, setSlug] = useState(initialSlug);
   const [position, setPosition] = useState<Position | null>(null);
   const [polygonKm2, setPolygonKm2] = useState('');
+  useEffect(() => () => setPicking(false), [setPicking]);
   usePositionPin(map, { position, setPosition, picking, setPicking });
 
   const save = (at: Position) =>

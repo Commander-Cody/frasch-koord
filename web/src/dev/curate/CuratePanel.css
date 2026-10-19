@@ -120,13 +120,6 @@ button.is-armed {
   color: var(--dev-panel-ok);
 }
 
-.curate-section-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-}
-
 .curate-label {
   margin: 0 0 8px;
   padding: 6px 8px;

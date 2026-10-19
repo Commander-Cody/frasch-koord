@@ -185,9 +185,16 @@ def names_of(line: PatchLine) -> str:
 
 
 @functools.cache
-def patch_validator() -> jsonschema.Draft202012Validator:
+def patch_schema() -> dict[str, Any]:
+    """names/curate-patch.schema.json, read once."""
     with open(paths.PATCH_SCHEMA, encoding="utf-8") as fh:
-        return jsonschema.Draft202012Validator(json.load(fh))
+        schema: dict[str, Any] = json.load(fh)
+    return schema
+
+
+@functools.cache
+def patch_validator() -> jsonschema.Draft202012Validator:
+    return jsonschema.Draft202012Validator(patch_schema())
 
 
 def schema_problem(entry: object) -> str | None:

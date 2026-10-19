@@ -168,6 +168,21 @@ def test_a_refused_place_is_kept_in_the_patch_with_its_decision(ws: Workspace) -
     assert [e["action"] for e in kept(ws)] == ["create", "osm"]
 
 
+def test_the_summary_counts_the_created_places(ws: Workspace) -> None:
+    append(ws, create())
+    assert apply(ws).log[-1] == (
+        f"0 row(s) written to {ws.names}, 1 created, 0 appended to {ws.curation}, 0 refused"
+    )
+
+
+def test_a_dry_run_counts_the_places_it_would_create(ws: Workspace) -> None:
+    append(ws, create())
+    assert curate.apply(ws, REGISTRY, dry_run=True).log[-1] == (
+        "dry run: 0 row(s) would change, 1 would be created, "
+        "0 curation row(s) would be appended, 0 refused -- nothing written"
+    )
+
+
 def test_a_decision_for_a_place_the_patch_does_not_create_is_refused(ws: Workspace) -> None:
     append(ws, osm("node/7"))
     assert refusals(apply(ws)) == [
@@ -181,7 +196,7 @@ def test_a_discarded_place_is_not_created(ws: Workspace) -> None:
     assert len(rows(ws)) == len(ROWS)
 
 
-def test_a_create_under_a_row_id_is_refused_without_the_rows_decision(ws: Workspace) -> None:
+def test_a_create_under_a_row_id_is_refused_alone_the_rows_decision_applies(ws: Workspace) -> None:
     append(ws, create(id="hoorn"), osm("node/7", key="hoorn"))
     apply(ws)
     assert [r["osm"] for r in rows(ws) if r["id"] == "hoorn"] == ["node/7"]

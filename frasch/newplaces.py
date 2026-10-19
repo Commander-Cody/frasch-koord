@@ -12,19 +12,24 @@ Nothing here writes: apply (frasch.curate) does.
 
 from __future__ import annotations
 
+import functools
 import re
 
-from frasch import check_inputs, placelist, tables
+from frasch import check_inputs, patch, placelist, tables
 from frasch.decisions import Refused
 from frasch.patch import PatchEntry
 from frasch.placelist import PlaceList, PlaceRow
 
-PROVISIONAL_KEY = re.compile(r"new:[a-z0-9]+")
+
+@functools.cache
+def _provisional_key() -> re.Pattern[str]:
+    """The shape of a provisional key, as names/curate-patch.schema.json says it."""
+    return re.compile(patch.patch_schema()["$defs"]["provisional_key"]["pattern"])
 
 
 def is_provisional(key: str) -> bool:
     """Whether `key` is the provisional key of a created place, not a row id."""
-    return PROVISIONAL_KEY.fullmatch(key) is not None
+    return _provisional_key().search(key) is not None
 
 
 def new_row(entry: PatchEntry, names: PlaceList) -> PlaceRow:

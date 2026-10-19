@@ -80,13 +80,9 @@ export default function CuratePanel({ map }: { map: MapLibreMap }) {
   const save = useSave(resource.update, visible, doneById, selection);
   const doneCount = rows.filter((row) => doneById.has(row.id)).length;
 
-  // Whether the next map click sets the selected row's position: then it is no label click.
-  const [pickingFor, setPickingFor] = useState<string | null>(null);
-  const picking = selected !== null && pickingFor === selected.id;
-  const setPicking = useCallback(
-    (on: boolean) => setPickingFor(on ? selection.selected : null),
-    [selection.selected],
-  );
+  // Whether the next map click sets the selected row's position: then it is
+  // no label click. The detail disarms it when it goes (CurateDetail).
+  const [picking, setPicking] = useState(false);
   const [label, setLabel] = useLabelOffer(map, picking);
   const places = usePlaceForm(resource.update, selection.select);
   // A row opened from a list is what the user turns to: the form gives way.
@@ -162,7 +158,6 @@ export default function CuratePanel({ map }: { map: MapLibreMap }) {
             onSave={(draft) => places.save(draft, worklist.name_columns)}
             onCancel={places.close}
           />
-          {places.error && <p className="dev-panel-error">could not save: {places.error}</p>}
         </>
       ) : (
         selected &&
@@ -187,6 +182,7 @@ export default function CuratePanel({ map }: { map: MapLibreMap }) {
           />
         )
       )}
+      {places.error && <p className="dev-panel-error">could not save: {places.error}</p>}
     </DevPanel>
   );
 }

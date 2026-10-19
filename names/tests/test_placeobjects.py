@@ -56,3 +56,10 @@ def test_a_place_osm_does_not_have_needs_a_position_in_the_curation() -> None:
 def test_a_row_keyed_by_its_wikidata_id_alone_has_no_object() -> None:
     denmark = place(id="daanemark", kind="country", mooring="Däänemark", wikidata="Q35")
     assert placeobjects.for_row(LOCATED, denmark, {}, REGISTRY) is None
+
+
+def test_the_objects_of_a_row_without_a_frisian_name_are_not_needed() -> None:
+    # a place the curation view created from its German name alone (#113):
+    # neither the objects build nor check-outputs asks for its object
+    nameless = place(id="horne", kind="warft", de="Horne", osm="node/1")
+    assert placeobjects.named([nameless], REGISTRY) == {}
