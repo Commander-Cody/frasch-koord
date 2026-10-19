@@ -34,7 +34,7 @@ from frasch import (
 from frasch.dialects import Registry
 from frasch.errors import Problem
 from frasch.paths import Workspace
-from frasch.placelist import PlaceRow
+from frasch.placelist import PlaceRow, Row
 from frasch.tables import Table
 
 
@@ -123,14 +123,14 @@ def check_places(
     if what := placelist.form_problem(names):
         problems.append(what)
     for row in rows:
-        whats = _cell_problems(row, reg) + _position_problems(row, curation, positioned)
+        whats = cell_problems(row, reg) + _position_problems(row, curation, positioned)
         problems += [Problem(names.path, row.line, what) for what in whats]
     return tables.by_line(problems)
 
 
-def _cell_problems(row: PlaceRow, reg: Registry) -> list[str]:
+def cell_problems(row: Row, reg: Registry) -> list[str]:
     """What is wrong with the syntax of a row's name cells and of its `osm`
-    cell."""
+    cell -- the rules `frasch curate apply` checks a new row by too."""
     found = [
         f"{column}: {what}: {row[column]!r}"
         for column in variant_columns(reg)

@@ -131,3 +131,36 @@ def test_every_action_of_the_patch_schema_has_its_branch() -> None:
     schema = read_schema("curate-patch")
     branches = [branch["if"]["properties"]["action"]["const"] for branch in schema["allOf"]]
     assert branches == schema["properties"]["action"]["enum"]
+
+
+# a new place, as the curation view creates it (#113)
+KEY = "new:3f9c0a"
+CREATE: dict[str, object] = {
+    "id": KEY,
+    "action": "create",
+    "kind": "warft",
+    "names": {"mooring": "Hoorne", "de": "Horn"},
+}
+
+
+def test_a_create_entry_keeps_the_schema() -> None:
+    assert patch.schema_problem(CREATE) is None
+
+
+def test_a_created_place_and_its_decision_are_kept_side_by_side(tmp_path: Path) -> None:
+    p = tmp_path / "curate-patch.jsonl"
+    write_patch(p, CREATE, {"id": KEY, "action": "skip"})
+    assert [e["action"] for e in read_entries(p)] == ["create", "skip"]
+
+
+def test_a_discard_withdraws_the_place_and_its_decision(tmp_path: Path) -> None:
+    p = tmp_path / "curate-patch.jsonl"
+    write_patch(p, CREATE, {"id": KEY, "action": "skip"}, {"id": KEY, "action": "discard"})
+    assert [e["action"] for e in read_entries(p)] == ["discard"]
+
+
+def test_a_refused_decision_of_a_place_discarded_meanwhile_is_not_kept(tmp_path: Path) -> None:
+    p = tmp_path / "curate-patch.jsonl"
+    write_patch(p, {"id": KEY, "action": "discard"})
+    refused = patch.EntryLine(1, {"id": KEY, "action": "skip"})
+    assert patch.append_back(str(p), [refused]) == 0

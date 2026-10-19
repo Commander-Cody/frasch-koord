@@ -257,6 +257,12 @@ def test_a_row_keyed_by_wikidata_alone_is_left_out(export: Export) -> None:
     assert "danemark" not in export([denmark, NAIBEL])
 
 
+def test_a_row_without_a_frisian_name_is_left_out(export: Export) -> None:
+    # it has no label to find (#113) -- nor a located object to need
+    nameless = {k: v for k, v in NAIBEL.items() if k != "mooring"} | {"osm": "node/1"}
+    assert list(export([nameless, LUNGEDIK])) == ["lungedik"]
+
+
 def git_hash(path: StrPath) -> str:
     return subprocess.run(
         ["git", "hash-object", str(path)], capture_output=True, encoding="utf-8", check=True

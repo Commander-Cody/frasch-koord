@@ -2,12 +2,12 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/Commander-Cody/frasch-koord/names/curate-patch.schema.json",
   "title": "Curation patch entry",
-  "description": "One line of names/work/curate-patch.jsonl: a decision the curation view (web `?curate`) made about one row of names/places.csv, which `frasch curate apply` writes back. `properties` are the fields of every entry; each action has a branch of `allOf` that says which fields it needs and which others it may carry -- a field of another action is refused. The browser appends through the Vite dev server (web/vite-plugins/curate.ts), which sets `at` and stores an entry only if it keeps this schema. The rules that need the name list (is the row the matcher's, is the slug free) are apply's.",
+  "description": "One line of names/work/curate-patch.jsonl: a decision the curation view (web `?curate`) made about one row of names/places.csv, or a new row it created, which `frasch curate apply` writes back. `properties` are the fields of every entry; each action has a branch of `allOf` that says which fields it needs and which others it may carry -- a field of another action is refused. The browser appends through the Vite dev server (web/vite-plugins/curate.ts), which sets `at` and stores an entry only if it keeps this schema. The rules that need the name list (is the row the matcher's, is the slug free) are apply's.",
   "type": "object",
   "required": ["id", "action"],
   "properties": {
     "id": {
-      "description": "The places.csv row's `id` -- what apply finds the row by.",
+      "description": "The places.csv row's `id` -- what apply finds the row by --, or the provisional key of a place the view created, until apply gives it an id (`$defs.provisional_key`).",
       "type": "string",
       "minLength": 1
     },
@@ -15,12 +15,15 @@
       "description": "The row's line in places.csv when the worklist was exported; for messages only.",
       "type": "integer"
     },
-    "kind": { "description": "The row's kind; for messages only.", "type": "string" },
+    "kind": {
+      "description": "The row's kind; for messages only -- but a `create`'s is the new row's.",
+      "type": "string"
+    },
     "name": { "description": "The row's Frisian name; for messages only.", "type": "string" },
     "de": { "description": "The row's German name; for messages only.", "type": "string" },
     "action": {
       "description": "What is decided about the row; each action has its branch of `allOf`.",
-      "enum": ["osm", "local", "skip", "clear"]
+      "enum": ["osm", "local", "skip", "clear", "create", "discard"]
     },
     "at": { "description": "When the dev server stored the entry (ISO 8601).", "type": "string" }
   },
@@ -71,10 +74,39 @@
     {
       "if": { "properties": { "action": { "const": "clear" } }, "required": ["action"] },
       "then": { "description": "Withdraw the row's earlier decision: no field of its own." }
+    },
+    {
+      "if": { "properties": { "action": { "const": "create" } }, "required": ["action"] },
+      "then": {
+        "description": "A new row of places.csv, under its provisional key until apply inserts it after the last row of its kind and gives it an id. A later `create` for the same key replaces it; the place's decision (`osm`, `local`, `skip`, `clear`) is an entry of its own under the same key.",
+        "required": ["kind", "names"],
+        "properties": {
+          "id": { "$ref": "#/$defs/provisional_key" },
+          "names": {
+            "description": "The new row's name cells by column: the Frisian name columns (`mooring`, `local`, those of names/dialects.csv), `de` and `da` -- only those that are not empty, at least one. Apply refuses a column the name list does not have.",
+            "type": "object",
+            "minProperties": 1,
+            "additionalProperties": { "type": "string", "minLength": 1 }
+          },
+          "note": { "description": "The new row's `note`.", "type": "string" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "action": { "const": "discard" } }, "required": ["action"] },
+      "then": {
+        "description": "Withdraw a created place and its decision: no field of its own.",
+        "properties": { "id": { "$ref": "#/$defs/provisional_key" } }
+      }
     }
   ],
   "unevaluatedProperties": false,
   "$defs": {
+    "provisional_key": {
+      "description": "The key of a place the curation view created, until apply gives it a row id: `new:`, then lowercase letters and digits. The colon keeps it from ever looking like a row id (`slug`).",
+      "type": "string",
+      "pattern": "^new:[a-z0-9]+$"
+    },
     "slug": {
       "description": "Lowercase ASCII letters and digits, words joined by single hyphens -- the shape of a row id and of a local reference. Both are folded from a name by one rule (`frasch.placelist.slug`): ß -> ss, æ -> ae, ø -> o, đ -> d; every other character is taken apart as Unicode's NFKD does, so a letter loses its diacritic (ä -> a, ö -> o, ü -> u, å -> a; never ae, oe, ue) and a compatibility character becomes its plain parts (ﬁ -> fi, ½ -> 12); what is still not ASCII is dropped, the rest is lowercased, every run of anything but a letter or digit becomes one hyphen, and hyphens at either end are removed: `Schörkewärw` -> `schorkewarw`, `Deezbüll Burg` -> `deezbull-burg`. A slug written by hand keeps the pattern too; a local reference may say more than the name (`westerheide-amrum`).",
       "type": "string",

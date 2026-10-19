@@ -218,6 +218,12 @@ def test_a_local_reference_with_its_position_is_fine(names: CheckNames) -> None:
     assert names(places_text([HUELLTOFT]), CURATION_HEADER + HUELLTOFT_POS) == []
 
 
+def test_a_row_without_a_frisian_name_may_have_a_reference(names: CheckNames) -> None:
+    # a place the curation view created from its German name alone (#113)
+    nameless = {k: v for k, v in HUELLTOFT.items() if k != "mooring"}
+    assert names(places_text([nameless]), CURATION_HEADER + HUELLTOFT_POS) == []
+
+
 def test_a_local_reference_without_a_position_is_reported(names: CheckNames) -> None:
     # The injector has nowhere to put the place, and the search cannot find it.
     problems = names(places_text([TOFTUM, HUELLTOFT]))

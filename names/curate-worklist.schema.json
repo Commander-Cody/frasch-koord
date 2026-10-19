@@ -2,16 +2,18 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/Commander-Cody/frasch-koord/names/curate-worklist.schema.json",
   "title": "Curation worklist",
-  "description": "names/work/curate.json: the rows of names/places.csv the last `frasch match` left for a human, with their candidates. `frasch curate export` writes it (frasch/worklist.py), the curation view (web `?curate`, web/src/dev/curate/worklist.ts) reads it through the Vite dev server. It carries every rule of the name list the view needs, so that the browser reads no cell of places.csv itself.",
+  "description": "names/work/curate.json: the rows of names/places.csv the last `frasch match` left for a human, with their candidates, and what the view needs to create a new place. `frasch curate export` writes it (frasch/worklist.py), the curation view (web `?curate`, web/src/dev/curate/worklist.ts) reads it through the Vite dev server. It carries every rule of the name list the view needs, so that the browser reads no cell of places.csv itself.",
   "type": "object",
   "required": [
     "bbox",
     "kind_order",
+    "name_columns",
     "polygon_kinds",
     "class_keys",
     "settlement_places",
     "results",
-    "rows"
+    "rows",
+    "places"
   ],
   "additionalProperties": false,
   "properties": {
@@ -23,7 +25,12 @@
       "maxItems": 4
     },
     "kind_order": {
-      "description": "The kinds in the order the view offers them and the rows come in: those a human decides quickly first.",
+      "description": "Every kind of frasch/kinds.py, in the order the view offers them and the rows come in: those a human decides quickly first.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "name_columns": {
+      "description": "The Frisian name columns of places.csv in the order of the list: `mooring`, `local`, then the other dialects of names/dialects.csv. A new place's form has these, `de` and `da`.",
       "type": "array",
       "items": { "type": "string" }
     },
@@ -51,9 +58,29 @@
       "description": "By kind in `kind_order`, each kind in places.csv order.",
       "type": "array",
       "items": { "$ref": "#/$defs/row" }
+    },
+    "places": {
+      "description": "Every row of places.csv, in its order: what a new place's duplicate warning compares the names typed with.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/place" }
     }
   },
   "$defs": {
+    "place": {
+      "description": "A row of places.csv by its names.",
+      "type": "object",
+      "required": ["id", "kind", "names"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "description": "The row's `id`.", "type": "string", "minLength": 1 },
+        "kind": { "description": "The row's kind.", "type": "string" },
+        "names": {
+          "description": "Every non-empty name cell -- the Frisian columns, `de` and `da` --, raw, keyed by column name.",
+          "type": "object",
+          "additionalProperties": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
     "result": {
       "description": "What the matcher made of a row it left for review: several plausible OSM objects, or none.",
       "enum": ["ambiguous", "not_found"]

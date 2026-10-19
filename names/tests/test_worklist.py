@@ -146,6 +146,31 @@ def test_the_worklist_offers_the_results_of_its_schema(world: Path) -> None:
     assert exported["results"] == read_schema("curate-worklist")["$defs"]["result"]["enum"]
 
 
+def test_the_worklist_names_the_frisian_name_columns_in_list_order(world: Path) -> None:
+    exported = json.loads(export_the_review_rows(world).read_text(encoding="utf-8"))
+    assert exported["name_columns"] == [
+        "mooring",
+        "local",
+        "wieding",
+        "nordgoes",
+        "suedgoes",
+        "fering",
+        "oomrang",
+        "solring",
+        "hallig",
+    ]
+
+
+def test_the_worklist_lists_every_place_of_the_name_list_with_its_names(world: Path) -> None:
+    # for the duplicate warning of a new place (#113): not only the review rows
+    exported = json.loads(export_the_review_rows(world).read_text(encoding="utf-8"))
+    assert exported["places"][2:] == [
+        {"id": "hus", "kind": "settlement", "names": {"mooring": "Hüs"}},
+        {"id": "toftem", "kind": "settlement", "names": {"mooring": "Toftem"}},
+        {"id": "bol", "kind": "settlement", "names": {"mooring": "Bol", "da": "Bøl"}},
+    ]
+
+
 def exported_row(world: Path, place: dict[str, str]) -> dict[str, object]:
     """The worklist row of `place`, the one row of a list the matcher found
     nothing for."""
@@ -180,7 +205,7 @@ def test_export_prints_nothing(world: Path, capsys: pytest.CaptureFixture[str]) 
 
 def test_export_reports_what_it_wrote_and_what_it_left_out(world: Path) -> None:
     assert report_of_the_review_rows(world).log == [
-        f"wrote 3 rows to {world / 'work' / 'curate.json'} (2 kB): 1 ambiguous, 2 not found; "
+        f"wrote 3 rows to {world / 'work' / 'curate.json'} (3 kB): 1 ambiguous, 2 not found; "
         f"2 candidates with a position, 2 rows with a hint point",
         "note: 1 row(s) have been decided by hand since work/matches.jsonl "
         "was written -- not exported",
