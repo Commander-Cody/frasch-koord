@@ -2,7 +2,7 @@
 // it: opened for a fresh key, from a clicked label or for a created place;
 // saved as a `create` under its key; a created place discarded.
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { errorMessage } from '../shell/fetchJson';
 import type { Selection } from '../shell/useSelection';
@@ -57,11 +57,18 @@ export function comparedPlaces(
   return [...listed, ...created.filter((place) => place.key !== key).map(listedPlace)];
 }
 
+/** A write that failed, and the key of the form or the created place it was for. */
+interface Failure {
+  message: string;
+  key: string;
+}
+
 /**
  * The open form and what it does: a saved place is selected, a failed
  * write says why in `error` — but only while the user is still where the
- * write was made: they may have opened another form or row meanwhile. One
- * write at a time: a double click must not append two lines.
+ * write was made, the form of that place or (a discard) the place itself:
+ * they may have opened another form or row meanwhile. One write at a time:
+ * a double click must not append two lines.
  */
 export function usePlaceForm(
   update: UpdateLoaded,
@@ -69,34 +76,29 @@ export function usePlaceForm(
 ) {
   const [form, setForm] = useState<OpenForm | null>(null);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  // For a write that resolves later: which form, which row is open now?
+  const [failure, setFailure] = useState<Failure | null>(null);
+  // For a save that resolves later: is its form still the open one?
   const formNow = useRef<string | null>(null);
-  const selectedNow = useRef(selected);
-  useEffect(() => {
-    selectedNow.current = selected;
-  }, [selected]);
 
   const open = (next: OpenForm) => {
     formNow.current = next.key;
     setForm(next);
-    setError(null);
+    setFailure(null);
   };
   // what went wrong with the form goes with it
   const close = () => {
     formNow.current = null;
     setForm(null);
-    setError(null);
+    setFailure(null);
   };
-  /** Runs `write`; its failure is told only if `stillHere` then. */
-  const run = async (write: () => Promise<void>, stillHere: () => boolean) => {
+  const run = async (key: string, write: () => Promise<void>) => {
     if (saving) return;
     setSaving(true);
-    setError(null);
+    setFailure(null);
     try {
       await write();
     } catch (err: unknown) {
-      if (stillHere()) setError(errorMessage(err));
+      setFailure({ message: errorMessage(err), key });
     } finally {
       setSaving(false);
     }
@@ -104,18 +106,18 @@ export function usePlaceForm(
   const save = (draft: PlaceDraft, nameColumns: readonly string[]) => {
     if (!form) return;
     const { key, decision } = form;
-    const stillHere = () => formNow.current === key;
-    void run(async () => {
+    void run(key, async () => {
       await storeEntry(update, createEntry(key, draft, nameColumns));
       if (decision) await storeEntry(update, { id: key, ...decision });
-      if (!stillHere()) return;
+      if (formNow.current !== key) return;
       close();
       select(key);
-    }, stillHere);
+    });
   };
   const discard = (key: string) => {
-    const stillHere = () => formNow.current === null && selectedNow.current === key;
-    void run(() => storeEntry(update, { id: key, action: 'discard' }), stillHere);
+    void run(key, () => storeEntry(update, { id: key, action: 'discard' }));
   };
+  const here = form ? form.key : selected;
+  const error = failure && failure.key === here ? failure.message : null;
   return { form, saving, error, open, close, save, discard };
 }

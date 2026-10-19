@@ -788,6 +788,18 @@ describe('CuratePanel, new places', () => {
     expect(screen.queryByText(/could not save/)).toBeNull();
   });
 
+  it('does not say under the row the keys moved to that a discard could not be saved', async () => {
+    await renderWithHoorne();
+    fireEvent.click(within(newPlacesList()).getByText('Hoorne'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Discard' }));
+    await failPost(0);
+    await screen.findByText(/could not save/);
+
+    fireEvent.keyDown(window, { key: 'ArrowDown' });
+
+    expect(screen.queryByText(/could not save/)).toBeNull();
+  });
+
   it('offers a new place for a clicked label once the form took over from an armed row', async () => {
     const map = new FakeMap();
     render(<CuratePanel map={map.map} />);
