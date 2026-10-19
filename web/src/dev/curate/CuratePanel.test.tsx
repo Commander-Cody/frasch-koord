@@ -719,6 +719,24 @@ describe('CuratePanel, new places', () => {
     await screen.findByText('could not save: /__curate/patch: disk full');
   });
 
+  it('takes back why a new place could not be saved once its form is cancelled', async () => {
+    await renderPanel();
+    fireEvent.click(screen.getByRole('button', { name: 'New place' }));
+    fillPlace({ 'new place kind': 'warft', 'new place mooring': 'Hoorne' });
+    fireEvent.click(savePlaceButton());
+    await act(async () => {
+      posts[0].reply.resolve(
+        new Response(JSON.stringify({ ok: false, error: 'disk full' }), { status: 500 }),
+      );
+      await posts[0].reply.promise;
+    });
+    await screen.findByText('could not save: /__curate/patch: disk full');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByText('could not save: /__curate/patch: disk full')).toBeNull();
+  });
+
   it('offers a new place for a clicked label once the form took over from an armed row', async () => {
     const map = new FakeMap();
     render(<CuratePanel map={map.map} />);

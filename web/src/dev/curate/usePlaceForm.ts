@@ -70,7 +70,11 @@ export function usePlaceForm(update: UpdateLoaded, select: (key: string) => void
     setForm(next);
     setError(null);
   };
-  const close = () => setForm(null);
+  // what went wrong with the form goes with it
+  const close = () => {
+    setForm(null);
+    setError(null);
+  };
   const run = async (write: () => Promise<void>) => {
     if (saving) return;
     setSaving(true);
