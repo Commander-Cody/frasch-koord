@@ -24,7 +24,10 @@ What apply writes where
                            reference, `not_a_place`) or one without a Frisian
                            name, and never an object or
                            Wikidata item another row holds: the name list
-                           would be refused.  Review with `git diff`.
+                           would be refused.  And the new rows of the places
+                           the view created (frasch.newplaces), each with its
+                           decision -- which it takes also without a Frisian
+                           name -- or not at all.  Review with `git diff`.
   names/curation.csv       one appended row per `local` decision (a
                            place OSM does not have -- it needs a position).
   names/work/curate-patch.jsonl
@@ -212,26 +215,44 @@ class _Decisions:
 
     report: ApplyReport = dataclasses.field(default_factory=ApplyReport)
     new_curation: list[dict[str, str]] = dataclasses.field(default_factory=list)
+    # the rows of the created places, with their decisions: logged once all
+    # are in the list, since a place inserted above a row moves it down
+    created: list[tuple[PlaceRow, Decision | None]] = dataclasses.field(default_factory=list)
 
-    def create(self, row: PlaceRow, names: PlaceList) -> None:
-        """Insert a created place's row into the list -- the file is written
-        at the end."""
+    def create(self, row: PlaceRow, decision: Decision | None, names: PlaceList) -> None:
+        """Insert a created place's row into the list, with its decision --
+        the file is written at the end, the log by `say_created`."""
         newplaces.insert(row, names)
         self.report.created += 1
-        self.report.log.append(
-            f"  {names.path}:{row.line} {placelist.describe(row, names.reg)}: "
-            f"new {row['kind']} row, id = {row['id']}"
-        )
+        if decision:
+            self._write(row, decision)
+        self.created.append((row, decision))
+
+    def say_created(self, names: PlaceList) -> None:
+        """Log the created places and their decisions, at their lines."""
+        for row, decision in self.created:
+            self.report.log.append(
+                f"  {names.path}:{row.line} {placelist.describe(row, names.reg)}: "
+                f"new {row['kind']} row, id = {row['id']}"
+            )
+            if decision:
+                self.report.log.append(_said(row, decision, names))
 
     def take(self, row: PlaceRow, decision: Decision, names: PlaceList) -> None:
         """Write a decision into its row -- the file is written at the end."""
+        self._write(row, decision)
+        self.report.log.append(_said(row, decision, names))
+
+    def _write(self, row: PlaceRow, decision: Decision) -> None:
         decision.reference.write(row)
         if decision.curation:
             self.new_curation.append(decision.curation)
         self.report.applied += 1
-        self.report.log.append(
-            f"  {names.path}:{row.line} {placelist.describe(row, names.reg)}: {decision.text}"
-        )
+
+
+def _said(row: PlaceRow, decision: Decision, names: PlaceList) -> str:
+    """The log line of a decision."""
+    return f"  {names.path}:{row.line} {placelist.describe(row, names.reg)}: {decision.text}"
 
 
 def _enter_patch(patch_file: str, lists: _Lists, decisions: _Decisions) -> None:
@@ -246,6 +267,7 @@ def _enter_patch(patch_file: str, lists: _Lists, decisions: _Decisions) -> None:
     decided = {key: line for line in lines if (key := _decision_key(line)) in places}
     for key, place in places.items():
         _enter_place(place, decided.get(key), lists, decisions)
+    decisions.say_created(lists.places)
     for line in lines:
         if not _place_key(line) and _decision_key(line) not in places:
             _enter_line(line, lists, decisions)
@@ -301,9 +323,7 @@ def _enter_place(
             report.refuse(decision, str(why))
             report.refuse(place, "its decision is refused")
             return
-    decisions.create(row, lists.places)
-    if decided:
-        decisions.take(*decided, lists.places)
+    decisions.create(row, decided[1] if decided else None, lists.places)
 
 
 def _created_row(place: PatchLine, lists: _Lists) -> PlaceRow:

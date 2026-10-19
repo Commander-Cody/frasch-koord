@@ -185,3 +185,10 @@ def test_a_create_under_a_row_id_is_refused_without_the_rows_decision(ws: Worksp
     append(ws, create(id="hoorn"), osm("node/7", key="hoorn"))
     apply(ws)
     assert [r["osm"] for r in rows(ws) if r["id"] == "hoorn"] == ["node/7"]
+
+
+def test_a_created_place_is_logged_at_its_line_after_the_places_created_above_it(
+    ws: Workspace,
+) -> None:
+    append(ws, create(), create(id="new:b", kind="settlement", names={"mooring": "Bütj"}))
+    assert f"  {ws.names}:5 Hoorne (Horne): new warft row, id = hoorne" in apply(ws).log
