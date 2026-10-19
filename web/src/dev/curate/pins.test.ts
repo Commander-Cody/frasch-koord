@@ -107,7 +107,6 @@ describe('useRowPins', () => {
       what: 'town',
       lon: 8.8,
       lat: 54.8,
-      tags: '',
     };
 
     renderPins({ lookupResults: [result] });

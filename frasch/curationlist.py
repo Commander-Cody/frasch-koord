@@ -37,7 +37,7 @@ MAX_ZOOM = 24  # the deepest zoom a map style knows
 
 
 # ------------------------------------------------------------------ cells ---
-def parse_point(lat: str | None, lon: str | None, where: str = "") -> LonLat | None:
+def parse_point(lat: str | None, lon: str | None) -> LonLat | None:
     """`("54.65097", "8.34019")` -> `(8.34019, 54.65097)` as (lon, lat) floats,
     None when both cells are empty.  One without the other is an error."""
     lat = (lat or "").strip()
@@ -45,22 +45,19 @@ def parse_point(lat: str | None, lon: str | None, where: str = "") -> LonLat | N
     if not lat and not lon:
         return None
     if not (lat and lon):
-        raise Invalid(
-            where, f"`lat` and `lon` go together (got lat={lat or '-'}, lon={lon or '-'})"
-        )
+        raise Invalid(f"`lat` and `lon` go together (got lat={lat or '-'}, lon={lon or '-'})")
     try:
         flat, flon = float(lat), float(lon)
     except ValueError:
         raise Invalid(
-            where,
             f"lat/lon {lat!r}/{lon!r} are not numbers (decimal degrees, e.g. 54.65097 / 8.34019)",
         ) from None
     if not (-90 <= flat <= 90 and -180 <= flon <= 180):
-        raise Invalid(where, f"lat/lon {flat}/{flon} out of range")
+        raise Invalid(f"lat/lon {flat}/{flon} out of range")
     return flon, flat
 
 
-def parse_set_tags(spec: str | None, where: str = "") -> dict[str, str]:
+def parse_set_tags(spec: str | None) -> dict[str, str]:
     """`set_tags`: `place=island;frasch:kind=island` ->
     `{"place": "island", "frasch:kind": "island"}`."""
     tags: dict[str, str] = {}
@@ -69,11 +66,11 @@ def parse_set_tags(spec: str | None, where: str = "") -> dict[str, str]:
         if not pair:
             continue
         if "=" not in pair:
-            raise Invalid(where, f"set_tags entry {pair!r} is not key=value")
+            raise Invalid(f"set_tags entry {pair!r} is not key=value")
         k, v = pair.split("=", 1)
         k, v = k.strip(), v.strip()
         if not k:
-            raise Invalid(where, f"set_tags entry {pair!r} has an empty key")
+            raise Invalid(f"set_tags entry {pair!r} has an empty key")
         tags[k] = v
     return tags
 

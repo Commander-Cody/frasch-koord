@@ -53,8 +53,8 @@ class Invalid(PipelineError, ValueError):
     """One cell that breaks the rules.  `reason` is the bare reason, for the
     reader of the cell's file, which says where itself."""
 
-    def __init__(self, where: str, reason: str):
-        super().__init__(f"{where}: {reason}" if where else reason)
+    def __init__(self, reason: str):
+        super().__init__(reason)
         self.reason = reason
 
 

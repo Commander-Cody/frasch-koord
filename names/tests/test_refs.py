@@ -62,12 +62,7 @@ def test_a_reference_is_either_an_osm_object_or_a_local_slug(
 )
 def test_parse_refuses_a_bad_reference(cell: str) -> None:
     with pytest.raises(Invalid, match="bad reference"):
-        refs.parse(cell, "places.csv:7")
-
-
-def test_parse_error_says_where() -> None:
-    with pytest.raises(Invalid, match="places.csv:7"):
-        refs.parse("way/abc", "places.csv:7")
+        refs.parse(cell)
 
 
 def test_a_local_reference_cannot_be_combined_with_others() -> None:

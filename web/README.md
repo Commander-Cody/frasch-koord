@@ -213,14 +213,21 @@ then reads TileJSON straight out of the archive itself.
   `openmaptiles:version` "3.x", downloaded as-is on 2026-09-15 — see
   `docs/project-decisions.md`) and was renamed from `osm-bright.json` on
   2026-09-15, when the `place`-layer label group was restructured for
-  Frisian place kinds (see "Label classes" below). Everything else in the
-  file is still stock OSM Bright.
+  Frisian place kinds (see "Label classes" below). Since then it has lost
+  what upstream needed and we do not (issue #112): the Mapbox Studio
+  metadata, the camera, and the source URL, sprite and glyphs, which named
+  MapTiler and GitHub Pages; the file names no URL. Everything else in it is
+  still stock OSM Bright.
+- **A layer that labels a feature by its name is marked**
+  `"metadata": {"frasch:label": true}`, with `["get", "name"]` as its
+  `text-field` in the file. A new name layer needs the marker, or it shows
+  the OSM `name` in every view.
 - `src/map/style/index.ts` — `styleFor(view)` takes it (`BASE_STYLE`, the
   one place the JSON is cast to a `StyleSpecification`) and keeps doing only
   what has to stay dynamic at runtime:
   - points the `openmaptiles` source at `TILES_URL` and adds OSM/OpenMapTiles
     attribution to it;
-  - rewrites every name-based symbol layer's `text-field` to
+  - rewrites the `text-field` of every marked layer to
     `nameExpression(view)` below (`labelLayers` in `src/map/style/labels.ts`,
     which needs no `import.meta.env`, so the glyphs check of the build
     imports it too);
@@ -228,9 +235,9 @@ then reads TileJSON straight out of the archive itself.
     as absolute URLs against the page origin (MapLibre requires this for
     sprites).
 
-  Layers labelling something else (e.g. `{ref}` road shields) are left
-  untouched. Changing the selector calls `map.setStyle()` with a freshly
-  built style for the new view.
+  Unmarked layers, such as the `{ref}` road shields, are left untouched.
+  Changing the selector calls `map.setStyle()` with a freshly built style
+  for the new view.
 
 ### Dialect registry and the selector
 
@@ -271,21 +278,22 @@ run over it.
 
 `labelChain(tag)` in `src/dialects/labelChain.ts` is the one definition of which name
 a place is shown by. `nameExpression(tag)` in `src/map/style/labels.ts` turns it
-into the `text-field` of every name-based symbol layer, and `resolveName` in
+into the `text-field` of every marked symbol layer, and `resolveName` in
 `src/names/resolveName.ts` walks the same chain over a place's names for the
 place card and the search results — so neither can drift from the map label again (it
 did once: the card said Flensburg where the map said Flensborg). Dialect view
 (`tag = "frr-x-mooring"`):
 
 ```
-coalesce(name:frr-x-mooring, frasch:local, name:frr, name:nds, name:de, name:latin, name)
+coalesce(name:frr-x-mooring, frasch:local, name:frr-x-wieding, …, name:frr, name:nds, name:de, name:latin, name)
 ```
 
-i.e. `coalesce(get "name:frr-x-mooring", get "frasch:local", get "name:frr",
-get "name:nds", get "name:de", get "name:latin", get "name")`. `frasch:local`
-sits right behind the selected dialect so that a place the dialect has no
-name for still gets a _Frisian_ label (the Fering name on Föhr) rather than
-dropping to German.
+i.e. `coalesce(get "name:frr-x-mooring", get "frasch:local", …)`, where `…`
+is the `name:<tag>` of every other dialect of the registry, in registry
+order. `frasch:local` sits right behind the selected dialect so that a place
+the dialect has no name for still gets a _Frisian_ label (the Fering name on
+Föhr) rather than dropping to German; the other dialects come next, ahead of
+OSM's dialect-mixed `name:frr`.
 
 Local view (`tag = LOCAL_TAG`):
 
@@ -341,10 +349,10 @@ OpenMapTiles schema plus our extras, injected by the `tiles/` build
   e.g. `Foortuftinge`. Shown by the place card; nothing in the style reads it.
 - `frasch:ref` (string, only on features from our name list): which row of
   `names/places.csv` the names come from — its `id`, e.g. `naibel` (tiles
-  built before the row ids carry the row's first OSM reference or its QID
-  instead). It is the `id` of that row's entry in the search index, which is how
-  a click on a label finds the rest of the place's names (see "Place info
-  card"). Absent on everything the name list does not cover.
+  built before the row ids carry the row's first OSM reference instead). It
+  is the `id` of that row's entry in the search index, which is how a click
+  on a label finds the rest of the place's names (see "Place info card").
+  Absent on everything the name list does not cover.
 - Names: `name:<tag>` for every dialect of the registry that has a name for
   the feature (`name:frr-x-mooring`, `name:frr-x-fering`, …), plus
   `name:frr`, `name:nds`, `name:de`, `name:da`, `name:latin`, `name`. On a
@@ -495,7 +503,7 @@ string as `frasch:ref`. That is the whole link between a label on the map and
 its row in the name list. It never changes, so a `?place=` link survives
 edits to the list and OSM id changes alike. Links shared before the row ids
 (`?place=node/240042766`, or `?place=way/28330569#679` for a second row on one
-object) and tiles built before them name the row's OSM reference (or its QID)
+object) and tiles built before them name the row's OSM reference
 instead; `entryLookup` in `src/names/load.ts` resolves those too. The
 `#<line>` told two rows on one object apart, which the name list no longer
 allows; it is ignored.

@@ -22,7 +22,7 @@ export default function CurateLookup({
   onShow,
   onPick,
 }: CurateLookupProps) {
-  const { query, setQuery, results, source, busy, error, run } = lookup;
+  const { query, setQuery, results, source, busy, error, run, searchUrl } = lookup;
   return (
     <>
       <h3 className="dev-panel-section">Look up in OSM</h3>
@@ -38,11 +38,7 @@ export default function CurateLookup({
             {service}
           </button>
         ))}
-        <a
-          href={`https://www.openstreetmap.org/search?query=${encodeURIComponent(query)}#map=10/54.7/8.9`}
-          target="_blank"
-          rel="noreferrer"
-        >
+        <a href={searchUrl} target="_blank" rel="noreferrer">
           openstreetmap.org
         </a>
       </div>
@@ -57,7 +53,7 @@ export default function CurateLookup({
             number={i + 1}
             color={COLOR_LOOKUP}
             name={result.name || '(unnamed)'}
-            meta={result.what || result.tags}
+            meta={result.what}
             wikidataTag={result.wikidata}
             checked={isChecked(result.ref)}
             onToggle={() => onToggle(result.ref, result.wikidata)}

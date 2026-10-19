@@ -304,6 +304,32 @@ describe('CuratePanel', () => {
     );
   });
 
+  it('sums a Nominatim hit without a category up by its display name', async () => {
+    await renderPanel();
+    await openRow('Naibel');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Nominatim' }));
+    const hit = { osm_type: 'node', osm_id: 502, display_name: 'Niebüll, Nordfriesland' };
+    await act(async () => {
+      lookups[0].reply.resolve(json([{ ...hit, lat: '54.8', lon: '8.8' }]));
+      await lookups[0].reply.promise;
+    });
+
+    const item = await listedItem('node/502');
+    expect(item.querySelector('.curate-candidate-meta')?.textContent).toBe(
+      'Niebüll, Nordfriesland',
+    );
+  });
+
+  it("opens the openstreetmap.org search in the middle of the worklist's bbox", async () => {
+    worklist = { ...WORKLIST, bbox: [8, 54, 9, 55] };
+    await renderPanel();
+    await openRow('Naibel');
+
+    const link = screen.getByRole('link', { name: 'openstreetmap.org' });
+    expect(link.getAttribute('href')).toMatch(/#map=10\/54\.5\/8\.5$/);
+  });
+
   it('colours a candidate as a settlement when the worklist says its class is one', async () => {
     const row = {
       ...curateRow('naibel', 'Naibel', 'Niebüll'),

@@ -64,8 +64,8 @@ Changed extracts
   the same extract (only its replication timestamp differs) is no warning.
 
 places.csv is written in one step (never half), and not at all if it changed
-on disk during the run; names/work/.lock keeps `frasch match` and
-`frasch curate apply` from running at the same time.
+on disk during the run; names/work/.lock keeps it from running at the same
+time as `frasch curate apply` or `frasch check-inputs --fix`.
 
 Run:  frasch match [--dry-run] [--offline]
 """
@@ -104,7 +104,7 @@ from frasch.matchresult import MatchResult, Outcome, RankedCandidate
 from frasch.namecell import primary, variants
 from frasch.nameindex import NameIndex, norm
 from frasch.paths import Workspace
-from frasch.placelist import PlaceRow, Reference, Row, any_name
+from frasch.placelist import PlaceRow, Reference, Row
 from frasch.provenance import ExtractStamp
 from frasch.refs import OsmRef, Ref
 from frasch.wikidata import Countries
@@ -383,13 +383,10 @@ def match_row(
     row: Row,
     index: NameIndex,
     hints: HintResolver,
-    reg: Registry,
     claimed: Claimed | None = None,
 ) -> MatchResult:
     """`claimed`: what other rows hold, which is not this row's to get."""
     claimed = claimed or Claimed()
-    if not any_name(row, reg):
-        return _unmatched(Outcome.NOT_FOUND, "no Frisian name")
     queries = row_query_names(row)
     if not queries:
         return _unmatched(Outcome.NOT_FOUND, "no German/Danish name to match on")
@@ -565,7 +562,7 @@ def _run(ws: Workspace, reg: Registry, offline: bool, dry_run: bool) -> int:
         f"({time.time() - t0:.0f}s)"
     )
     owned = [r for r in rows if placelist.state(r, reg).matchers]
-    sources = _Sources(index, HintResolver(index), reg, _countries(owned, ws, offline))
+    sources = _Sources(index, HintResolver(index), _countries(owned, ws, offline))
     results, changed = _match_rows(rows, owned, sources)
 
     # matches.jsonl first: a run that cannot write it leaves places.csv as it was
@@ -632,7 +629,6 @@ class _Sources:
 
     index: NameIndex
     hints: HintResolver
-    reg: Registry
     countries: Countries
 
     def match(self, row: PlaceRow, claimed: Claimed) -> MatchResult:
@@ -640,7 +636,7 @@ class _Sources:
         if kinds.rule(row["kind"]).by_item:
             found = match_country(row, self.countries.qids)
         else:
-            found = match_row(row, self.index, self.hints, self.reg, claimed)
+            found = match_row(row, self.index, self.hints, claimed)
         return claimed.without_taken_item(found)
 
     def entry(self, row: PlaceRow, result: MatchResult) -> matchfile.Entry:

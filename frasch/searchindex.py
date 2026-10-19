@@ -38,7 +38,7 @@ An entry's `id` is its row's `id` -- the same string the injector writes into
 the tiles as `frasch:ref`, which is how a click on a map label finds the entry
 it belongs to (web/src/names/load.ts).  Its `osm` is the row's `osm` cell, for the
 card's link to OpenStreetMap and for the share links and tiles from before the
-row ids, which name a place by its first OSM reference (or its QID).
+row ids, which name a place by its first OSM reference.
 """
 
 from __future__ import annotations

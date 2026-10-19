@@ -19,33 +19,21 @@ export function nameExpression(tag: string): ExpressionSpecification {
   ] as unknown as ExpressionSpecification;
 }
 
-/**
- * Does this symbol layer's text-field render the feature's `name`
- * (possibly combined with `name:latin`/`name:nonlatin` in various
- * OpenMapTiles/OSM Bright templating styles)? Layers that label something
- * else entirely (e.g. `{ref}` road shields) are left untouched.
- */
-function referencesName(textField: unknown): boolean {
-  if (typeof textField === 'string') {
-    return textField.includes('name');
-  }
-  if (Array.isArray(textField)) {
-    // Recurse into expressions such as ["concat", ["get", "name:latin"], ...]
-    return textField.some((part) => referencesName(part));
-  }
-  return false;
+/** The metadata that marks a symbol layer as labelling a feature by its name. */
+const LABEL_MARKER = 'frasch:label';
+
+function isNameLabel(layer: LayerSpecification): boolean {
+  return (layer.metadata as Record<string, unknown> | undefined)?.[LABEL_MARKER] === true;
 }
 
 /**
- * `layers` with every symbol layer's name-based `text-field` rewritten to
- * `nameExpression(view)`. `view` is a dialect tag or LOCAL_TAG.
+ * `layers` with the `text-field` of every layer marked `frasch:label`
+ * rewritten to `nameExpression(view)`. `view` is a dialect tag or LOCAL_TAG.
  */
 export function labelLayers(layers: LayerSpecification[], view: string): LayerSpecification[] {
   const textFieldExpression = nameExpression(view);
   return layers.map((layer): LayerSpecification => {
-    if (layer.type !== 'symbol' || !layer.layout) return layer;
-    const textField = (layer.layout as Record<string, unknown>)['text-field'];
-    if (textField === undefined || !referencesName(textField)) return layer;
+    if (layer.type !== 'symbol' || !isNameLabel(layer)) return layer;
     return { ...layer, layout: { ...layer.layout, 'text-field': textFieldExpression } };
   });
 }

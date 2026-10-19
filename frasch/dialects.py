@@ -193,14 +193,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="print the language tags as a comma-separated list "
         "(tiles/build.sh feeds them to Planetiler)",
     )
-    ap.add_argument("--columns", action="store_true", help="print the places.csv columns instead")
     a = ap.parse_args(argv)
     ws = cli.workspace(a)
     reg = read(ws.dialects)
     if a.tags:
         print(",".join(reg.tags))
-    elif a.columns:
-        print(",".join(reg.columns))
     else:
         for d in reg:
             print(

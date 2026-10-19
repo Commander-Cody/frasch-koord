@@ -63,11 +63,6 @@ def test_a_point_on_the_outline_is_inside() -> None:
     assert areas.lookup(8.80, 54.60) == "frr-x-mooring"
 
 
-def test_lookup_takes_coordinate_strings() -> None:
-    areas = dialect_areas.AreaIndex([("frr-x-mooring", OUTER)])
-    assert areas.lookup("8.90", "54.62") == "frr-x-mooring"
-
-
 def test_an_empty_index_knows_no_dialect() -> None:
     assert dialect_areas.AreaIndex([]).lookup(8.84, 54.59) is None
 

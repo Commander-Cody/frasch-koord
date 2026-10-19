@@ -132,7 +132,8 @@ describe('siteFields', () => {
           type: 'symbol',
           source: 'openmaptiles',
           'source-layer': 'place',
-          layout: { 'text-field': '{name}' },
+          metadata: { 'frasch:label': true },
+          layout: { 'text-field': ['get', 'name'] },
         },
       ],
     } as StyleSpecification;

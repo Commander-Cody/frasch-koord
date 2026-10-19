@@ -6,7 +6,7 @@ import type {
 } from 'maplibre-gl';
 
 import { LOCAL_TAG } from '../../dialects/views';
-import { placeLayerIds, styleFor } from './index';
+import { BASE_STYLE, placeLayerIds, styleFor } from './index';
 import { nameExpression } from './labels';
 
 const origin = window.location.origin;
@@ -30,8 +30,16 @@ it("reads the tiles from the site's archive", async () => {
   expect(source.url).toBe(`pmtiles://${origin}/tiles/sh.pmtiles`);
 });
 
+it('names no third-party URL in the style file', () => {
+  expect(JSON.stringify(BASE_STYLE)).not.toMatch(/[a-z]+:\/\//);
+});
+
 it("labels places with the view's label expression", () => {
   expect(textField('place-village')).toEqual(nameExpression(LOCAL_TAG));
+});
+
+it('leaves the road shields showing their ref', () => {
+  expect(textField('highway-shield')).toBe('{ref}');
 });
 
 it('serves glyphs and sprites from the site root by default', () => {

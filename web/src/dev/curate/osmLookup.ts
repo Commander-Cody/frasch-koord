@@ -14,7 +14,6 @@ export interface LookupResult {
   what: string;
   lon: number;
   lat: number;
-  tags: string;
   wikidata?: string;
 }
 
@@ -72,10 +71,9 @@ async function searchNominatim(
     .map((h) => ({
       ref: `${h.osm_type}/${h.osm_id}`,
       name: h.name || h.display_name || '',
-      what: [h.category, h.type].filter(Boolean).join('='),
+      what: [h.category, h.type].filter(Boolean).join('=') || (h.display_name ?? ''),
       lon: Number(h.lon),
       lat: Number(h.lat),
-      tags: h.display_name ?? '',
     }));
 }
 
@@ -116,11 +114,19 @@ async function searchOverpass(
       what: tagSummary(element.tags, classKeys) || element.type,
       lon,
       lat,
-      tags: tagSummary(element.tags, classKeys),
       wikidata: element.tags?.wikidata,
     });
   }
   return results;
+}
+
+/**
+ * openstreetmap.org's own search for `query`, its map at the middle of the
+ * worklist's bbox.
+ */
+function osmSearchUrl(query: string, [w, s, e, n]: Bbox): string {
+  const centre = `${(s + n) / 2}/${(w + e) / 2}`;
+  return `https://www.openstreetmap.org/search?query=${encodeURIComponent(query)}#map=10/${centre}`;
 }
 
 const SERVICES = { Nominatim: searchNominatim, Overpass: searchOverpass };
@@ -136,6 +142,8 @@ export interface OsmLookup {
   busy: boolean;
   error: string | null;
   run: (service: LookupService) => Promise<void>;
+  /** The same query on openstreetmap.org, see `osmSearchUrl`. */
+  searchUrl: string;
 }
 
 /**
@@ -169,5 +177,6 @@ export function useOsmLookup(scope: LookupScope, initialQuery: string): OsmLooku
     }
   };
 
-  return { query, setQuery, results, source, busy, error, run };
+  const searchUrl = osmSearchUrl(query, scope.bbox);
+  return { query, setQuery, results, source, busy, error, run, searchUrl };
 }

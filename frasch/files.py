@@ -117,9 +117,10 @@ def _sync_directory(directory: str) -> None:
 @contextlib.contextmanager
 def lock(lock_path: str) -> Iterator[None]:
     """Hold the workspace's lock file for the duration of a read-modify-write
-    run, so that `frasch match` and `frasch curate apply` never run at the
-    same time.  Advisory (`flock`): a spreadsheet does not take it -- that is
-    what the check in `atomic_write` is for."""
+    run, so that no two of `frasch match`, `frasch curate apply` and
+    `frasch check-inputs --fix` run at the same time.  Advisory (`flock`): a
+    spreadsheet does not take it -- that is what the check in `atomic_write`
+    is for."""
     import fcntl  # POSIX only; the pipeline runs in WSL
 
     os.makedirs(os.path.dirname(os.path.abspath(lock_path)), exist_ok=True)
@@ -130,9 +131,9 @@ def lock(lock_path: str) -> Iterator[None]:
             if exc.errno not in (errno.EWOULDBLOCK, errno.EAGAIN, errno.EACCES):
                 raise
             raise PipelineError(
-                f"{lock_path} is held: another `frasch match` or "
-                f"`frasch curate apply` is running -- wait for it to "
-                f"finish"
+                f"{lock_path} is held: another `frasch match`, "
+                f"`frasch curate apply` or `frasch check-inputs --fix` is "
+                f"running -- wait for it to finish"
             ) from None
         try:
             yield

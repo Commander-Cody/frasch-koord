@@ -165,7 +165,8 @@ class FeatureCollection[P](TypedDict):
 def read_areas(path: str, reg: Registry) -> list[AreaRow]:
     """The rows of the dialect area list in file order, as
     `dialect_areas.area_rows` reads them -- {"line", "dialect", "name",
-    "note", "osm", "refs"}; stops on a row that breaks the list's rules."""
+    "note", "osm", "refs"}; stops on the rows that break the list's rules,
+    naming all of them."""
     if not os.path.exists(path):
         raise PipelineError(f"dialect area list not found: {path}")
     rows, problems = dialect_areas.area_rows(path, reg)
