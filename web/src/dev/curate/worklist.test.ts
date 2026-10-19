@@ -35,21 +35,6 @@ function row(id: string, fields: Partial<CurateRow> = {}): CurateRow {
   };
 }
 
-/** A worklist of `rows` that walks the kinds in `kind_order`. */
-function worklist(kind_order: string[], rows: CurateRow[]): CurateWorklist {
-  return {
-    bbox: [8, 54, 9, 55],
-    kind_order,
-    name_columns: ['mooring'],
-    polygon_kinds: [],
-    class_keys: [],
-    settlement_places: [],
-    results: ['ambiguous', 'not_found'],
-    rows,
-    places: [],
-  };
-}
-
 const ids = (rows: CurateRow[]) => rows.map((r) => r.id);
 const NONE_DONE = () => false;
 const ALL = { ...NO_FILTER, hideDone: false };
@@ -164,7 +149,7 @@ describe('filterRows', () => {
 describe('rowKinds', () => {
   it("lists the rows' kinds in kind_order, the kinds it does not know after them, sorted", () => {
     const rows = ['mill', 'koog', 'church', 'settlement'].map((kind) => row(kind, { kind }));
-    expect(rowKinds(worklist(['settlement', 'koog'], rows))).toEqual([
+    expect(rowKinds(['settlement', 'koog'], rows)).toEqual([
       'settlement',
       'koog',
       'church',
@@ -174,6 +159,6 @@ describe('rowKinds', () => {
 
   it('leaves out a kind of kind_order no row has', () => {
     const rows = [row('a', { kind: 'koog' })];
-    expect(rowKinds(worklist(['settlement', 'koog'], rows))).toEqual(['koog']);
+    expect(rowKinds(['settlement', 'koog'], rows)).toEqual(['koog']);
   });
 });

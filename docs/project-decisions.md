@@ -1794,8 +1794,9 @@ issue's comment. What it settled:
   patch under the key, where the view still shows the place.
 - **No owner rule for a created row**: its decision is applied also when it
   has no Frisian name — a row with a reference and no label, which
-  `check-inputs`, the search index and the injector already accept (`on_map`
-  leaves it out). Rows of `places.csv` keep `owner_problem`.
+  `check-inputs` accepts and which the objects build, `check-outputs`, the
+  search index and the injector leave out (`on_map`, tested through
+  `placeobjects.named` and the search index). Rows of `places.csv` keep `owner_problem`.
 - **Where the row goes**: after the last row of its kind, at the end when none
   has it; the rows below it are logged at the lines they move to.
 - **The view** lists created places apart, above the worklist, and does not

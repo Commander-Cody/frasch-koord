@@ -737,6 +737,57 @@ describe('CuratePanel, new places', () => {
     expect(screen.queryByText('could not save: /__curate/patch: disk full')).toBeNull();
   });
 
+  it('offers the kind of a created place no worklist row has in the filter', async () => {
+    await renderWithHoorne();
+
+    const options = within(screen.getByLabelText('kind')).getAllByRole('option');
+    expect(options.map((option) => option.textContent)).toContain('warft');
+  });
+
+  /** Saves a new place Hoorne, the post left on its way. */
+  async function saveHoorneAndWait() {
+    await renderPanel();
+    fireEvent.click(screen.getByRole('button', { name: 'New place' }));
+    fillPlace({ 'new place kind': 'warft', 'new place mooring': 'Hoorne' });
+    fireEvent.click(savePlaceButton());
+  }
+
+  async function failPost(i: number) {
+    await act(async () => {
+      posts[i].reply.resolve(
+        new Response(JSON.stringify({ ok: false, error: 'disk full' }), { status: 500 }),
+      );
+      await posts[i].reply.promise;
+    });
+  }
+
+  it('keeps a form opened while the place before it was on its way', async () => {
+    await saveHoorneAndWait();
+    fireEvent.click(screen.getByRole('button', { name: 'New place' }));
+
+    await answerPost(0);
+
+    expect(screen.queryByLabelText('new place kind')).not.toBeNull();
+  });
+
+  it('stays on the row the user went to while a new place was on its way', async () => {
+    await saveHoorneAndWait();
+    await openRow('Rischsbel');
+
+    await answerPost(0);
+
+    expect(selectedHeading()).toContain('Rischsbel');
+  });
+
+  it('does not say under another row that a new place could not be saved', async () => {
+    await saveHoorneAndWait();
+    await openRow('Rischsbel');
+
+    await failPost(0);
+
+    expect(screen.queryByText(/could not save/)).toBeNull();
+  });
+
   it('offers a new place for a clicked label once the form took over from an armed row', async () => {
     const map = new FakeMap();
     render(<CuratePanel map={map.map} />);

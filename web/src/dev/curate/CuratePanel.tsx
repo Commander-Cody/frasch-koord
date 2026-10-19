@@ -84,7 +84,7 @@ export default function CuratePanel({ map }: { map: MapLibreMap }) {
   // no label click. The detail disarms it when it goes (CurateDetail).
   const [picking, setPicking] = useState(false);
   const [label, setLabel] = useLabelOffer(map, picking);
-  const places = usePlaceForm(resource.update, selection.select);
+  const places = usePlaceForm(resource.update, selection);
   // A row opened from a list is what the user turns to: the form gives way.
   const openRow = (id: string) => {
     places.close();
@@ -113,7 +113,7 @@ export default function CuratePanel({ map }: { map: MapLibreMap }) {
         <CurateFilters
           filter={filter}
           onChange={setFilter}
-          kinds={worklist ? rowKinds(worklist) : []}
+          kinds={worklist ? rowKinds(worklist.kind_order, allRows) : []}
           results={worklist?.results ?? []}
           counts={{ open: rows.length - doneCount, done: doneCount, shown: visible.length }}
         />

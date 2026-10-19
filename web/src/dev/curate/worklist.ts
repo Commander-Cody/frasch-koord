@@ -148,13 +148,16 @@ export function filterRows<Row extends ListRow>(
 }
 
 /**
- * The kinds of the rows, in the exporter's `kind_order`. Anything the
- * exporter emitted but kind_order does not know about still has to be
- * reachable, so the leftovers come after it.
+ * The kinds of `rows` — the worklist's and the created places' — in the
+ * exporter's `kind_order` (`order`). Anything the exporter emitted but
+ * kind_order does not know about still has to be reachable, so the
+ * leftovers come after it.
  */
-export function rowKinds(worklist: CurateWorklist): string[] {
-  const order = worklist.kind_order;
-  const present = new Set(worklist.rows.map((row) => row.kind));
+export function rowKinds(
+  order: readonly string[],
+  rows: readonly Pick<ListRow, 'kind'>[],
+): string[] {
+  const present = new Set(rows.map((row) => row.kind));
   const known = order.filter((kind) => present.has(kind));
   const rest = [...present].filter((kind) => !order.includes(kind)).sort();
   return [...known, ...rest];
