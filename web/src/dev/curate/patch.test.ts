@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import patchSchema from '../../../../names/curate-patch.schema.json';
 import { PATCH_FIELDS } from '../../../vite-plugins/patchFields.ts';
-import { decidedRows, decisionLabel, singleWikidataId, type PatchEntry } from './patch';
+import {
+  createdPlaces,
+  decidedRows,
+  decisionLabel,
+  singleWikidataId,
+  type PatchEntry,
+} from './patch';
 
 function decision(
   id: string,
@@ -37,6 +43,46 @@ describe('decidedRows', () => {
       decision('schorkewarw', 12, 'clear'),
     ]);
     expect(done.has('schorkewarw')).toBe(false);
+  });
+});
+
+const KEY = 'new:3f9c0a';
+
+/** The `create` of the place KEY. */
+function create(names: Record<string, string>, kind = 'warft'): PatchEntry {
+  return { id: KEY, action: 'create', kind, names };
+}
+
+const DISCARD: PatchEntry = { id: KEY, action: 'discard' };
+const SKIP_NEW: PatchEntry = { id: KEY, action: 'skip' };
+
+describe('decidedRows, of a created place', () => {
+  it('is its decision, not its creation', () => {
+    const done = decidedRows([create({ de: 'Horne' }), SKIP_NEW]);
+    expect(done.get(KEY)?.action).toBe('skip');
+  });
+
+  it('has none for a place that has none', () => {
+    expect(decidedRows([create({ de: 'Horne' })]).has(KEY)).toBe(false);
+  });
+
+  it('forgets the decision of a discarded place', () => {
+    expect(decidedRows([create({ de: 'Horne' }), SKIP_NEW, DISCARD]).has(KEY)).toBe(false);
+  });
+});
+
+describe('createdPlaces', () => {
+  it('is the last creation per key', () => {
+    const places = createdPlaces([create({ de: 'Horn' }), create({ de: 'Horne' })]);
+    expect(places.map((place) => place.names)).toEqual([{ de: 'Horne' }]);
+  });
+
+  it('leaves a discarded place out', () => {
+    expect(createdPlaces([create({ de: 'Horne' }), DISCARD])).toEqual([]);
+  });
+
+  it('keeps a place its decision comes after', () => {
+    expect(createdPlaces([create({ de: 'Horne' }), SKIP_NEW])).toHaveLength(1);
   });
 });
 
@@ -92,6 +138,7 @@ describe('PatchEntry', () => {
       lat: true,
       lon: true,
       polygon_km2: true,
+      names: true,
       note: true,
       at: true,
     };
@@ -104,6 +151,8 @@ describe('PatchEntry', () => {
       local: true,
       skip: true,
       clear: true,
+      create: true,
+      discard: true,
     };
     expect(Object.keys(actions).sort()).toEqual([...patchSchema.properties.action.enum].sort());
   });

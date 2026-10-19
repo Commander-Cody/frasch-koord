@@ -1,8 +1,9 @@
 // A stand-in for the MapLibre map the dev views draw on. jsdom has no WebGL,
 // so a test hands a panel this instead: it keeps the sources and layers a
-// panel adds, and neither moves nor answers clicks.
+// panel adds, and does not move. A click (`click`) goes to the handlers of
+// the whole map, and the hit test of a panel finds the feature it was on.
 
-import type { Map as MapLibreMap } from 'maplibre-gl';
+import type { Map as MapLibreMap, MapGeoJSONFeature } from 'maplibre-gl';
 
 interface FakeLayer {
   id: string;
@@ -14,6 +15,9 @@ export class FakeMap {
   private readonly sources = new Map<string, { data: unknown; setData: (data: unknown) => void }>();
   private layers: FakeLayer[] = [];
   private readonly canvas = document.createElement('canvas');
+  private readonly clickHandlers = new Set<(event: unknown) => void>();
+  /** What a hit test finds where the last click was. */
+  private rendered: MapGeoJSONFeature[] = [];
 
   /** As the typed map a panel takes. */
   get map(): MapLibreMap {
@@ -31,6 +35,12 @@ export class FakeMap {
 
   sourceData(id: string): unknown {
     return this.sources.get(id)?.data;
+  }
+
+  /** A click at `lngLat`, on the label `on` if given. */
+  click(lngLat: { lng: number; lat: number }, on?: Partial<MapGeoJSONFeature>): void {
+    this.rendered = on ? [on as MapGeoJSONFeature] : [];
+    for (const handler of [...this.clickHandlers]) handler({ point: { x: 0, y: 0 }, lngLat });
   }
 
   /* ------------------------------------------------- what the panels call */
@@ -78,12 +88,21 @@ export class FakeMap {
     layer.filter = filter ?? undefined;
   }
 
-  on(): this {
+  /** Keeps a click handler of the whole map; handlers of a layer, and other events, it drops. */
+  on(type: string, ...rest: unknown[]): this {
+    const [handler] = rest;
+    if (type === 'click' && rest.length === 1) this.clickHandlers.add(handler as () => void);
     return this;
   }
 
-  off(): this {
+  off(type: string, ...rest: unknown[]): this {
+    const [handler] = rest;
+    if (type === 'click' && rest.length === 1) this.clickHandlers.delete(handler as () => void);
     return this;
+  }
+
+  queryRenderedFeatures(): MapGeoJSONFeature[] {
+    return this.rendered;
   }
 
   getCanvas(): HTMLCanvasElement {

@@ -55,7 +55,8 @@ function curateRow(id: string, name: string, de: string): CurateRow {
 
 const WORKLIST: CurateWorklist = {
   bbox: [8, 54, 9, 55],
-  kind_order: ['settlement'],
+  kind_order: ['settlement', 'warft'],
+  name_columns: ['mooring', 'local', 'fering'],
   polygon_kinds: ['koog'],
   class_keys: ['place', 'boundary'],
   settlement_places: ['village', 'town'],
@@ -76,10 +77,13 @@ const WORKLIST: CurateWorklist = {
       ],
     },
   ],
+  places: [{ id: 'naibel', kind: 'settlement', names: { mooring: 'Naibel', de: 'Niebüll' } }],
 };
 
 /** The worklist the dev server hands out; a test may put another in its place. */
 let worklist: CurateWorklist;
+/** The patch the dev server hands out; a test may put entries into it. */
+let patchEntries: PatchEntry[];
 
 /** A reply the test settles by hand. */
 function deferred() {
@@ -117,6 +121,9 @@ beforeEach(() => {
   // jsdom lays nothing out; CurateList keeps the selected row in view.
   Element.prototype.scrollIntoView = () => {};
   worklist = WORKLIST;
+  patchEntries = [];
+  // the hit test of a label click asks whether the pointer is a finger
+  vi.stubGlobal('matchMedia', () => ({ matches: false }));
   posts = [];
   lookups = [];
   vi.stubGlobal(
@@ -128,7 +135,7 @@ beforeEach(() => {
         posts.push({ entry: JSON.parse(String(init.body)) as PatchEntry, reply });
         return reply.promise;
       }
-      if (input === '/__curate/patch') return Promise.resolve(json({ entries: [] }));
+      if (input === '/__curate/patch') return Promise.resolve(json({ entries: patchEntries }));
       const reply = deferred();
       lookups.push({ url: input, init, reply });
       return reply.promise;
@@ -476,5 +483,246 @@ describe('CuratePanel', () => {
     within(await listedItem('node/7')).getByText(
       'wikidata Q1717813;Q20729612: not one id, not saved',
     );
+  });
+});
+
+/* ------------------------------------------------------------ new places */
+
+const KEY = 'new:3f9c0a';
+
+/** The `create` of the place KEY, as the patch holds it. */
+const HOORNE: PatchEntry = {
+  id: KEY,
+  action: 'create',
+  kind: 'warft',
+  names: { mooring: 'Hoorne', de: 'Horne' },
+};
+
+/** Fills the form of a new place: `fields` by their label. */
+function fillPlace(fields: Record<string, string>) {
+  for (const [label, value] of Object.entries(fields)) {
+    fireEvent.change(screen.getByLabelText(label), { target: { value } });
+  }
+}
+
+function savePlaceButton(): HTMLButtonElement {
+  return screen.getByRole<HTMLButtonElement>('button', { name: 'Save place' });
+}
+
+/** The list of the created places. */
+function newPlacesList(): HTMLElement {
+  return screen.getByRole('list', { name: /^New places/ });
+}
+
+/** Renders the panel on `map`, with a created place in the patch already. */
+async function renderWithHoorne(map = new FakeMap()) {
+  patchEntries = [HOORNE];
+  render(<CuratePanel map={map.map} />);
+  await screen.findByText('Hoorne');
+}
+
+const AT = { lng: 8.8, lat: 54.8 };
+/** Niebüll's label, which the name list does not have: tile feature id node/240042766. */
+const NIEBUELL_LABEL = { id: 2400427661, properties: { 'name:de': 'Niebüll', 'name:da': 'Nibøl' } };
+
+describe('CuratePanel, new places', () => {
+  it('saves a new place under a provisional key', async () => {
+    await renderPanel();
+    fireEvent.click(screen.getByRole('button', { name: 'New place' }));
+    fillPlace({
+      'new place kind': 'warft',
+      'new place mooring': 'Hoorne',
+      'new place de': 'Horne',
+    });
+
+    fireEvent.click(savePlaceButton());
+
+    expect(posts[0].entry).toMatchObject({
+      id: expect.stringMatching(/^new:[a-z0-9]+$/),
+      action: 'create',
+      kind: 'warft',
+      names: { mooring: 'Hoorne', de: 'Horne' },
+    });
+  });
+
+  it('saves no new place without a kind', async () => {
+    await renderPanel();
+    fireEvent.click(screen.getByRole('button', { name: 'New place' }));
+    fillPlace({ 'new place de': 'Horne' });
+
+    expect(savePlaceButton().disabled).toBe(true);
+  });
+
+  it('saves no new place without a name', async () => {
+    await renderPanel();
+    fireEvent.click(screen.getByRole('button', { name: 'New place' }));
+    fillPlace({ 'new place kind': 'warft', 'new place note': 'from the 1920 map' });
+
+    expect(savePlaceButton().disabled).toBe(true);
+  });
+
+  it('offers every kind of the worklist for a new place', async () => {
+    await renderPanel();
+    fireEvent.click(screen.getByRole('button', { name: 'New place' }));
+
+    const options = within(screen.getByLabelText('new place kind')).getAllByRole('option');
+    expect(options.map((option) => option.textContent)).toEqual(['kind…', 'settlement', 'warft']);
+  });
+
+  it('warns of a row of the list that has a name typed for a new place', async () => {
+    await renderPanel();
+    fireEvent.click(screen.getByRole('button', { name: 'New place' }));
+
+    fillPlace({ 'new place fering': 'Niebüll' });
+
+    within(screen.getByRole('list', { name: 'already in the list' })).getByText(/naibel/);
+  });
+
+  it('lists a new place as soon as it is saved, marked new', async () => {
+    await renderPanel();
+    fireEvent.click(screen.getByRole('button', { name: 'New place' }));
+    fillPlace({ 'new place kind': 'warft', 'new place mooring': 'Hoorne' });
+    fireEvent.click(savePlaceButton());
+
+    await answerPost(0);
+
+    within(newPlacesList()).getByText('new');
+  });
+
+  it('lists the places the patch created', async () => {
+    await renderWithHoorne();
+
+    within(newPlacesList()).getByText('Hoorne');
+  });
+
+  it('lists a created place that is decided, though done rows are hidden', async () => {
+    patchEntries = [HOORNE, { id: KEY, action: 'skip' }];
+    render(<CuratePanel map={new FakeMap().map} />);
+
+    expect(
+      await within(await screen.findByRole('list', { name: /^New places/ })).findByText('Hoorne'),
+    ).toBeDefined();
+  });
+
+  it('opens a created place by the key the address names', async () => {
+    window.history.replaceState(null, '', `/?curate&row=${KEY}`);
+
+    await renderWithHoorne();
+
+    expect((await screen.findByRole('heading', { level: 2 })).textContent).toContain('Hoorne');
+  });
+
+  it('saves the decision of a created place under its key', async () => {
+    await renderWithHoorne();
+    fireEvent.click(within(newPlacesList()).getByText('Hoorne'));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Skip' }));
+
+    expect(posts[0].entry).toMatchObject({ id: KEY, action: 'skip' });
+  });
+
+  it('saves an edited place under the key it had', async () => {
+    await renderWithHoorne();
+    fireEvent.click(within(newPlacesList()).getByText('Hoorne'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    fillPlace({ 'new place de': 'Hoorn' });
+
+    fireEvent.click(savePlaceButton());
+
+    expect(posts[0].entry).toMatchObject({ id: KEY, action: 'create', names: { de: 'Hoorn' } });
+  });
+
+  it('discards a created place', async () => {
+    await renderWithHoorne();
+    fireEvent.click(within(newPlacesList()).getByText('Hoorne'));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Discard' }));
+
+    expect(posts[0].entry).toEqual({ id: KEY, action: 'discard' });
+  });
+
+  it("starts a new place from a clicked label with the label's German and Danish names", async () => {
+    const map = new FakeMap();
+    render(<CuratePanel map={map.map} />);
+    await screen.findByText('Naibel');
+    act(() => map.click(AT, NIEBUELL_LABEL));
+
+    fireEvent.click(screen.getByRole('button', { name: 'New place from this' }));
+
+    expect([
+      screen.getByLabelText<HTMLInputElement>('new place de').value,
+      screen.getByLabelText<HTMLInputElement>('new place da').value,
+    ]).toEqual(['Niebüll', 'Nibøl']);
+  });
+
+  it("starts the German name with OSM's name for a label with neither", async () => {
+    const map = new FakeMap();
+    render(<CuratePanel map={map.map} />);
+    await screen.findByText('Naibel');
+    act(() => map.click(AT, { id: 2400427661, properties: { name: 'Niebüll' } }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'New place from this' }));
+
+    expect(screen.getByLabelText<HTMLInputElement>('new place de').value).toBe('Niebüll');
+  });
+
+  it('saves the object of the clicked label as the decision of the new place', async () => {
+    const map = new FakeMap();
+    render(<CuratePanel map={map.map} />);
+    await screen.findByText('Naibel');
+    act(() => map.click(AT, NIEBUELL_LABEL));
+    fireEvent.click(screen.getByRole('button', { name: 'New place from this' }));
+    fillPlace({ 'new place kind': 'settlement' });
+    fireEvent.click(savePlaceButton());
+
+    await answerPost(0);
+
+    expect(posts[1].entry).toMatchObject({
+      id: posts[0].entry.id,
+      action: 'osm',
+      osm: 'node/240042766',
+    });
+  });
+
+  it('closes the form of a new place when a row is opened from the list', async () => {
+    await renderPanel();
+    fireEvent.click(screen.getByRole('button', { name: 'New place' }));
+
+    await openRow('Naibel');
+
+    expect(screen.queryByLabelText('new place kind')).toBeNull();
+  });
+
+  it('takes the offer of a clicked label back once a place is started from it', async () => {
+    const map = new FakeMap();
+    render(<CuratePanel map={map.map} />);
+    await screen.findByText('Naibel');
+    act(() => map.click(AT, NIEBUELL_LABEL));
+
+    fireEvent.click(screen.getByRole('button', { name: 'New place from this' }));
+
+    expect(screen.queryByRole('button', { name: 'New place from this' })).toBeNull();
+  });
+
+  it('offers no new place for the label of a row of the list', async () => {
+    const map = new FakeMap();
+    render(<CuratePanel map={map.map} />);
+    await screen.findByText('Naibel');
+
+    act(() => map.click(AT, { id: 2400427661, properties: { 'frasch:ref': 'naibel' } }));
+
+    expect(screen.queryByRole('button', { name: 'New place from this' })).toBeNull();
+  });
+
+  it('sets the position, offering no new place, for a click while that is armed', async () => {
+    const map = new FakeMap();
+    render(<CuratePanel map={map.map} />);
+    await screen.findByText('Naibel');
+    await openRow('Naibel');
+    fireEvent.click(screen.getByRole('button', { name: 'set position on map' }));
+
+    act(() => map.click(AT, NIEBUELL_LABEL));
+
+    expect(screen.queryByRole('button', { name: 'New place from this' })).toBeNull();
   });
 });

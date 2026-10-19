@@ -1,7 +1,8 @@
 /**
  * The selected row of the curation view and every way to decide it: pick a
  * candidate or a lookup result (or several, ticked), an OSM reference by
- * hand, a local reference at a position set on the map, or skip it.
+ * hand, a local reference at a position set on the map, or skip it. A place
+ * the view created is decided the same way, and can be edited or discarded.
  *
  * Everything typed or ticked here belongs to this one row: CuratePanel keys
  * the component by the row id, so moving to another row starts afresh.
@@ -22,7 +23,7 @@ import {
 } from './patch';
 import { candidateColor, hasPoint, type Position, usePositionPin, useRowPins } from './pins';
 import { parseRefs } from './refs';
-import type { Bbox, CurateCandidate, CurateRow } from './worklist';
+import type { Bbox, CurateCandidate, ListRow } from './worklist';
 import { useOsmLookup } from './osmLookup';
 import RefItem from './RefItem';
 
@@ -30,7 +31,7 @@ import RefItem from './RefItem';
 const MAX_LISTED_REFS = 12;
 
 export interface CurateDetailProps {
-  row: CurateRow;
+  row: ListRow;
   /** The row's current decision, if it has one. */
   done: PatchEntry | null;
   /** The worklist's bbox, which the lookups search in. */
@@ -43,8 +44,18 @@ export interface CurateDetailProps {
   canBePolygon: boolean;
   /** The map the row's pins go on. */
   map: MapLibreMap;
+  /**
+   * Whether the next map click sets the position of a local reference: the
+   * panel's, which then takes that click for no label.
+   */
+  picking: boolean;
+  setPicking: (picking: boolean) => void;
   /** Stores a decision; rejects with a message fit for the panel. */
-  onSave: (row: CurateRow, decision: Decision) => Promise<void>;
+  onSave: (row: ListRow, decision: Decision) => Promise<void>;
+  /** A created place's: opens its form. */
+  onEdit?: () => void;
+  /** A created place's: withdraws it and its decision. */
+  onDiscard?: () => void;
 }
 
 /** An OSM object ticked for a multi-object pick. */
@@ -105,7 +116,11 @@ export default function CurateDetail({
   settlementPlaces,
   canBePolygon,
   map,
+  picking,
+  setPicking,
   onSave,
+  onEdit,
+  onDiscard,
 }: CurateDetailProps) {
   const lookup = useOsmLookup({ bbox, classKeys }, row.name_de || row.name_da || row.name);
   const { checked, toggle, checkAll, clear } = useCheckedRefs();
@@ -142,11 +157,21 @@ export default function CurateDetail({
       <h2 className="dev-panel-detail-title curate-detail-title">
         {row.name}
         <span className="curate-detail-line">
-          {row.id} · places.csv line {row.line}
+          {row.id} · {row.result === 'new' ? 'new place' : `places.csv line ${row.line}`}
         </span>
       </h2>
       <RowFacts row={row} />
       {done && <p className="curate-done">already decided: {decisionLabel(done)}</p>}
+      {onEdit && onDiscard && (
+        <div className="curate-row">
+          <button type="button" disabled={saving} onClick={onEdit}>
+            Edit
+          </button>
+          <button type="button" disabled={saving} onClick={onDiscard}>
+            Discard
+          </button>
+        </div>
+      )}
 
       {/* Inert while a decision is on its way to the patch. */}
       <fieldset className="curate-decisions" disabled={saving} aria-busy={saving}>
@@ -176,6 +201,8 @@ export default function CurateDetail({
           initialSlug={row.slug_suggestion}
           canBePolygon={canBePolygon}
           map={map}
+          picking={picking}
+          setPicking={setPicking}
           decide={decide}
         />
 
@@ -204,7 +231,7 @@ export default function CurateDetail({
 }
 
 /** What the worklist knows about the row. */
-function RowFacts({ row }: { row: CurateRow }) {
+function RowFacts({ row }: { row: ListRow }) {
   const facts: [string, string][] = [
     ...Object.entries(row.names),
     ['de', row.de],
@@ -367,14 +394,15 @@ interface LocalRefProps {
   initialSlug: string;
   canBePolygon: boolean;
   map: MapLibreMap;
+  picking: boolean;
+  setPicking: (picking: boolean) => void;
   decide: (decision: Decision) => void;
 }
 
 /** A place OSM does not have: a slug and a position set on the map. */
-function LocalRef({ initialSlug, canBePolygon, map, decide }: LocalRefProps) {
+function LocalRef({ initialSlug, canBePolygon, map, picking, setPicking, decide }: LocalRefProps) {
   const [slug, setSlug] = useState(initialSlug);
   const [position, setPosition] = useState<Position | null>(null);
-  const [picking, setPicking] = useState(false);
   const [polygonKm2, setPolygonKm2] = useState('');
   usePositionPin(map, { position, setPosition, picking, setPicking });
 

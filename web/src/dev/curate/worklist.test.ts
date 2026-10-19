@@ -9,6 +9,7 @@ import {
   type CurateCandidate,
   type CurateRow,
   type CurateWorklist,
+  type ListedPlace,
 } from './worklist';
 
 /** A worklist row with only `fields` set. */
@@ -39,11 +40,13 @@ function worklist(kind_order: string[], rows: CurateRow[]): CurateWorklist {
   return {
     bbox: [8, 54, 9, 55],
     kind_order,
+    name_columns: ['mooring'],
     polygon_kinds: [],
     class_keys: [],
     settlement_places: [],
     results: ['ambiguous', 'not_found'],
     rows,
+    places: [],
   };
 }
 
@@ -58,13 +61,24 @@ describe('the worklist types', () => {
     const pin: Pin<CurateWorklist> = {
       bbox: { array: true },
       kind_order: { array: true },
+      name_columns: { array: true },
       polygon_kinds: { array: true },
       class_keys: { array: true },
       settlement_places: { array: true },
       results: { array: true },
       rows: { array: true },
+      places: { array: true },
     };
     expect(pinnedFields(pin)).toEqual(schemaFields(worklistSchema));
+  });
+
+  it('ListedPlace has the fields of a place of the schema', () => {
+    const pin: Pin<ListedPlace> = {
+      id: { string: true },
+      kind: { string: true },
+      names: { object: true },
+    };
+    expect(pinnedFields(pin)).toEqual(schemaFields(worklistSchema.$defs.place, worklistSchema));
   });
 
   it('CurateRow has the fields of a row of the schema', () => {

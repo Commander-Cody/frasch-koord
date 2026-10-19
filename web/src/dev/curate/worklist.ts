@@ -55,14 +55,30 @@ export interface CurateRow {
   candidates: CurateCandidate[];
 }
 
+/**
+ * A row of the list: one of the worklist, or a place the view created
+ * (newPlaces.ts `placeRow`), whose result is `new` and whose `line` is 0.
+ */
+export type ListRow = Omit<CurateRow, 'result'> & { result: CurateRow['result'] | 'new' };
+
+/** A row of places.csv by its names, for a new place's duplicate warning. */
+export interface ListedPlace {
+  id: string;
+  kind: string;
+  /** Every non-empty name cell (the Frisian columns, `de`, `da`), raw, keyed by column name. */
+  names: Record<string, string>;
+}
+
 /** lon_min, lat_min, lon_max, lat_max. */
 export type Bbox = [number, number, number, number];
 
 /** `names/work/curate.json` as a whole. */
 export interface CurateWorklist {
   bbox: Bbox;
-  /** The kinds in the order the list walks them. */
+  /** Every kind, in the order the list walks them. */
   kind_order: string[];
+  /** The Frisian name columns of places.csv in list order; a new place's form adds `de` and `da`. */
+  name_columns: string[];
   /** The kinds whose local reference can carry an area instead of a bare point. */
   polygon_kinds: string[];
   /** The OSM tags that say what kind of thing an object is, the most telling first. */
@@ -72,6 +88,8 @@ export interface CurateWorklist {
   /** The results a row can have, for the filter. */
   results: CurateRow['result'][];
   rows: CurateRow[];
+  /** Every row of places.csv, by its names. */
+  places: ListedPlace[];
 }
 
 /* ---------------------------------------------------------------- loading */
@@ -111,11 +129,11 @@ export interface RowFilter {
 
 export const NO_FILTER: RowFilter = { text: '', kind: '', result: 'all', hideDone: true };
 
-export function filterRows(
-  rows: CurateRow[],
+export function filterRows<Row extends ListRow>(
+  rows: Row[],
   filter: RowFilter,
   isDone: (id: string) => boolean,
-): CurateRow[] {
+): Row[] {
   const needle = filter.text.trim().toLowerCase();
   return rows.filter((row) => {
     if (filter.kind && row.kind !== filter.kind) return false;
