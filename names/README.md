@@ -416,6 +416,24 @@ it, and `apply` refuses a line that does. It renames the patch file before readi
 decisions made while it runs go to a fresh patch; refused entries are appended
 back to it. Re-run `frasch match` afterwards and export again.
 
+**A place the list does not have yet** can be added in the view too: "New
+place", or a click on the label of an OSM object no row names ("New place from
+this", which also picks that object). The form takes the kind (every kind of
+`frasch/kinds.py`), a cell per name column, `de`, `da` and a note — at least
+one name, in any column — and lists the rows that already have a name typed
+(names do repeat, so it only warns; `export` writes every row's names into
+`work/curate.json` for it). The `create` goes into the patch under a
+provisional key, `new:…`, which the place's decision uses too; until `apply`
+the place is listed apart, marked new, and can be edited (a later `create` for
+the key wins) or discarded (`discard` withdraws it and its decision). `apply`
+checks the new row by the rules `frasch check-inputs` has for one row, gives
+it its id as `check-inputs --fix` would, inserts it after the last row of its
+kind (at the end, if none has it) and writes its decision into it — also for a
+place without a Frisian name, which then has a reference but no label on the
+map. It applies a place with its decision or neither: a refused one stays in
+the patch, both entries, under its key. A place left without a decision is
+the matcher's on the next `just update`.
+
 **Build**:
 
 ```bash
@@ -796,7 +814,8 @@ references of their `osm` cell.
 | `matchfile` | `work/matches.jsonl`, the result of every row the matcher owns: writing it (`frasch match`) and reading it (`frasch curate export`) |
 | `matchreport` | `REPORT.md`: rendering it, its stamp, the warning for candidates from another set of extracts |
 | `worklist` | `work/curate.json`, the rows left for the curation view: its types and `export` (`frasch curate export`) |
-| `patch` | `work/curate-patch.jsonl`, the curation view's decisions: reading it (the last line per row), checking a line against its schema, taking the file out of the browser's way and putting it back |
+| `patch` | `work/curate-patch.jsonl`, the curation view's decisions: reading it (the last line per row, and per place the view created), checking a line against its schema, taking the file out of the browser's way and putting it back |
+| `newplaces` | the places the curation view created: the row a `create` makes, checked as `check-inputs` checks a row, and where `apply` inserts it |
 | `decisions` | what a decision makes of its row: `ACTIONS`, one entry per action of the patch schema — the row's new `Reference`, a local place's curation row, the log text — and `owner_problem` |
 | `searchindex` | builds and writes the search index |
 | `provenance` | `Stamp`, what a generated file was built from: making one, reading it from any stamped file, comparing two; printing the tiles' (`frasch provenance`) |

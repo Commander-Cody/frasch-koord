@@ -9,7 +9,10 @@ fill (`owner_problem`), and nothing another row holds can be taken.
 
 Nothing here writes: `frasch curate apply` (frasch.curate) does, with what an
 action returns.  A new action is one entry of `ACTIONS` and its branch of the
-schema.
+schema.  The actions about a place the view created rather than a row's
+reference -- `create`, `discard` (`patch.PLACE_ACTIONS`) -- are not among
+them: frasch.newplaces makes the row a `create` adds, and the place's
+decision then is one of these, applied to that row.
 """
 
 from __future__ import annotations
