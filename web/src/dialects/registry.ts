@@ -34,7 +34,7 @@ export interface DialectEntry {
 export const DIALECTS = registry as DialectEntry[];
 
 /** The language of the North Frisian dialects. */
-export const FRISIAN = 'frr';
+const FRISIAN = 'frr';
 
 /** The tags of the Frisian dialects among `dialects`, in their order. */
 export function frisianTags(dialects: readonly Pick<DialectEntry, 'tag' | 'language'>[]): string[] {

@@ -130,9 +130,12 @@ def _variety_name(
     row: Row, obj: LocatedObject | None, tag: str, area_tag: str | None, reg: Registry
 ) -> str:
     """The name of a place in one variety: the list's (`_dialect_name`), else
-    -- for a variety that is a language of its own, Low Saxon -- OSM's name
-    in it, as the tiles keep OSM's where the list has none."""
-    return _dialect_name(row, tag, area_tag, reg) or _osm_name(obj, tag)
+    -- for a variety that is a language of its own (Low Saxon: its tag is its
+    language) -- OSM's name in it, as the tiles keep OSM's where the list has
+    none."""
+    listed = _dialect_name(row, tag, area_tag, reg)
+    is_language = tag == reg.language_of(tag)
+    return listed or (_osm_name(obj, tag) if is_language else "")
 
 
 def _dialect_name(row: Row, tag: str, area_tag: str | None, reg: Registry) -> str:

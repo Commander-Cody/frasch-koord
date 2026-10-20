@@ -1,7 +1,7 @@
 // What a place's card shows: which names, in which order, and what each one
 // is. Pure; ui/PlaceCard.tsx gives every source its label and renders.
 
-import { DIALECTS, FRISIAN } from '../dialects/registry';
+import { DIALECTS, frisianTags } from '../dialects/registry';
 import type { PlaceSelection } from '../selection/placeSelection';
 import { cardNames } from './cardNames';
 import type { CardNames } from './entry';
@@ -38,8 +38,8 @@ function localSource({ names, local, dialect }: CardNames): NameSource {
   return isAreaName ? { kind: 'local', dialect } : { kind: 'local' };
 }
 
-const FRISIAN_TAGS = DIALECTS.filter((d) => d.language === FRISIAN).map((d) => d.tag);
-const NON_FRISIAN_TAGS = DIALECTS.filter((d) => d.language !== FRISIAN).map((d) => d.tag);
+const FRISIAN_TAGS = frisianTags(DIALECTS);
+const NON_FRISIAN_TAGS = DIALECTS.map((d) => d.tag).filter((tag) => !FRISIAN_TAGS.includes(tag));
 
 /** The place's names in the varieties `tags` of the registry, in its order, but the headline's. */
 function varietyLines(names: CardNames, shown: ShownName, tags: string[]): CardLine[] {

@@ -1,19 +1,24 @@
-"""The dialect registry, names/dialects.csv: the single list of the dialects
-the project knows.
+"""The registry of the local varieties, names/dialects.csv: the single list
+of the varieties the project knows -- the North Frisian dialects, and Low
+Saxon and Synnejysk, the other local languages of Schleswig.
 
 North Frisian is not one language variety but a dozen, and the map shows more
-than one of them.  Everything else derives from this list: the name columns of
+than one of them.  Wherever the code says "Frisian" it means the rows of
+`language` `frr`; Low Saxon (`nds`) and Synnejysk (`jut`) have names of their
+own in the list, but no row is named by them and no map view is in them.
+Everything else derives from this list: the name columns of
 names/places.csv (frasch.placelist), the `name:<tag>` tags the injector
 writes, Planetiler's `--languages` list (`frasch dialects --tags` in
 tiles/build.sh), the search index and the frontend's selector
-(web/src/dialects/generated/dialects.json).  Adding a dialect is therefore one line in
+(web/src/dialects/generated/dialects.json).  Adding a variety is therefore one line in
 the registry plus a column in places.csv -- and, the one thing in the code, its
 colour in the dialect-area review view (`DIALECT_COLORS` in
 web/src/dev/areas/areaLayers.ts, which a test holds to the registry's tags).
 
 | column | meaning |
 |---|---|
-| `tag`    | BCP 47 language tag, always `frr-x-<subtag>`; no registered subtags for North Frisian dialects exist, so private use it is |
+| `tag`    | BCP 47 language tag, `<language>` or `<language>-x-<subtag>`; a Frisian one always `frr-x-<subtag>` -- no registered subtags for North Frisian dialects exist, so private use it is, and a bare `frr` is OSM's Frisian of no dialect |
+| `language` | ISO 639 code of the language the variety belongs to: `frr`, `nds`, `jut` |
 | `column` | the column of names/places.csv that holds this dialect's names |
 | `label`  | how the dialect is written in the UI (its German/endonym name) |
 | `status` | `living` or `extinct` (extinct dialects still label the map in the local view -- Südergoesharde) |
@@ -242,7 +247,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     else:
         for d in reg:
             print(
-                f"{d['tag']:<16} {d['column']:<10} {d['label']:<18} "
+                f"{d['tag']:<16} {d['language']:<4} {d['column']:<10} {d['label']:<18} "
                 f"{d['status']:<7} view={d['view']:<4} {d['note']}"
             )
     return 0
