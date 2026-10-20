@@ -19,7 +19,7 @@ from conftest import workspace as workspace_of
 from conftest import write_sh_extract
 
 # a dialect the registry of the tests does not have
-STRAND = "frr-x-strand,strand,Strander,extinct,no,\n"
+STRAND = "frr-x-strand,frr,strand,Strander,extinct,no,\n"
 # a row the matcher finds in the extract, and one it does not
 TOFTEM = {"id": "toftem", "kind": "settlement", "mooring": "Toftem", "de": "Toftum"}
 HESBEL = {"id": "hesbel", "kind": "settlement", "mooring": "Hesbel", "de": "Hesbüll"}

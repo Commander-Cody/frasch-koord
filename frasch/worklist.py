@@ -82,6 +82,7 @@ class Worklist(TypedDict):
     bbox: list[float]
     kind_order: list[str]
     name_columns: list[str]
+    non_frisian_columns: list[str]
     polygon_kinds: list[str]
     class_keys: list[str]
     settlement_places: list[str]
@@ -200,6 +201,7 @@ def _write_worklist(
         "bbox": list(geo.NF_BBOX),
         "kind_order": kinds.KIND_ORDER,
         "name_columns": placelist.name_columns(reg),
+        "non_frisian_columns": placelist.non_frisian_columns(reg),
         "polygon_kinds": kinds.POLYGON_KINDS,
         "class_keys": list(osmtags.CLASS_KEYS),
         "settlement_places": sorted(osmtags.SETTLEMENT_PLACES),

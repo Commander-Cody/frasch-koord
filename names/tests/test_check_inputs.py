@@ -3,6 +3,9 @@ its line, instead of stopping at the first one (#22, M3)."""
 
 from __future__ import annotations
 
+import csv
+import io
+
 import os
 from collections.abc import Sequence
 from pathlib import Path
@@ -116,6 +119,14 @@ def test_a_malformed_name_cell_is_reported(names: CheckNames, cell: str) -> None
     problems = names(places_text([{**TOFTUM, "mooring": cell}]))
     assert lines(problems) == [2]
     assert "mooring" in problems[0].message
+
+
+@pytest.mark.parametrize("column", ["nds", "jut"])
+def test_a_malformed_low_saxon_or_synnejysk_cell_is_reported(
+    names: CheckNames, column: str
+) -> None:
+    problems = names(places_text([{**TOFTUM, column: "Lym?"}]))
+    assert column in problems[0].message
 
 
 @pytest.mark.parametrize(
@@ -272,13 +283,13 @@ def test_the_command_succeeds_on_a_clean_list(ws: Workspace) -> None:
     assert command(ws) == 0
 
 
-REGISTRY_HEADER = "tag,column,label,status,view,note\n"
+REGISTRY_HEADER = "tag,language,column,label,status,view,note\n"
 
 
 def test_a_damaged_dialect_row_is_reported(names: CheckNames) -> None:
     # the rules are dialects' (test_dialects.py)
     problems = names(
-        places_text([TOFTUM]), dialects=REGISTRY_HEADER + "frr-x-mooring,mooring,,living,yes,\n"
+        places_text([TOFTUM]), dialects=REGISTRY_HEADER + "frr-x-mooring,frr,mooring,,living,yes,\n"
     )
     assert [(os.path.basename(p.path), p.line) for p in problems] == [("dialects.csv", 2)]
 
@@ -384,6 +395,20 @@ def test_fix_adds_the_id_column_to_a_list_that_has_none(ws: Workspace, world: Pa
     names = placelist.read(str(places), REGISTRY)
     assert names.fields[-1] == "id"
     assert [r["id"] for r in names.rows] == ["toftem", "naibel"]
+
+
+def _without_columns(text: str, cut: set[str]) -> str:
+    """A places.csv `text` with the columns `cut` taken out."""
+    table = list(csv.reader(io.StringIO(text)))
+    keep = [i for i, column in enumerate(table[0]) if column not in cut]
+    return "".join(",".join(line[i] for i in keep) + "\n" for line in table)
+
+
+def test_fix_adds_the_columns_of_new_varieties_in_their_place(ws: Workspace, world: Path) -> None:
+    places = world / "places.csv"
+    places.write_text(_without_columns(places_text([TOFTUM]), {"nds", "jut"}), encoding="utf-8")
+    assert fix(ws) == []
+    assert placelist.read(str(places), REGISTRY).fields == placelist.columns(REGISTRY)
 
 
 def test_fix_run_twice_changes_nothing(ws: Workspace, world: Path) -> None:

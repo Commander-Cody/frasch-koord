@@ -60,3 +60,9 @@ def test_planetiler_carries_every_key_the_injector_writes(
     key: str, options: dict[str, list[str]]
 ) -> None:
     assert carried(key, options)
+
+
+def test_planetiler_is_told_each_language_once(options: dict[str, list[str]]) -> None:
+    # Low Saxon is OSM's language and a variety of the registry at once
+    languages = options["--languages"]
+    assert len(languages) == len(set(languages))

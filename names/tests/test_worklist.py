@@ -146,6 +146,11 @@ def test_the_worklist_offers_the_results_of_its_schema(world: Path) -> None:
     assert exported["results"] == read_schema("curate-worklist")["$defs"]["result"]["enum"]
 
 
+def test_the_worklist_names_the_name_columns_of_the_other_languages(world: Path) -> None:
+    exported = json.loads(export_the_review_rows(world).read_text(encoding="utf-8"))
+    assert exported["non_frisian_columns"] == ["nds", "jut"]
+
+
 def test_the_worklist_names_the_frisian_name_columns_in_list_order(world: Path) -> None:
     exported = json.loads(export_the_review_rows(world).read_text(encoding="utf-8"))
     assert exported["name_columns"] == [

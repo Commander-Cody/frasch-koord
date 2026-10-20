@@ -25,7 +25,7 @@ def test_refuses_a_row_with_a_comma_too_few_as_such(tmp_path: Path) -> None:
     with pytest.raises(ValidationError) as exc:
         placelist.read(str(path), REGISTRY)
     assert exc.value.problems == [
-        Problem(str(path), 2, "17 cells, the header has 18 (a comma too many or too few?)")
+        Problem(str(path), 2, "19 cells, the header has 20 (a comma too many or too few?)")
     ]
 
 
@@ -127,9 +127,9 @@ def test_the_registry_passed_in_sets_the_name_columns(tmp_path: Path) -> None:
     # list with other columns, and names a row by them.
     dialects_csv = tmp_path / "dialects.csv"
     dialects_csv.write_text(
-        "tag,column,label,status,view,note\n"
-        "frr-x-solring,solring,Sölring,living,yes,\n"
-        "frr-x-fering,fering,Fering,living,no,\n",
+        "tag,language,column,label,status,view,note\n"
+        "frr-x-solring,frr,solring,Sölring,living,yes,\n"
+        "frr-x-fering,frr,fering,Fering,living,no,\n",
         encoding="utf-8",
     )
     reg = dialects.read(str(dialects_csv))

@@ -155,7 +155,7 @@ def _position_problems(row: PlaceRow, curation: str, positioned: Container[str])
 def variant_columns(reg: Registry) -> list[str]:
     """The name columns: `;`-separated variants with `(…)` remarks, the
     conventions names/README.md sets for every name cell."""
-    return placelist.name_columns(reg) + ["de", "da"]
+    return [*placelist.name_columns(reg), "de", *placelist.non_frisian_columns(reg), "da"]
 
 
 def check(ws: Workspace) -> list[Problem]:

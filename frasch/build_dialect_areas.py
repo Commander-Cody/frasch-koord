@@ -38,12 +38,13 @@ cannot disagree:
            the lookup file: the injector and the search exporter read it
            through dialect_areas.AreaIndex ("smallest containing area wins").
   --parts  one Feature per *municipality*, carrying the `name` and the
-           research `note` of its dialect_areas.csv row -- plus the Kreis
-           Nordfriesland municipalities that no row claims at all, marked
-           `assigned: false`.  This one is for the review overlay only
-           (web `?areas`, see web/src/dev/areas/AreaPanel.tsx); a reviewer needs
-           to see which municipality got which dialect and why, and an
-           unassigned one is a hole in the coverage.  `--no-parts` leaves
+           research `note` of its dialect_areas.csv row -- plus the
+           municipalities of Nordfriesland, Schleswig-Flensburg and
+           Flensburg that no row claims at all, marked `assigned: false`.
+           This one is for the review overlay only (web `?areas`, see
+           web/src/dev/areas/AreaPanel.tsx); a reviewer needs to see which
+           municipality got which variety and why, and that an unassigned
+           one is Low Saxon by default.  `--no-parts` leaves
            it unwritten.
 
   NOTHING in the Python pipeline may read --parts.  Its features are
@@ -102,13 +103,16 @@ GEOJSON_DECIMALS = 5
 
 # German municipality key, used to scope the "not assigned to any dialect"
 # features.  Every admin_level=8 relation in the Schleswig-Holstein extract
-# carries one of these keys, and Kreis Nordfriesland is 01054 -- the district
-# that is (or was) Frisian-speaking, so a municipality outside it is not a gap
-# in the dialect map but simply not part of it.  Helgoland is the one assigned
-# area outside (Kreis Pinneberg, 01056); it is named by the CSV, so the scan
-# never has to find it.
+# carries one of these keys.  The districts scanned are Schleswig south of
+# the border, where the area list says which variety is spoken: Kreis
+# Nordfriesland (01054), Kreis Schleswig-Flensburg (01059) and Flensburg
+# (01001).  A municipality there that no row claims is Low Saxon by default;
+# one outside them is simply not part of the dialect map.  Helgoland is the
+# one assigned area outside (Kreis Pinneberg, 01056); it is named by the CSV,
+# so the scan never has to find it.  Kreis Rendsburg-Eckernförde's part of
+# Schleswig is Low Saxon by default and needs no review.
 AGS_KEYS = ("de:regionalschluessel", "de:amtlicher_gemeindeschluessel")
-DEFAULT_UNASSIGNED_AGS = "01054"
+DEFAULT_UNASSIGNED_AGS = ("01054", "01059", "01001")
 
 
 class DialectProperties(TypedDict):
@@ -153,7 +157,7 @@ class CollectionProperties(TypedDict):
     simplify_deg: float
     built_from: BuiltFrom
     unit: NotRequired[str]
-    unassigned_ags: NotRequired[str]
+    unassigned_ags: NotRequired[list[str]]
 
 
 class FeatureCollection[P](TypedDict):
@@ -218,17 +222,17 @@ class Options:
 
     simplify: float = SIMPLIFY_DEG
     parts_simplify: float = PARTS_SIMPLIFY_DEG
-    # the municipality-key prefix of the district whose unclaimed
-    # municipalities join the parts; None: none do
-    unassigned_ags: str | None = DEFAULT_UNASSIGNED_AGS
+    # the municipality-key prefixes of the districts whose unclaimed
+    # municipalities join the parts; none: none do
+    unassigned_ags: tuple[str, ...] = DEFAULT_UNASSIGNED_AGS
     allow_missing: bool = False  # write although a reference gave no geometry
     parts: bool = True  # build the per-municipality file too
 
     @property
-    def scanned_ags(self) -> str | None:
-        """The district the scan looks for unclaimed municipalities in:
+    def scanned_ags(self) -> tuple[str, ...]:
+        """The districts the scan looks for unclaimed municipalities in:
         none when the parts, the only file that shows them, are not built."""
-        return self.unassigned_ags if self.parts else None
+        return self.unassigned_ags if self.parts else ()
 
 
 USUAL = Options()
@@ -242,7 +246,7 @@ class Source(NamedTuple):
 
 
 class Municipality(NamedTuple):
-    """A municipality of the district that no row of the area list claims."""
+    """A municipality of the scanned districts that no row of the area list claims."""
 
     name: str
     polygon: BaseGeometry
@@ -277,10 +281,12 @@ class Areas(NamedTuple):
     missing: int  # references that gave no geometry, listed in the report
 
 
-def scan(pbfs: Iterable[StrPath], claimed: Collection[OsmRef], unassigned_ags: str | None) -> Scan:
+def scan(
+    pbfs: Iterable[StrPath], claimed: Collection[OsmRef], unassigned_ags: Sequence[str]
+) -> Scan:
     """Read out of the extracts `pbfs` the polygons of the references
-    `claimed` and -- unless `unassigned_ags` is None -- of that district's
-    municipalities that are none of them.  An extract is asked only for the
+    `claimed` and of the municipalities of the districts `unassigned_ags`
+    (municipality-key prefixes) that are none of them.  An extract is asked only for the
     references no earlier one held."""
     found = Scan()
 
@@ -336,7 +342,7 @@ def build_parts(rows: Sequence[AreaRow], found: Scan, source: Source, options: O
             "source": source.name,
             "simplify_deg": options.parts_simplify,
             "unit": "one feature per municipality",
-            "unassigned_ags": (options.unassigned_ags or "") if found.unclaimed else "",
+            "unassigned_ags": list(options.unassigned_ags) if found.unclaimed else [],
             "built_from": source.built_from,
         },
         "features": [
@@ -387,7 +393,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     a = _parse_args(argv)
     ws = cli.workspace(a)
     options = Options(
-        unassigned_ags=None if a.no_unassigned else DEFAULT_UNASSIGNED_AGS,
+        unassigned_ags=() if a.no_unassigned else DEFAULT_UNASSIGNED_AGS,
         allow_missing=a.allow_missing,
         parts=not a.no_parts,
     )
@@ -421,28 +427,29 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
 
 
 def _unclaimed_relations(
-    pbf: StrPath, ags_prefix: str | None, skip: Container[OsmRef]
+    pbf: StrPath, ags_prefixes: Sequence[str], skip: Container[OsmRef]
 ) -> dict[int, osmscan.Relation]:
-    """The municipality relations of one district (None: of none) that are
-    not among `skip` -- those a row claims or an earlier extract held.
+    """The municipality relations of the districts `ags_prefixes` (none: of
+    none) that are not among `skip` -- those a row claims or an earlier
+    extract held.
 
     Scans every relation rather than filtering by id, because the whole point
     is to find the ones nobody has written down yet.  The filter is the German
     municipality key (`de:regionalschluessel`), not a bounding box: a box would
     also catch the neighbouring Kreise, which are not part of the dialect map
     at all and would read as gaps in it."""
-    if ags_prefix is None:
+    if not ags_prefixes:
         return {}
-    found = osmscan.relations_where(pbf, lambda tags: _is_municipality_of(tags, ags_prefix))
+    found = osmscan.relations_where(pbf, lambda tags: _is_municipality_of(tags, ags_prefixes))
     return {i: relation for i, relation in found.items() if ("r", i) not in skip}
 
 
-def _is_municipality_of(tags: osmium.osm.TagList, ags_prefix: str) -> bool:
+def _is_municipality_of(tags: osmium.osm.TagList, ags_prefixes: Sequence[str]) -> bool:
     key = next((tags[k] for k in AGS_KEYS if k in tags), "")
     return (
         tags.get("boundary") == "administrative"
         and tags.get("admin_level") == "8"
-        and key.startswith(ags_prefix)
+        and key.startswith(tuple(ags_prefixes))
     )
 
 

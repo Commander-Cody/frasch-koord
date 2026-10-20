@@ -14,16 +14,14 @@ the same files as the injector uses for the tiles, so a search result and
 the map label agree.  An entry lies where the first object of its row's
 `osm` cell lies (`placeobjects.for_row`).  A row for a place OSM does not have
 (`osm` = `local/<slug>`) takes its position from the curation row with the
-same reference (names/curation.csv).  The Low Saxon
-name (`name_nds`) is the object's OSM `name:nds`: the name list has no Low
-Saxon column, but the map labels with it before German, and the card and
-search results have to agree with it.  The generic name (`name_osm`) is the
-object's OSM `name`, for the same reason: it is the chain's generic step
-near its end, and north of the border it is the Danish name, not the list's
-German one.  A local reference gets the `name` the injector gives its point.
+same reference (names/curation.csv).  The generic
+name (`name_osm`) is the object's OSM `name`: it is the label chain's generic
+step near its end, and north of the border it is the Danish name, not the
+list's German one, so the card and search results need it to agree with the
+map.  A local reference gets the `name` the injector gives its point.
 The local name (`local`) of a row that has none is the object's OSM
-`name:frr` inside a dialect area, as the injector writes it into
-`frasch:local` (#81).
+name in the language of the dialect area it lies in, as the injector writes
+it into `frasch:local` (#81).
 
 A row whose entry lies at an object the objects file has none for stops the
 export -- it is on the map, and would be missing from search
@@ -109,6 +107,6 @@ def run(ws: Workspace, reg: Registry) -> None:
         f"({os.path.getsize(ws.index) / 1e3:.0f} kB); "
         f"{sum(1 for e in places if 'dialect' in e)} in a dialect area, "
         f"{sum(1 for e in places if 'local' in e)} with a local name, "
-        f"{sum(1 for e in places if 'name_nds' in e)} with a Low Saxon one; "
+        f"{sum(1 for e in places if 'nds' in e['names'])} with a Low Saxon one; "
         f"rows keyed by Wikidata alone (no position) are left out"
     )

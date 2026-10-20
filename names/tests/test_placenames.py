@@ -14,19 +14,24 @@ from frasch.dialect_areas import AreaIndex
 from frasch.objects import LocatedObject
 from conftest import REGISTRY
 
-# four dialect areas side by side, and a point in each
+# four Frisian dialect areas, a Synnejysk and a Low Saxon one side by side,
+# and a point in each
 AREAS = AreaIndex(
     [
         ("frr-x-mooring", box(8, 54, 9, 55)),
         ("frr-x-nordgoes", box(9, 54, 10, 55)),
         ("frr-x-hallig", box(10, 54, 11, 55)),
         ("frr-x-solring", box(11, 54, 12, 55)),
+        ("jut", box(12, 54, 13, 55)),
+        ("nds", box(13, 54, 14, 55)),
     ]
 )
 IN_MOORING: LocatedObject = {"lon": 8.5, "lat": 54.5}
 IN_NORDGOES: LocatedObject = {"lon": 9.5, "lat": 54.5}
 IN_HALLIG: LocatedObject = {"lon": 10.5, "lat": 54.5}
 IN_SOLRING: LocatedObject = {"lon": 11.5, "lat": 54.5}
+IN_JUT: LocatedObject = {"lon": 12.5, "lat": 54.5}
+IN_NDS: LocatedObject = {"lon": 13.5, "lat": 54.5}
 OUTSIDE: LocatedObject = {"lon": 0.0, "lat": 0.0}
 
 
@@ -133,7 +138,41 @@ def test_a_local_name_of_the_list_is_not_marked_as_osms() -> None:
 def test_an_object_no_row_claims_has_osms_frisian_name_as_its_local_name() -> None:
     # a Warft, a street, a station inside a dialect area (#81)
     kirchwarft: LocatedObject = IN_HALLIG | {"name_frr": "Schörkeweerw"}
-    assert placenames.unclaimed_local(kirchwarft, AREAS) == "Schörkeweerw"
+    assert placenames.unclaimed_local(kirchwarft, AREAS, REGISTRY) == "Schörkeweerw"
+
+
+# Süderlügum: a Mooring name, and the Synnejysk one its people use
+LAIGEM = row(id="laigem", kind="settlement", mooring="Läigem", jut="Lym", de="Süderlügum")
+
+
+def test_in_a_synnejysk_area_the_local_name_is_the_synnejysk_one() -> None:
+    assert resolve(IN_JUT, LAIGEM).local == "Lym"
+
+
+def test_in_a_synnejysk_area_osms_frisian_name_is_no_local_name() -> None:
+    # OSM has no Synnejysk names, and its Frisian one is an exonym there
+    laigem = LAIGEM | {"jut": ""}
+    assert resolve(IN_JUT | {"name_frr": "Läigem"}, laigem).local == ""
+
+
+def test_in_a_synnejysk_area_an_object_no_row_claims_has_no_local_name_from_osm() -> None:
+    street: LocatedObject = IN_JUT | {"name_frr": "Bänstrin"}
+    assert placenames.unclaimed_local(street, AREAS, REGISTRY) == ""
+
+
+def test_in_a_low_saxon_area_osms_low_saxon_name_is_the_local_name() -> None:
+    gaarding = row(kind="settlement", mooring="Gaarding", de="Garding")
+    assert resolve(IN_NDS | {"name_nds": "Garn"}, gaarding).local == "Garn"
+
+
+def test_osms_low_saxon_name_is_the_low_saxon_name_of_a_place_the_list_gives_none() -> None:
+    assert resolve(OUTSIDE | {"name_nds": "Lüügum"}, LAIGEM).names["nds"] == "Lüügum"
+
+
+def test_the_lists_low_saxon_name_replaces_osms_in_the_tags() -> None:
+    ransborj = row(kind="settlement", mooring="Ransborj", nds="Rensborg", de="Rendsburg")
+    names = resolve(OUTSIDE | {"name_nds": "Rendsborg"}, ransborj)
+    assert placenames.as_tags(names)["name:nds"] == "Rensborg"
 
 
 # ------------------------------------------------------- the other fields ---
@@ -227,11 +266,10 @@ def test_an_entry_carries_osms_names_of_its_object_and_the_rows_own_facts() -> N
     ripen = row(
         id="ripen", kind="settlement", mooring="Ripen", da="Ribe", osm="node/1", wikidata="Q322"
     )
-    obj: LocatedObject = {"lon": 8.76, "lat": 55.33, "name": "Ribe", "name_nds": "Riep"}
+    obj: LocatedObject = {"lon": 8.76, "lat": 55.33, "name": "Ribe"}
     entry = placenames.as_entry(resolve(obj, ripen), obj, ripen)
-    own = ("name_nds", "name_osm", "name_da", "osm", "wikidata")
+    own = ("name_osm", "name_da", "osm", "wikidata")
     assert {field: entry.get(field) for field in own} == {
-        "name_nds": "Riep",
         "name_osm": "Ribe",
         "name_da": "Ribe",
         "osm": "node/1",

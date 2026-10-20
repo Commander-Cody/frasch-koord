@@ -8,6 +8,7 @@
     "bbox",
     "kind_order",
     "name_columns",
+    "non_frisian_columns",
     "polygon_kinds",
     "class_keys",
     "settlement_places",
@@ -30,7 +31,12 @@
       "items": { "type": "string" }
     },
     "name_columns": {
-      "description": "The Frisian name columns of places.csv in the order of the list: `mooring`, `local`, then the other dialects of names/dialects.csv. A new place's form has these, `de` and `da`.",
+      "description": "The Frisian name columns of places.csv in the order of the list: `mooring`, `local`, then the other dialects of names/dialects.csv. A new place's form has these, `de`, `non_frisian_columns` and `da`.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "non_frisian_columns": {
+      "description": "The name columns of places.csv of the local varieties that are not Frisian (`nds`, `jut`), in the order of names/dialects.csv. Names, but never a row's Frisian name: a new place's form offers them after `de`, and its name in the view is never one of them.",
       "type": "array",
       "items": { "type": "string" }
     },

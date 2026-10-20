@@ -93,7 +93,15 @@ def optional_sections(stats: Stats, inputs: Inputs) -> list[list[str]]:
 def test_the_dialects_line_names_the_registrys_tags() -> None:
     reg = Registry(
         [
-            Dialect(tag=f"frr-x-{column}", column=column, label="", status="", view="", note="")
+            Dialect(
+                tag=f"frr-x-{column}",
+                language="frr",
+                column=column,
+                label="",
+                status="",
+                view="",
+                note="",
+            )
             for column in ("mooring", "fering")
         ]
     )

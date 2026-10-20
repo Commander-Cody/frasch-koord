@@ -9,9 +9,10 @@
 #     so, asking the command <frasch> for both lists, so that neither is
 #     spelled out here:
 #       --languages        which name:* tags end up in the tiles: German,
-#                          Danish, Low Saxon and OSM's own Frisian, and one
-#                          per dialect of the registry (`frasch dialects
-#                          --tags`; names/dialects.csv, or $DIALECTS)
+#                          Danish and OSM's own Frisian, and one per variety
+#                          of the registry (`frasch dialects --tags`;
+#                          names/dialects.csv, or $DIALECTS) -- Low Saxon
+#                          among them, which is OSM's `name:nds` as well
 #       --extra_name_tags  stock Planetiler passes these through verbatim as
 #                          string attributes on the labelled features -- that
 #                          is how the frasch:* tags written by `frasch inject`
@@ -26,7 +27,7 @@ name_tag_options() {
   attribute_keys=$("$frasch" tile-keys)
   # shellcheck disable=SC2034  # read by whoever sources this file
   NAME_TAG_OPTIONS=(
-    "--languages=de,da,nds,frr,${dialect_tags}"
+    "--languages=de,da,frr,${dialect_tags}"
     "--extra_name_tags=${attribute_keys}"
   )
 }

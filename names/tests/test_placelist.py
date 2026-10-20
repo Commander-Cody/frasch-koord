@@ -43,6 +43,20 @@ def test_a_row_for_a_place_osm_does_not_have_knows_its_slug() -> None:
     assert place(osm="local/westerheide-amrum").local == "westerheide-amrum"
 
 
+def test_the_columns_of_the_other_languages_follow_the_german_one() -> None:
+    columns = placelist.columns(REGISTRY)
+    assert columns[columns.index("de") :][:3] == ["de", "nds", "jut"]
+
+
+def test_a_low_saxon_or_synnejysk_name_is_no_frisian_one() -> None:
+    assert placelist.any_name(place(nds="Garn", jut="Lym"), REGISTRY) == ""
+
+
+def test_a_new_id_is_the_german_name_before_a_synnejysk_one() -> None:
+    row = place(jut="Lym", de="Süderlügum")
+    assert placelist.new_id(row, set(), REGISTRY) == "suderlugum"
+
+
 # ------------------------------------------------------------------ state ---
 def named(**cells: str) -> placelist.PlaceRow:
     """A settlement row with a Frisian name."""
