@@ -365,6 +365,15 @@ def _write_district(ws: Workspace) -> tuple[Path, Path]:
         500: ([("w", 40, "outer")], _admin("010540000000", "Amt", admin_level="7")),
         600: ([("w", 40, "outer")], _admin("010540006000", "Park", boundary="protected_area")),
         700: ([("w", 70, "outer")], _admin("010540007000", "Brokentown")),
+        # Flensburg: a city that is a district of its own, not admin_level 8
+        800: (
+            [("w", 40, "outer")],
+            _admin("010010000000", "Flensburg", admin_level="6", **{"de:place": "city"}),
+        ),
+        900: (
+            [("w", 40, "outer")],
+            _admin("010590000000", "Kreis", admin_level="6", **{"de:place": "county"}),
+        ),
     }
     first = write_extract(tmp_path / "first.osm.pbf", nodes=nodes, ways=ways, relations=relations)
     second_nodes, way8 = ring(80, (8.70, 54.50), (8.72, 54.50), (8.72, 54.52))
@@ -422,6 +431,15 @@ def test_a_scan_finds_the_unclaimed_municipalities_of_every_district_it_is_given
     assert ("r", 400) in found.unclaimed
 
 
+def test_a_scan_takes_a_city_that_is_a_district_of_its_own_for_a_municipality(
+    ws: Workspace,
+) -> None:
+    # but not the district (Kreis) around the municipalities
+    found = bda.scan(_write_district(ws), CLAIMED, ("01001", "01059"))
+
+    assert {ref: m.name for ref, m in found.unclaimed.items()} == {("r", 800): "Flensburg"}
+
+
 def test_a_scan_without_a_district_finds_no_unclaimed_municipalities(ws: Workspace) -> None:
     found = bda.scan(_write_district(ws), CLAIMED, ())
 
@@ -458,9 +476,10 @@ def test_the_parts_keep_their_schema(ws: Workspace) -> None:
 
 
 def test_a_build_adds_the_municipalities_no_row_claims_to_the_parts(ws: Workspace) -> None:
+    # of the districts scanned by default: Freetown, the nameless one, Flensburg
     bda.run(ws, REGISTRY, _write_district(ws))
     parts = json.loads(Path(ws.parts).read_text(encoding="utf-8"))
-    assert [f["properties"]["assigned"] for f in parts["features"]].count(False) == 2
+    assert [f["properties"]["assigned"] for f in parts["features"]].count(False) == 3
 
 
 def test_a_build_first_says_what_the_area_list_names(

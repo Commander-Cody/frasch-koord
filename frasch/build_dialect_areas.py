@@ -448,9 +448,16 @@ def _is_municipality_of(tags: osmium.osm.TagList, ags_prefixes: Sequence[str]) -
     key = next((tags[k] for k in AGS_KEYS if k in tags), "")
     return (
         tags.get("boundary") == "administrative"
-        and tags.get("admin_level") == "8"
+        and _is_municipality(tags)
         and key.startswith(tuple(ags_prefixes))
     )
+
+
+def _is_municipality(tags: osmium.osm.TagList) -> bool:
+    """An admin_level=8 boundary, or a city that is a district of its own
+    (kreisfreie Stadt: Flensburg), which OSM tags as the district it is."""
+    level = tags.get("admin_level")
+    return level == "8" or (level == "6" and tags.get("de:place") == "city")
 
 
 def _extract_line(
