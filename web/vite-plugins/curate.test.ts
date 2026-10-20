@@ -70,6 +70,14 @@ describe('createCurateMiddleware', () => {
     local: { ...localEntry, polygon_km2: 2, note: 'gone since 1634' },
     skip: { ...validEntry, note: 'not a place' },
     clear: { ...validEntry, action: 'clear' },
+    create: {
+      id: 'new:3f9c0a',
+      action: 'create',
+      kind: 'warft',
+      names: { mooring: 'Hoorne', de: 'Horne' },
+      note: 'from the 1920 map',
+    },
+    discard: { id: 'new:3f9c0a', action: 'discard' },
   };
   const jsonHeaders = { 'content-type': 'application/json' };
 
@@ -162,6 +170,11 @@ describe('createCurateMiddleware', () => {
     const res = await post(jsonHeaders, JSON.stringify(entry));
     expect(res.status).toBe(400);
     expect(await readPatchEntries()).toEqual([]);
+  });
+
+  it('rejects a created place under a row id with 400: it would look like the row', async () => {
+    const res = await post(jsonHeaders, JSON.stringify({ ...fullEntries.create, id: 'hoorne' }));
+    expect(res.status).toBe(400);
   });
 
   it('rejects an oversized body with 413 and destroys the connection', async () => {

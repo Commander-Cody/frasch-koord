@@ -45,6 +45,7 @@ class PatchEntry(TypedDict):
     lat: NotRequired[float]
     lon: NotRequired[float]
     polygon_km2: NotRequired[float]
+    names: NotRequired[dict[str, str]]
     note: NotRequired[str]
     at: NotRequired[str]
 
@@ -76,13 +77,44 @@ class RefusedLine:
 PatchLine = EntryLine | RefusedLine
 
 
-def patch_key(value: object) -> str | None:
-    """What makes two patch entries decisions about the same row: its id.
-    The `line`, `name` and `de` an entry also carries are only there for the
-    messages -- they change when the list is edited, the id does not.  None
-    for a line (as the patch holds it) without a usable one."""
-    ident = value.get("id") if isinstance(value, dict) else None
-    return ident if isinstance(ident, str) and ident else None
+# The actions about a place the view created (#113), rather than about its
+# location: such a place has two slots under its key, the place itself and
+# its decision, and each has its own last entry.
+PLACE_ACTIONS = frozenset({"create", "discard"})
+
+# The slot of an entry under its key: the place itself, or its decision.
+PLACE, DECISION = "place", "decision"
+
+# What makes two patch entries say the same thing: the key, and the slot.
+PatchKey = tuple[str, str]
+
+
+def patch_key(value: object) -> PatchKey | None:
+    """What makes two patch entries decisions about the same thing: the id of
+    their row (or the provisional key of a created place), and whether they
+    are about the place itself or its decision.  The `line`, `name` and `de`
+    an entry also carries are only there for the messages -- they change when
+    the list is edited, the id does not.  None for a line (as the patch
+    holds it) without a usable id."""
+    if not isinstance(value, dict):
+        return None
+    ident = value.get("id")
+    if not isinstance(ident, str) or not ident:
+        return None
+    return ident, PLACE if value.get("action") in PLACE_ACTIONS else DECISION
+
+
+def withdrawn(newest: Iterable[object]) -> set[PatchKey]:
+    """The keys the newest entries (the lines' values, as the patch holds
+    them) withdraw besides their own: a `discard` withdraws the decision of
+    its place as well."""
+    return {
+        (key[0], DECISION)
+        for value in newest
+        if isinstance(value, dict)
+        and value.get("action") == "discard"
+        and (key := patch_key(value))
+    }
 
 
 def read_patch(
@@ -90,18 +122,21 @@ def read_patch(
 ) -> list[PatchLine]:
     """-> the last entry per row, in line order.  The browser appends, never
     rewrites, so a row decided twice simply has two lines; `clear` withdraws,
-    whatever line either was sent with.
+    whatever line either was sent with.  A place the view created has two
+    lines of its own under its key, the place (`create`) and its decision;
+    `discard` withdraws both.
 
     A line that breaks the patch schema counts like any other: apply
     refuses and keeps it, and as the newest line about its row it holds
     back the row's earlier decision.  A line without a usable id is a
     decision of its own, never swallowed by a later one.  A line that is no
     JSON is left out and goes to `not_json` with its number."""
-    last: dict[str | tuple[str, int], PatchLine] = {}
+    last: dict[PatchKey | tuple[str, int], PatchLine] = {}
     with open(path, encoding="utf-8") as fh:
         for line in patch_lines(fh, not_json):
             last[patch_key(line.value) or ("line", line.number)] = line
-    return sorted(last.values(), key=_patch_order)
+    gone = withdrawn(line.value for line in last.values())
+    return sorted((line for key, line in last.items() if key not in gone), key=_patch_order)
 
 
 def patch_lines(
@@ -150,9 +185,16 @@ def names_of(line: PatchLine) -> str:
 
 
 @functools.cache
-def patch_validator() -> jsonschema.Draft202012Validator:
+def patch_schema() -> dict[str, Any]:
+    """names/curate-patch.schema.json, read once."""
     with open(paths.PATCH_SCHEMA, encoding="utf-8") as fh:
-        return jsonschema.Draft202012Validator(json.load(fh))
+        schema: dict[str, Any] = json.load(fh)
+    return schema
+
+
+@functools.cache
+def patch_validator() -> jsonschema.Draft202012Validator:
+    return jsonschema.Draft202012Validator(patch_schema())
 
 
 def schema_problem(entry: object) -> str | None:
@@ -186,8 +228,9 @@ def append_back(path: str, refused: Iterable[PatchLine]) -> int:
     """Append refused lines to the live patch -- appending, never
     rewriting, because the dev server may be appending to it too.  A line
     whose row has been decided again since then is dropped: the newer
-    decision wins, as it would in `read_patch`.  -> how many were appended."""
-    newer: set[str] = set()
+    decision wins, as it would in `read_patch` -- and a discarded place takes
+    its decision along.  -> how many were appended."""
+    newer: set[PatchKey] = set()
     ends_nl = True
     if os.path.exists(path):
         with open(path, encoding="utf-8") as fh:
@@ -195,8 +238,8 @@ def append_back(path: str, refused: Iterable[PatchLine]) -> int:
         ends_nl = not text or text.endswith("\n")
         # line by line as a file is read (not `splitlines`, which also ends
         # a line inside a JSON string that holds a U+2028)
-        keys = (patch_key(line.value) for line in patch_lines(io.StringIO(text)))
-        newer = {key for key in keys if key}
+        values = [line.value for line in patch_lines(io.StringIO(text))]
+        newer = {key for key in map(patch_key, values) if key} | withdrawn(values)
     lines = [
         json.dumps(line.value, ensure_ascii=False) + "\n"
         for line in refused

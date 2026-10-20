@@ -8,18 +8,12 @@ import CloseButton from '../ui/CloseButton';
 import { createMap, removeMap } from './createMap';
 import { placeHitTest } from './hitTest';
 import { oncePerFrame } from './oncePerFrame';
-import { BASE_STYLE, placeLayerIds, styleFor } from './style';
+import { PLACE_LAYERS, styleFor } from './style';
 import { useMapFailure } from './useMapFailure';
 import './MapView.css';
 
 /** How close (px) to the edge of a bottom inset a place may sit before `reveal` pans. */
 const REVEAL_MARGIN = 24;
-
-/**
- * The layers a click on the map can hit: read off the base style once, since
- * every view has the same label layers and only their text-field differs.
- */
-const PLACE_LAYERS = placeLayerIds(BASE_STYLE);
 
 /** The single marker of the map: where it stands, and what its tooltip names. */
 export interface MapMarker {

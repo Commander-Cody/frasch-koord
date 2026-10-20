@@ -107,6 +107,31 @@ button.is-armed {
   color: #8a1f1f;
 }
 
+/* A place the view created: not in places.csv until `frasch curate apply`. */
+.curate-badge-new {
+  background: #e3f2e5;
+  color: #2e6b34;
+}
+
+.curate-new {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--dev-panel-ok);
+}
+
+.curate-label {
+  margin: 0 0 8px;
+  padding: 6px 8px;
+  border: 1px dashed #bbb;
+  border-radius: 6px;
+}
+
+.curate-duplicates li {
+  font-size: 11px;
+  padding: 2px 0;
+}
+
 /* --------------------------------------------------------------- detail */
 
 /* Only there to disable the decisions while one is saved; lays out nothing. */

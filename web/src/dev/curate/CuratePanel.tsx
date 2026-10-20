@@ -13,12 +13,20 @@
  * of relations): tick candidates or lookup results — or shift-click their pins
  * — and "Pick selected" saves them as one `osm` cell, `a; b; c`.
  *
+ * It also creates places the list does not have yet (#113): "New place", or
+ * a click on the label of an OSM object no row names, opens a form whose
+ * `create` goes into the patch under a provisional key. Until apply such a
+ * place is listed apart, marked new, and is decided like a row — or edited,
+ * or discarded.
+ *
  * This component holds the worklist, the filter and the selection; the list,
- * the selected row's detail with its lookups, and the map's pins are their
- * own modules (CurateList, CurateDetail, CurateLookup, pins, hintCircle).
+ * the selected row's detail with its lookups, the form of a new place and
+ * the map's pins are their own modules (CurateList, CurateDetail,
+ * CurateLookup, NewPlaceForm with usePlaceForm, LabelOffer with labelClicks,
+ * pins, hintCircle).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Map as MapLibreMap } from 'maplibre-gl';
+import type { Map as MapLibreMap, MapGeoJSONFeature } from 'maplibre-gl';
 
 import DevPanel from '../shell/DevPanel';
 import { useDevResource } from '../shell/useDevResource';
@@ -26,14 +34,27 @@ import { useSelection, type Selection } from '../shell/useSelection';
 import CurateDetail from './CurateDetail';
 import CurateFilters from './CurateFilters';
 import CurateList from './CurateList';
-import { decidedRows, postPatchEntry, type Decision, type PatchEntry } from './patch';
+import { clickedLabel, useLabelClicks, type ClickedLabel } from './labelClicks';
+import LabelOffer from './LabelOffer';
+import NewPlaceForm from './NewPlaceForm';
+import { placeRow } from './newPlaces';
+import {
+  createdPlaces,
+  decidedRows,
+  storeEntry,
+  type Decision,
+  type PatchEntry,
+  type UpdateLoaded,
+} from './patch';
+import { comparedPlaces, editForm, labelForm, newPlaceForm, usePlaceForm } from './usePlaceForm';
 import {
   filterRows,
   loadWorklist,
   NO_FILTER,
   rowKinds,
-  type CurateRow,
+  type ListRow,
   type LoadedWorklist,
+  type RowFilter,
 } from './worklist';
 import './CuratePanel.css';
 
@@ -41,27 +62,41 @@ export default function CuratePanel({ map }: { map: MapLibreMap }) {
   const resource = useDevResource(loadWorklist);
   const worklist = resource.data?.worklist;
   const [filter, setFilter] = useState(NO_FILTER);
-
-  const doneById = useMemo(() => decidedRows(resource.data?.entries ?? []), [resource.data]);
-  // Memoised so every derivation below (and the lint's dependency analysis)
-  // sees one stable array rather than a fresh `[]` on each render.
-  const rows = useMemo(() => worklist?.rows ?? [], [worklist]);
-  const visible = useMemo(
-    () => filterRows(rows, filter, (id) => doneById.has(id)),
-    [rows, filter, doneById],
+  const { doneById, created, rows, visible, visibleNew, allRows } = useListRows(
+    resource.data,
+    filter,
   );
 
   // `?curate&row=schorkewarw-2` opens that row: a session note ("I stopped
-  // there"), a link from a report, or a scripted screenshot.
+  // there"), a link from a report, or a scripted screenshot. A created
+  // place opens by its key until apply.
   const selection = useSelection({
     param: 'row',
-    keys: useMemo(() => visible.map((row) => row.id), [visible]),
+    keys: useMemo(() => [...visibleNew, ...visible].map((row) => row.id), [visibleNew, visible]),
     ready: worklist !== undefined,
-    resolve: useCallback((id: string) => rows.find((row) => row.id === id)?.id, [rows]),
+    resolve: useCallback((id: string) => allRows.find((row) => row.id === id)?.id, [allRows]),
   });
-  const selected = rows.find((row) => row.id === selection.selected) ?? null;
+  const selected = allRows.find((row) => row.id === selection.selected) ?? null;
   const save = useSave(resource.update, visible, doneById, selection);
   const doneCount = rows.filter((row) => doneById.has(row.id)).length;
+
+  // Whether the next map click sets the selected row's position: then it is
+  // no label click. The detail disarms it when it goes (CurateDetail).
+  const [picking, setPicking] = useState(false);
+  const [label, setLabel] = useLabelOffer(map, picking);
+  const places = usePlaceForm(resource.update, selection);
+  // A row opened from a list is what the user turns to: the form gives way.
+  const openRow = (id: string) => {
+    places.close();
+    selection.select(id);
+  };
+  const selectedPlace = created.find((place) => place.key === selected?.id);
+  const listProps = {
+    doneById,
+    selectedId: selection.selected,
+    onSelect: openRow,
+    itemRef: selection.itemRef,
+  };
 
   return (
     <DevPanel
@@ -78,45 +113,134 @@ export default function CuratePanel({ map }: { map: MapLibreMap }) {
         <CurateFilters
           filter={filter}
           onChange={setFilter}
-          kinds={worklist ? rowKinds(worklist) : []}
+          kinds={worklist ? rowKinds(worklist.kind_order, allRows) : []}
           results={worklist?.results ?? []}
           counts={{ open: rows.length - doneCount, done: doneCount, shown: visible.length }}
         />
       }
     >
-      <CurateList
-        rows={visible}
-        doneById={doneById}
-        selectedId={selection.selected}
-        onSelect={selection.select}
-        itemRef={selection.itemRef}
-      />
-      {selected && worklist && (
-        // Keyed by row: everything typed or ticked for one row starts afresh on the next.
-        <CurateDetail
-          key={selected.id}
-          row={selected}
-          done={doneById.get(selected.id) ?? null}
-          bbox={worklist.bbox}
-          classKeys={worklist.class_keys}
-          settlementPlaces={worklist.settlement_places}
-          canBePolygon={worklist.polygon_kinds.includes(selected.kind)}
-          map={map}
-          onSave={save}
+      <div className="curate-row">
+        <button type="button" onClick={() => places.open(newPlaceForm())}>
+          New place
+        </button>
+      </div>
+      {label && (
+        <LabelOffer
+          label={label}
+          onCreate={() => {
+            places.open(labelForm(label));
+            setLabel(null);
+          }}
+          onDismiss={() => setLabel(null)}
         />
       )}
+      {visibleNew.length > 0 && (
+        <>
+          <h3 className="dev-panel-section">New places ({visibleNew.length})</h3>
+          <CurateList
+            rows={visibleNew}
+            label={`New places (${visibleNew.length})`}
+            {...listProps}
+          />
+        </>
+      )}
+      <CurateList rows={visible} label="worklist" {...listProps} />
+      {places.form && worklist ? (
+        <>
+          <NewPlaceForm
+            key={places.form.key}
+            title={places.form.title}
+            kinds={worklist.kind_order}
+            nameColumns={worklist.name_columns}
+            places={comparedPlaces(worklist.places, created, places.form.key)}
+            initial={places.form.initial}
+            saving={places.saving}
+            onSave={(draft) => places.save(draft, worklist.name_columns)}
+            onCancel={places.close}
+          />
+        </>
+      ) : (
+        selected &&
+        worklist && (
+          // Keyed by row: everything typed or ticked for one row starts afresh on the next.
+          <CurateDetail
+            key={selected.id}
+            row={selected}
+            done={doneById.get(selected.id) ?? null}
+            bbox={worklist.bbox}
+            classKeys={worklist.class_keys}
+            settlementPlaces={worklist.settlement_places}
+            canBePolygon={worklist.polygon_kinds.includes(selected.kind)}
+            map={map}
+            picking={picking}
+            setPicking={setPicking}
+            onSave={save}
+            {...(selectedPlace && {
+              onEdit: () => places.open(editForm(selectedPlace)),
+              onDiscard: () => places.discard(selectedPlace.key),
+            })}
+          />
+        )
+      )}
+      {places.error && <p className="dev-panel-error">could not save: {places.error}</p>}
     </DevPanel>
   );
 }
 
+const NONE_DONE = () => false;
+
+/**
+ * The rows of the panel: the worklist's and the created places', each with
+ * those the filter lets through, and which are decided. Memoised so every
+ * derivation (and the lint's dependency analysis) sees stable arrays rather
+ * than a fresh `[]` on each render.
+ */
+function useListRows(data: LoadedWorklist | null, filter: RowFilter) {
+  const worklist = data?.worklist;
+  const entries = data?.entries;
+  const doneById = useMemo(() => decidedRows(entries ?? []), [entries]);
+  const created = useMemo(() => createdPlaces(entries ?? []), [entries]);
+  const rows = useMemo(() => worklist?.rows ?? [], [worklist]);
+  const newRows = useMemo(
+    () => created.map((place) => placeRow(place, worklist?.name_columns ?? [])),
+    [created, worklist],
+  );
+  const visible = useMemo(
+    () => filterRows(rows, filter, (id) => doneById.has(id)),
+    [rows, filter, doneById],
+  );
+  // A created place stays listed, decided or not: it is not in places.csv yet.
+  const visibleNew = useMemo(
+    () => filterRows(newRows, { ...filter, result: 'all', hideDone: false }, NONE_DONE),
+    [newRows, filter],
+  );
+  const allRows = useMemo<ListRow[]>(() => [...newRows, ...rows], [newRows, rows]);
+  return { doneById, created, rows, visible, visibleNew, allRows };
+}
+
+/**
+ * The label of an object the name list does not have that was clicked last,
+ * while no click sets a position (`picking`); and a way to take it back.
+ */
+function useLabelOffer(map: MapLibreMap, picking: boolean) {
+  const [label, setLabel] = useState<ClickedLabel | null>(null);
+  useLabelClicks(map, (feature: MapGeoJSONFeature) => {
+    if (picking) return;
+    const offer = clickedLabel(feature);
+    if (offer) setLabel(offer);
+  });
+  return [label, setLabel] as const;
+}
+
 /**
  * Stores a decision, shows the row as decided at once, and moves on to the
- * next open row of the list as shown — but only from where the user still
- * is: they may have gone to another row while the save was on its way.
+ * next open row of the worklist as shown — but only from where the user still
+ * is: they may have gone to another row while the save was on its way. A
+ * created place is not in the worklist: there it stays.
  */
 function useSave(
-  update: (change: (data: LoadedWorklist) => LoadedWorklist) => void,
-  visible: CurateRow[],
+  update: UpdateLoaded,
+  visible: ListRow[],
   doneById: Map<string, PatchEntry>,
   { selected, select }: Pick<Selection, 'selected' | 'select'>,
 ) {
@@ -127,13 +251,14 @@ function useSave(
   }, [selected]);
 
   return useCallback(
-    async (row: CurateRow, decision: Decision) => {
+    async (row: ListRow, decision: Decision) => {
       const { id, line, kind, name } = row;
-      const stored = await postPatchEntry({ id, line, kind, name, de: row.name_de, ...decision });
-      // Mirror the appended line locally so the list turns "done" at once.
-      update((loaded) => ({ ...loaded, entries: [...loaded.entries, stored] }));
+      // a created place has no line yet
+      const where = row.result === 'new' ? {} : { line };
+      await storeEntry(update, { id, ...where, kind, name, de: row.name_de, ...decision });
       if (decision.action === 'clear' || selectedNow.current !== id) return;
       const at = visible.findIndex((other) => other.id === id);
+      if (at < 0) return;
       const next = visible.slice(at + 1).find((other) => !doneById.has(other.id));
       if (next) select(next.id);
     },

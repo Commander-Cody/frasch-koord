@@ -1773,3 +1773,39 @@ something works:
 - **`errors.Invalid` takes the reason alone**: no production call passed a
   location to `refs.parse`, `parse_point` or `parse_set_tags`; every reader
   names the file and line of the row itself.
+
+## Decided 2026-10-19: new places from the curation view (issue #113)
+
+The curation view creates places the list does not have yet; the spec is the
+issue's comment. What it settled:
+
+- **A `create` carries its names as an object** (owner's decision):
+  `"names": {"mooring": …, "de": …}`, only the cells that are not empty, so the
+  patch schema need not list the dialect columns of `dialects.csv`; `apply`
+  refuses a column the name list does not have. The top-level `kind` of a
+  `create` is the new row's.
+- **A provisional key, two slots under it**: until `apply` the place is
+  `new:<random>`, a shape no row id can have. Its `create` and its decision are
+  entries of their own, each with its last line; **`discard`** (owner's
+  decision: a new action, not a flag) withdraws the place and its decision,
+  in `read_patch` and `append_back` alike.
+- **A place is applied whole or not at all** (owner's decision): if its
+  `create` or its decision is refused, both are, and both go back into the
+  patch under the key, where the view still shows the place.
+- **No owner rule for a created row**: its decision is applied also when it
+  has no Frisian name — a row with a reference and no label, which
+  `check-inputs` accepts and which the objects build, `check-outputs`, the
+  search index and the injector leave out (`on_map`, tested through
+  `placeobjects.named` and the search index). Rows of `places.csv` keep `owner_problem`.
+- **Where the row goes**: after the last row of its kind, at the end when none
+  has it; the rows below it are logged at the lines they move to.
+- **The view** lists created places apart, above the worklist, and does not
+  hide one that is decided (owner's decision). The duplicate warning compares
+  every variant typed, remarks left out and case ignored, with every name cell
+  of the rows and of the other new places (owner's decision); `export` writes
+  every row's names for it (`places`) and the Frisian name columns
+  (`name_columns`). A label click starts the German name with OSM's plain
+  `name` when the object has neither `name:de` nor `name:da` (owner's
+  decision).
+- **One list of label layers**: `PLACE_LAYERS` moved from `MapView.tsx` to
+  `map/style`, for the curation view's label clicks too.

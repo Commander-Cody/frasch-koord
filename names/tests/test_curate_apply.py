@@ -486,7 +486,7 @@ def test_the_command_prints_the_log(w: World, capsys: pytest.CaptureFixture[str]
     append(w.patch, entry(3, action="osm", osm="node/1", wikidata="Q5"))
     apply_command(w, "--keep")
     assert capsys.readouterr().out.splitlines()[-1] == (
-        f"1 row(s) written to {w.places}, 0 appended to {w.curation}, 0 refused"
+        f"1 row(s) written to {w.places}, 0 created, 0 appended to {w.curation}, 0 refused"
     )
 
 
@@ -568,14 +568,15 @@ def test_the_log_says_how_many_refused_entries_are_kept(w: World) -> None:
 def test_the_log_ends_with_what_was_written_appended_and_refused(w: World) -> None:
     mixed_patch(w)
     assert w.apply().log[-1] == (
-        f"2 row(s) written to {w.places}, 1 appended to {w.curation}, 2 refused"
+        f"2 row(s) written to {w.places}, 0 created, 1 appended to {w.curation}, 2 refused"
     )
 
 
 def test_dry_run_says_what_would_change(w: World) -> None:
     mixed_patch(w)
     assert w.apply(dry_run=True).log[-1] == (
-        "dry run: 2 row(s) would change, 1 curation row(s) would be appended, "
+        "dry run: 2 row(s) would change, 0 would be created, "
+        "1 curation row(s) would be appended, "
         "2 refused -- nothing written"
     )
 

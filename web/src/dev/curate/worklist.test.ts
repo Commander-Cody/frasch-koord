@@ -9,6 +9,7 @@ import {
   type CurateCandidate,
   type CurateRow,
   type CurateWorklist,
+  type ListedPlace,
 } from './worklist';
 
 /** A worklist row with only `fields` set. */
@@ -34,19 +35,6 @@ function row(id: string, fields: Partial<CurateRow> = {}): CurateRow {
   };
 }
 
-/** A worklist of `rows` that walks the kinds in `kind_order`. */
-function worklist(kind_order: string[], rows: CurateRow[]): CurateWorklist {
-  return {
-    bbox: [8, 54, 9, 55],
-    kind_order,
-    polygon_kinds: [],
-    class_keys: [],
-    settlement_places: [],
-    results: ['ambiguous', 'not_found'],
-    rows,
-  };
-}
-
 const ids = (rows: CurateRow[]) => rows.map((r) => r.id);
 const NONE_DONE = () => false;
 const ALL = { ...NO_FILTER, hideDone: false };
@@ -58,13 +46,24 @@ describe('the worklist types', () => {
     const pin: Pin<CurateWorklist> = {
       bbox: { array: true },
       kind_order: { array: true },
+      name_columns: { array: true },
       polygon_kinds: { array: true },
       class_keys: { array: true },
       settlement_places: { array: true },
       results: { array: true },
       rows: { array: true },
+      places: { array: true },
     };
     expect(pinnedFields(pin)).toEqual(schemaFields(worklistSchema));
+  });
+
+  it('ListedPlace has the fields of a place of the schema', () => {
+    const pin: Pin<ListedPlace> = {
+      id: { string: true },
+      kind: { string: true },
+      names: { object: true },
+    };
+    expect(pinnedFields(pin)).toEqual(schemaFields(worklistSchema.$defs.place, worklistSchema));
   });
 
   it('CurateRow has the fields of a row of the schema', () => {
@@ -150,7 +149,7 @@ describe('filterRows', () => {
 describe('rowKinds', () => {
   it("lists the rows' kinds in kind_order, the kinds it does not know after them, sorted", () => {
     const rows = ['mill', 'koog', 'church', 'settlement'].map((kind) => row(kind, { kind }));
-    expect(rowKinds(worklist(['settlement', 'koog'], rows))).toEqual([
+    expect(rowKinds(['settlement', 'koog'], rows)).toEqual([
       'settlement',
       'koog',
       'church',
@@ -160,6 +159,6 @@ describe('rowKinds', () => {
 
   it('leaves out a kind of kind_order no row has', () => {
     const rows = [row('a', { kind: 'koog' })];
-    expect(rowKinds(worklist(['settlement', 'koog'], rows))).toEqual(['koog']);
+    expect(rowKinds(['settlement', 'koog'], rows)).toEqual(['koog']);
   });
 });

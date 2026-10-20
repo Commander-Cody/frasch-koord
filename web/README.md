@@ -656,6 +656,17 @@ worklist's `slug_suggestion` — the browser folds no name itself. After
 another `frasch curate export` or an `apply`, _Reload_ reads the worklist and
 the patch again, and stays on the selected row.
 
+"New place" opens the form of a place the list does not have yet; so does
+"New place from this", which a click on the label of an OSM object without a
+`frasch:ref` offers (`src/dev/curate/labelClicks.ts`: the label's `name:de`
+and `name:da` — OSM's `name` as the German one when it has neither — and its
+object as the place's decision; not while "set position on map" is armed). Its
+`create` goes into the patch under a provisional key `new:…`
+(`src/dev/curate/newPlaces.ts`); the form lists the rows that already have a
+name typed. Until `apply` the place is listed apart under "New places", marked
+new — whatever the filter says of decided rows — and opens like a row
+(`?curate&row=new:…`): decided with the same tools, edited, or discarded.
+
 The "Nominatim" and "Overpass" lookups are **called from the browser** against
 the public instances (`nominatim.openstreetmap.org`, `overpass-api.de`), bounded
 to the North Frisia bbox of the worklist. Light, hand-driven use only — that is

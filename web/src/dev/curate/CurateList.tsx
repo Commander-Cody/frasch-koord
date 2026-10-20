@@ -1,14 +1,17 @@
 /**
- * The curation view's worklist: one button per row the filter lets through,
- * marked when selected or decided, the selected one kept in view.
+ * A list of the curation view — the worklist, or the places the view
+ * created: one button per row the filter lets through, marked when selected,
+ * decided or new, the selected one kept in view.
  */
 import type { RefCallback } from 'react';
 
 import { decisionLabel, type PatchEntry } from './patch';
-import type { CurateRow } from './worklist';
+import type { ListRow } from './worklist';
 
 export interface CurateListProps {
-  rows: CurateRow[];
+  rows: ListRow[];
+  /** What the list is, for a screen reader. */
+  label: string;
   /** The decision per row id (see patch.decidedRows). */
   doneById: Map<string, PatchEntry>;
   selectedId: string | null;
@@ -19,6 +22,7 @@ export interface CurateListProps {
 
 export default function CurateList({
   rows,
+  label,
   doneById,
   selectedId,
   onSelect,
@@ -26,7 +30,7 @@ export default function CurateList({
 }: CurateListProps) {
   if (rows.length === 0) return <p className="dev-panel-hint">nothing matches the filter</p>;
   return (
-    <ul className="dev-panel-list curate-list">
+    <ul className="dev-panel-list curate-list" aria-label={label}>
       {rows.map((row) => {
         const done = doneById.get(row.id);
         const className = [
@@ -43,6 +47,7 @@ export default function CurateList({
                 <span className="curate-item-name">{row.name}</span>
                 <span className="curate-item-de">{row.name_de || row.name_da}</span>
                 <span className={`curate-badge curate-badge-${row.result}`}>{row.kind}</span>
+                {row.result === 'new' && <span className="curate-new">new</span>}
               </span>
               {row.hint && <span className="curate-item-hint">{row.hint}</span>}
               {done && <span className="curate-done">✓ {decisionLabel(done)}</span>}

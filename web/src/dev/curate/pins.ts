@@ -10,7 +10,7 @@ import type { MapMouseEvent, Map as MapLibreMap } from 'maplibre-gl';
 import { fitTo, flyTo } from '../shell/mapMoves';
 import { COLOR_HINT, type HintPoint } from './hintCircle';
 import type { LookupResult } from './osmLookup';
-import type { Bbox, CurateCandidate, CurateRow } from './worklist';
+import type { Bbox, CurateCandidate, ListRow } from './worklist';
 
 /* ----------------------------------------------------------------- colour */
 
@@ -94,7 +94,7 @@ function removeMarkers(markers: Marker[], pins: Map<string, HTMLElement>): void 
 /* ------------------------------------------------------------------ hooks */
 
 export interface RowPinsOptions {
-  row: CurateRow;
+  row: ListRow;
   /** The worklist's bbox: what the map shows when the row has nothing to pin. */
   bbox: Bbox;
   /** The worklist's `settlement_places`: what colours a candidate's pin as a settlement. */
@@ -158,7 +158,7 @@ export function useRowPins(map: MapLibreMap, options: RowPinsOptions): void {
 
 function candidateMarkers(
   map: MapLibreMap,
-  row: CurateRow,
+  row: ListRow,
   { pins, colorOf, onActivate, onToggle }: CandidatePinWiring,
   bounds: LngLatBounds,
 ): Marker[] {

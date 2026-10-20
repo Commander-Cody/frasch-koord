@@ -5,7 +5,9 @@ The matcher leaves two kinds of row for a human: `ambiguous` (several
 plausible OSM objects) and `not_found` (no object, or only near misses).
 `export` writes those the matcher still owns, with the candidates'
 coordinates and the row's location hint, as names/curate-worklist.schema.json
-defines the file and web/src/dev/curate/worklist.ts reads it.
+defines the file and web/src/dev/curate/worklist.ts reads it -- and, for the
+places the view creates (#113), the name columns a new row has and the names
+every row of the list has, which a new one may repeat.
 
 It reads no candidates: everything the worklist shows of them the matcher
 wrote into names/work/matches.jsonl (frasch.matchfile).  The file is
@@ -68,14 +70,24 @@ class WorkRow(TypedDict):
     candidates: list[WorkCandidate]
 
 
+class ListedPlace(TypedDict):
+    """A row of the name list, as a new place's duplicate warning shows it."""
+
+    id: str
+    kind: str
+    names: dict[str, str]
+
+
 class Worklist(TypedDict):
     bbox: list[float]
     kind_order: list[str]
+    name_columns: list[str]
     polygon_kinds: list[str]
     class_keys: list[str]
     settlement_places: list[str]
     results: list[str]
     rows: list[WorkRow]
+    places: list[ListedPlace]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -91,9 +103,10 @@ class ExportReport:
 def export(ws: Workspace, reg: Registry) -> ExportReport:
     """Write the worklist for the browser: the rows the last match left for
     a human, with their candidates; -> what it wrote."""
-    work = _read_work(ws, reg)
+    places = placelist.read(ws.names, reg).rows
+    work = _read_work(ws, places, reg)
     rows = _work_rows(work.matches, reg)
-    _write_worklist(ws.worklist, rows)
+    _write_worklist(ws.worklist, rows, [_listed_place(row, reg) for row in places], reg)
     return ExportReport(len(rows), work.unowned, work.stale, _summary(ws, rows, work))
 
 
@@ -106,10 +119,10 @@ class _Work:
     unowned: int = 0  # decided by hand since the run
 
 
-def _read_work(ws: Workspace, reg: Registry) -> _Work:
+def _read_work(ws: Workspace, places: Iterable[PlaceRow], reg: Registry) -> _Work:
     """The `ambiguous` and `not_found` rows of the last match the matcher
-    still owns, each with its places.csv row."""
-    by_id = {r["id"]: r for r in placelist.read(ws.names, reg).rows}
+    still owns, each with its row of the name list (`places`)."""
+    by_id = {r["id"]: r for r in places}
     work = _Work([])
     for m in matchfile.read(ws.matches):
         if not Outcome(m["result"]).for_review:
@@ -173,16 +186,26 @@ def _work_candidate(listed: matchfile.ListedCandidate) -> WorkCandidate:
     return shown
 
 
-def _write_worklist(path: str, rows: list[WorkRow]) -> None:
+def _listed_place(row: PlaceRow, reg: Registry) -> ListedPlace:
+    """A row as the worklist lists every row: its non-empty name cells, raw."""
+    columns = [*placelist.name_columns(reg), "de", "da"]
+    return {"id": row["id"], "kind": row["kind"], "names": {c: row[c] for c in columns if row[c]}}
+
+
+def _write_worklist(
+    path: str, rows: list[WorkRow], places: list[ListedPlace], reg: Registry
+) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     worklist: Worklist = {
         "bbox": list(geo.NF_BBOX),
         "kind_order": kinds.KIND_ORDER,
+        "name_columns": placelist.name_columns(reg),
         "polygon_kinds": kinds.POLYGON_KINDS,
         "class_keys": list(osmtags.CLASS_KEYS),
         "settlement_places": sorted(osmtags.SETTLEMENT_PLACES),
         "results": list(RESULTS),
         "rows": rows,
+        "places": places,
     }
     # in one step: the dev server may be reading the file
     files.atomic_write(path, json.dumps(worklist, ensure_ascii=False, indent=1) + "\n")

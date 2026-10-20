@@ -33,6 +33,13 @@ export function placeLayerIds(style: StyleSpecification): string[] {
 export const BASE_STYLE = fraschBright as unknown as StyleSpecification;
 
 /**
+ * The layers a click on the map can hit a place label in: read off the base
+ * style once, since every view has the same label layers and only their
+ * text-field differs.
+ */
+export const PLACE_LAYERS = placeLayerIds(BASE_STYLE);
+
+/**
  * The site's style in `view` (a dialect tag or LOCAL_TAG): BASE_STYLE with
  *  - its `openmaptiles` source pointed at TILES_URL
  *  - the `text-field` of every layer marked `frasch:label` rewritten to the

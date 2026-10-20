@@ -24,7 +24,10 @@ What apply writes where
                            reference, `not_a_place`) or one without a Frisian
                            name, and never an object or
                            Wikidata item another row holds: the name list
-                           would be refused.  Review with `git diff`.
+                           would be refused.  And the new rows of the places
+                           the view created (frasch.newplaces), each with its
+                           decision -- which it takes also without a Frisian
+                           name -- or not at all.  Review with `git diff`.
   names/curation.csv       one appended row per `local` decision (a
                            place OSM does not have -- it needs a position).
   names/work/curate-patch.jsonl
@@ -55,15 +58,25 @@ import dataclasses
 import functools
 import os
 import sys
-from collections.abc import Collection, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from typing import final
 
-from frasch import cli, curationlist, dialects, errors, files, patch, placelist, worklist
+from frasch import (
+    cli,
+    curationlist,
+    dialects,
+    errors,
+    files,
+    newplaces,
+    patch,
+    placelist,
+    worklist,
+)
 from frasch.curationlist import Appendable
 from frasch.decisions import ACTIONS, Decision, Refused, Standing, owner_problem
 from frasch.dialects import Registry
 from frasch.errors import PipelineError
-from frasch.patch import PatchLine, RefusedLine
+from frasch.patch import EntryLine, PatchLine, RefusedLine
 from frasch.paths import Workspace
 from frasch.placelist import PlaceList, PlaceRow
 
@@ -83,7 +96,8 @@ class ApplyReport:
     that fails raises instead: the warnings and the log are then the notes of
     its error."""
 
-    applied: int = 0  # the rows it wrote -- on a dry run, would write
+    applied: int = 0  # the rows it decided -- on a dry run, would decide
+    created: int = 0  # the rows it inserted -- on a dry run, would insert
     # the lines it refused: they stay in the patch
     refused: list[Refusal] = dataclasses.field(default_factory=list)
     # what it did, a line each: every decision, then where the patch went
@@ -144,16 +158,17 @@ def _apply(ws: Workspace, reg: Registry, dry_run: bool, keep: bool) -> ApplyRepo
 
 def _sum(decisions: _Decisions, lists: _Lists, dry_run: bool) -> str:
     """The last line of the log: how many rows changed, were appended and refused."""
-    applied, refused = decisions.report.applied, len(decisions.report.refused)
+    report = decisions.report
+    applied, created, refused = report.applied, report.created, len(report.refused)
     appended = len(decisions.new_curation)
     if dry_run:
         return (
-            f"dry run: {applied} row(s) would change, "
+            f"dry run: {applied} row(s) would change, {created} would be created, "
             f"{appended} curation row(s) would be appended, "
             f"{refused} refused -- nothing written"
         )
     return (
-        f"{applied} row(s) written to {lists.places.path}, "
+        f"{applied} row(s) written to {lists.places.path}, {created} created, "
         f"{appended} appended to {lists.curation.path}, {refused} refused"
     )
 
@@ -172,6 +187,10 @@ class _Lists:
     def row_to_fill(self, ident: str) -> PlaceRow:
         """The row with this id, which a decision may fill."""
         row = self.by_id.get(ident)
+        if row is None and newplaces.is_provisional(ident):
+            raise Refused(
+                f"no place {ident} is created in the patch (applied or discarded already?)"
+            )
         if row is None:
             raise Refused(
                 f"no row with id {ident!r} in {self.places.path} (deleted since the export?)"
@@ -196,16 +215,44 @@ class _Decisions:
 
     report: ApplyReport = dataclasses.field(default_factory=ApplyReport)
     new_curation: list[dict[str, str]] = dataclasses.field(default_factory=list)
+    # the rows of the created places, with their decisions: logged once all
+    # are in the list, since a place inserted above a row moves it down
+    created: list[tuple[PlaceRow, Decision | None]] = dataclasses.field(default_factory=list)
+
+    def create(self, row: PlaceRow, decision: Decision | None, names: PlaceList) -> None:
+        """Insert a created place's row into the list, with its decision --
+        the file is written at the end, the log by `say_created`."""
+        newplaces.insert(row, names)
+        self.report.created += 1
+        if decision:
+            self._write(row, decision)
+        self.created.append((row, decision))
+
+    def say_created(self, names: PlaceList) -> None:
+        """Log the created places and their decisions, at their lines."""
+        for row, decision in self.created:
+            self.report.log.append(
+                f"  {names.path}:{row.line} {placelist.describe(row, names.reg)}: "
+                f"new {row['kind']} row, id = {row['id']}"
+            )
+            if decision:
+                self.report.log.append(_said(row, decision, names))
 
     def take(self, row: PlaceRow, decision: Decision, names: PlaceList) -> None:
         """Write a decision into its row -- the file is written at the end."""
+        self._write(row, decision)
+        self.report.log.append(_said(row, decision, names))
+
+    def _write(self, row: PlaceRow, decision: Decision) -> None:
         decision.reference.write(row)
         if decision.curation:
             self.new_curation.append(decision.curation)
         self.report.applied += 1
-        self.report.log.append(
-            f"  {names.path}:{row.line} {placelist.describe(row, names.reg)}: {decision.text}"
-        )
+
+
+def _said(row: PlaceRow, decision: Decision, names: PlaceList) -> str:
+    """The log line of a decision."""
+    return f"  {names.path}:{row.line} {placelist.describe(row, names.reg)}: {decision.text}"
 
 
 def _enter_patch(patch_file: str, lists: _Lists, decisions: _Decisions) -> None:
@@ -215,25 +262,90 @@ def _enter_patch(patch_file: str, lists: _Lists, decisions: _Decisions) -> None:
     def not_json(n: int, exc: ValueError) -> None:
         decisions.report.warnings.append(f"{patch_file}:{n}: not JSON ({exc}) -- ignored")
 
-    for line in patch.read_patch(patch_file, not_json):
-        _enter_line(line, lists, decisions)
+    lines = patch.read_patch(patch_file, not_json)
+    places = {key: line for line in lines if (key := _place_key(line))}
+    decided = {key: line for line in lines if (key := _decision_key(line)) in places}
+    for key, place in places.items():
+        _enter_place(place, decided.get(key), lists, decisions)
+    decisions.say_created(lists.places)
+    for line in lines:
+        if not _place_key(line) and _decision_key(line) not in places:
+            _enter_line(line, lists, decisions)
+
+
+def _place_key(line: PatchLine) -> str | None:
+    """The provisional key of the created place a line is about itself
+    (`create`, `discard`), or None -- also for such a line under a row's id,
+    which the schema refuses on its own."""
+    key = patch.patch_key(line.value)
+    if key and key[1] == patch.PLACE and newplaces.is_provisional(key[0]):
+        return key[0]
+    return None
+
+
+def _decision_key(line: PatchLine) -> str | None:
+    """The row id or provisional key a line decides, or None."""
+    key = patch.patch_key(line.value)
+    return key[0] if key and key[1] == patch.DECISION else None
 
 
 def _enter_line(line: PatchLine, lists: _Lists, decisions: _Decisions) -> None:
     """Enter one line of the patch into its row, or refuse it."""
-    if isinstance(line, RefusedLine):
-        decisions.report.refuse(line, line.problem)
-        return
-    action = ACTIONS[line.entry["action"]]
-    if action is None:
-        return  # withdrawn in the browser
     try:
-        row = lists.row_to_fill(line.entry["id"])
-        decision = action(line.entry, row, lists.standing_for(row))
+        decided = _decided(line, lists.row_to_fill, lists)
     except Refused as why:
         decisions.report.refuse(line, str(why))
         return
-    decisions.take(row, decision, lists.places)
+    if decided:
+        decisions.take(*decided, lists.places)
+
+
+def _enter_place(
+    place: PatchLine, decision: PatchLine | None, lists: _Lists, decisions: _Decisions
+) -> None:
+    """Enter a place the view created into the list, with its decision -- or
+    refuse both: neither is applied without the other."""
+    if isinstance(place, EntryLine) and place.entry["action"] == "discard":
+        return  # discarded in the browser, its decision with it
+    report = decisions.report
+    try:
+        row = _created_row(place, lists)
+    except Refused as why:
+        report.refuse(place, str(why))
+        if decision:
+            report.refuse(decision, f"its place {_place_key(place)} is refused")
+        return
+    decided = None
+    if decision:
+        try:
+            decided = _decided(decision, lambda _: row, lists)
+        except Refused as why:
+            report.refuse(decision, str(why))
+            report.refuse(place, "its decision is refused")
+            return
+    decisions.create(row, decided[1] if decided else None, lists.places)
+
+
+def _created_row(place: PatchLine, lists: _Lists) -> PlaceRow:
+    """The new row of a `create` line, or Refused."""
+    if isinstance(place, RefusedLine):
+        raise Refused(place.problem)
+    return newplaces.new_row(place.entry, lists.places)
+
+
+def _decided(
+    line: PatchLine, row_of: Callable[[str], PlaceRow], lists: _Lists
+) -> tuple[PlaceRow, Decision] | None:
+    """What a decision line makes of its row (`row_of` finds it by the
+    entry's id): the row and the decision, None for one withdrawn in the
+    browser -- or Refused."""
+    if isinstance(line, RefusedLine):
+        raise Refused(line.problem)
+    action = ACTIONS[line.entry["action"]]
+    if action is None:
+        return None  # withdrawn in the browser
+    row = row_of(line.entry["id"])
+    return row, action(line.entry, row, lists.standing_for(row))
 
 
 def _write(lists: _Lists, decisions: _Decisions) -> None:
@@ -242,7 +354,7 @@ def _write(lists: _Lists, decisions: _Decisions) -> None:
     say), the curation rows come out again, so a `local/<slug>` row never
     lands without its position and a failed apply leaves both files as they
     were -- what became of curation.csv then goes into the log."""
-    if not decisions.report.applied:
+    if not (decisions.report.applied or decisions.report.created):
         return
     written = _append_curation(lists.curation, decisions.new_curation)
     try:
