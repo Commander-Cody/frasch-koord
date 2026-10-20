@@ -82,7 +82,7 @@ settlement,e Weestermoore,,,,,,,,,,,,Westermoor,,,node/240122490,Q546975,auto,,e
 settlement,Gamsbel,,,,,,,,,,,,Galmsbüll,,,node/240042366,Q506039,auto,,gamsbel
 settlement,Naigamsbel,,,,,,,,,,,,Neugalmsbüll,,,node/266146705,,auto,,naigamsbel
 settlement,Doogebel,,,,,,,Doogebal,Doogebal,,,,Dagebüll,,,node/617040425,Q20744,auto,,doogebel
-settlement,Foortuft,,,,,,,,,,,,Fahretoft,,,node/429618503,Q20558,auto,,foortuft
+settlement,Foortuft,,,,,,,,,,Foortoft,,Fahretoft,,,node/429618503,Q20558,auto,,foortuft
 settlement,Waiguurd,Woiguurd,,,Woiguurd,,,,,,,,Waygaard,,Vadgård,local/waygaard,,ok,,waiguurd
 settlement,,,,Froodeguurd,,,,,,,,,Froddegaard,,,local/froddegaard,,ok,,froodeguurd
 settlement,,,,Troolebel,,,,,,,,,Trollebüll,,,node/4153335583,,auto,,troolebel
