@@ -49,9 +49,15 @@ export function newPlaceKey(): string {
   return `new:${crypto.randomUUID().replaceAll('-', '')}`;
 }
 
-/** The columns of a new place's names: the Frisian ones of the worklist, `de` and `da`. */
-export function placeColumns(nameColumns: readonly string[]): string[] {
-  return [...nameColumns, 'de', 'da'];
+/**
+ * The columns of a new place's names, in the order of places.csv: the
+ * Frisian ones of the worklist, `de`, Low Saxon and Synnejysk, and `da`.
+ */
+export function placeColumns(
+  nameColumns: readonly string[],
+  nonFrisianColumns: readonly string[],
+): string[] {
+  return [...nameColumns, 'de', ...nonFrisianColumns, 'da'];
 }
 
 /** What the form of a new place holds: every name column, empty ones too. */
@@ -75,7 +81,11 @@ export function isComplete(draft: PlaceDraft): boolean {
   return Boolean(draft.kind) && Object.keys(filledNames(draft.names)).length > 0;
 }
 
-/** The name a place goes by in the view: its first Frisian name, else its German or Danish one. */
+/**
+ * The name a place goes by in the view: its first Frisian name, else its
+ * German or Danish one — never its Low Saxon or Synnejysk one, as no row of
+ * places.csv is named by those.
+ */
 function nameOf(names: Record<string, string>, nameColumns: readonly string[]): string {
   const frisian = nameColumns.map((column) => primaryName(names[column])).find(Boolean);
   return frisian || primaryName(names.de) || primaryName(names.da);

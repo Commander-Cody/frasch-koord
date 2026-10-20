@@ -5,6 +5,11 @@ import type { PlaceSelection } from '../selection/placeSelection';
 import type { CardNames, NameEntry } from './entry';
 import { namesOfTile } from './tile';
 
+/** The tile feature's Low Saxon name, where it has one, as a place's names hold it. */
+function tileLowSaxon({ names }: CardNames): CardNames['names'] {
+  return names.nds ? { nds: names.nds } : {};
+}
+
 /**
  * The names of a clicked label of a listed place: the name-list entry wins
  * field by field — it is the curated source — and the tile feature fills
@@ -15,7 +20,9 @@ import { namesOfTile } from './tile';
 function mergedNames(entry: NameEntry, tile: CardNames): CardNames {
   return {
     ...entry,
-    names: { ...tile.names, ...entry.names },
+    // Low Saxon the tile's own first, like OSM's names below: where the list
+    // has none it is OSM's, and the tile's is what the clicked label shows.
+    names: { ...tile.names, ...entry.names, ...tileLowSaxon(tile) },
     // The tile's own local name and dialect area, never the entry's: the
     // entry lies where the first object of its row lies, and the clicked one
     // may be another object of that row, in another dialect area and with
@@ -27,8 +34,6 @@ function mergedNames(entry: NameEntry, tile: CardNames): CardNames {
     // The tile's own value first: it is what the label the user just clicked
     // shows, while the entry's comes from the OSM extract the name list was
     // matched against, which may be older.
-    name_nds: tile.name_nds ?? entry.name_nds,
-    // Likewise: the label may be the tile's generic name.
     name_osm: tile.name_osm ?? entry.name_osm,
     name_de: entry.name_de || tile.name_de,
     name_da: entry.name_da ?? tile.name_da,

@@ -57,6 +57,7 @@ const WORKLIST: CurateWorklist = {
   bbox: [8, 54, 9, 55],
   kind_order: ['settlement', 'warft'],
   name_columns: ['mooring', 'local', 'fering'],
+  non_frisian_columns: ['nds', 'jut'],
   polygon_kinds: ['koog'],
   class_keys: ['place', 'boundary'],
   settlement_places: ['village', 'town'],
@@ -542,6 +543,23 @@ describe('CuratePanel, new places', () => {
       action: 'create',
       kind: 'warft',
       names: { mooring: 'Hoorne', de: 'Horne' },
+    });
+  });
+
+  it('saves the Synnejysk name of a new place, naming it by its German one', async () => {
+    await renderPanel();
+    fireEvent.click(screen.getByRole('button', { name: 'New place' }));
+    fillPlace({
+      'new place kind': 'settlement',
+      'new place jut': 'Lym',
+      'new place de': 'Süderlügum',
+    });
+
+    fireEvent.click(savePlaceButton());
+
+    expect(posts[0].entry).toMatchObject({
+      name: 'Süderlügum',
+      names: { jut: 'Lym', de: 'Süderlügum' },
     });
   });
 

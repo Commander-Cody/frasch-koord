@@ -24,7 +24,9 @@
     "frr-x-oomrang": "Öömrang",
     "frr-x-solring": "Sölring",
     "frr-x-hallig": "Hålifrasch",
-    "frr-x-halunder": "Halunder"
+    "frr-x-halunder": "Halunder",
+    "nds": "Plååtjüsch",
+    "jut": "Jütsch"
   },
   "share": {
     "label": "Link diilje",
@@ -36,7 +38,6 @@
     "close": "Tumååge",
     "local": "Lokååle noome",
     "frisian": "Frasch",
-    "lowSaxon": "Plååtjüsch",
     "german": "Tjüsch",
     "danish": "Dånsch",
     "extinct": "Spräkewise wårt ai mör spräägen",

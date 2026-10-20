@@ -16,7 +16,8 @@ export type TileProps = Record<string, unknown>;
  *
  * OpenMapTiles' `name_de` is not in it: that is `name:de` where OSM has one
  * and the plain `name` everywhere else, which north of the border is Danish.
- * A name in a dialect is not either: its property is `name:<tag>`.
+ * A name in a variety of the registry is not either: its property is
+ * `name:<tag>` — Low Saxon's `name:nds` among them, OSM's own or the list's.
  */
 const FIELD_OF_TILE_KEY = {
   'frasch:local': 'local',
@@ -25,7 +26,6 @@ const FIELD_OF_TILE_KEY = {
   'frasch:kind': 'kind',
   class: 'kind',
   'name:frr': 'name_frr',
-  'name:nds': 'name_nds',
   'name:de': 'name_de',
   'name:da': 'name_da',
   'name:latin': 'name_osm',

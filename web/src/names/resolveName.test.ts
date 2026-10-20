@@ -10,7 +10,7 @@ function entry(fields: Partial<CardNames> = {}): CardNames {
 
 const LOCAL: NameSource = { kind: 'local' };
 const FRISIAN: NameSource = { kind: 'language', language: 'frr' };
-const LOW_SAXON: NameSource = { kind: 'language', language: 'nds' };
+const LOW_SAXON: NameSource = { kind: 'dialect', tag: 'nds' };
 const GERMAN: NameSource = { kind: 'language', language: 'de' };
 const DANISH: NameSource = { kind: 'language', language: 'da' };
 const UNKNOWN: NameSource = { kind: 'unknown' };
@@ -42,9 +42,24 @@ describe('resolveName', () => {
     expect(resolveName(e, 'frr-x-mooring')).toEqual({ name: 'Rüms', source: FRISIAN });
   });
 
-  it('reports name:nds as Low Saxon', () => {
-    const e = entry({ name_nds: 'Niböl' });
+  it('reports name:nds as the Low Saxon of the registry', () => {
+    const e = entry({ names: { nds: 'Niböl' } });
     expect(resolveName(e, 'frr-x-mooring')).toEqual({ name: 'Niböl', source: LOW_SAXON });
+  });
+
+  it('prefers the local name of a place in a Frisian area over the other dialects', () => {
+    const e = entry({ local: 'Wik', dialect: 'frr-x-fering', names: { 'frr-x-solring': 'Wyk' } });
+    expect(resolveName(e, 'frr-x-mooring')).toEqual({ name: 'Wik', source: LOCAL });
+  });
+
+  it('prefers Frisian of no dialect over the local name of a place in a Synnejysk area', () => {
+    const e = entry({ local: 'Lym', dialect: 'jut', names: { jut: 'Lym' }, name_frr: 'Läigem' });
+    expect(resolveName(e, 'frr-x-mooring')).toEqual({ name: 'Läigem', source: FRISIAN });
+  });
+
+  it('never names a place by its Synnejysk name as such in a Frisian view', () => {
+    const e = entry({ names: { jut: 'Lym' }, name_de: 'Süderlügum' });
+    expect(resolveName(e, 'frr-x-mooring')).toEqual({ name: 'Süderlügum', source: GERMAN });
   });
 
   it('reports the German name as German', () => {
@@ -80,7 +95,12 @@ describe('resolveName', () => {
   it('the local view never shows name:frr, only frasch:local then Low Saxon then German', () => {
     // name_frr is deliberately ignored by the local view (see dialects/labelChain.ts);
     // Low Saxon still wins over OSM's generic name and the German one.
-    const e = entry({ name_frr: 'Rüms', name_nds: 'Sölerloch', name_osm: 'Sylt', name_de: 'Sylt' });
+    const e = entry({
+      names: { nds: 'Sölerloch' },
+      name_frr: 'Rüms',
+      name_osm: 'Sylt',
+      name_de: 'Sylt',
+    });
     expect(resolveName(e, 'frr-x-local')).toEqual({ name: 'Sölerloch', source: LOW_SAXON });
   });
 

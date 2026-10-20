@@ -47,6 +47,7 @@ describe('the worklist types', () => {
       bbox: { array: true },
       kind_order: { array: true },
       name_columns: { array: true },
+      non_frisian_columns: { array: true },
       polygon_kinds: { array: true },
       class_keys: { array: true },
       settlement_places: { array: true },

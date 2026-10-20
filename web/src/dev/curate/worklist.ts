@@ -77,8 +77,10 @@ export interface CurateWorklist {
   bbox: Bbox;
   /** Every kind, in the order the list walks them. */
   kind_order: string[];
-  /** The Frisian name columns of places.csv in list order; a new place's form adds `de` and `da`. */
+  /** The Frisian name columns of places.csv in list order; a new place's form adds `de`, `non_frisian_columns` and `da`. */
   name_columns: string[];
+  /** The name columns of Low Saxon and Synnejysk: names, but never a place's Frisian name. */
+  non_frisian_columns: string[];
   /** The kinds whose local reference can carry an area instead of a bare point. */
   polygon_kinds: string[];
   /** The OSM tags that say what kind of thing an object is, the most telling first. */

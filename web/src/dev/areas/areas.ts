@@ -59,9 +59,13 @@ export interface DialectGroup {
   features: AreaFeature[];
 }
 
-/** The name of a group: the dialect's, as the registry has it. */
+/**
+ * The name of a group: the variety's, as the registry has it. A
+ * municipality no row claims is not a gap: south of the border it is Low
+ * Saxon by default (frasch/build_dialect_areas.py).
+ */
 export function groupLabel(key: string): string {
-  return key === UNASSIGNED ? 'not assigned' : (dialect(key)?.label ?? key);
+  return key === UNASSIGNED ? 'no row – Low Saxon by default' : (dialect(key)?.label ?? key);
 }
 
 /** The group a municipality belongs in. */

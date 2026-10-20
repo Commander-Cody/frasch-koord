@@ -14,7 +14,6 @@ describe('createSearch', () => {
   it.each([
     ['a name in a dialect', { names: { 'frr-x-mooring': 'Sought' } }],
     ['its local form', { local: 'Sought' }],
-    ['its Low Saxon name', { name_nds: 'Sought' }],
     ["OSM's generic name, which the local view labels it with", { name_osm: 'Sought' }],
     ['its German name', { name_de: 'Sought' }],
   ])('finds a place by %s', (_name, names) => {

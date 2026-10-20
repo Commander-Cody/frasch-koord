@@ -27,7 +27,6 @@ export interface PlaceCardProps {
 /** Locale keys of the labels of the names in no dialect of the registry. */
 const LANGUAGE_LABEL_KEYS: Record<Language, string> = {
   frr: 'card.frisian',
-  nds: 'card.lowSaxon',
   de: 'card.german',
   da: 'card.danish',
 };
@@ -69,8 +68,9 @@ function sourceKey(source: NameSource): string {
 }
 
 /**
- * The card for one place: its name in the selected view, every other dialect
- * the name list has a name in, the local form, Low Saxon, German and Danish,
+ * The card for one place: its name in the selected view, every other Frisian
+ * dialect the name list has a name in, the local form, Low Saxon and
+ * Synnejysk, German and Danish,
  * and links to the objects behind it.
  *
  * Which names it shows, and in which order, is `cardModel` of the selection

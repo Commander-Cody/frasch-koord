@@ -3,14 +3,15 @@
 // properties.
 
 import { labelChain } from '../dialects/labelChain';
+import { isFrisian } from '../dialects/registry';
 import type { CardNames } from './entry';
 import { dialectOfTileKey, fieldOfTileKey, type TileField } from './tile';
 
-/** A language a name is in that is no dialect of the registry; `frr` is OSM's Frisian of no particular dialect. */
-export type Language = 'frr' | 'nds' | 'de' | 'da';
+/** A language a name is in that is no variety of the registry; `frr` is OSM's Frisian of no particular dialect. */
+export type Language = 'frr' | 'de' | 'da';
 
 /**
- * Which of a place's names a name is: its name in a dialect of the registry,
+ * Which of a place's names a name is: its name in a variety of the registry,
  * its local form (with the dialect of its area, where a card says the local
  * form is that dialect's name), its name in a language, or `unknown` for
  * OSM's generic name where it is the name in no language known of the place.
@@ -29,7 +30,6 @@ export interface ShownName {
 
 const LANGUAGE_OF_FIELD: Partial<Record<TileField, Language>> = {
   name_frr: 'frr',
-  name_nds: 'nds',
   name_de: 'de',
   name_da: 'da',
 };
@@ -71,7 +71,9 @@ function chainStep(names: CardNames, key: string): ShownName | undefined {
  * unknown source.
  */
 export function resolveName(names: CardNames, view: string): ShownName {
-  for (const key of labelChain(view)) {
+  // The chain of a place in a Frisian dialect area or of one elsewhere, as
+  // the style tells the two apart by `frasch:dialect` (map/style/labels.ts).
+  for (const key of labelChain(view, isFrisian(names.dialect))) {
     const shown = chainStep(names, key);
     if (shown) return shown;
   }

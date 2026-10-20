@@ -14,7 +14,8 @@ const FERING = 'frr-x-fering';
 
 const inDialect = (tag: string): NameSource => ({ kind: 'dialect', tag });
 const FRISIAN: NameSource = { kind: 'language', language: 'frr' };
-const LOW_SAXON: NameSource = { kind: 'language', language: 'nds' };
+const LOW_SAXON: NameSource = { kind: 'dialect', tag: 'nds' };
+const SYNNEJYSK = 'jut';
 const GERMAN: NameSource = { kind: 'language', language: 'de' };
 const DANISH: NameSource = { kind: 'language', language: 'da' };
 
@@ -138,8 +139,7 @@ describe('the lines', () => {
 
   it('leave out a Low Saxon name that is the same word as the German one', () => {
     const naibel = found({
-      names: { [MOORING]: 'Naibel' },
-      name_nds: 'Niebüll',
+      names: { [MOORING]: 'Naibel', nds: 'Niebüll' },
       name_de: 'Niebüll',
     });
 
@@ -148,14 +148,34 @@ describe('the lines', () => {
 
   it('have the Low Saxon name before the German one', () => {
     const naibel = found({
-      names: { [MOORING]: 'Naibel' },
-      name_nds: 'Niebüll op Platt',
+      names: { [MOORING]: 'Naibel', nds: 'Niebüll op Platt' },
       name_de: 'Niebüll',
     });
 
     expect(cardModel(naibel, MOORING).lines.map((line) => line.source)).toEqual([
       LOW_SAXON,
       GERMAN,
+    ]);
+  });
+
+  it('have the Frisian names before the Synnejysk one', () => {
+    const tynne = found({ names: { [MOORING]: 'Tuner', [SYNNEJYSK]: 'Tynne', [FERING]: 'Töner' } });
+
+    expect(cardModel(tynne, MOORING).lines.map((line) => line.source)).toEqual([
+      inDialect(FERING),
+      inDialect(SYNNEJYSK),
+    ]);
+  });
+
+  it("call the Synnejysk name of a place in a Synnejysk area its local form, of the area's variety", () => {
+    const laigem = found({
+      names: { [MOORING]: 'Läigem', [SYNNEJYSK]: 'Lym' },
+      local: 'Lym',
+      dialect: SYNNEJYSK,
+    });
+
+    expect(cardModel(laigem, MOORING).lines).toEqual([
+      { source: { kind: 'local', dialect: SYNNEJYSK }, name: 'Lym' },
     ]);
   });
 });
@@ -299,14 +319,14 @@ describe('the card of a clicked label of a listed place', () => {
   // The tile's own value is what the clicked label shows; the entry's comes
   // from the OSM extract the list was matched against, which may be older.
   const TILE_FIRST_NAMES = [
-    { name: 'Low Saxon', tileKey: 'name:nds', entryField: 'name_nds' },
-    { name: 'generic', tileKey: 'name', entryField: 'name_osm' },
+    { name: 'Low Saxon', tileKey: 'name:nds', entryFields: { names: { nds: 'Listed' } } },
+    { name: 'generic', tileKey: 'name', entryFields: { name_osm: 'Listed' } },
   ] as const;
 
   it.each(TILE_FIRST_NAMES)(
     "has the tile feature's $name name rather than the entry's",
-    ({ tileKey, entryField }) => {
-      const entry = listed({ [entryField]: 'Listed' });
+    ({ tileKey, entryFields }) => {
+      const entry = listed(entryFields);
 
       expect(cardModel(clicked({ [tileKey]: 'Tile' }, entry), LOCAL_TAG).headline).toBe('Tile');
     },
@@ -314,8 +334,8 @@ describe('the card of a clicked label of a listed place', () => {
 
   it.each(TILE_FIRST_NAMES)(
     "has the entry's $name name where the tile feature has none",
-    ({ entryField }) => {
-      const entry = listed({ [entryField]: 'Listed' });
+    ({ entryFields }) => {
+      const entry = listed(entryFields);
 
       expect(cardModel(clicked({}, entry), LOCAL_TAG).headline).toBe('Listed');
     },

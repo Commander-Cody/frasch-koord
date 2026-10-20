@@ -152,6 +152,7 @@ export default function CuratePanel({ map }: { map: MapLibreMap }) {
             title={places.form.title}
             kinds={worklist.kind_order}
             nameColumns={worklist.name_columns}
+            nonFrisianColumns={worklist.non_frisian_columns}
             places={comparedPlaces(worklist.places, created, places.form.key)}
             initial={places.form.initial}
             saving={places.saving}

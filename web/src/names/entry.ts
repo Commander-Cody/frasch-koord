@@ -12,25 +12,21 @@ export interface NameEntry {
   id: string;
   /** The row's OSM references, e.g. "node/240042766" or "way/1; node/2", or "local/<slug>" for a place OSM does not have. */
   osm?: string;
-  /** Dialect names by registry tag, e.g. { "frr-x-mooring": "Naibel" }. */
+  /**
+   * Names by registry tag, e.g. { "frr-x-mooring": "Naibel", "nds": "Niböl" }.
+   * Low Saxon is the list's, else OSM's `name:nds`, as in the tiles.
+   */
   names: Record<string, string>;
   /**
    * Name used by the people of the place itself (tile attribute
-   * `frasch:local`): the name list's, else OSM's `name:frr` where the place
-   * lies in a dialect area (issue #81).
+   * `frasch:local`): the name list's, else OSM's name in the language of
+   * the dialect area the place lies in — `name:frr` in a Frisian one — (issue #81).
    */
   local?: string;
   /** Dialect area the place lies in, e.g. "frr-x-fering". */
   dialect?: string;
   /** Sub-dialect remark of the local name, e.g. "Foortuftinge". */
   variety?: string;
-  /**
-   * Low Saxon name — OSM's `name:nds`, never our name list (it has no Low
-   * Saxon column). frasch/searchindex.py takes it from the object's
-   * entry in names/osm_objects.json, a tile feature carries it itself. The label chain falls back to it
-   * before German, so the card needs it for the same reason as `name_frr`.
-   */
-  name_nds?: string;
   /**
    * German name — the list's `de`, shown as a hint next to a Frisian one. The
    * tiles carry the same as `name:de` on the place's objects (issue #61).
@@ -55,15 +51,7 @@ export interface NameEntry {
 }
 
 /** The fields of an entry that name or describe the place, rather than identify or locate it. */
-type NameField =
-  | 'local'
-  | 'dialect'
-  | 'variety'
-  | 'name_nds'
-  | 'name_de'
-  | 'name_osm'
-  | 'name_da'
-  | 'kind';
+type NameField = 'local' | 'dialect' | 'variety' | 'name_de' | 'name_osm' | 'name_da' | 'kind';
 
 /**
  * The names of a place as its card shows them: those of its entry, any of

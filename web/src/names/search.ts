@@ -24,13 +24,7 @@ interface IndexedEntry {
 
 /** All of an entry's names in one string, each once. */
 function searchText(entry: NameEntry): string {
-  const names = [
-    ...Object.values(entry.names),
-    entry.local,
-    entry.name_nds,
-    entry.name_osm,
-    entry.name_de,
-  ];
+  const names = [...Object.values(entry.names), entry.local, entry.name_osm, entry.name_de];
   return [...new Set(names.filter(Boolean))].join(' ');
 }
 

@@ -79,8 +79,13 @@ it("labels OSM's generic name in the local view with the language it is the name
   expect(headlineLabel()).toBe(i18n.t('card.danish'));
 });
 
+it('calls a Low Saxon name, from the list or from OSM, by the name of its variety', () => {
+  renderCard(place({ names: { [MOORING]: 'Naibel', nds: 'Other' } }), MOORING);
+
+  expect(lineLabel('Other')).toBe(i18n.t('dialects.nds'));
+});
+
 it.each([
-  ['Low Saxon', 'card.lowSaxon', { name_nds: 'Other' }],
   ['German', 'card.german', { name_de: 'Other' }],
   ['Danish', 'card.danish', { name_da: 'Other' }],
 ])('calls the %s name by its language', (_language, key, names) => {

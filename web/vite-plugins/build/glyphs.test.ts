@@ -79,6 +79,22 @@ describe('renderedFields', () => {
     ]);
   });
 
+  it("reads what a case's outputs show, not what its conditions test", () => {
+    const fields = renderedFields(
+      style({
+        id: 'village',
+        type: 'symbol',
+        source: 'openmaptiles',
+        'source-layer': 'place',
+        layout: {
+          'text-field': ['case', ['has', ['get', 'frasch:dialect']], ['get', 'a'], ['get', 'b']],
+        },
+      }),
+    );
+
+    expect(fields.map((field) => field.key)).toEqual(['a', 'b']);
+  });
+
   it('marks the fields a layer shows in capitals, and leaves out layers without text', () => {
     const fields = renderedFields(
       style(
@@ -140,8 +156,9 @@ describe('siteFields', () => {
 
     const keys = siteFields(base).map((field) => field.key);
     expect(keys).toEqual(expect.arrayContaining(['frasch:local', 'name:frr', 'name:nds', 'name']));
-    // Every dialect's name, whether the selector offers its view or not.
-    expect(keys).toEqual(expect.arrayContaining(DIALECTS.map((d) => `name:${d.tag}`)));
+    // Every Frisian dialect's name, whether the selector offers its view or not.
+    const frisian = DIALECTS.filter((d) => d.language === 'frr');
+    expect(keys).toEqual(expect.arrayContaining(frisian.map((d) => `name:${d.tag}`)));
   });
 });
 

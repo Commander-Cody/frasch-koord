@@ -4,10 +4,15 @@
 
 import registry from './generated/dialects.json' with { type: 'json' };
 
-/** One dialect of the registry (names/dialects.csv, exported to generated/dialects.json). */
+/**
+ * One local variety of the registry (names/dialects.csv, exported to
+ * generated/dialects.json): a North Frisian dialect, Low Saxon or Synnejysk.
+ */
 export interface DialectEntry {
-  /** BCP 47 language tag, e.g. "frr-x-mooring". Tile property: "name:<tag>". */
+  /** BCP 47 language tag, e.g. "frr-x-mooring", "nds". Tile property: "name:<tag>". */
   tag: string;
+  /** ISO 639 code of the language the variety belongs to: "frr" for the Frisian dialects. */
+  language: string;
   /**
    * The dialect's German name, e.g. "Wiedingharder": what the German UI
    * calls it, and any UI whose locale file has no `dialects.<tag>` of its own
@@ -27,6 +32,19 @@ export interface DialectEntry {
  * frasch/dialects.py checks `status` and `view` before it exports them.
  */
 export const DIALECTS = registry as DialectEntry[];
+
+/** The language of the North Frisian dialects. */
+export const FRISIAN = 'frr';
+
+/** The tags of the Frisian dialects among `dialects`, in their order. */
+export function frisianTags(dialects: readonly Pick<DialectEntry, 'tag' | 'language'>[]): string[] {
+  return dialects.filter((d) => d.language === FRISIAN).map((d) => d.tag);
+}
+
+/** Whether `tag` is a Frisian dialect of the registry: no for Low Saxon, Synnejysk, or none at all. */
+export function isFrisian(tag: string | undefined): boolean {
+  return tag !== undefined && dialect(tag)?.language === FRISIAN;
+}
 
 /**
  * The registry entry of a dialect tag, or undefined for a tag the registry

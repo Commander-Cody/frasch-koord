@@ -44,6 +44,10 @@ export const DIALECT_COLORS: Record<string, string> = {
   'frr-x-solring': '#eb6834',
   'frr-x-hallig': '#c2185b',
   'frr-x-halunder': '#e34948',
+  // Low Saxon and Synnejysk, outside the Frisian hues: a pale lime and a
+  // near-black brown, clear of every mainland dialect they border
+  nds: '#d4e157',
+  jut: '#3e2723',
 };
 
 /** A municipality no row claims. Deliberately outside the palette: this is a

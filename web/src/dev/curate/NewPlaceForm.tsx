@@ -15,6 +15,8 @@ export interface NewPlaceFormProps {
   kinds: readonly string[];
   /** The Frisian name columns of the worklist. */
   nameColumns: readonly string[];
+  /** Its Low Saxon and Synnejysk ones. */
+  nonFrisianColumns: readonly string[];
   /** The places a name typed may repeat: the rows of the list and the other new places. */
   places: readonly ListedPlace[];
   initial: PlaceDraft;
@@ -28,6 +30,7 @@ export default function NewPlaceForm({
   title,
   kinds,
   nameColumns,
+  nonFrisianColumns,
   places,
   initial,
   saving,
@@ -56,7 +59,7 @@ export default function NewPlaceForm({
             </option>
           ))}
         </select>
-        {placeColumns(nameColumns).map((column) => (
+        {placeColumns(nameColumns, nonFrisianColumns).map((column) => (
           <input
             key={column}
             className="dev-panel-input"

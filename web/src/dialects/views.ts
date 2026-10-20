@@ -1,7 +1,7 @@
 // The views of the map: what the selector offers and the map is labelled in.
 // A view is a dialect of the registry, or the local view.
 
-import { DIALECTS, dialectLabelKey } from './registry.ts';
+import { DIALECTS, dialectLabelKey, frisianTags } from './registry.ts';
 
 /**
  * Pseudo-tag of the "local dialect" view: every place labelled the way the
@@ -51,11 +51,12 @@ export const VIEWS: ViewOption[] = [
 
 /**
  * Every tag the map can be labelled in, offered by the selector or not: each
- * dialect of the registry, then the local view. What has to hold in any view
- * (the glyphs a label needs, the map and the card agreeing) is checked over
- * these.
+ * Frisian dialect of the registry, then the local view. Low Saxon and
+ * Synnejysk are varieties of the registry, but no view of the map. What has
+ * to hold in any view (the glyphs a label needs, the map and the card
+ * agreeing) is checked over these.
  */
-export const ALL_VIEW_TAGS: string[] = [...DIALECTS.map((d) => d.tag), LOCAL_TAG];
+export const ALL_VIEW_TAGS: string[] = [...frisianTags(DIALECTS), LOCAL_TAG];
 
 /**
  * The view of `tag`, falling back to the default view (and, should the
