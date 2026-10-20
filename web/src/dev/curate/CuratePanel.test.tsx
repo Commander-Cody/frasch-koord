@@ -666,6 +666,40 @@ describe('CuratePanel, new places', () => {
     expect(screen.getByLabelText<HTMLInputElement>('new place de').value).toBe('Niebüll');
   });
 
+  it('starts a new place from the label of a settlement as a settlement', async () => {
+    const map = new FakeMap();
+    render(<CuratePanel map={map.map} />);
+    await screen.findByText('Naibel');
+    act(() => map.click(AT, { id: 2400427661, properties: { name: 'Niebüll', class: 'village' } }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'New place from this' }));
+
+    expect(screen.getByLabelText<HTMLSelectElement>('new place kind').value).toBe('settlement');
+  });
+
+  it('starts a new place from the label of an island as an island', async () => {
+    worklist = { ...WORKLIST, kind_order: [...WORKLIST.kind_order, 'island'] };
+    const map = new FakeMap();
+    render(<CuratePanel map={map.map} />);
+    await screen.findByText('Naibel');
+    act(() => map.click(AT, { id: 2400427661, properties: { name: 'Pellworm', class: 'island' } }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'New place from this' }));
+
+    expect(screen.getByLabelText<HTMLSelectElement>('new place kind').value).toBe('island');
+  });
+
+  it('starts a new place from the label of any other class without a kind', async () => {
+    const map = new FakeMap();
+    render(<CuratePanel map={map.map} />);
+    await screen.findByText('Naibel');
+    act(() => map.click(AT, { id: 2400427661, properties: { name: 'Angeln', class: 'state' } }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'New place from this' }));
+
+    expect(screen.getByLabelText<HTMLSelectElement>('new place kind').value).toBe('');
+  });
+
   it('saves the object of the clicked label as the decision of the new place', async () => {
     const map = new FakeMap();
     render(<CuratePanel map={map.map} />);

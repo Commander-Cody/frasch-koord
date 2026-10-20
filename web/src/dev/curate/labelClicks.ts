@@ -15,6 +15,8 @@ export interface ClickedLabel {
   ref?: string;
   /** OSM's name of it, for the panel to say which label it was. */
   name: string;
+  /** What OSM maps it as: its OpenMapTiles `class` (`village`, `island`, …); '' for none. */
+  placeClass: string;
   /** The names a new place from it starts with. */
   de: string;
   da: string;
@@ -39,9 +41,21 @@ export function clickedLabel(feature: MapGeoJSONFeature): ClickedLabel | null {
   return {
     ref: osmRefFromFeatureId(feature.id) ?? undefined,
     name: name || de || da,
+    placeClass: text(props, 'class'),
     de: de || (da ? '' : name),
     da,
   };
+}
+
+/**
+ * The kind a new place from `label` starts with, '' for none: a settlement
+ * for one of the `settlementPlaces` (the worklist's), an island for an
+ * island. Only a guess -- a hamlet may be a Warft, an island a Hallig --
+ * which the form lets the user change.
+ */
+export function labelKind(label: ClickedLabel, settlementPlaces: readonly string[]): string {
+  if (settlementPlaces.includes(label.placeClass)) return 'settlement';
+  return label.placeClass === 'island' ? 'island' : '';
 }
 
 /**

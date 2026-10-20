@@ -659,8 +659,10 @@ the patch again, and stays on the selected row.
 "New place" opens the form of a place the list does not have yet; so does
 "New place from this", which a click on the label of an OSM object without a
 `frasch:ref` offers (`src/dev/curate/labelClicks.ts`: the label's `name:de`
-and `name:da` — OSM's `name` as the German one when it has neither — and its
-object as the place's decision; not while "set position on map" is armed). Its
+and `name:da` — OSM's `name` as the German one when it has neither — a kind
+guessed from its `class`, `settlement` for one of the worklist's
+`settlement_places` and `island` for an island, and its object as the place's
+decision; not while "set position on map" is armed). Its
 `create` goes into the patch under a provisional key `new:…`
 (`src/dev/curate/newPlaces.ts`); the form lists the rows that already have a
 name typed. Until `apply` the place is listed apart under "New places", marked

@@ -128,7 +128,7 @@ export default function CuratePanel({ map }: { map: MapLibreMap }) {
         <LabelOffer
           label={label}
           onCreate={() => {
-            places.open(labelForm(label));
+            places.open(labelForm(label, worklist?.settlement_places ?? []));
             setLabel(null);
           }}
           onDismiss={() => setLabel(null)}
