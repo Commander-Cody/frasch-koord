@@ -274,4 +274,4 @@ Either the feature is not in OSM at all, or OSM spells it differently. `near mis
 | wasklaow | 900 | helgoland | Waskläow | Westklippe | no name match in OSM |  |
 | nathoawen | 904 | helgoland | Nathoawen | Nordhafen | no name match in OSM |  |
 
-<!-- built_from: {"places.csv":"1c6cd0394bd7687ab2c4b7c44abdd482b2acf81f","dialects.csv":"ca69b19fd53fe4cb3186c52b5d509379e80e3e2a","extracts":[{"file":"schleswig-holstein-latest.osm.pbf","replication_timestamp":"2026-09-22T20:22:59Z"},{"file":"denmark-latest.osm.pbf","replication_timestamp":"2026-09-26T20:22:51Z"}]} -->
+<!-- built_from: {"places.csv":"b53613fb5171a20d09311d5caf1335293be212ce","dialects.csv":"2d5f081ffa3a1c22f66643dfad72a2b3d3001d18","extracts":[{"file":"schleswig-holstein-latest.osm.pbf","replication_timestamp":"2026-09-22T20:22:59Z"},{"file":"denmark-latest.osm.pbf","replication_timestamp":"2026-09-26T20:22:51Z"}]} -->
