@@ -6,7 +6,7 @@ import { useRef, useState } from 'react';
 
 import { errorMessage } from '../shell/fetchJson';
 import type { Selection } from '../shell/useSelection';
-import type { ClickedLabel } from './labelClicks';
+import { labelKind, type ClickedLabel } from './labelClicks';
 import { createEntry, listedPlace, newPlaceKey, type PlaceDraft } from './newPlaces';
 import { storeEntry, type Decision, type NewPlace, type UpdateLoaded } from './patch';
 import type { ListedPlace } from './worklist';
@@ -26,12 +26,20 @@ export function newPlaceForm(): OpenForm {
   return { key: newPlaceKey(), title: 'New place', initial: EMPTY_DRAFT };
 }
 
-/** The form of a new place from a clicked label: its names, and its object as the decision. */
-export function labelForm(label: ClickedLabel): OpenForm {
+/**
+ * The form of a new place from a clicked label: its kind as far as its class
+ * tells (`settlementPlaces` are the worklist's), its names, and its object as
+ * the decision.
+ */
+export function labelForm(label: ClickedLabel, settlementPlaces: readonly string[]): OpenForm {
   return {
     key: newPlaceKey(),
     title: `New place from ${label.ref ?? label.name}`,
-    initial: { ...EMPTY_DRAFT, names: { de: label.de, da: label.da } },
+    initial: {
+      ...EMPTY_DRAFT,
+      kind: labelKind(label, settlementPlaces),
+      names: { de: label.de, da: label.da },
+    },
     ...(label.ref && { decision: { action: 'osm', osm: label.ref } }),
   };
 }
