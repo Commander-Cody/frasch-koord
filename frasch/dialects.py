@@ -22,7 +22,7 @@ web/src/dev/areas/areaLayers.ts, which a test holds to the registry's tags).
 | `column` | the column of names/places.csv that holds this dialect's names |
 | `label`  | how the dialect is written in the UI (its German/endonym name) |
 | `status` | `living` or `extinct` (extinct dialects still label the map in the local view -- Südergoesharde) |
-| `view`   | `yes` = selectable as a map language in the frontend |
+| `view`   | `yes` = selectable as a map language in the frontend; Frisian rows only |
 | `note`   | free text: which area speaks it |
 
 This is the one reader of the file.  A command reads the registry of its
@@ -148,6 +148,11 @@ def row_problem(
         return f"status {row['status']!r} (living / extinct)"
     if row["view"] not in VIEWS:
         return f"view {row['view']!r} (yes / no)"
+    if row["view"] == "yes" and row["language"] != FRISIAN:
+        return (
+            f"view 'yes' for a variety of {row['language']!r} -- "
+            f"only a Frisian dialect ({FRISIAN}) can be a map view"
+        )
     if not row["label"]:
         return "no label"
     return None

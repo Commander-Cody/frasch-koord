@@ -85,6 +85,10 @@ BAD_TAG = (
         ),
         ("frr-x-mooring,frr,mooring,Mooring,alive,yes,", "status 'alive' (living / extinct)"),
         ("frr-x-mooring,frr,mooring,Mooring,living,maybe,", "view 'maybe' (yes / no)"),
+        (
+            "jut,jut,jut,Süderjütisch,living,yes,",
+            "view 'yes' for a variety of 'jut' -- only a Frisian dialect (frr) can be a map view",
+        ),
         ("frr-x-mooring,frr,mooring,,living,yes,", "no label"),
     ],
     ids=[
@@ -97,6 +101,7 @@ BAD_TAG = (
         "local",
         "status",
         "view",
+        "view of another language",
         "label",
     ],
 )
