@@ -125,7 +125,7 @@ def unclaimed_tags(obj: LocatedObject, areas: AreaIndex | None, reg: Registry) -
     """The tags of an object no row of the name list claims -- a Warft, a
     street, a station: its local name, OSM's own name in the language of the
     area it lies in, with that area, which the label chain of a Frisian view
-    asks for.  None for an object without a local name."""
+    asks for.  An empty dict for an object without a local name."""
     area_tag = dialect_at(obj, areas)
     local = _osm_local_name(obj, area_tag, reg)
     return {LOCAL_KEY: local, DIALECT_KEY: area_tag or ""} if local else {}

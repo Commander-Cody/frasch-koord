@@ -24,8 +24,7 @@ from frasch.provenance import ExtractStamp
 from frasch.dialects import Dialect, Registry
 from osm_fixture import Nodes, ring, write_extract
 
-# the varieties of the tests: (tag, language, column, label, status, view) --
-# the Frisian dialects, and Low Saxon and Synnejysk after them
+# the Frisian dialects of the tests: (column, label, status, view)
 _FRISIAN = [
     ("mooring", "Mooring", "living", "yes"),
     ("wieding", "Wiedingharder", "living", "no"),
@@ -36,6 +35,8 @@ _FRISIAN = [
     ("solring", "Sölring", "living", "no"),
     ("hallig", "Halligfriesisch", "living", "no"),
 ]
+# the varieties of the tests: (tag, language, column, label, status, view) --
+# the Frisian dialects, and Low Saxon and Synnejysk after them
 _DIALECTS = [
     *((f"frr-x-{column}", "frr", column, *rest) for column, *rest in _FRISIAN),
     ("nds", "nds", "nds", "Plattdeutsch", "living", "no"),

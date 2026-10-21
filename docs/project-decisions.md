@@ -1843,6 +1843,11 @@ like the Frisian ones. The spec is the issue and its comments. What it settled:
   OSM's `name:nds`, in `resolve` alone. The tiles keep OSM's where the list
   has none, as with `name:de` (#61). The search entry's separate `name_nds`
   and the card's `card.lowSaxon` are gone, and the registry's label names it.
+- **An object no row claims carries its area** (owner's decision, review):
+  where OSM's `name:frr` is its local name (#81), the injector writes the
+  area's `frasch:dialect` next to `frasch:local` (`placenames.unclaimed_tags`).
+  So a Frisian view reads it with the Frisian-area chain, as it reads a listed
+  place, and the card calls the name the local form, not "Frisian (OSM)".
 - **OSM's fallback for the local name follows the area's language**:
   `name:frr` in a Frisian area, `name:nds` in a Low Saxon one, nothing in a
   Synnejysk one (OSM has no `name:jut`). So OSM's Frisian exonym never becomes
