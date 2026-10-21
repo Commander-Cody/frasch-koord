@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import { FakeMap } from '../../testing/fakeMap';
+import { queryParamWhenShown } from '../../testing/queryParamWhenShown';
 import AreaPanel from './AreaPanel';
 import type { AreaCollection, AreaFeature } from './areas';
 
@@ -75,9 +76,9 @@ describe('AreaPanel', () => {
     render(<AreaPanel map={new FakeMap().map} />);
     fireEvent.click(await screen.findByRole('button', { name: /Risum/ }));
     built = parts();
+    const area = queryParamWhenShown('area', 'nothing matches that filter');
     fireEvent.click(screen.getByRole('button', { name: 'Reload' }));
-    await screen.findByText('nothing matches that filter');
-    expect(new URLSearchParams(window.location.search).get('area')).toBeNull();
+    expect(await area).toBeUndefined();
   });
 
   it('lists only the municipalities the text filter lets through', async () => {
