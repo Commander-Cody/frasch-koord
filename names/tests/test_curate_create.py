@@ -150,6 +150,13 @@ def test_a_created_place_with_a_column_the_list_has_not_is_refused(ws: Workspace
     assert refusals(apply(ws)) == [f"no name column halunder in {ws.names}"]
 
 
+def test_a_created_place_keeps_its_synnejysk_name(ws: Workspace) -> None:
+    append(ws, create(names={"mooring": "Hoorne", "jut": "Horn"}))
+    apply(ws)
+    (new,) = (r for r in rows(ws) if r["mooring"] == "Hoorne")
+    assert new["jut"] == "Horn"
+
+
 def test_the_decision_of_a_refused_place_is_refused_with_it(ws: Workspace) -> None:
     append(ws, create(kind="castle"), osm("node/7"))
     assert refusals(apply(ws))[1] == f"its place {KEY} is refused"

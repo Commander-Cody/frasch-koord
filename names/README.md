@@ -442,8 +442,9 @@ back to it. Re-run `frasch match` afterwards and export again.
 **A place the list does not have yet** can be added in the view too: "New
 place", or a click on the label of an OSM object no row names ("New place from
 this", which also picks that object). The form takes the kind (every kind of
-`frasch/kinds.py`), a cell per name column, `de`, `da` and a note — at least
-one name, in any column — and lists the rows that already have a name typed
+`frasch/kinds.py`), a cell for every name column of places.csv (the Frisian
+ones, `de`, `nds`, `jut`, `da`) and a note — at least one name, in any column
+— and lists the rows that already have a name typed in any of those columns
 (names do repeat, so it only warns; `export` writes every row's names into
 `work/curate.json` for it). The `create` goes into the patch under a
 provisional key, `new:…`, which the place's decision uses too; until `apply`
