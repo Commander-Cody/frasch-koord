@@ -210,8 +210,8 @@ def test_the_name_frr_line_counts_osms_frisian_names_no_row_holds() -> None:
     }
     lines = input_lines(replace(EMPTY, osm_local=osm_local), WS)
     assert line_starting(lines, "name:frr") == (
-        "name:frr  : 2 object(s) in a Frisian dialect area that no row holds by reference "
-        "have one in OSM"
+        "name:frr  : 2 object(s) that no row holds by reference have one in OSM and get "
+        "a local name in their area (name:frr, or name:nds in a Low Saxon one)"
     )
 
 
