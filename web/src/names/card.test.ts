@@ -137,13 +137,21 @@ describe('the lines', () => {
     expect(cardModel(found({ name_de: 'Niebüll' }), MOORING).lines).toEqual([]);
   });
 
-  it('leave out a Low Saxon name that is the same word as the German one', () => {
-    const naibel = found({
-      names: { [MOORING]: 'Naibel', nds: 'Niebüll' },
-      name_de: 'Niebüll',
-    });
+  // A known Low Saxon or Synnejysk name is shown even where it is the same
+  // word as another: the reader learns that it is, not that it is unknown.
+  it('show a Low Saxon name that is the same word as the German one', () => {
+    const husum = found({ names: { [MOORING]: 'Hüsem', nds: 'Husum' }, name_de: 'Husum' });
 
-    expect(cardModel(naibel, MOORING).lines).toEqual([{ source: GERMAN, name: 'Niebüll' }]);
+    expect(cardModel(husum, MOORING).lines).toEqual([
+      { source: LOW_SAXON, name: 'Husum' },
+      { source: GERMAN, name: 'Husum' },
+    ]);
+  });
+
+  it('show a Low Saxon name that is the same word as the headline', () => {
+    const treen = found({ names: { [MOORING]: 'Treen', nds: 'Treen' }, name_de: 'Treene' });
+
+    expect(cardModel(treen, MOORING).lines).toContainEqual({ source: LOW_SAXON, name: 'Treen' });
   });
 
   it('have the Low Saxon name before the German one', () => {

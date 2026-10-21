@@ -607,10 +607,11 @@ Where the data comes from (`src/names/`):
   and both chains fall back to it before German. A clicked card takes it
   from the tile first, like the generic name below, since that is what the
   label shows. They get their lines after the Frisian ones and OSM's
-  `name:frr`, before German, and only where they differ from the headline
-  and the German name (Husum). A Synnejysk name that is the local form of a
-  place in a Synnejysk area is shown once, as the local form of that variety
-  ("Lokååle noome · Jütsch").
+  `name:frr`, before German, wherever they are known — also where they are
+  the same word as German or the headline (Husum, Treen), so the reader sees
+  that they are, not that they are unknown. A Synnejysk name that is the
+  local form of a place in a Synnejysk area is shown once, as the local form
+  of that variety ("Lokååle noome · Jütsch").
 - The generic name (`name_osm`), the `name:latin`/`name` steps near the end
   of both chains, comes from the same places: a clicked card takes it from the tile,
   one opened from search from `names.json`. A place OSM does not have gets

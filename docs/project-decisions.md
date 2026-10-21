@@ -1859,3 +1859,8 @@ like the Frisian ones. The spec is the issue and its comments. What it settled:
   Frisian name is known. The style splits the chain with a `case` on
   `frasch:dialect` being a Frisian tag, and the card asks the same of its
   `dialect`. The local view is unchanged.
+- **The card shows every known Low Saxon and Synnejysk name** (owner's
+  decision, review): also where it is the same word as German or the headline
+  (Husum, Treen), so the reader sees that it is the same, not that it is
+  unknown. Only the headline's own name gets no line, and a Synnejysk local
+  form gets one line, the local one.

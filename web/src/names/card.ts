@@ -55,11 +55,11 @@ function varietyLines(names: CardNames, shown: ShownName, tags: string[]): CardL
 }
 
 /**
- * Low Saxon and Synnejysk, where they say something German does not: most
- * places are the same word in Low Saxon and German (Husum).
+ * Low Saxon and Synnejysk, wherever they are known -- also where they are the
+ * same word as German or the headline (Husum): the line says that they are.
  */
 function nonFrisianLines(names: CardNames, shown: ShownName): CardLine[] {
-  return varietyLines(names, shown, NON_FRISIAN_TAGS).filter((line) => line.name !== names.name_de);
+  return varietyLines(names, shown, NON_FRISIAN_TAGS);
 }
 
 /**
