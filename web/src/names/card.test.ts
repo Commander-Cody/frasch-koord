@@ -223,6 +223,17 @@ describe('the card of a clicked label the name list does not have', () => {
     expect(cardModel(clicked(props), LOCAL_TAG).lines).toEqual([{ source: FRISIAN, name: 'Söl' }]);
   });
 
+  it("calls OSM's Frisian name of a place in a Frisian area its local form in a dialect view", () => {
+    const props = {
+      'frasch:local': 'Schörkeweerw',
+      'frasch:dialect': 'frr-x-hallig',
+      'name:frr': 'Schörkeweerw',
+      name: 'Kirchwarft',
+    };
+
+    expect(cardModel(clicked(props), MOORING).source).toEqual({ kind: 'local' });
+  });
+
   it("leaves out OSM's Frisian name where it only repeats a name on the card", () => {
     const props = { 'name:frr-x-solring': 'Söl', 'name:frr': 'Söl', name: 'Sylt' };
 

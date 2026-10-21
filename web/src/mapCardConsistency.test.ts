@@ -72,9 +72,10 @@ const SCENARIOS: Record<string, TileProps> = {
   // local view labels with it rather than with German.
   'a Danish place with a German exonym': { 'name:de': 'Ripen', 'name:da': 'Ribe', name: 'Ribe' },
   // Issue #81: a place the name list does not have, inside a dialect area.
-  // The injector writes OSM's `name:frr` as its `frasch:local`.
+  // The injector writes OSM's `name:frr` as its `frasch:local`, with the area.
   'OSM’s Frisian name as the local one, inside a dialect area': {
     'frasch:local': 'Schörkeweerw',
+    'frasch:dialect': 'frr-x-hallig',
     'name:frr': 'Schörkeweerw',
     name: 'Kirchwarft',
   },

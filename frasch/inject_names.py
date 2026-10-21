@@ -45,7 +45,6 @@ from frasch.inject.synthetic import SyntheticObjects
 from frasch.inject.writer import Writer, copy_of
 from frasch.objects import LocatedObject, point
 from frasch.paths import Workspace
-from frasch.placenames import LOCAL_KEY
 from frasch.refs import OsmRef
 
 # an object of the extract the injector copies
@@ -89,8 +88,8 @@ class Injector:
 
     def _added_tags(self, key: OsmRef, o: _OsmObject) -> dict[str, str]:
         """The tags this object gets: its row's -- or, when no row claims
-        it, OSM's Frisian name as its local one (#81) -- and then the
-        curation's, which win."""
+        it, OSM's Frisian name as its local one, with its area (#81) -- and
+        then the curation's, which win."""
         tags: dict[str, str] = {}
         claim = self._claims.row_for(key, o.tags)
         if claim is not None:
@@ -98,7 +97,7 @@ class Injector:
             self._stats.tag(key[0], tags)
         elif local := self._inputs.osm_local.get(key):
             self._stats.osm_local_unclaimed += 1
-            tags[LOCAL_KEY] = local
+            tags.update(local)
         tuning = self._inputs.curation.objects.get(key)
         if tuning is not None:
             self._stats.curated.add(key)

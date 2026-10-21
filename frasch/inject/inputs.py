@@ -39,10 +39,11 @@ class Inputs:
     # the places OSM does not have that a row uses, with their tags
     local_places: list[LocalPlace]
     # the pre-passes over the extract: the member ways of the claimed
-    # waterway relations, and OSM's Frisian name of the objects no row
-    # holds that lie in a dialect area
+    # waterway relations, and the tags of OSM's Frisian name of the objects
+    # no row holds that lie in a Frisian dialect area (`frasch:local` and
+    # `frasch:dialect`)
     members: Members
-    osm_local: dict[OsmRef, str]
+    osm_local: dict[OsmRef, dict[str, str]]
 
 
 def load_inputs(ws: Workspace, reg: Registry, extract: str) -> Inputs:
@@ -107,12 +108,13 @@ def _read_objects(path: str, by_id: Mapping[Ref, PlaceRow]) -> dict[OsmRef, Loca
 
 def scan_osm_local(
     extract: str, areas: AreaIndex, held: Collection[Ref], reg: Registry
-) -> dict[OsmRef, str]:
-    """OSM's own Frisian name (`name:frr`) of every object of the extract
-    that lies in a Frisian dialect area and that no row holds by reference
-    (`held`) -- there it is the local name of an object the name list gives
-    none (placenames.unclaimed_local, #81).  An object a row holds has its
-    `name:frr` in the objects file.  In a Synnejysk area OSM's Frisian name
+) -> dict[OsmRef, dict[str, str]]:
+    """The tags of OSM's own Frisian name (`name:frr`) of every object of the
+    extract that lies in a Frisian dialect area and that no row holds by
+    reference (`held`) -- there it is the local name of an object the name
+    list gives none, written with its area (placenames.unclaimed_tags, #81).
+    An object a row holds has its `name:frr` in the objects file.  In a
+    Synnejysk area OSM's Frisian name
     is no local name, and in a Low Saxon one OSM's `name:nds` labels the
     local view anyway, the step of the label chain after `frasch:local`.
 
@@ -122,7 +124,7 @@ def scan_osm_local(
     a way or relation inside its polygon, else at its outline point."""
     named = set(osmscan.tagged(extract, FRISIAN_KEY)) - set(held)
     local = {
-        ref: placenames.unclaimed_local(obj, areas, reg)
+        ref: placenames.unclaimed_tags(obj, areas, reg)
         for ref, obj in locate.locate_in(extract, named).items()
     }
-    return {ref: name for ref, name in local.items() if name}
+    return {ref: tags for ref, tags in local.items() if tags}

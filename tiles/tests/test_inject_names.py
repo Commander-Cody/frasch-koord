@@ -482,7 +482,7 @@ def test_curation_tags_win_over_the_original_tags(injected: Injected) -> None:
 
 
 # ------------------------------------------- OSM's own Frisian name (#81) ---
-def test_an_object_no_row_claims_gets_osms_frisian_name_as_its_local_one(
+def test_an_object_no_row_claims_gets_osms_frisian_name_as_its_local_one_with_its_area(
     injected: Injected,
 ) -> None:
     _, by_key = injected
@@ -491,6 +491,7 @@ def test_an_object_no_row_claims_gets_osms_frisian_name_as_its_local_one(
         "name": "Kirchwarft",
         "name:frr": "Schörkeweerw",
         "frasch:local": "Schörkeweerw",
+        "frasch:dialect": "frr-x-mooring",
     }
 
 

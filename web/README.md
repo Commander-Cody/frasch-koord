@@ -347,9 +347,11 @@ OpenMapTiles schema plus our extras, injected by the `tiles/` build
   feature must not be labelled below that zoom.
 - `frasch:maxzoom` (**string**, only where curated): the feature must not
   be labelled above that zoom (inclusive).
-- `frasch:dialect` (string, only inside a Frisian dialect area): tag of the
-  dialect area the feature lies in, e.g. `frr-x-fering`. Not used by the
-  style today; it is what `frasch:local` was computed from.
+- `frasch:dialect` (string, only inside a dialect area): tag of the area
+  the feature lies in, e.g. `frr-x-fering`, or `jut` in a Synnejysk area;
+  absent outside every area, which is Low Saxon by default. It is what
+  `frasch:local` was computed from, and the style's `case` reads it: a
+  Frisian view's chain differs inside a Frisian area (see "Label chain").
 - `frasch:local` (string, only where known): the name the people of the
   place use themselves — the area dialect's name, or the `local` column of
   `names/places.csv` where a sub-dialect differs (Fahretoft). Where the list
@@ -700,9 +702,10 @@ message in the panel.
 assignments — a researched draft nobody has checked — can be reviewed on the
 map instead of in a spreadsheet. Clicking a polygon or a list row shows the
 municipality, the dialect and the row's research `note` verbatim. The
-municipalities **no row claims** are drawn in grey: those places get no dialect
-at all, and the detail block hands you the `relation/<id>` to paste into a new
-CSV row. `?areas&area=relation/<id>` reopens a municipality (by its OSM reference,
+municipalities **no row claims** — of Nordfriesland, Schleswig-Flensburg and
+Flensburg — are drawn in grey: those places get no area, so they are Low Saxon
+by default (the legend says "no row – Low Saxon by default"), and the detail
+block hands you the `relation/<id>` to paste into a new CSV row. `?areas&area=relation/<id>` reopens a municipality (by its OSM reference,
 which belongs to one `dialect_areas.csv` row only); ↑/↓
 or `j`/`k` walk the list. English only on purpose, like the curation view.
 
@@ -762,7 +765,6 @@ the dialect names under `dialects.*`, which German takes from the registry:
 
 ## Not done / left as-is
 
-- Nothing in the _style_ reads `frasch:dialect`/`frasch:variety`; the place
-  card does.
+- Nothing in the _style_ reads `frasch:variety`; the place card does.
 - The `within`-polygon split of the label chain for non-German areas (see
   "Label chain").

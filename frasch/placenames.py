@@ -92,7 +92,8 @@ class PlaceNames(NamedTuple):
     dialect: str  # of the area the place lies in
     local: str
     variety: str
-    # whether `local` is OSM's `name:frr`, not the list's (the injector counts them)
+    # whether `local` is OSM's name in the area's language, not the list's
+    # (the injector counts them)
     local_from_osm: bool
 
 
@@ -120,10 +121,14 @@ def resolve(
     )
 
 
-def unclaimed_local(obj: LocatedObject, areas: AreaIndex | None, reg: Registry) -> str:
-    """The local name of an object no row of the name list claims -- a Warft,
-    a street, a station: OSM's own name in the language of the area it lies in."""
-    return _osm_local_name(obj, dialect_at(obj, areas), reg)
+def unclaimed_tags(obj: LocatedObject, areas: AreaIndex | None, reg: Registry) -> dict[str, str]:
+    """The tags of an object no row of the name list claims -- a Warft, a
+    street, a station: its local name, OSM's own name in the language of the
+    area it lies in, with that area, which the label chain of a Frisian view
+    asks for.  None for an object without a local name."""
+    area_tag = dialect_at(obj, areas)
+    local = _osm_local_name(obj, area_tag, reg)
+    return {LOCAL_KEY: local, DIALECT_KEY: area_tag or ""} if local else {}
 
 
 def _variety_name(

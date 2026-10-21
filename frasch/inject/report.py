@@ -38,7 +38,7 @@ def input_lines(inputs: Inputs, ws: Workspace) -> list[str]:
         lines.append(f"waterways : {len(inputs.members)} member ways of matched waterway relations")
     if inputs.osm_local:
         lines.append(
-            f"{FRISIAN_KEY}  : {len(inputs.osm_local)} object(s) in a dialect area that no row "
+            f"{FRISIAN_KEY}  : {len(inputs.osm_local)} object(s) in a Frisian dialect area that no row "
             "holds by reference have one in OSM"
         )
     return lines

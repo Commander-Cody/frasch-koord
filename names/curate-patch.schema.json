@@ -83,7 +83,7 @@
         "properties": {
           "id": { "$ref": "#/$defs/provisional_key" },
           "names": {
-            "description": "The new row's name cells by column: the Frisian name columns (`mooring`, `local`, those of names/dialects.csv), `de` and `da` -- only those that are not empty, at least one. Apply refuses a column the name list does not have.",
+            "description": "The new row's name cells by column: the Frisian name columns (`mooring`, `local`, those of names/dialects.csv), `de`, the Low Saxon and Synnejysk columns (`nds`, `jut`) and `da` -- only those that are not empty, at least one. Apply refuses a column the name list does not have.",
             "type": "object",
             "minProperties": 1,
             "additionalProperties": { "type": "string", "minLength": 1 }

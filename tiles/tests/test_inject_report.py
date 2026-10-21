@@ -204,10 +204,14 @@ def test_the_waterways_line_counts_the_member_ways() -> None:
 
 
 def test_the_name_frr_line_counts_osms_frisian_names_no_row_holds() -> None:
-    osm_local = {("n", 1): "Schörkeweerw", ("w", 2): "Jenswäärw"}
+    osm_local = {
+        ("n", 1): {"frasch:local": "Schörkeweerw", "frasch:dialect": "frr-x-hallig"},
+        ("w", 2): {"frasch:local": "Jenswäärw", "frasch:dialect": "frr-x-hallig"},
+    }
     lines = input_lines(replace(EMPTY, osm_local=osm_local), WS)
     assert line_starting(lines, "name:frr") == (
-        "name:frr  : 2 object(s) in a dialect area that no row holds by reference have one in OSM"
+        "name:frr  : 2 object(s) in a Frisian dialect area that no row holds by reference "
+        "have one in OSM"
     )
 
 
