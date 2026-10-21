@@ -148,12 +148,12 @@ def test_the_worklist_offers_the_results_of_its_schema(world: Path) -> None:
 
 def test_the_worklist_names_every_name_column_in_list_order(world: Path) -> None:
     exported = json.loads(export_the_review_rows(world).read_text(encoding="utf-8"))
-    assert exported["all_name_columns"] == [*exported["name_columns"], "de", "nds", "jut", "da"]
+    assert exported["all_name_columns"] == [*exported["frisian_columns"], "de", "nds", "jut", "da"]
 
 
 def test_the_worklist_names_the_frisian_name_columns_in_list_order(world: Path) -> None:
     exported = json.loads(export_the_review_rows(world).read_text(encoding="utf-8"))
-    assert exported["name_columns"] == [
+    assert exported["frisian_columns"] == [
         "mooring",
         "local",
         "wieding",

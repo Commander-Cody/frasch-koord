@@ -78,8 +78,8 @@ export interface CurateWorklist {
   /** Every kind, in the order the list walks them. */
   kind_order: string[];
   /** The Frisian name columns of places.csv in list order: a place goes by its first name among these. */
-  name_columns: string[];
-  /** Every name column of places.csv in list order (`name_columns`, `de`, `nds`, `jut`, `da`): a new place's form has a cell for each. */
+  frisian_columns: string[];
+  /** Every name column of places.csv in list order (`frisian_columns`, `de`, `nds`, `jut`, `da`): a new place's form has a cell for each. */
   all_name_columns: string[];
   /** The kinds whose local reference can carry an area instead of a bare point. */
   polygon_kinds: string[];

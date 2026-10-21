@@ -46,7 +46,7 @@ from frasch.refs import LOCAL_TYPE, SLUG, OsmRef, Ref
 from frasch.tables import Table
 
 
-def name_columns(reg: Registry) -> list[str]:
+def frisian_columns(reg: Registry) -> list[str]:
     """The Frisian name columns in the order `any_name` tries them: the first
     (= Mooring) dialect, `local` -- the sub-dialect form of the place itself,
     not a dialect of its own -- then the other dialects."""
@@ -63,14 +63,14 @@ def non_frisian_columns(reg: Registry) -> list[str]:
 def all_name_columns(reg: Registry) -> list[str]:
     """Every name column, in list order: `;`-separated variants with `(…)`
     remarks, the conventions names/README.md sets for every name cell."""
-    return [*name_columns(reg), "de", *non_frisian_columns(reg), "da"]
+    return [*frisian_columns(reg), "de", *non_frisian_columns(reg), "da"]
 
 
 def columns(reg: Registry) -> list[str]:
     """The columns of the name list, in the order it is written in."""
     return (
         ["kind"]
-        + name_columns(reg)
+        + frisian_columns(reg)
         + ["de", *non_frisian_columns(reg), "hint", "da", "osm", "wikidata", "status", "note", "id"]
     )
 
@@ -120,7 +120,7 @@ def any_name(row: Row, reg: Registry) -> str:
     """The row's Frisian name in any dialect -- the answer to "does this row
     carry a Frisian name at all?".  Mooring first, then `local`, then the
     other dialects in registry order."""
-    for column in name_columns(reg):
+    for column in frisian_columns(reg):
         name = primary(row.get(column))
         if name:
             return name

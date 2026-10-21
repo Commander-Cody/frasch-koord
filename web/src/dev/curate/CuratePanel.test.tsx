@@ -56,7 +56,7 @@ function curateRow(id: string, name: string, de: string): CurateRow {
 const WORKLIST: CurateWorklist = {
   bbox: [8, 54, 9, 55],
   kind_order: ['settlement', 'warft'],
-  name_columns: ['mooring', 'local', 'fering'],
+  frisian_columns: ['mooring', 'local', 'fering'],
   all_name_columns: ['mooring', 'local', 'fering', 'de', 'nds', 'jut', 'da'],
   polygon_kinds: ['koog'],
   class_keys: ['place', 'boundary'],

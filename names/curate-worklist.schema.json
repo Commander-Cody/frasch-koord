@@ -7,7 +7,7 @@
   "required": [
     "bbox",
     "kind_order",
-    "name_columns",
+    "frisian_columns",
     "all_name_columns",
     "polygon_kinds",
     "class_keys",
@@ -30,13 +30,13 @@
       "type": "array",
       "items": { "type": "string" }
     },
-    "name_columns": {
+    "frisian_columns": {
       "description": "The Frisian name columns of places.csv in the order of the list: `mooring`, `local`, then the other dialects of names/dialects.csv. A place goes by its first name among these.",
       "type": "array",
       "items": { "type": "string" }
     },
     "all_name_columns": {
-      "description": "Every name column of places.csv in the order of the list: `name_columns`, `de`, the other languages' varieties of names/dialects.csv (`nds`, `jut`), `da`. A new place's form has a cell for each.",
+      "description": "Every name column of places.csv in the order of the list: `frisian_columns`, `de`, the other languages' varieties of names/dialects.csv (`nds`, `jut`), `da`. A new place's form has a cell for each.",
       "type": "array",
       "items": { "type": "string" }
     },

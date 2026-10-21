@@ -81,7 +81,7 @@ class ListedPlace(TypedDict):
 class Worklist(TypedDict):
     bbox: list[float]
     kind_order: list[str]
-    name_columns: list[str]
+    frisian_columns: list[str]
     all_name_columns: list[str]
     polygon_kinds: list[str]
     class_keys: list[str]
@@ -156,7 +156,7 @@ def _work_row(row: PlaceRow, m: matchfile.Entry, reg: Registry) -> WorkRow:
         "kind": row["kind"],
         "result": m["result"],
         "name": name,
-        "names": {c: row[c] for c in placelist.name_columns(reg) if row[c]},
+        "names": {c: row[c] for c in placelist.frisian_columns(reg) if row[c]},
         "name_de": name_de,
         "name_da": namecell.primary(row["da"]),
         "slug_suggestion": placelist.slug(name_de or name),
@@ -200,7 +200,7 @@ def _write_worklist(
     worklist: Worklist = {
         "bbox": list(geo.NF_BBOX),
         "kind_order": kinds.KIND_ORDER,
-        "name_columns": placelist.name_columns(reg),
+        "frisian_columns": placelist.frisian_columns(reg),
         "all_name_columns": placelist.all_name_columns(reg),
         "polygon_kinds": kinds.POLYGON_KINDS,
         "class_keys": list(osmtags.CLASS_KEYS),
