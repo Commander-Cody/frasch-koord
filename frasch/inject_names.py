@@ -88,7 +88,8 @@ class Injector:
 
     def _added_tags(self, key: OsmRef, o: _OsmObject) -> dict[str, str]:
         """The tags this object gets: its row's -- or, when no row claims
-        it, OSM's Frisian name as its local one, with its area (#81) -- and
+        it, OSM's name in the language of its area (`name:frr`, or `name:nds`
+        in a Low Saxon one) as its local one, with that area (#81) -- and
         then the curation's, which win."""
         tags: dict[str, str] = {}
         claim = self._claims.row_for(key, o.tags)

@@ -126,11 +126,11 @@ def _dialect_lines(stats: Stats, inputs: Inputs) -> list[str]:
     claimed, unclaimed = stats.osm_local_claimed, stats.osm_local_unclaimed
     lines.append(
         f"  {LOCAL_KEY:<20} {stats.local:>5}  local form"
-        + (f" ({claimed} of them OSM's {FRISIAN_KEY})" if claimed else "")
+        + (f" ({claimed} of them OSM's {FRISIAN_KEY} or name:nds)" if claimed else "")
     )
     if unclaimed:
         lines.append(
-            f"  {LOCAL_KEY:<20} {unclaimed:>5}  OSM's {FRISIAN_KEY} on objects no row claims"
+            f"  {LOCAL_KEY:<20} {unclaimed:>5}  OSM's {FRISIAN_KEY} or name:nds on objects no row claims"
         )
     lines.append("objects per dialect area:")
     lines += [f"  {DIALECT_KEY}={tag:<15} {n:>5}" for tag, n in stats.dialects.most_common()]
