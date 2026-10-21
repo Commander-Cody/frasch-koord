@@ -30,8 +30,7 @@ vi.mock('./map/MapView', () => ({
 
 const naibel: NameEntry = {
   id: 'naibel',
-  names: { 'frr-x-mooring': 'Naibel' },
-  name_nds: 'Neebüll',
+  names: { 'frr-x-mooring': 'Naibel', nds: 'Neebüll' },
   name_de: 'Niebüll',
   lon: 8.83,
   lat: 54.79,

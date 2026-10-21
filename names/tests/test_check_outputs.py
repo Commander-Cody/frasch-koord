@@ -168,7 +168,7 @@ def test_the_objects_are_rebuilt_with_the_registry_passed_in(extract: Extract, w
     # rebuild that reads places.csv with that registry puts it on the map
     ws, pbf, _ = extract
     (world / "dialects.csv").write_text(
-        REGISTRY_CSV + "frr-x-strand,strand,Strander,extinct,no,\n", encoding="utf-8"
+        REGISTRY_CSV + "frr-x-strand,frr,strand,Strander,extinct,no,\n", encoding="utf-8"
     )
     header, row, _ = places_text([NAIBEL | {"mooring": ""}]).split("\n")
     (world / "places.csv").write_text(f"{header},strand\n{row},Naibel\n", encoding="utf-8")

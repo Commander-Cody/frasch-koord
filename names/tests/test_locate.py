@@ -178,7 +178,7 @@ def test_the_command_locates_the_rows_the_registry_of_its_option_puts_on_the_map
     # `--dialects`: a row named only in a dialect of that registry is located
     registry = tmp_path / "other-dialects.csv"
     registry.write_text(
-        REGISTRY_CSV + "frr-x-strand,strand,Strander,extinct,no,\n", encoding="utf-8"
+        REGISTRY_CSV + "frr-x-strand,frr,strand,Strander,extinct,no,\n", encoding="utf-8"
     )
     header, row, _ = places_text([{"kind": "island", "osm": f"node/{NAIBEL}"}]).split("\n")
     (world / "places.csv").write_text(f"{header},strand\n{row},Strand\n", encoding="utf-8")

@@ -47,7 +47,7 @@ def _cells(entry: PatchEntry, names: PlaceList) -> dict[str, str]:
     """The cells of the new row: its kind, names and note, stripped, the rest
     empty."""
     given = entry.get("names", {})
-    if unknown := sorted(set(given) - set(check_inputs.variant_columns(names.reg))):
+    if unknown := sorted(set(given) - set(placelist.all_name_columns(names.reg))):
         raise Refused(f"no name column {', '.join(unknown)} in {names.path}")
     cells = dict.fromkeys(names.fields, "") | {c: cell.strip() for c, cell in given.items()}
     if not any(cells[c] for c in given):

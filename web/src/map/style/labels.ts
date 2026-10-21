@@ -6,16 +6,26 @@ import type { LayerSpecification } from 'maplibre-gl';
 import type { ExpressionSpecification } from '@maplibre/maplibre-gl-style-spec';
 
 import { labelChain } from '../../dialects/labelChain.ts';
+import { DIALECTS, frisianTags } from '../../dialects/registry.ts';
+
+function coalesce(keys: string[]): unknown[] {
+  return ['coalesce', ...keys.map((key) => ['get', key])];
+}
 
 /**
  * Builds the `text-field` expression for a view: a `coalesce` over the tile
- * properties of `labelChain(tag)`, the chain the place card and the search
- * results follow too (see dialects/labelChain.ts).
+ * properties of `labelChain(tag, …)`, the chain the place card and the search
+ * results follow too (see dialects/labelChain.ts) — one for a feature in the
+ * area of a Frisian dialect, one for any other, as `frasch:dialect` says.
+ * names/resolveName.ts asks the same of a card's `dialect`.
  */
 export function nameExpression(tag: string): ExpressionSpecification {
+  const inFrisianArea = ['in', ['get', 'frasch:dialect'], ['literal', frisianTags(DIALECTS)]];
   return [
-    'coalesce',
-    ...labelChain(tag).map((key) => ['get', key]),
+    'case',
+    inFrisianArea,
+    coalesce(labelChain(tag, true)),
+    coalesce(labelChain(tag, false)),
   ] as unknown as ExpressionSpecification;
 }
 

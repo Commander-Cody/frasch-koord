@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { createPropertyExpression, latest } from '@maplibre/maplibre-gl-style-spec';
 import type { LngLat } from 'maplibre-gl';
 
 import { ALL_VIEW_TAGS } from './dialects/views';
@@ -8,6 +7,7 @@ import type { NameEntry } from './names/entry';
 import type { TileProps } from './names/tile';
 import { nameExpression } from './map/style/labels';
 import listedScenarios from './testing/generated/listedScenarios.json';
+import { evaluateTextField } from './testing/textField';
 
 // Issue #16: the place card once showed German while the map label showed
 // Low Saxon for the same place, because the card's label chain and the map's
@@ -22,19 +22,7 @@ import listedScenarios from './testing/generated/listedScenarios.json';
 
 /** What the map would render as the label, using the real style expression. */
 function mapLabel(tag: string, props: TileProps): string {
-  const result = createPropertyExpression(
-    nameExpression(tag),
-    'text-field',
-    // The style-spec JSON's own type is looser than the (unexported)
-    // StylePropertySpecification createPropertyExpression wants; go via its
-    // own parameter type rather than reaching for `any`.
-    latest.layout_symbol['text-field'] as unknown as Parameters<typeof createPropertyExpression>[2],
-  );
-  if (result.result === 'error') {
-    throw new Error(`invalid text-field expression for ${tag}: ${JSON.stringify(result.value)}`);
-  }
-  const value = result.value.evaluate({ zoom: 10 }, { properties: props, type: 'Point' });
-  return value.toString();
+  return evaluateTextField(nameExpression(tag), props);
 }
 
 /** A click on a map label: the tile properties, and the entry when the place is listed. */
@@ -84,9 +72,10 @@ const SCENARIOS: Record<string, TileProps> = {
   // local view labels with it rather than with German.
   'a Danish place with a German exonym': { 'name:de': 'Ripen', 'name:da': 'Ribe', name: 'Ribe' },
   // Issue #81: a place the name list does not have, inside a dialect area.
-  // The injector writes OSM's `name:frr` as its `frasch:local`.
+  // The injector writes OSM's `name:frr` as its `frasch:local`, with the area.
   'OSM’s Frisian name as the local one, inside a dialect area': {
     'frasch:local': 'Schörkeweerw',
+    'frasch:dialect': 'frr-x-hallig',
     'name:frr': 'Schörkeweerw',
     name: 'Kirchwarft',
   },

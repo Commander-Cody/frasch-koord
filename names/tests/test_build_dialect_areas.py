@@ -213,17 +213,18 @@ def test_a_build_counts_the_municipalities_no_row_claims() -> None:
     assert parts.unassigned == 2
 
 
-def test_the_parts_name_the_district_of_their_unassigned_municipalities() -> None:
+def test_the_parts_name_the_districts_of_their_unassigned_municipalities() -> None:
+    # Nordfriesland, Schleswig-Flensburg and Flensburg: Schleswig south of the border
     rows = [_row(2, "frr-x-mooring", "way/1")]
 
     parts = bda.build(rows, REGISTRY, _with_two_unclaimed(), SOURCE).parts
 
     assert parts is not None
-    assert parts.fc["properties"]["unassigned_ags"] == "01054"
+    assert parts.fc["properties"]["unassigned_ags"] == ["01054", "01059", "01001"]
 
 
 def test_a_build_without_the_parts_scans_for_no_unclaimed_municipalities() -> None:
-    assert bda.Options(parts=False).scanned_ags is None
+    assert bda.Options(parts=False).scanned_ags == ()
 
 
 # ------------------------------------------------------------------ write ---
@@ -286,7 +287,7 @@ def test_a_missing_reference_stops_the_build_and_nothing_is_written(ws: Workspac
     parts_out.write_bytes(b"stale-parts")
 
     with pytest.raises(PipelineError):
-        bda.run(ws, REGISTRY, [pbf], bda.Options(unassigned_ags=None))
+        bda.run(ws, REGISTRY, [pbf], bda.Options(unassigned_ags=()))
 
     # nothing was written -- neither file changed
     assert out.read_bytes() == b"stale-out"
@@ -296,7 +297,7 @@ def test_a_missing_reference_stops_the_build_and_nothing_is_written(ws: Workspac
 def test_allow_missing_writes_despite_a_missing_reference(ws: Workspace) -> None:
     pbf = _write_fixture(ws, "frr-x-mooring,way/1,Existing,\nfrr-x-mooring,way/999,Missing,\n")
 
-    bda.run(ws, REGISTRY, [pbf], bda.Options(unassigned_ags=None, allow_missing=True))
+    bda.run(ws, REGISTRY, [pbf], bda.Options(unassigned_ags=(), allow_missing=True))
 
     assert Path(ws.areas).exists()
     assert Path(ws.parts).exists()
@@ -306,7 +307,7 @@ def test_output_is_stamped_with_its_inputs(ws: Workspace) -> None:
     pbf = _write_fixture(ws, "frr-x-mooring,way/1,Existing,\n", timestamp="2026-09-22T20:22:59Z")
     out, parts_out = Path(ws.areas), Path(ws.parts)
 
-    bda.run(ws, REGISTRY, [pbf], bda.Options(unassigned_ags=None))
+    bda.run(ws, REGISTRY, [pbf], bda.Options(unassigned_ags=()))
 
     expected = {
         "dialect_areas.csv": provenance.blob_hash(ws.area_list),
@@ -364,6 +365,15 @@ def _write_district(ws: Workspace) -> tuple[Path, Path]:
         500: ([("w", 40, "outer")], _admin("010540000000", "Amt", admin_level="7")),
         600: ([("w", 40, "outer")], _admin("010540006000", "Park", boundary="protected_area")),
         700: ([("w", 70, "outer")], _admin("010540007000", "Brokentown")),
+        # Flensburg: a city that is a district of its own, not admin_level 8
+        800: (
+            [("w", 40, "outer")],
+            _admin("010010000000", "Flensburg", admin_level="6", **{"de:place": "city"}),
+        ),
+        900: (
+            [("w", 40, "outer")],
+            _admin("010590000000", "Kreis", admin_level="6", **{"de:place": "county"}),
+        ),
     }
     first = write_extract(tmp_path / "first.osm.pbf", nodes=nodes, ways=ways, relations=relations)
     second_nodes, way8 = ring(80, (8.70, 54.50), (8.72, 54.50), (8.72, 54.52))
@@ -395,7 +405,7 @@ def _untimed(line: str) -> str:
 def test_a_scan_finds_each_claimed_reference_in_whichever_extract_holds_it(
     ws: Workspace,
 ) -> None:
-    found = bda.scan(_write_district(ws), CLAIMED, "01054")
+    found = bda.scan(_write_district(ws), CLAIMED, ("01054",))
 
     assert set(found.claimed) == {("w", 1), ("r", 100), ("w", 8)}
 
@@ -405,7 +415,7 @@ def test_a_scan_finds_the_municipalities_of_the_district_that_no_row_claims(
 ) -> None:
     # not those of another district, of another admin level or no
     # administrative boundary, and not one whose ring is broken
-    found = bda.scan(_write_district(ws), CLAIMED, "01054")
+    found = bda.scan(_write_district(ws), CLAIMED, ("01054",))
 
     assert {ref: m.name for ref, m in found.unclaimed.items()} == {
         ("r", 200): "Freetown",
@@ -413,21 +423,38 @@ def test_a_scan_finds_the_municipalities_of_the_district_that_no_row_claims(
     }
 
 
+def test_a_scan_finds_the_unclaimed_municipalities_of_every_district_it_is_given(
+    ws: Workspace,
+) -> None:
+    found = bda.scan(_write_district(ws), CLAIMED, ("01054", "01056"))
+
+    assert ("r", 400) in found.unclaimed
+
+
+def test_a_scan_takes_a_city_that_is_a_district_of_its_own_for_a_municipality(
+    ws: Workspace,
+) -> None:
+    # but not the district (Kreis) around the municipalities
+    found = bda.scan(_write_district(ws), CLAIMED, ("01001", "01059"))
+
+    assert {ref: m.name for ref, m in found.unclaimed.items()} == {("r", 800): "Flensburg"}
+
+
 def test_a_scan_without_a_district_finds_no_unclaimed_municipalities(ws: Workspace) -> None:
-    found = bda.scan(_write_district(ws), CLAIMED, None)
+    found = bda.scan(_write_district(ws), CLAIMED, ())
 
     assert found.unclaimed == {}
 
 
 def test_a_scan_has_the_ring_problems_of_the_claimed_areas_only(ws: Workspace) -> None:
     # Brokentown's broken ring is no problem: nobody claims it
-    found = bda.scan(_write_district(ws), CLAIMED, "01054")
+    found = bda.scan(_write_district(ws), CLAIMED, ("01054",))
 
     assert found.problems == ["relation/100: 1 unclosed outer ring(s) -- skipped"]
 
 
 def test_a_scan_says_what_an_extract_held(ws: Workspace) -> None:
-    found = bda.scan(_write_district(ws), CLAIMED, "01054")
+    found = bda.scan(_write_district(ws), CLAIMED, ("01054",))
 
     assert _untimed(found.report[0]) == (
         "first.osm.pbf: 1/1 relations, 6 ways, 17 nodes, 3 unclaimed municipalities (Ns)"
@@ -436,7 +463,7 @@ def test_a_scan_says_what_an_extract_held(ws: Workspace) -> None:
 
 def test_a_later_extract_is_asked_only_for_what_the_earlier_ones_lacked(ws: Workspace) -> None:
     # Freetown, found in the first extract already, is not counted again
-    found = bda.scan(_write_district(ws), CLAIMED, "01054")
+    found = bda.scan(_write_district(ws), CLAIMED, ("01054",))
 
     assert _untimed(found.report[1]) == "second.osm.pbf: 0/0 relations, 1 ways, 3 nodes (Ns)"
 
@@ -449,9 +476,10 @@ def test_the_parts_keep_their_schema(ws: Workspace) -> None:
 
 
 def test_a_build_adds_the_municipalities_no_row_claims_to_the_parts(ws: Workspace) -> None:
+    # of the districts scanned by default: Freetown, the nameless one, Flensburg
     bda.run(ws, REGISTRY, _write_district(ws))
     parts = json.loads(Path(ws.parts).read_text(encoding="utf-8"))
-    assert [f["properties"]["assigned"] for f in parts["features"]].count(False) == 2
+    assert [f["properties"]["assigned"] for f in parts["features"]].count(False) == 3
 
 
 def test_a_build_first_says_what_the_area_list_names(

@@ -282,18 +282,29 @@ into the `text-field` of every marked symbol layer, and `resolveName` in
 `src/names/resolveName.ts` walks the same chain over a place's names for the
 place card and the search results — so neither can drift from the map label again (it
 did once: the card said Flensburg where the map said Flensborg). Dialect view
-(`tag = "frr-x-mooring"`):
+(`tag = "frr-x-mooring"`), for a place in the area of a Frisian dialect and
+for any other — the style tells them apart with a `case` on whether
+`frasch:dialect` is one of the registry's Frisian tags (`language` `frr`),
+and the card asks the same of the place's `dialect`:
 
 ```
-coalesce(name:frr-x-mooring, frasch:local, name:frr-x-wieding, …, name:frr, name:nds, name:de, name:latin, name)
+Frisian area: coalesce(name:frr-x-mooring, frasch:local, name:frr-x-wieding, …, name:frr, name:nds, name:de, name:latin, name)
+elsewhere:    coalesce(name:frr-x-mooring, name:frr-x-wieding, …, name:frr, frasch:local, name:nds, name:de, name:latin, name)
 ```
 
 i.e. `coalesce(get "name:frr-x-mooring", get "frasch:local", …)`, where `…`
-is the `name:<tag>` of every other dialect of the registry, in registry
-order. `frasch:local` sits right behind the selected dialect so that a place
-the dialect has no name for still gets a _Frisian_ label (the Fering name on
-Föhr) rather than dropping to German; the other dialects come next, ahead of
-OSM's dialect-mixed `name:frr`.
+is the `name:<tag>` of every other Frisian dialect of the registry, in
+registry order — never `name:nds` or `name:jut`, which are no dialects of a
+Frisian view. In a Frisian area `frasch:local` sits right behind the
+selected dialect so that a place the dialect has no name for still gets a
+_Frisian_ label (the Fering name on Föhr) rather than dropping to German;
+the other dialects come next, ahead of OSM's dialect-mixed `name:frr`.
+Anywhere else — a Synnejysk area, a Low Saxon one, or none — the local name
+is Synnejysk or Low Saxon, so it comes only after every Frisian name, before
+`name:nds`: Süderlügum is _Läigem_ in Mooring, and _Lym_ only where no
+Frisian name is known. A Synnejysk name labels a Frisian view only where it
+is the place's local name, never as an exonym of a place outside the
+Synnejysk areas. Only a Frisian dialect is a view (`ALL_VIEW_TAGS`).
 
 Local view (`tag = LOCAL_TAG`):
 
@@ -336,9 +347,11 @@ OpenMapTiles schema plus our extras, injected by the `tiles/` build
   feature must not be labelled below that zoom.
 - `frasch:maxzoom` (**string**, only where curated): the feature must not
   be labelled above that zoom (inclusive).
-- `frasch:dialect` (string, only inside a Frisian dialect area): tag of the
-  dialect area the feature lies in, e.g. `frr-x-fering`. Not used by the
-  style today; it is what `frasch:local` was computed from.
+- `frasch:dialect` (string, only inside a dialect area): tag of the area
+  the feature lies in, e.g. `frr-x-fering`, or `jut` in a Synnejysk area;
+  absent outside every area, which is Low Saxon by default. It is what
+  `frasch:local` was computed from, and the style's `case` reads it: a
+  Frisian view's chain differs inside a Frisian area (see "Label chain").
 - `frasch:local` (string, only where known): the name the people of the
   place use themselves — the area dialect's name, or the `local` column of
   `names/places.csv` where a sub-dialect differs (Fahretoft). Where the list
@@ -528,7 +541,7 @@ warns rather than fails: the archive is published on its own and catches up
 with `names.json` later. With `VITE_TILES_URL` the archive that is served is
 not the build's to read; the fetched pinned one is checked if there is one.
 
-**All** of an entry's names (every dialect, the local one, Low Saxon and German)
+**All** of an entry's names (every variety's, Low Saxon and Synnejysk among them, the local one, and German)
 are flattened into one indexed string, so a place stays findable under any of
 its names whichever view is selected — typing "Naibel" while the map is in
 Fering still finds Niebüll. Which name a result _shows_ follows the selected
@@ -586,12 +599,19 @@ Where the data comes from (`src/names/`):
   reference or a pasted OSM URL. The card links the first reference of its
   row; the dev panels use the same three. The shape of a Wikidata id is the
   pattern of `names/search-index.schema.json`, read at run time.
-- Low Saxon (`name_nds`) is the same kind of name: the list has no column for
-  it, but both chains fall back to `name:nds` before German. A clicked card
-  takes it from the tile, one opened from search from `names.json`
-  (the search index takes it from the object's entry in
-  `names/osm_objects.json`). It gets its own line (`card.lowSaxon`) only where
-  it differs from both the headline and the German name.
+- Low Saxon and Synnejysk are varieties of the registry (`nds`, `jut`), with
+  names of their own in the list: `names.nds` / `names.jut`, labelled by the
+  registry ("Plattdeutsch", "Süderjütisch"; Mooring "Plååtjüsch", "Jütsch").
+  Low Saxon is one name whether it comes from the list or from OSM's
+  `name:nds` (the list's, else OSM's — as in the tiles, `frasch/placenames.py`),
+  and both chains fall back to it before German. A clicked card takes it
+  from the tile first, like the generic name below, since that is what the
+  label shows. They get their lines after the Frisian ones and OSM's
+  `name:frr`, before German, wherever they are known — also where they are
+  the same word as German or the headline (Husum, Treen), so the reader sees
+  that they are, not that they are unknown. A Synnejysk name that is the
+  local form of a place in a Synnejysk area is shown once, as the local form
+  of that variety ("Lokååle noome · Jütsch").
 - The generic name (`name_osm`), the `name:latin`/`name` steps near the end
   of both chains, comes from the same places: a clicked card takes it from the tile,
   one opened from search from `names.json`. A place OSM does not have gets
@@ -683,9 +703,10 @@ message in the panel.
 assignments — a researched draft nobody has checked — can be reviewed on the
 map instead of in a spreadsheet. Clicking a polygon or a list row shows the
 municipality, the dialect and the row's research `note` verbatim. The
-municipalities **no row claims** are drawn in grey: those places get no dialect
-at all, and the detail block hands you the `relation/<id>` to paste into a new
-CSV row. `?areas&area=relation/<id>` reopens a municipality (by its OSM reference,
+municipalities **no row claims** — of Nordfriesland, Schleswig-Flensburg and
+Flensburg — are drawn in grey: those places get no area, so they are Low Saxon
+by default (the legend says "no row – Low Saxon by default"), and the detail
+block hands you the `relation/<id>` to paste into a new CSV row. `?areas&area=relation/<id>` reopens a municipality (by its OSM reference,
 which belongs to one `dialect_areas.csv` row only); ↑/↓
 or `j`/`k` walk the list. English only on purpose, like the curation view.
 
@@ -745,7 +766,6 @@ the dialect names under `dialects.*`, which German takes from the registry:
 
 ## Not done / left as-is
 
-- Nothing in the _style_ reads `frasch:dialect`/`frasch:variety`; the place
-  card does.
+- Nothing in the _style_ reads `frasch:variety`; the place card does.
 - The `within`-polygon split of the label chain for non-German areas (see
   "Label chain").

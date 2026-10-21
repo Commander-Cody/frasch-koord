@@ -15,7 +15,6 @@ describe('NameEntry', () => {
       local: { string: true, optional: true },
       dialect: { string: true, optional: true },
       variety: { string: true, optional: true },
-      name_nds: { string: true, optional: true },
       name_de: { string: true },
       name_osm: { string: true, optional: true },
       name_da: { string: true, optional: true },

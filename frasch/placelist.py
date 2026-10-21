@@ -46,20 +46,32 @@ from frasch.refs import LOCAL_TYPE, SLUG, OsmRef, Ref
 from frasch.tables import Table
 
 
-def name_columns(reg: Registry) -> list[str]:
-    """The name columns in the order `any_name` tries them: the first
+def frisian_columns(reg: Registry) -> list[str]:
+    """The Frisian name columns in the order `any_name` tries them: the first
     (= Mooring) dialect, `local` -- the sub-dialect form of the place itself,
     not a dialect of its own -- then the other dialects."""
-    dialect_columns = reg.columns
+    dialect_columns = [d["column"] for d in reg.frisian]
     return [dialect_columns[0], LOCAL_COLUMN] + dialect_columns[1:]
+
+
+def non_frisian_columns(reg: Registry) -> list[str]:
+    """The name columns of the local varieties that are not Frisian (`nds`,
+    `jut`): names like the others, but never a row's Frisian name."""
+    return [d["column"] for d in reg.non_frisian]
+
+
+def all_name_columns(reg: Registry) -> list[str]:
+    """Every name column, in list order: `;`-separated variants with `(…)`
+    remarks, the conventions names/README.md sets for every name cell."""
+    return [*frisian_columns(reg), "de", *non_frisian_columns(reg), "da"]
 
 
 def columns(reg: Registry) -> list[str]:
     """The columns of the name list, in the order it is written in."""
     return (
         ["kind"]
-        + name_columns(reg)
-        + ["de", "hint", "da", "osm", "wikidata", "status", "note", "id"]
+        + frisian_columns(reg)
+        + ["de", *non_frisian_columns(reg), "hint", "da", "osm", "wikidata", "status", "note", "id"]
     )
 
 
@@ -108,7 +120,7 @@ def any_name(row: Row, reg: Registry) -> str:
     """The row's Frisian name in any dialect -- the answer to "does this row
     carry a Frisian name at all?".  Mooring first, then `local`, then the
     other dialects in registry order."""
-    for column in name_columns(reg):
+    for column in frisian_columns(reg):
         name = primary(row.get(column))
         if name:
             return name
@@ -270,7 +282,10 @@ def header_problem(fields: Sequence[str], reg: Registry) -> str | None:
     if what and "id" not in fields:
         what += " (`frasch check-inputs --fix` adds `id`)"
     elif what:
-        what += " (dialect columns come from names/dialects.csv)"
+        what += (
+            " (name columns come from names/dialects.csv; "
+            "`frasch check-inputs --fix` adds those of a new variety)"
+        )
     return what
 
 
@@ -347,7 +362,8 @@ def new_id(row: Row, taken: set[str], reg: Registry) -> str:
 
 def fill_ids(path: str, reg: Registry) -> int:
     """Give every row of the name list without an `id` one (`new_id`), and
-    the file the `id` column when it has none -- the one step that both
+    the file the `id` column and the column of a variety new to the registry
+    when it has none (`_with_added_columns`) -- the one step that both
     introduced the ids and keeps new rows keyed.  An id, once written, never
     changes.  Writes the list in its `written_form`, and nothing when every
     row has an id and the file is in that form already.  -> the number of
@@ -360,7 +376,7 @@ def fill_ids(path: str, reg: Registry) -> int:
     if found.problems:
         raise ValidationError(found.problems)
     header = found.header
-    fields = header if "id" in header else header + ["id"]
+    fields = _with_added_columns(header, reg)
     if what := header_problem(fields, reg):
         raise ValidationError([Problem(path, 1, what)])
     rows = [PlaceRow(cells, n) for n, cells in found.records()]
@@ -374,6 +390,19 @@ def fill_ids(path: str, reg: Registry) -> int:
     if given or fields is not header or form_problem(found):
         PlaceList(path, reg, fields, rows, found.digest).write()
     return given
+
+
+def _with_added_columns(header: list[str], reg: Registry) -> list[str]:
+    """The header `fill_ids` writes: `header` -- the very list when it lacks
+    nothing it can add -- else with `id` and the name columns of varieties
+    new to the registry added, every column the pipeline knows in the order
+    of `columns` and the editor's own ones after them."""
+    layout = columns(reg)
+    addable = {"id", *reg.columns}
+    if all(column in header for column in addable):
+        return header
+    known = [c for c in layout if c in header or c in addable]
+    return known + [c for c in header if c not in layout]
 
 
 def table(path: str) -> Table:

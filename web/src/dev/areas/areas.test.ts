@@ -7,6 +7,7 @@ import {
   filterAreas,
   findByRef,
   groupByDialect,
+  groupLabel,
   UNASSIGNED,
   type AreaFeature,
   type AreaProps,
@@ -112,6 +113,12 @@ describe('filterAreas', () => {
       shown: UNASSIGNED,
     }).map((feature) => feature.properties.name);
     expect(names).toEqual(['Loose']);
+  });
+});
+
+describe('groupLabel', () => {
+  it('calls the municipalities no row claims what they are by default: Low Saxon', () => {
+    expect(groupLabel(UNASSIGNED)).toBe('no row – Low Saxon by default');
   });
 });
 

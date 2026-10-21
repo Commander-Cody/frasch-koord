@@ -94,7 +94,7 @@ describe('AreaPanel', () => {
     built = parts(municipality('Bargum', 'relation/1', 2), unclaimed('Nordstrand', 'relation/9'));
     await renderLoaded();
 
-    fireEvent.click(screen.getByRole('button', { name: /^not assigned/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^no row – Low Saxon by default/ }));
 
     expect(listedNames()).toEqual(['Nordstrand']);
   });
@@ -102,7 +102,7 @@ describe('AreaPanel', () => {
   it('lists every group again on a second click in the legend', async () => {
     built = parts(municipality('Bargum', 'relation/1', 2), unclaimed('Nordstrand', 'relation/9'));
     await renderLoaded();
-    const legendItem = screen.getByRole('button', { name: /^not assigned/ });
+    const legendItem = screen.getByRole('button', { name: /^no row – Low Saxon by default/ });
 
     fireEvent.click(legendItem);
     fireEvent.click(legendItem);

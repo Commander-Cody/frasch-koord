@@ -7,8 +7,8 @@ this directory either helps fill it in or is generated from it.
 
 ```
 names/places.csv         THE name list (hand-edited, in git)
-names/dialects.csv       THE dialect registry (hand-edited, in git)
-names/dialect_areas.csv  which OSM municipalities/islands speak which dialect
+names/dialects.csv       THE registry of local varieties (hand-edited, in git)
+names/dialect_areas.csv  which OSM municipalities/islands speak which variety
 names/curation.csv       per-OSM-object map tuning (hand-edited, in git)
         |
         |  frasch match       fills empty `osm` cells, marks them status=auto
@@ -53,6 +53,7 @@ are gone from the tree; `git show b602a3f:names/bootstrap/` lists them.
 | `local` | the form the people of the place **itself** use where it differs from the dialect of the area around it (sub-dialects such as Fahretoft's *Foortuftinge*). Empty means "same as the area's dialect". The bracket remark names the variety and becomes the tile attribute `frasch:variety`: `Brouersweerw (Foortuftinge)`. |
 | one column per dialect | `wieding`, `karrhard`, `nordgoes`, `midgoes`, `suedgoes`, `fering`, `oomrang`, `solring`, `hallig`, `halunder` — the names in that dialect. **The column list comes from `dialects.csv`**, see below; the old catch-all `other` column is gone (see *Migration*). |
 | `de` | German name(s). What the matcher searches for in OSM. The first one is also the tiles' `name:de` on the row's objects, in place of OSM's (#61). |
+| `nds`, `jut` | the Low Saxon (Plattdeutsch) and Synnejysk (Süderjütisch) name(s) — the other varieties of `dialects.csv`, right after `de` in registry order. Names like the others, but **not Frisian**: a row is never named by them (id, reports, `any_name`), the matcher does not search them, and a row whose only names they are has no Frisian name and stays off the map. The first one is the tiles' `name:nds` / `name:jut`; `nds` replaces OSM's `name:nds`, which stays where the cell is empty. |
 | `hint` | where the feature is, for matching: `Langeness`, `Ockholm`, `bei Leck`. Binding — a hint that matches nothing sends the row to review. |
 | `da` | Danish name(s). Used for matching when there is no German name. |
 | `osm` | the OSM object(s) that carry the label: `node/123`, `way/123`, `relation/123`. Several separated by `;` when OSM splits a river or dyke into pieces: `way/1; way/2`. A place **OSM does not have** carries a local reference instead: `local/<slug>` (lowercase ascii letters, digits, hyphens) alone in the cell, e.g. `local/westerheide-amrum` — never mixed with a real reference, never split by `;`. See *Places OSM does not have*. |
@@ -61,9 +62,10 @@ are gone from the tree; `git show b602a3f:names/bootstrap/` lists them.
 | `note` | free text for you. `frasch match` never writes here. The import put `uncertain` here for names the sheet marked with `?`. |
 | `id` | the row's own key, e.g. `naibel`, `schorkewarw-2`: lowercase ascii letters, digits, hyphens, unique. Everything else names the row by it — `work/matches.jsonl`, `REPORT.md`, the curation worklist and patch, the search index (`?place=` links) and the tiles (`frasch:ref`) — so adding, deleting or moving rows, or correcting a name, never changes another row's identity. **Leave it empty on a new row** and run `frasch check-inputs --fix`, which fills it from the Frisian name (German, then Danish, when there is none; `-2`, `-3` on repeats), folded as `$defs.slug` of `curate-patch.schema.json` says (`Schörkewärw` → `schorkewarw`: ü → u, never ue). Never change an id once written: it would break the share links to that place. |
 
-The sheet's other columns (inhabitant adjectives, Low German, South Jutish,
-old names, sources) were deliberately not imported: the map does not use them.
-They are still in `bootstrap/sheet-export.csv`.
+The sheet's Low German (*Plååttjüsch*) and South Jutish (*Synnejysk*) columns
+went into `nds` and `jut` in October 2026 (#83). Its other columns
+(inhabitant adjectives, old names, sources) were deliberately not imported:
+the map does not use them. They are still in `bootstrap/sheet-export.csv`.
 
 Conventions that apply to every name cell:
 
@@ -96,23 +98,27 @@ name can go on the map. A row claims the references of its `osm` cell and its
 The rows are in the order of the original sheet (by section, then the owner's
 geographic order); new rows can go anywhere.
 
-## `dialects.csv` — the dialect registry
+## `dialects.csv` — the registry of local varieties
 
-One line per dialect, and the **only** place the project lists them. The
-columns of `places.csv`, the `name:*` tags the injector writes, Planetiler's
-`--languages`, the search index and the frontend's language selector all
-derive from it, so adding a dialect is one line here plus a column in
-`places.csv`. The one thing to add in the code is the dialect's colour in the
-dialect-area review view (`DIALECT_COLORS` in `web/src/dev/areas/areaLayers.ts`); a
+One line per local variety — the North Frisian dialects, and Low Saxon and
+Synnejysk, the other local languages of Schleswig — and the **only** place
+the project lists them. Wherever the code or these docs say "Frisian", they
+mean the rows of `language` `frr`. The columns of `places.csv`, the `name:*`
+tags the injector writes, Planetiler's `--languages`, the search index and
+the frontend's language selector all derive from it, so adding a variety is
+one line here plus a column in `places.csv` (`frasch check-inputs --fix` adds
+it in its place). The one thing to add in the code is the variety's colour in
+the dialect-area review view (`DIALECT_COLORS` in `web/src/dev/areas/areaLayers.ts`); a
 test holds that table to the registry's tags, so it cannot be forgotten.
 
 | column | meaning |
 |---|---|
-| `tag` | the BCP 47 language tag, always `frr-x-<subtag>` (no registered subtags for North Frisian dialects exist; a private-use subtag is at most 8 characters) |
-| `column` | the `places.csv` column holding this dialect's names |
+| `tag` | the BCP 47 language tag: `<language>` or `<language>-x-<subtag>`, subtags `[a-z0-9]` of at most 8 characters. A Frisian row needs a private-use subtag, `frr-x-mooring` — no registered subtags for North Frisian dialects exist, and a bare `frr` would be OSM's `name:frr`, Frisian of no particular dialect. Low Saxon and Synnejysk are the bare `nds` and `jut` |
+| `language` | the ISO 639 code of the language the variety belongs to: `frr` for the eleven Frisian dialects, `nds`, `jut`. The frontend gets it too: the label chains treat Frisian and other areas apart (`web/README.md`) |
+| `column` | the `places.csv` column holding this variety's names |
 | `label` | how the dialect is written in the UI |
 | `status` | `living` or `extinct` — Südergoesharde died in 1981, its names still label the local view |
-| `view` | `yes` = selectable as a map language in the frontend. Today only Mooring: a dialect becomes selectable when its UI translation exists |
+| `view` | `yes` = selectable as a map language in the frontend. Today only Mooring: a dialect becomes selectable when its UI translation exists. Only a Frisian dialect can be a view |
 | `note` | free text: which area speaks it |
 
 ```bash
@@ -126,22 +132,26 @@ and frontend must agree on it. The injector writes its result as tags
 (`as_tags`), the exporter as a search entry (`as_entry`); the table
 `TILE_KEY` says which field of an entry is which tile key:
 
-* **the name of a place in dialect T** = its column, else — if T is the
-  dialect of the area the place lies in — `local`
-* **the local name** = `local`, else the name in the dialect of the area,
-  else OSM's own `name:frr` of the object, inside a dialect area only (see
-  *OSM's Frisian names* in `tiles/README.md`)
+* **the name of a place in variety T** = its column, else — if T is the
+  variety of the area the place lies in — `local`; for Low Saxon, else OSM's
+  own `name:nds` of the object (as the tiles keep it, `names.nds` of the
+  search index is the one Low Saxon name)
+* **the local name** = `local`, else the name in the variety of the area,
+  else OSM's own name of the object in the language of the area, inside an
+  area only: `name:frr` in a Frisian area, `name:nds` in a Low Saxon one, none
+  in a Synnejysk one — OSM has no `name:jut`, and its Frisian name is an
+  exonym there (see *OSM's Frisian names* in `tiles/README.md`)
 * **the variety** = the bracket remark on the primary `local` variant
 
 ## Dialect areas — `dialect_areas.csv` → `dialect_areas.geojson`
 
-Which dialect is spoken *where* is a question about areas, not about single
+Which variety is spoken *where* is a question about areas, not about single
 places: a Warft on Hallig Hooge is Halligfriesisch even when nobody wrote that
 down, and without it the map cannot know that *Hansweerf* is the local name
 and *Hanswärw* the foreign one.
 
 `dialect_areas.csv` is the hand-edited answer: one line per OSM object that
-belongs to a dialect.
+belongs to a variety of the registry, a Frisian dialect or Synnejysk.
 
 | column | meaning |
 |---|---|
@@ -156,9 +166,20 @@ Wikipedia, 2026-09-16) are a **draft**: the `note` column carries `high`,
 `medium` or `low` with the reason, and every `medium`/`low` row deserves a
 look — particularly the Gotteskoog border villages (Holm, Uphusum,
 Galmsbüll). Move a municipality by changing its `dialect` cell and
-re-running the build script below. Nordstrand, Pellworm, Eiderstedt and
-Friedrichstadt deliberately have no row: no living or historic Frisian dialect
-is assigned there, so the local view shows Low Saxon.
+re-running the build script below.
+
+**Synnejysk is the default local language of Schleswig, and Low Saxon the
+default south of the border.** The `jut` rows (#83) are a starting point to
+review, each with the note `low – default from #83, unverified`: every
+municipality of Kreis Schleswig-Flensburg, Flensburg, and the Nordfriesland
+municipalities no Frisian row claims. A place in **no area is Low Saxon by
+default**, with nothing to assign: Eiderstedt (Amt Eiderstedt, Tönning,
+Uelvesbüll, Witzwort), Nordstrand, Elisabeth-Sophien-Koog, Pellworm,
+Friedrichstadt, the Amt Nordsee-Treene villages south and east of Husum,
+Stapelholm, the city of Schleswig, and Kreis Rendsburg-Eckernförde's part of
+Schleswig, Eckernförde included. Explicit `nds` rows are allowed, to carve
+Low Saxon out of a larger area, but none are needed. North of the border
+belongs to #15.
 
 **The smallest area containing a point wins**, so a small exception inside a
 larger area is simply another row: the Hamburger Hallig (Halligfriesisch) lies
@@ -187,9 +208,11 @@ warning in the report either way.
 
 The same run also writes `names/dialect_areas_parts.geojson` (`--parts`):
 one Feature per *municipality* rather than per dialect, carrying the row's
-`name` and research `note`, plus every Kreis Nordfriesland municipality that no
-row claims, marked `assigned: false`. It exists for the review overlay in the
-web app (`?areas`, see `web/README.md`) and is simplified finer, to 0.0001°
+`name` and research `note`, plus every municipality of the districts under
+review — Nordfriesland (01054), Schleswig-Flensburg (01059) and Flensburg
+(01001), the property `unassigned_ags` lists them — that no row claims,
+marked `assigned: false`: Low Saxon by default, which the overlay says. It
+exists for the review overlay in the web app (`?areas`, see `web/README.md`) and is simplified finer, to 0.0001°
 (~11 m), because neighbours are simplified independently and at 50 m the cracks
 between two municipalities that actually touch become visible. Committed, for
 the same reason as the dissolved file. `--no-unassigned` skips the extra
@@ -419,8 +442,9 @@ back to it. Re-run `frasch match` afterwards and export again.
 **A place the list does not have yet** can be added in the view too: "New
 place", or a click on the label of an OSM object no row names ("New place from
 this", which also picks that object). The form takes the kind (every kind of
-`frasch/kinds.py`), a cell per name column, `de`, `da` and a note — at least
-one name, in any column — and lists the rows that already have a name typed
+`frasch/kinds.py`), a cell for every name column of places.csv (the Frisian
+ones, `de`, `nds`, `jut`, `da`) and a note — at least one name, in any column
+— and lists the rows that already have a name typed in any of those columns
 (names do repeat, so it only warns; `export` writes every row's names into
 `work/curate.json` for it). The `create` goes into the patch under a
 provisional key, `new:…`, which the place's decision uses too; until `apply`
@@ -745,7 +769,7 @@ the commands.
 | command | what |
 |---|---|
 | `update` | `just update`: checks the inputs, applies the curation decisions and builds every generated file of the table in its order (see [Workflow](#workflow)), skipping a scan of the extracts whose output is not stale |
-| `build` | `just rebuild <name>`: builds one generated file of the table — `candidates`, `report`, `objects` (OSM extracts → `osm_objects.json`: where each object of the name list is), `areas`, `dialects` (→ `web/src/dialects/generated/dialects.json`) or `index` (`places.csv` + `osm_objects.json` + `dialect_areas.geojson` → `web/public/data/names.json`: every dialect name, the local form, OSM's Low Saxon name, German, Danish, the QID; keyed by the row `id`, the same string the tiles carry as `frasch:ref`; stamped with `built_from`) |
+| `build` | `just rebuild <name>`: builds one generated file of the table — `candidates`, `report`, `objects` (OSM extracts → `osm_objects.json`: where each object of the name list is), `areas`, `dialects` (→ `web/src/dialects/generated/dialects.json`) or `index` (`places.csv` + `osm_objects.json` + `dialect_areas.geojson` → `web/public/data/names.json`: every variety's name (Low Saxon the list's, else OSM's), the local form, German, Danish, the QID; keyed by the row `id`, the same string the tiles carry as `frasch:ref`; stamped with `built_from`) |
 | `check-inputs` | `just check-inputs`: checks the hand-edited files, every problem with its line (`--fix` gives new rows an id and writes `places.csv` in the form the pipeline writes it) |
 | `candidates` | OSM extract(s) → `work/candidates.jsonl`, with the scan's own options |
 | `match` | fills `osm`/`wikidata` in `places.csv`; writes `work/matches.jsonl` and `REPORT.md` (`--dry-run`: only `work/matches.jsonl`) |

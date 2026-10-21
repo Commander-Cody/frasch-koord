@@ -33,9 +33,9 @@ COMMANDS = [
 def dialects_csv(tmp_path: Path) -> str:
     path = tmp_path / "dialects.csv"
     path.write_text(
-        "tag,column,label,status,view,note\n"
-        "frr-x-mooring,mooring,Mooring,living,yes,\n"
-        "frr-x-fering,fering,Fering,living,no,\n",
+        "tag,language,column,label,status,view,note\n"
+        "frr-x-mooring,frr,mooring,Mooring,living,yes,\n"
+        "frr-x-fering,frr,fering,Fering,living,no,\n",
         encoding="utf-8",
     )
     return str(path)

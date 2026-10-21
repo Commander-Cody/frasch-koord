@@ -137,5 +137,58 @@
       "frasch:kind": "settlement",
       "name:de": "Wisch"
     }
+  },
+  "a listed place in a Synnejysk area, with its Synnejysk name": {
+    "entry": {
+      "id": "laigem",
+      "names": {
+        "frr-x-mooring": "Läigem",
+        "jut": "Lym"
+      },
+      "name_de": "Süderlügum",
+      "lon": 10.0,
+      "lat": 55.05,
+      "kind": "settlement",
+      "local": "Lym",
+      "dialect": "jut",
+      "name_osm": "Süderlügum",
+      "osm": "node/18"
+    },
+    "props": {
+      "name": "Süderlügum",
+      "name:frr": "Läigem",
+      "name:frr-x-mooring": "Läigem",
+      "name:jut": "Lym",
+      "frasch:ref": "laigem",
+      "frasch:kind": "settlement",
+      "name:de": "Süderlügum",
+      "frasch:dialect": "jut",
+      "frasch:local": "Lym"
+    }
+  },
+  "a listed place in a Synnejysk area without one, with OSM’s Low Saxon": {
+    "entry": {
+      "id": "loonlun",
+      "names": {
+        "frr-x-mooring": "Loonlun",
+        "nds": "Lahnlunn"
+      },
+      "name_de": "Ladelund",
+      "lon": 10.05,
+      "lat": 55.05,
+      "kind": "settlement",
+      "dialect": "jut",
+      "name_osm": "Ladelund",
+      "osm": "node/19"
+    },
+    "props": {
+      "name": "Ladelund",
+      "name:nds": "Lahnlunn",
+      "name:frr-x-mooring": "Loonlun",
+      "frasch:ref": "loonlun",
+      "frasch:kind": "settlement",
+      "name:de": "Ladelund",
+      "frasch:dialect": "jut"
+    }
   }
 }

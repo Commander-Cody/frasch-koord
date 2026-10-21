@@ -14,7 +14,7 @@ from frasch import cli, dialects
 from frasch.errors import ValidationError
 from frasch.paths import Workspace
 
-REGISTRY_HEADER = "tag,column,label,status,view,note\n"
+REGISTRY_HEADER = "tag,language,column,label,status,view,note\n"
 
 
 def parsed(options: list[str], argv: list[str]) -> Workspace:
@@ -53,7 +53,7 @@ def test_a_scratch_file_named_by_its_own_option_stays_out_of_the_work_directory(
 def test_a_broken_input_stops_the_library_with_a_validation_error(tmp_path: Path) -> None:
     path = tmp_path / "dialects.csv"
     path.write_text(
-        REGISTRY_HEADER + "frr-y-mooring,mooring,Mooring,living,yes,\n", encoding="utf-8"
+        REGISTRY_HEADER + "frr-y-mooring,frr,mooring,Mooring,living,yes,\n", encoding="utf-8"
     )
     with pytest.raises(ValidationError, match="dialects.csv:2: bad tag"):
         dialects.read(str(path))
@@ -64,7 +64,7 @@ def test_the_command_reports_it_and_exits_1(
 ) -> None:
     path = tmp_path / "dialects.csv"
     path.write_text(
-        REGISTRY_HEADER + "frr-y-mooring,mooring,Mooring,living,yes,\n", encoding="utf-8"
+        REGISTRY_HEADER + "frr-y-mooring,frr,mooring,Mooring,living,yes,\n", encoding="utf-8"
     )
     assert dialects.main(["--dialects", str(path)]) == 1
     assert "dialects.csv:2: bad tag" in capsys.readouterr().err

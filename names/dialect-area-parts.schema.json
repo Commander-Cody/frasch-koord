@@ -21,8 +21,9 @@
         },
         "unit": { "description": "What one feature is.", "type": "string" },
         "unassigned_ags": {
-          "description": "The municipality-key prefix of the district whose unclaimed municipalities are in the file; empty when there are none.",
-          "type": "string"
+          "description": "The municipality-key prefixes of the districts whose unclaimed municipalities are in the file (Nordfriesland 01054, Schleswig-Flensburg 01059, Flensburg 01001); empty when there are none.",
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[0-9]+$" }
         },
         "built_from": {
           "description": "What the file was built from, as `$defs/built_from` of names/search-index.schema.json defines a stamp: the area list, the dialect registry and the extract.",

@@ -1809,3 +1809,58 @@ issue's comment. What it settled:
   decision).
 - **One list of label layers**: `PLACE_LAYERS` moved from `MapView.tsx` to
   `map/style`, for the curation view's label clicks too.
+
+## Decided 2026-10-21: Low Saxon and Synnejysk, the other local varieties (issue #83)
+
+`places.csv` gets Low Saxon and Synnejysk columns, so their names can be added
+like the Frisian ones. The spec is the issue and its comments. What it settled:
+
+- **One registry of local varieties.** `names/dialects.csv` keeps its name but
+  lists the local varieties: the eleven Frisian dialects, plus `nds` (Low Saxon,
+  "Plattdeutsch") and `jut` (Synnejysk, "Süderjütisch"). A new `language`
+  column holds the ISO 639 code, `frr` for the Frisian rows. Wherever the code
+  says "Frisian" it means `language == frr`. A tag is `<language>` or
+  `<language>-x-<subtag>`, and a Frisian row needs a subtag, because a bare
+  `frr` is OSM's generic `name:frr`. The frontend gets `language` too.
+- **Their names are no Frisian names.** The `nds`/`jut` columns follow `de`.
+  A row is never named by them (id, reports, `any_name`), and the matcher does
+  not search them. A row whose only names they are has no Frisian name and
+  stays off the map. Only a Frisian dialect can be a map view.
+- **Synnejysk is the default local language of Schleswig, Low Saxon the default
+  south of the border.** The `jut` rows of `dialect_areas.csv` cover
+  Schleswig-Flensburg, Flensburg and the Nordfriesland mainland that no
+  Frisian row claims. They are a starting point to review, each "low –
+  default from #83, unverified". A place in no area is Low Saxon, with nothing
+  to assign (owner's decisions). That covers Eiderstedt (Amt Eiderstedt with
+  Grothusenkoog, plus Tönning, Uelvesbüll and Witzwort), Nordstrand,
+  Elisabeth-Sophien-Koog, Pellworm, Friedrichstadt, the Amt Nordsee-Treene
+  villages south and east of Husum, Stapelholm, the city of Schleswig and
+  Rendsburg-Eckernförde's part of Schleswig. The review overlay scans the
+  three districts for municipalities no row claims and calls them "no row –
+  Low Saxon by default". A kreisfreie Stadt, tagged `admin_level=6` in OSM,
+  counts as a municipality. North of the border is #15.
+- **Low Saxon is one name** (owner's decision): `names.nds` = the list's, else
+  OSM's `name:nds`, in `resolve` alone. The tiles keep OSM's where the list
+  has none, as with `name:de` (#61). The search entry's separate `name_nds`
+  and the card's `card.lowSaxon` are gone, and the registry's label names it.
+- **An object no row claims carries its area** (owner's decision, review):
+  where OSM's `name:frr` is its local name (#81), the injector writes the
+  area's `frasch:dialect` next to `frasch:local` (`placenames.unclaimed_tags`).
+  So a Frisian view reads it with the Frisian-area chain, as it reads a listed
+  place, and the card calls the name the local form, not "Frisian (OSM)".
+- **OSM's fallback for the local name follows the area's language**:
+  `name:frr` in a Frisian area, `name:nds` in a Low Saxon one, nothing in a
+  Synnejysk one (OSM has no `name:jut`). So OSM's Frisian exonym never becomes
+  the local name of a Synnejysk place.
+- **The ranking in the Frisian views**: the local name comes right after the
+  view's own dialect only in a Frisian area. Anywhere else it comes after every
+  Frisian name and `name:frr`, before `name:nds`. A Synnejysk or Low Saxon
+  name labels a Frisian view only where it is the place's local name and no
+  Frisian name is known. The style splits the chain with a `case` on
+  `frasch:dialect` being a Frisian tag, and the card asks the same of its
+  `dialect`. The local view is unchanged.
+- **The card shows every known Low Saxon and Synnejysk name** (owner's
+  decision, review): also where it is the same word as German or the headline
+  (Husum, Treen), so the reader sees that it is the same, not that it is
+  unknown. Only the headline's own name gets no line, and a Synnejysk local
+  form gets one line, the local one.

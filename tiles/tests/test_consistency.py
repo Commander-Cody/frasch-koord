@@ -14,7 +14,9 @@ average lies in the sea (Sylt, Amrum), a node near a dialect border
 outline hits it (Oland), and a row with two objects in two areas
 (Nordwärw).  And the places whose local name may be OSM's own `name:frr`
 (#81): one in an area whose row has no local name (Slütsil), one whose row
-has one (Oland), one outside every area (Kil).
+has one (Oland), one outside every area (Kil) -- and in a Synnejysk area,
+where OSM's Frisian name is none (#83): one with a Synnejysk name (Läigem),
+one without (Loonlun).
 
 The labels of the place card's listed scenarios come from here too: what
 the entry and the injected object of each of LISTED_SCENARIOS say is
@@ -72,6 +74,9 @@ NODES = (
         15: ((10.2, 54.2), {"name": "Wisch"}),  # e Wäsk, outside every area
         16: ((9.4, 54.42), {"name": "Nordwarft", "name:frr": "Nöördweerew"}),  # on the Hallig
         17: ((9.12, 54.42), {"name": "Nordwarft"}),  # Noordweerw, in Nordergoesharde
+        # in a Synnejysk area: OSM's Frisian name is no local name there
+        18: ((10.0, 55.05), {"place": "village", "name": "Süderlügum", "name:frr": "Läigem"}),
+        19: ((10.05, 55.05), {"place": "village", "name": "Ladelund", "name:nds": "Lahnlunn"}),
     }
     | SYLT_NODES
     | OLAND_NODES
@@ -162,6 +167,21 @@ ROWS = [
         "de": "Nordwarft",
         "osm": "node/16; node/17",
     },
+    {
+        "id": "laigem",
+        "kind": "settlement",
+        "mooring": "Läigem",
+        "jut": "Lym",
+        "de": "Süderlügum",
+        "osm": "node/18",
+    },
+    {
+        "id": "loonlun",
+        "kind": "settlement",
+        "mooring": "Loonlun",
+        "de": "Ladelund",
+        "osm": "node/19",
+    },
 ]
 
 
@@ -173,6 +193,7 @@ AREAS = areas_geojson(
         ("frr-x-hallig", box(9.3, 54.4, 9.45, 54.6)),
         ("frr-x-hallig", box(9.45, 54.59, 9.55, 54.63)),
         ("frr-x-wieding", box(9.6, 54.8, 9.8, 54.9)),
+        ("jut", box(9.9, 55.0, 10.1, 55.1)),
     ]
 )
 
@@ -251,6 +272,8 @@ def test_every_row_on_the_map_is_checked(built: Built) -> None:
         ("nordwarw", "frr-x-nordgoes", "Noordweerw"),
         ("slutsil", "frr-x-nordgoes", "Slütsiil"),
         ("kil", None, None),
+        ("laigem", "jut", "Lym"),
+        ("loonlun", "jut", None),
     ],
 )
 def test_the_search_entry_has_the_dialect_of_where_the_place_is(
@@ -276,6 +299,9 @@ LISTED_SCENARIOS = {
     # #89: the entry's object has a local name, the clicked one, outside
     # every dialect area, has none
     "the second object of a listed row, outside every dialect area": ("e-wask", "node/15"),
+    # #83: the local name is Synnejysk, and comes after OSM's Frisian one
+    "a listed place in a Synnejysk area, with its Synnejysk name": ("laigem", "node/18"),
+    "a listed place in a Synnejysk area without one, with OSM’s Low Saxon": ("loonlun", "node/19"),
 }
 LISTED_REFS = {ref for ref, _ in LISTED_SCENARIOS.values()}
 SCENARIOS_JSON = Path(ROOT) / "web" / "src" / "testing" / "generated" / "listedScenarios.json"

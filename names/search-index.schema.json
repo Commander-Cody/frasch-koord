@@ -62,12 +62,12 @@
           "minLength": 1
         },
         "names": {
-          "description": "The dialect names by registry tag, `{\"frr-x-mooring\": \"Naibel\"}`: only the dialects that have one.",
+          "description": "The names by registry tag, `{\"frr-x-mooring\": \"Naibel\", \"nds\": \"Niebüll\"}`: only the varieties that have one. Low Saxon (`nds`) is the list's, else OSM's `name:nds` of the place's object, as in the tiles.",
           "type": "object",
           "additionalProperties": { "type": "string", "minLength": 1 }
         },
         "local": {
-          "description": "The name the people of the place itself use (the tiles' `frasch:local`): the name list's, else OSM's `name:frr` where the place lies in a dialect area.",
+          "description": "The name the people of the place itself use (the tiles' `frasch:local`): the name list's, else OSM's name in the language of the dialect area the place lies in (`name:frr` in a Frisian one, `name:nds` in a Low Saxon one, none in a Synnejysk one).",
           "type": "string",
           "minLength": 1
         },
@@ -78,11 +78,6 @@
         },
         "variety": {
           "description": "The sub-dialect remark on the local name, e.g. `Foortuftinge`.",
-          "type": "string",
-          "minLength": 1
-        },
-        "name_nds": {
-          "description": "The Low Saxon name: OSM's `name:nds` of the place's object. The label chain falls back to it before German.",
           "type": "string",
           "minLength": 1
         },

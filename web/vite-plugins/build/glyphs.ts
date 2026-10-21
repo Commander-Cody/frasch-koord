@@ -68,14 +68,24 @@ export function glyphProblems(labels: Iterable<Label>, ranges: readonly string[]
   return [...problems.values()];
 }
 
-/** The properties a text-field takes: the `{key}`s of a template, the `["get", key]`s of an expression. */
+/**
+ * The properties a text-field takes: the `{key}`s of a template, the
+ * `["get", key]`s of an expression — of a `case` only those of its outputs,
+ * since its conditions show nothing.
+ */
 function textFieldKeys(textField: unknown): string[] {
   if (typeof textField === 'string') {
     return [...textField.matchAll(/\{([^}]+)\}/g)].map(([, key]) => key);
   }
   if (!Array.isArray(textField)) return [];
   if (textField[0] === 'get' && typeof textField[1] === 'string') return [textField[1]];
+  if (textField[0] === 'case') return caseOutputs(textField).flatMap(textFieldKeys);
   return textField.flatMap(textFieldKeys);
+}
+
+/** The outputs of `["case", condition, output, …, fallback]`: every other argument, and the last. */
+function caseOutputs([, ...args]: unknown[]): unknown[] {
+  return args.filter((_, i) => i % 2 === 1 || i === args.length - 1);
 }
 
 /** Every tile property a symbol layer of `style` can show, each once. */

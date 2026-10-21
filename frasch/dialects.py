@@ -1,23 +1,28 @@
-"""The dialect registry, names/dialects.csv: the single list of the dialects
-the project knows.
+"""The registry of the local varieties, names/dialects.csv: the single list
+of the varieties the project knows -- the North Frisian dialects, and Low
+Saxon and Synnejysk, the other local languages of Schleswig.
 
 North Frisian is not one language variety but a dozen, and the map shows more
-than one of them.  Everything else derives from this list: the name columns of
+than one of them.  Wherever the code says "Frisian" it means the rows of
+`language` `frr`; Low Saxon (`nds`) and Synnejysk (`jut`) have names of their
+own in the list, but no row is named by them and no map view is in them.
+Everything else derives from this list: the name columns of
 names/places.csv (frasch.placelist), the `name:<tag>` tags the injector
 writes, Planetiler's `--languages` list (`frasch dialects --tags` in
 tiles/build.sh), the search index and the frontend's selector
-(web/src/dialects/generated/dialects.json).  Adding a dialect is therefore one line in
+(web/src/dialects/generated/dialects.json).  Adding a variety is therefore one line in
 the registry plus a column in places.csv -- and, the one thing in the code, its
 colour in the dialect-area review view (`DIALECT_COLORS` in
 web/src/dev/areas/areaLayers.ts, which a test holds to the registry's tags).
 
 | column | meaning |
 |---|---|
-| `tag`    | BCP 47 language tag, always `frr-x-<subtag>`; no registered subtags for North Frisian dialects exist, so private use it is |
+| `tag`    | BCP 47 language tag, `<language>` or `<language>-x-<subtag>`; a Frisian one always `frr-x-<subtag>` -- no registered subtags for North Frisian dialects exist, so private use it is, and a bare `frr` is OSM's Frisian of no dialect |
+| `language` | ISO 639 code of the language the variety belongs to: `frr`, `nds`, `jut` |
 | `column` | the column of names/places.csv that holds this dialect's names |
 | `label`  | how the dialect is written in the UI (its German/endonym name) |
 | `status` | `living` or `extinct` (extinct dialects still label the map in the local view -- Südergoesharde) |
-| `view`   | `yes` = selectable as a map language in the frontend |
+| `view`   | `yes` = selectable as a map language in the frontend; Frisian rows only |
 | `note`   | free text: which area speaks it |
 
 This is the one reader of the file.  A command reads the registry of its
@@ -53,13 +58,20 @@ VIEWS = {"yes", "no"}
 # of the place itself use (frasch.placenames), so no dialect may be called that.
 LOCAL_COLUMN = "local"
 
-_TAG = re.compile(r"frr-x-[a-z0-9]{1,8}(-[a-z0-9]{1,8})*$")
+# The language of the North Frisian dialects: OSM's `name:frr` is Frisian of
+# no particular dialect, so a Frisian row needs a private-use subtag.
+FRISIAN = "frr"
+
+_LANGUAGE = re.compile(r"[a-z]{2,3}")
+# BCP 47 allows at most 8 characters per private-use subtag
+_TAG = re.compile(r"(?P<language>[a-z]{2,3})(-x(-[a-z0-9]{1,8})+)?")
 
 
 class Dialect(TypedDict):
     """One row of the registry: a cell per column of the file."""
 
     tag: str
+    language: str
     column: str
     label: str
     status: str
@@ -93,6 +105,19 @@ class Registry:
     def columns(self) -> list[str]:
         return [d["column"] for d in self.dialects]
 
+    @property
+    def frisian(self) -> list[Dialect]:
+        """The North Frisian dialects, in file order."""
+        return [d for d in self.dialects if d["language"] == FRISIAN]
+
+    @property
+    def non_frisian(self) -> list[Dialect]:
+        """The local varieties of the other languages (Low Saxon, Synnejysk), in file order."""
+        return [d for d in self.dialects if d["language"] != FRISIAN]
+
+    def language_of(self, tag: str) -> str:
+        return self._find("tag", tag)["language"]
+
     def column_of(self, tag: str) -> str:
         return self._find("tag", tag)["column"]
 
@@ -111,12 +136,8 @@ def row_problem(
 ) -> str | None:
     """What is wrong with one registry row (`seen_*`: the tags and columns of
     the rows above it), or None."""
-    if not _TAG.fullmatch(row["tag"]):
-        # BCP 47 allows at most 8 characters per private-use subtag
-        return (
-            f"bad tag {row['tag']!r} -- expected frr-x-<subtag>, subtags "
-            f"[a-z0-9] and at most 8 characters each"
-        )
+    if what := tag_problem(row["tag"], row["language"]):
+        return what
     if not re.fullmatch(r"[a-z][a-z0-9_]*", row["column"]):
         return f"bad column name {row['column']!r}"
     if row["column"] == LOCAL_COLUMN:
@@ -127,8 +148,38 @@ def row_problem(
         return f"status {row['status']!r} (living / extinct)"
     if row["view"] not in VIEWS:
         return f"view {row['view']!r} (yes / no)"
+    if row["view"] == "yes" and row["language"] != FRISIAN:
+        return (
+            f"view 'yes' for a variety of {row['language']!r} -- "
+            f"only a Frisian dialect ({FRISIAN}) can be a map view"
+        )
     if not row["label"]:
         return "no label"
+    return None
+
+
+def tag_problem(tag: str, language: str) -> str | None:
+    """What is wrong with the tag of a row of `language`, or None: a tag is
+    `<language>` or `<language>-x-<subtag>...`, and a Frisian one has a subtag."""
+    if not _LANGUAGE.fullmatch(language):
+        return f"bad language {language!r} -- expected an ISO 639 code such as {FRISIAN}"
+    match = _TAG.fullmatch(tag)
+    if not match:
+        return (
+            f"bad tag {tag!r} -- expected <language> or <language>-x-<subtag>, "
+            f"subtags [a-z0-9] and at most 8 characters each"
+        )
+    if match["language"] != language:
+        return (
+            f"tag {tag!r} is not of the row's language {language!r} -- "
+            f"expected {language} or {language}-x-<subtag>"
+        )
+    if tag == FRISIAN:
+        return (
+            f"bare tag {FRISIAN!r} -- a Frisian dialect needs a subtag of its own, "
+            f"{FRISIAN}-x-<subtag> (plain {FRISIAN} is OSM's name:{FRISIAN}, "
+            f"Frisian of no particular dialect)"
+        )
     return None
 
 
@@ -201,7 +252,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     else:
         for d in reg:
             print(
-                f"{d['tag']:<16} {d['column']:<10} {d['label']:<18} "
+                f"{d['tag']:<16} {d['language']:<4} {d['column']:<10} {d['label']:<18} "
                 f"{d['status']:<7} view={d['view']:<4} {d['note']}"
             )
     return 0

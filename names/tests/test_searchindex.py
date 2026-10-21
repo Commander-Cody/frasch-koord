@@ -195,7 +195,7 @@ def test_a_district_gets_no_dialect(export: Export) -> None:
 
 
 def test_the_low_saxon_name_comes_from_the_object(export: Export) -> None:
-    assert export([NAIBEL])["naibel"]["name_nds"] == "Niböl"
+    assert export([NAIBEL])["naibel"]["names"]["nds"] == "Niböl"
 
 
 def test_the_generic_name_comes_from_the_object(export: Export) -> None:

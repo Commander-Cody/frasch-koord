@@ -66,9 +66,10 @@ def object_facts(tags: Mapping[str, str]) -> Facts:
 
     admin_level  of an administrative boundary -- one above municipality level
                  (a Kreis, an Amt) spans several dialects, see `dialect_at`
-    name_nds     its Low Saxon name: the name list has no Low Saxon column,
-                 but the map labels with OSM's `name:nds` before German, and
-                 the place card must name the place as its label does
+    name_nds     its Low Saxon name: where the list's `nds` is empty, the
+                 tiles keep OSM's `name:nds`, the map labels with it before
+                 German, and the place card must name the place as its label
+                 does (frasch.placenames)
     name         its generic name, for the same reason: the local view labels
                  a place without a local or Low Saxon name with it, and north
                  of the border it is the Danish name, not the list's German

@@ -151,11 +151,11 @@ export default function CuratePanel({ map }: { map: MapLibreMap }) {
             key={places.form.key}
             title={places.form.title}
             kinds={worklist.kind_order}
-            nameColumns={worklist.name_columns}
+            columns={worklist.all_name_columns}
             places={comparedPlaces(worklist.places, created, places.form.key)}
             initial={places.form.initial}
             saving={places.saving}
-            onSave={(draft) => places.save(draft, worklist.name_columns)}
+            onSave={(draft) => places.save(draft, worklist.frisian_columns)}
             onCancel={places.close}
           />
         </>
@@ -202,7 +202,7 @@ function useListRows(data: LoadedWorklist | null, filter: RowFilter) {
   const created = useMemo(() => createdPlaces(entries ?? []), [entries]);
   const rows = useMemo(() => worklist?.rows ?? [], [worklist]);
   const newRows = useMemo(
-    () => created.map((place) => placeRow(place, worklist?.name_columns ?? [])),
+    () => created.map((place) => placeRow(place, worklist?.frisian_columns ?? [])),
     [created, worklist],
   );
   const visible = useMemo(

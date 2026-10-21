@@ -6,15 +6,15 @@
  */
 import { useState } from 'react';
 
-import { duplicates, isComplete, placeColumns, type PlaceDraft } from './newPlaces';
+import { duplicates, isComplete, type PlaceDraft } from './newPlaces';
 import type { ListedPlace } from './worklist';
 
 export interface NewPlaceFormProps {
   title: string;
   /** The kinds to offer: every kind, in the worklist's order. */
   kinds: readonly string[];
-  /** The Frisian name columns of the worklist. */
-  nameColumns: readonly string[];
+  /** The name columns to fill in: every one of the worklist, in list order. */
+  columns: readonly string[];
   /** The places a name typed may repeat: the rows of the list and the other new places. */
   places: readonly ListedPlace[];
   initial: PlaceDraft;
@@ -27,7 +27,7 @@ export interface NewPlaceFormProps {
 export default function NewPlaceForm({
   title,
   kinds,
-  nameColumns,
+  columns,
   places,
   initial,
   saving,
@@ -56,7 +56,7 @@ export default function NewPlaceForm({
             </option>
           ))}
         </select>
-        {placeColumns(nameColumns).map((column) => (
+        {columns.map((column) => (
           <input
             key={column}
             className="dev-panel-input"

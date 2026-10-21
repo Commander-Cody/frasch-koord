@@ -19,6 +19,7 @@ it('answers a tag the selector does not offer with the default view', () => {
   expect(viewOption('frr-x-nowhere').tag).toBe(DEFAULT_VIEW);
 });
 
-it('can label the map in every dialect of the registry, offered or not, and in the local view', () => {
-  expect([...ALL_VIEW_TAGS].sort()).toEqual([...DIALECTS.map((d) => d.tag), LOCAL_TAG].sort());
+it('can label the map in every Frisian dialect of the registry, offered or not, and in the local view', () => {
+  const frisian = DIALECTS.filter((d) => d.language === 'frr').map((d) => d.tag);
+  expect([...ALL_VIEW_TAGS].sort()).toEqual([...frisian, LOCAL_TAG].sort());
 });

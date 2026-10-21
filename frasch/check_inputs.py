@@ -133,7 +133,7 @@ def cell_problems(row: Row, reg: Registry) -> list[str]:
     cell -- the rules `frasch curate apply` checks a new row by too."""
     found = [
         f"{column}: {what}: {row[column]!r}"
-        for column in variant_columns(reg)
+        for column in placelist.all_name_columns(reg)
         if row[column] and (what := cell_problem(row[column]))
     ]
     if _BAD_SEPARATOR.search(row["osm"]):
@@ -150,12 +150,6 @@ def _position_problems(row: PlaceRow, curation: str, positioned: Container[str])
     if slug and slug not in positioned:
         return [f"local/{slug} has no row with `lat`/`lon` in {curation}"]
     return []
-
-
-def variant_columns(reg: Registry) -> list[str]:
-    """The name columns: `;`-separated variants with `(…)` remarks, the
-    conventions names/README.md sets for every name cell."""
-    return placelist.name_columns(reg) + ["de", "da"]
 
 
 def check(ws: Workspace) -> list[Problem]:

@@ -93,7 +93,15 @@ def optional_sections(stats: Stats, inputs: Inputs) -> list[list[str]]:
 def test_the_dialects_line_names_the_registrys_tags() -> None:
     reg = Registry(
         [
-            Dialect(tag=f"frr-x-{column}", column=column, label="", status="", view="", note="")
+            Dialect(
+                tag=f"frr-x-{column}",
+                language="frr",
+                column=column,
+                label="",
+                status="",
+                view="",
+                note="",
+            )
             for column in ("mooring", "fering")
         ]
     )
@@ -196,10 +204,14 @@ def test_the_waterways_line_counts_the_member_ways() -> None:
 
 
 def test_the_name_frr_line_counts_osms_frisian_names_no_row_holds() -> None:
-    osm_local = {("n", 1): "Schörkeweerw", ("w", 2): "Jenswäärw"}
+    osm_local = {
+        ("n", 1): {"frasch:local": "Schörkeweerw", "frasch:dialect": "frr-x-hallig"},
+        ("w", 2): {"frasch:local": "Jenswäärw", "frasch:dialect": "frr-x-hallig"},
+    }
     lines = input_lines(replace(EMPTY, osm_local=osm_local), WS)
     assert line_starting(lines, "name:frr") == (
-        "name:frr  : 2 object(s) in a dialect area that no row holds by reference have one in OSM"
+        "name:frr  : 2 object(s) that no row holds by reference have one in OSM and get "
+        "a local name in their area (name:frr, or name:nds in a Low Saxon one)"
     )
 
 
@@ -257,7 +269,7 @@ def test_the_names_are_listed_per_dialect_in_registry_order_with_its_label() -> 
 def test_the_local_forms_line_says_how_many_are_osms_frisian_name() -> None:
     lines = result_lines(Stats(local=3, osm_local_claimed=1), EMPTY, EXTRACT, 0)
     assert [line for line in lines if line.startswith("  frasch:local")] == [
-        "  frasch:local             3  local form (1 of them OSM's name:frr)"
+        "  frasch:local             3  local form (1 of them OSM's name:frr or name:nds)"
     ]
 
 
@@ -265,7 +277,7 @@ def test_osms_frisian_names_on_objects_no_row_claims_get_a_line_of_their_own() -
     lines = result_lines(Stats(osm_local_unclaimed=2), EMPTY, EXTRACT, 0)
     assert [line for line in lines if line.startswith("  frasch:local")] == [
         "  frasch:local             0  local form",
-        "  frasch:local             2  OSM's name:frr on objects no row claims",
+        "  frasch:local             2  OSM's name:frr or name:nds on objects no row claims",
     ]
 
 

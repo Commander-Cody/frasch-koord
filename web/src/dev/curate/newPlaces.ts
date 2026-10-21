@@ -49,11 +49,6 @@ export function newPlaceKey(): string {
   return `new:${crypto.randomUUID().replaceAll('-', '')}`;
 }
 
-/** The columns of a new place's names: the Frisian ones of the worklist, `de` and `da`. */
-export function placeColumns(nameColumns: readonly string[]): string[] {
-  return [...nameColumns, 'de', 'da'];
-}
-
 /** What the form of a new place holds: every name column, empty ones too. */
 export interface PlaceDraft {
   kind: string;
@@ -75,9 +70,13 @@ export function isComplete(draft: PlaceDraft): boolean {
   return Boolean(draft.kind) && Object.keys(filledNames(draft.names)).length > 0;
 }
 
-/** The name a place goes by in the view: its first Frisian name, else its German or Danish one. */
-function nameOf(names: Record<string, string>, nameColumns: readonly string[]): string {
-  const frisian = nameColumns.map((column) => primaryName(names[column])).find(Boolean);
+/**
+ * The name a place goes by in the view: its first Frisian name, else its
+ * German or Danish one — never its Low Saxon or Synnejysk one, as no row of
+ * places.csv is named by those.
+ */
+function nameOf(names: Record<string, string>, frisianColumns: readonly string[]): string {
+  const frisian = frisianColumns.map((column) => primaryName(names[column])).find(Boolean);
   return frisian || primaryName(names.de) || primaryName(names.da);
 }
 
@@ -85,7 +84,7 @@ function nameOf(names: Record<string, string>, nameColumns: readonly string[]): 
 export function createEntry(
   key: string,
   draft: PlaceDraft,
-  nameColumns: readonly string[],
+  frisianColumns: readonly string[],
 ): PatchEntry {
   const names = filledNames(draft.names);
   const note = draft.note.trim();
@@ -93,7 +92,7 @@ export function createEntry(
     id: key,
     action: 'create',
     kind: draft.kind,
-    name: nameOf(names, nameColumns),
+    name: nameOf(names, frisianColumns),
     de: primaryName(names.de),
     names,
     ...(note ? { note } : {}),
@@ -109,15 +108,15 @@ export function listedPlace(place: NewPlace): ListedPlace {
  * A created place as a row of the list and its detail: what the worklist
  * would say about it, were it a row the matcher found nothing for yet.
  */
-export function placeRow(place: NewPlace, nameColumns: readonly string[]): ListRow {
+export function placeRow(place: NewPlace, frisianColumns: readonly string[]): ListRow {
   const { names } = place;
   return {
     id: place.key,
     line: 0,
     kind: place.kind,
     result: 'new',
-    name: nameOf(names, nameColumns),
-    names: Object.fromEntries(nameColumns.filter((c) => names[c]).map((c) => [c, names[c]])),
+    name: nameOf(names, frisianColumns),
+    names: Object.fromEntries(frisianColumns.filter((c) => names[c]).map((c) => [c, names[c]])),
     name_de: primaryName(names.de),
     name_da: primaryName(names.da),
     slug_suggestion: '',

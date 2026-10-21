@@ -24,8 +24,8 @@ from frasch.provenance import ExtractStamp
 from frasch.dialects import Dialect, Registry
 from osm_fixture import Nodes, ring, write_extract
 
-# the dialects of the tests: (column, label, status, view)
-_DIALECTS = [
+# the Frisian dialects of the tests: (column, label, status, view)
+_FRISIAN = [
     ("mooring", "Mooring", "living", "yes"),
     ("wieding", "Wiedingharder", "living", "no"),
     ("nordgoes", "Nordergoesharder", "living", "no"),
@@ -35,17 +35,31 @@ _DIALECTS = [
     ("solring", "Sölring", "living", "no"),
     ("hallig", "Halligfriesisch", "living", "no"),
 ]
+# the varieties of the tests: (tag, language, column, label, status, view) --
+# the Frisian dialects, and Low Saxon and Synnejysk after them
+_DIALECTS = [
+    *((f"frr-x-{column}", "frr", column, *rest) for column, *rest in _FRISIAN),
+    ("nds", "nds", "nds", "Plattdeutsch", "living", "no"),
+    ("jut", "jut", "jut", "Süderjütisch", "living", "no"),
+]
 REGISTRY = Registry(
     [
         Dialect(
-            tag=f"frr-x-{column}", column=column, label=label, status=status, view=view, note=""
+            tag=tag,
+            language=language,
+            column=column,
+            label=label,
+            status=status,
+            view=view,
+            note="",
         )
-        for column, label, status, view in _DIALECTS
+        for tag, language, column, label, status, view in _DIALECTS
     ]
 )
 # the same registry as a dialects.csv
-REGISTRY_CSV = "tag,column,label,status,view,note\n" + "".join(
-    f"{d['tag']},{d['column']},{d['label']},{d['status']},{d['view']},\n" for d in REGISTRY
+REGISTRY_CSV = "tag,language,column,label,status,view,note\n" + "".join(
+    f"{d['tag']},{d['language']},{d['column']},{d['label']},{d['status']},{d['view']},\n"
+    for d in REGISTRY
 )
 
 

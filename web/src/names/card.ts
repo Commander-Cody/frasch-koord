@@ -1,7 +1,7 @@
 // What a place's card shows: which names, in which order, and what each one
 // is. Pure; ui/PlaceCard.tsx gives every source its label and renders.
 
-import { DIALECTS } from '../dialects/registry';
+import { DIALECTS, frisianTags } from '../dialects/registry';
 import type { PlaceSelection } from '../selection/placeSelection';
 import { cardNames } from './cardNames';
 import type { CardNames } from './entry';
@@ -38,16 +38,28 @@ function localSource({ names, local, dialect }: CardNames): NameSource {
   return isAreaName ? { kind: 'local', dialect } : { kind: 'local' };
 }
 
-/** The place's names in the dialects of the registry, in its order, but the headline's. */
-function dialectLines(names: CardNames, shown: ShownName): CardLine[] {
+const FRISIAN_TAGS = frisianTags(DIALECTS);
+const NON_FRISIAN_TAGS = DIALECTS.map((d) => d.tag).filter((tag) => !FRISIAN_TAGS.includes(tag));
+
+/** The place's names in the varieties `tags` of the registry, in its order, but the headline's. */
+function varietyLines(names: CardNames, shown: ShownName, tags: string[]): CardLine[] {
   const isHeadline = (tag: string) => shown.source.kind === 'dialect' && shown.source.tag === tag;
-  // The area's own dialect falls back to the `local` column in
+  // The area's own variety falls back to the `local` column in
   // frasch/placenames.py, so its name can be the very same string as the
-  // local form. It is shown once, on the local line, which names the dialect.
+  // local form. It is shown once, on the local line, which names the variety.
   const isLocalForm = (tag: string) => tag === names.dialect && names.names[tag] === names.local;
-  return DIALECTS.map(({ tag }) => ({ tag, name: names.names[tag] }))
+  return tags
+    .map((tag) => ({ tag, name: names.names[tag] }))
     .filter(({ tag, name }) => name && !isHeadline(tag) && !isLocalForm(tag))
     .map(({ tag, name }) => ({ source: { kind: 'dialect', tag }, name }));
+}
+
+/**
+ * Low Saxon and Synnejysk, wherever they are known -- also where they are the
+ * same word as German or the headline (Husum): the line says that they are.
+ */
+function nonFrisianLines(names: CardNames, shown: ShownName): CardLine[] {
+  return varietyLines(names, shown, NON_FRISIAN_TAGS);
 }
 
 /**
@@ -72,13 +84,9 @@ function frisianLines({ name_frr }: CardNames, shown: string[]): CardLine[] {
   return [{ source: { kind: 'language', language: 'frr' }, name: name_frr }];
 }
 
-/**
- * German and Danish, and Low Saxon where it says something German does not:
- * most places are the same word in both (Husum).
- */
-function languageLines({ name_nds, name_de, name_da }: CardNames, headline: string): CardLine[] {
+/** German and Danish. */
+function languageLines({ name_de, name_da }: CardNames, headline: string): CardLine[] {
   const names: [Language, string | undefined][] = [
-    ['nds', name_nds === name_de ? undefined : name_nds],
     ['de', name_de],
     ['da', name_da],
   ];
@@ -88,9 +96,14 @@ function languageLines({ name_nds, name_de, name_da }: CardNames, headline: stri
 }
 
 function cardLines(names: CardNames, shown: ShownName): CardLine[] {
-  const frisian = [...dialectLines(names, shown), ...localLines(names, shown.name)];
+  const frisian = [...varietyLines(names, shown, FRISIAN_TAGS), ...localLines(names, shown.name)];
   const onCard = [shown.name, ...frisian.map((line) => line.name)];
-  return [...frisian, ...frisianLines(names, onCard), ...languageLines(names, shown.name)];
+  return [
+    ...frisian,
+    ...frisianLines(names, onCard),
+    ...nonFrisianLines(names, shown),
+    ...languageLines(names, shown.name),
+  ];
 }
 
 /**
