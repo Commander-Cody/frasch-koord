@@ -49,17 +49,6 @@ export function newPlaceKey(): string {
   return `new:${crypto.randomUUID().replaceAll('-', '')}`;
 }
 
-/**
- * The columns of a new place's names, in the order of places.csv: the
- * Frisian ones of the worklist, `de`, Low Saxon and Synnejysk, and `da`.
- */
-export function placeColumns(
-  nameColumns: readonly string[],
-  nonFrisianColumns: readonly string[],
-): string[] {
-  return [...nameColumns, 'de', ...nonFrisianColumns, 'da'];
-}
-
 /** What the form of a new place holds: every name column, empty ones too. */
 export interface PlaceDraft {
   kind: string;

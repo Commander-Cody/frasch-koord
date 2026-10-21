@@ -8,7 +8,7 @@
     "bbox",
     "kind_order",
     "name_columns",
-    "non_frisian_columns",
+    "all_name_columns",
     "polygon_kinds",
     "class_keys",
     "settlement_places",
@@ -31,12 +31,12 @@
       "items": { "type": "string" }
     },
     "name_columns": {
-      "description": "The Frisian name columns of places.csv in the order of the list: `mooring`, `local`, then the other dialects of names/dialects.csv. A new place's form has these, `de`, `non_frisian_columns` and `da`.",
+      "description": "The Frisian name columns of places.csv in the order of the list: `mooring`, `local`, then the other dialects of names/dialects.csv. A place goes by its first name among these.",
       "type": "array",
       "items": { "type": "string" }
     },
-    "non_frisian_columns": {
-      "description": "The name columns of places.csv of the local varieties that are not Frisian (`nds`, `jut`), in the order of names/dialects.csv. Names, but never a row's Frisian name: a new place's form offers them after `de`, and its name in the view is never one of them.",
+    "all_name_columns": {
+      "description": "Every name column of places.csv in the order of the list: `name_columns`, `de`, the other languages' varieties of names/dialects.csv (`nds`, `jut`), `da`. A new place's form has a cell for each.",
       "type": "array",
       "items": { "type": "string" }
     },
@@ -81,7 +81,7 @@
         "id": { "description": "The row's `id`.", "type": "string", "minLength": 1 },
         "kind": { "description": "The row's kind.", "type": "string" },
         "names": {
-          "description": "Every non-empty name cell -- the Frisian columns, `de` and `da` --, raw, keyed by column name.",
+          "description": "Every non-empty cell of `all_name_columns`, raw, keyed by column name.",
           "type": "object",
           "additionalProperties": { "type": "string", "minLength": 1 }
         }

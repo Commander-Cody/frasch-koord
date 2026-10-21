@@ -60,6 +60,12 @@ def non_frisian_columns(reg: Registry) -> list[str]:
     return [d["column"] for d in reg.non_frisian]
 
 
+def all_name_columns(reg: Registry) -> list[str]:
+    """Every name column, in list order: `;`-separated variants with `(…)`
+    remarks, the conventions names/README.md sets for every name cell."""
+    return [*name_columns(reg), "de", *non_frisian_columns(reg), "da"]
+
+
 def columns(reg: Registry) -> list[str]:
     """The columns of the name list, in the order it is written in."""
     return (

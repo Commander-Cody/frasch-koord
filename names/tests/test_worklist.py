@@ -146,9 +146,9 @@ def test_the_worklist_offers_the_results_of_its_schema(world: Path) -> None:
     assert exported["results"] == read_schema("curate-worklist")["$defs"]["result"]["enum"]
 
 
-def test_the_worklist_names_the_name_columns_of_the_other_languages(world: Path) -> None:
+def test_the_worklist_names_every_name_column_in_list_order(world: Path) -> None:
     exported = json.loads(export_the_review_rows(world).read_text(encoding="utf-8"))
-    assert exported["non_frisian_columns"] == ["nds", "jut"]
+    assert exported["all_name_columns"] == [*exported["name_columns"], "de", "nds", "jut", "da"]
 
 
 def test_the_worklist_names_the_frisian_name_columns_in_list_order(world: Path) -> None:
@@ -174,6 +174,15 @@ def test_the_worklist_lists_every_place_of_the_name_list_with_its_names(world: P
         {"id": "toftem", "kind": "settlement", "names": {"mooring": "Toftem"}},
         {"id": "bol", "kind": "settlement", "names": {"mooring": "Bol", "da": "Bøl"}},
     ]
+
+
+def test_the_worklist_lists_the_low_saxon_and_synnejysk_names_of_a_place(world: Path) -> None:
+    # a new place's duplicate warning compares every name typed
+    lym = {"id": "lym", "kind": "settlement", "mooring": "Lem", "nds": "Lüm", "jut": "Lym"}
+    (world / "places.csv").write_text(places_text([lym]), encoding="utf-8")
+    export(world, left("lym", "not_found", "no candidate"))
+    exported = json.loads((world / "work" / "curate.json").read_text(encoding="utf-8"))
+    assert exported["places"][0]["names"] == {"mooring": "Lem", "nds": "Lüm", "jut": "Lym"}
 
 
 def exported_row(world: Path, place: dict[str, str]) -> dict[str, object]:

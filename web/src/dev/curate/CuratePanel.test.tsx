@@ -57,7 +57,7 @@ const WORKLIST: CurateWorklist = {
   bbox: [8, 54, 9, 55],
   kind_order: ['settlement', 'warft'],
   name_columns: ['mooring', 'local', 'fering'],
-  non_frisian_columns: ['nds', 'jut'],
+  all_name_columns: ['mooring', 'local', 'fering', 'de', 'nds', 'jut', 'da'],
   polygon_kinds: ['koog'],
   class_keys: ['place', 'boundary'],
   settlement_places: ['village', 'town'],

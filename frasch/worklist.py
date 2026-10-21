@@ -82,7 +82,7 @@ class Worklist(TypedDict):
     bbox: list[float]
     kind_order: list[str]
     name_columns: list[str]
-    non_frisian_columns: list[str]
+    all_name_columns: list[str]
     polygon_kinds: list[str]
     class_keys: list[str]
     settlement_places: list[str]
@@ -189,7 +189,7 @@ def _work_candidate(listed: matchfile.ListedCandidate) -> WorkCandidate:
 
 def _listed_place(row: PlaceRow, reg: Registry) -> ListedPlace:
     """A row as the worklist lists every row: its non-empty name cells, raw."""
-    columns = [*placelist.name_columns(reg), "de", "da"]
+    columns = placelist.all_name_columns(reg)
     return {"id": row["id"], "kind": row["kind"], "names": {c: row[c] for c in columns if row[c]}}
 
 
@@ -201,7 +201,7 @@ def _write_worklist(
         "bbox": list(geo.NF_BBOX),
         "kind_order": kinds.KIND_ORDER,
         "name_columns": placelist.name_columns(reg),
-        "non_frisian_columns": placelist.non_frisian_columns(reg),
+        "all_name_columns": placelist.all_name_columns(reg),
         "polygon_kinds": kinds.POLYGON_KINDS,
         "class_keys": list(osmtags.CLASS_KEYS),
         "settlement_places": sorted(osmtags.SETTLEMENT_PLACES),
