@@ -83,6 +83,7 @@ class Worklist(TypedDict):
     kind_order: list[str]
     frisian_columns: list[str]
     all_name_columns: list[str]
+    naming_columns: list[str]
     polygon_kinds: list[str]
     class_keys: list[str]
     settlement_places: list[str]
@@ -202,6 +203,7 @@ def _write_worklist(
         "kind_order": kinds.KIND_ORDER,
         "frisian_columns": placelist.frisian_columns(reg),
         "all_name_columns": placelist.all_name_columns(reg),
+        "naming_columns": placelist.naming_columns(reg),
         "polygon_kinds": kinds.POLYGON_KINDS,
         "class_keys": list(osmtags.CLASS_KEYS),
         "settlement_places": sorted(osmtags.SETTLEMENT_PLACES),

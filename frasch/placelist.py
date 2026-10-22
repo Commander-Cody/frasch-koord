@@ -60,6 +60,14 @@ def non_frisian_columns(reg: Registry) -> list[str]:
     return [d["column"] for d in reg.non_frisian]
 
 
+def naming_columns(reg: Registry) -> list[str]:
+    """Every name column, in the order a row's one name is looked for (its
+    id, the curation view's label): the Frisian ones, German, Danish, then
+    the other local varieties -- never before German or Danish, but never
+    left out."""
+    return [*frisian_columns(reg), "de", "da", *non_frisian_columns(reg)]
+
+
 def all_name_columns(reg: Registry) -> list[str]:
     """Every name column, in list order: `;`-separated variants with `(…)`
     remarks, the conventions names/README.md sets for every name cell."""
@@ -345,14 +353,10 @@ def slug(text: str) -> str:
 
 
 def new_id(row: Row, taken: set[str], reg: Registry) -> str:
-    """An id for a row that has none: the slug of its Frisian name (German,
-    then Danish, when it has none), with `-2`, `-3`, ... when that is taken."""
-    base = (
-        slug(any_name(row, reg))
-        or slug(primary(row.get("de")))
-        or slug(primary(row.get("da")))
-        or "row"
-    )
+    """An id for a row that has none: the slug of its first name along
+    `naming_columns`, with `-2`, `-3`, ... when that is taken."""
+    names = (slug(primary(row.get(column))) for column in naming_columns(reg))
+    base = next(filter(None, names), "row")
     ident, n = base, 1
     while ident in taken:
         n += 1
