@@ -3,8 +3,9 @@ a missing input file, and a whole `run()` over a tiny extract written here
 with pyosmium.
 
 The extract mirrors real places (ids and positions from the
-Schleswig-Holstein extract; ring nodes made up): the village Holm, the
-Nordwarft way on Ockholm, the Hamburger Hallig relation, the Nordstrand
+Schleswig-Holstein extract; ring nodes made up): the village Holm, a
+Nordwarft way on Ockholm (the id of the Warft on Habel, moved to where the
+row's Nordwarft lies; #135), the Hamburger Hallig relation, the Nordstrand
 village node that carries the synthetic island square, Tammensiel (curated,
 not in the name list), Westerheide on Amrum, a place OSM does not have, and
 the Kirchwarft, which no row claims but OSM names in Frisian (#81; moved into

@@ -17,7 +17,7 @@ def test_parse_reads_several_references_in_order() -> None:
 
 
 def test_parse_does_not_need_a_space_after_the_semicolon() -> None:
-    # places.csv has cells written that way (the Nordwarft on Ockholm)
+    # a hand-edited cell of places.csv may be written that way
     assert refs.parse("way/1347936331;node/1332249790") == [
         ("w", 1347936331),
         ("n", 1332249790),
