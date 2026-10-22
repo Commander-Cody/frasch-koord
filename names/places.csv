@@ -595,7 +595,7 @@ warft,Latje Guurd,,,,Läitje Guurd,,,,,,,,Kleine Gaarde,,,Ockholm,,node/13337384
 warft,Grute Guurd,,,,Gråte Guurd,,,,,,,,Große Gaarde,,,Ockholm,,node/1333738476,,auto,,grute-guurd
 warft,Gräinewärw,,,,Greeneweerw,,,,,,,,Grünewarft,,,Ockholm,,node/1331340281,,ok,,grainewarw
 warft,Schörkewärw,,,,Schörkeweerw,,,,,,,,Kirchwarft,,,Ockholm,,node/1333738478,,ok,,schorkewarw-5
-warft,Nordwärw,,,,Noordweerw,,,,,,,,Nordwarft,,,Ockholm,,way/1347936331; node/1332249790,,ok,,nordwarw
+warft,Nordwärw,,,,Noordweerw,,,,,,,,Nordwarft,,,Ockholm,,node/1332249790,,ok,,nordwarw
 warft,Sööderwärw,,,,Sårweerw,,,,,,,,Süderwarft,,,Ockholm,,node/1333738472,,auto,,sooderwarw
 warft,Norderschölj,,,,Noorderschoul,,,,,,,,Norderschule,,,Ockholm,,node/1331340463,,auto,,norderscholj
 warft,Paderswärw,,,,Päidersweerw,,,,,,,,Peterswarft,,,Ockholm,,node/1333738470,,auto,,paderswarw-3
@@ -607,7 +607,7 @@ warft,,,,,Munksbrüg,,,,,,,,Munksbrück,,,Ockholm,,node/1331227468,,auto,,munksb
 warft,Knüdswärw,,,,,,,,,,Knudsweerw,,Knudswarft,,,Gröde,,node/2197628968,,auto,,knudswarw
 warft,Schöljwärw,,,,,,,,,,Sköölweerw,,Schulwarft,,,Gröde,,node/2197628967,,auto,,scholjwarw
 warft,Nai-Paderswärw,,,,,,,,,,Nai-Padersweerw,,Neu-Peterswarft,,,Gröde,,node/2197605878,,,,naiweerew
-warft,Norderwärw,,,,,,,,,,Noorderweerw,,Norderwarft,,,Habel,,node/7523667804,,ok,,norderwarw-2
+warft,Norderwärw,,,,,,,,,,Noorderweerw,,Norderwarft,,,Habel,,node/7523667804; way/1347936331,,ok,,norderwarw-2
 warft,Norderwärw,,,,,,,,,,Noorderweerw,,Norderwarft,,,Lütt Moor,,node/8541283957,,auto,,norderwarw
 warft,Amaalienwärw,,,,,,,,,,Amaalienweerew,,Amalienwarft,,,Lütt Moor,,node/8541283959,,,,amaalienweerew
 warft,Huulew-Wäi,,,,,,,,,,Hualew-Wai,,Halberwegwarft,,,Lütt Moor,,node/8541283958,,,name:frr from OSM,hualew-wai
