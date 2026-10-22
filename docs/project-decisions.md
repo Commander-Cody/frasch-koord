@@ -1825,8 +1825,9 @@ like the Frisian ones. The spec is the issue and its comments. What it settled:
 - **Their names are no Frisian names.** The `nds`/`jut` columns follow `de`.
   A row is never named by them (id, reports, `any_name`), and the matcher does
   not search them. *(Revised 2026-10-22, #154: never before German or Danish,
-  but not left out either; see below.)* A row whose only names they are has no Frisian name and
-  stays off the map. Only a Frisian dialect can be a map view.
+  but not left out either; see below.)* A row whose only names they are has
+  no Frisian name and stays off the map. Only a Frisian dialect can be a map
+  view.
 - **Synnejysk is the default local language of Schleswig, Low Saxon the default
   south of the border.** The `jut` rows of `dialect_areas.csv` cover
   Schleswig-Flensburg, Flensburg and the Nordfriesland mainland that no
