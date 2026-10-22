@@ -81,6 +81,8 @@ export interface CurateWorklist {
   frisian_columns: string[];
   /** Every name column of places.csv in list order (`frisian_columns`, `de`, `nds`, `jut`, `da`): a new place's form has a cell for each. */
   all_name_columns: string[];
+  /** Every name column in the order a place's one name is looked for (`frisian_columns`, `de`, `da`, `nds`, `jut`): the order its id is made in. */
+  naming_columns: string[];
   /** The kinds whose local reference can carry an area instead of a bare point. */
   polygon_kinds: string[];
   /** The OSM tags that say what kind of thing an object is, the most telling first. */
