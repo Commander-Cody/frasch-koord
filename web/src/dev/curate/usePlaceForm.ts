@@ -111,11 +111,11 @@ export function usePlaceForm(
       setSaving(false);
     }
   };
-  const save = (draft: PlaceDraft, frisianColumns: readonly string[]) => {
+  const save = (draft: PlaceDraft, namingColumns: readonly string[]) => {
     if (!form) return;
     const { key, decision } = form;
     void run(key, async () => {
-      await storeEntry(update, createEntry(key, draft, frisianColumns));
+      await storeEntry(update, createEntry(key, draft, namingColumns));
       if (decision) await storeEntry(update, { id: key, ...decision });
       if (formNow.current !== key) return;
       close();

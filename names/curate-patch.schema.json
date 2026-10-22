@@ -19,7 +19,7 @@
       "description": "The row's kind; for messages only -- but a `create`'s is the new row's.",
       "type": "string"
     },
-    "name": { "description": "The row's Frisian name; for messages only.", "type": "string" },
+    "name": { "description": "The row's Frisian name -- a created place's first name along the worklist's `naming_columns`; for messages only.", "type": "string" },
     "de": { "description": "The row's German name; for messages only.", "type": "string" },
     "action": {
       "description": "What is decided about the row; each action has its branch of `allOf`.",

@@ -1824,8 +1824,10 @@ like the Frisian ones. The spec is the issue and its comments. What it settled:
   `frr` is OSM's generic `name:frr`. The frontend gets `language` too.
 - **Their names are no Frisian names.** The `nds`/`jut` columns follow `de`.
   A row is never named by them (id, reports, `any_name`), and the matcher does
-  not search them. A row whose only names they are has no Frisian name and
-  stays off the map. Only a Frisian dialect can be a map view.
+  not search them. *(Revised 2026-10-22, #154: never before German or Danish,
+  but not left out either; see below.)* A row whose only names they are has
+  no Frisian name and stays off the map. Only a Frisian dialect can be a map
+  view.
 - **Synnejysk is the default local language of Schleswig, Low Saxon the default
   south of the border.** The `jut` rows of `dialect_areas.csv` cover
   Schleswig-Flensburg, Flensburg and the Nordfriesland mainland that no
@@ -1864,3 +1866,24 @@ like the Frisian ones. The spec is the issue and its comments. What it settled:
   (Husum, Treen), so the reader sees that it is the same, not that it is
   unknown. Only the headline's own name gets no line, and a Synnejysk local
   form gets one line, the local one.
+
+## Decided 2026-10-22: one naming chain that leaves no language out (issue #154)
+
+A place the curation view created with only a Low Saxon or Synnejysk name was
+posted to the patch and listed without a name, and `frasch curate apply` would
+have given it the id `row`: `nameOf` and `placelist.new_id` tried only the
+Frisian columns, German and Danish.
+
+- **All languages are treated equally where possible** (owner's rule). Where
+  exactly one name is needed, the fallback chain goes through every language
+  and leaves none out. #83's "their names are no Frisian names" means never
+  before German, not never.
+- **One chain, `placelist.naming_columns`**: the Frisian columns, `de`, `da`,
+  then the other local varieties in registry order (`nds`, `jut`). `new_id`
+  slugs the first name along it (`row` only for a row with no name at all),
+  and the worklist exports it as `naming_columns`, so the view's `nameOf`
+  names a created place the way its id will be made.
+- `any_name` stays Frisian-only: it answers "does the row have a Frisian
+  name?", and a row whose only names are `nds`/`jut` still stays off the map.
+- The other single-name chains that still leave languages out (reports,
+  `describe`, `point_name`) are #156.

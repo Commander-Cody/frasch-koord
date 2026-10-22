@@ -151,6 +151,11 @@ def test_the_worklist_names_every_name_column_in_list_order(world: Path) -> None
     assert exported["all_name_columns"] == [*exported["frisian_columns"], "de", "nds", "jut", "da"]
 
 
+def test_the_worklist_names_the_columns_a_place_is_named_by_in_order(world: Path) -> None:
+    exported = json.loads(export_the_review_rows(world).read_text(encoding="utf-8"))
+    assert exported["naming_columns"] == [*exported["frisian_columns"], "de", "da", "nds", "jut"]
+
+
 def test_the_worklist_names_the_frisian_name_columns_in_list_order(world: Path) -> None:
     exported = json.loads(export_the_review_rows(world).read_text(encoding="utf-8"))
     assert exported["frisian_columns"] == [

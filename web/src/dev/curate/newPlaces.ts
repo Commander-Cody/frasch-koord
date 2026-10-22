@@ -71,20 +71,18 @@ export function isComplete(draft: PlaceDraft): boolean {
 }
 
 /**
- * The name a place goes by in the view: its first Frisian name, else its
- * German or Danish one — never its Low Saxon or Synnejysk one, as no row of
- * places.csv is named by those.
+ * The name a place goes by in the view: its first name along `namingColumns`
+ * (the worklist's `naming_columns`, the order its id is made in).
  */
-function nameOf(names: Record<string, string>, frisianColumns: readonly string[]): string {
-  const frisian = frisianColumns.map((column) => primaryName(names[column])).find(Boolean);
-  return frisian || primaryName(names.de) || primaryName(names.da);
+function nameOf(names: Record<string, string>, namingColumns: readonly string[]): string {
+  return namingColumns.map((column) => primaryName(names[column])).find(Boolean) ?? '';
 }
 
 /** The `create` entry of a draft, with the name and German name its messages give. */
 export function createEntry(
   key: string,
   draft: PlaceDraft,
-  frisianColumns: readonly string[],
+  namingColumns: readonly string[],
 ): PatchEntry {
   const names = filledNames(draft.names);
   const note = draft.note.trim();
@@ -92,7 +90,7 @@ export function createEntry(
     id: key,
     action: 'create',
     kind: draft.kind,
-    name: nameOf(names, frisianColumns),
+    name: nameOf(names, namingColumns),
     de: primaryName(names.de),
     names,
     ...(note ? { note } : {}),
@@ -108,14 +106,18 @@ export function listedPlace(place: NewPlace): ListedPlace {
  * A created place as a row of the list and its detail: what the worklist
  * would say about it, were it a row the matcher found nothing for yet.
  */
-export function placeRow(place: NewPlace, frisianColumns: readonly string[]): ListRow {
+export function placeRow(
+  place: NewPlace,
+  frisianColumns: readonly string[],
+  namingColumns: readonly string[],
+): ListRow {
   const { names } = place;
   return {
     id: place.key,
     line: 0,
     kind: place.kind,
     result: 'new',
-    name: nameOf(names, frisianColumns),
+    name: nameOf(names, namingColumns),
     names: Object.fromEntries(frisianColumns.filter((c) => names[c]).map((c) => [c, names[c]])),
     name_de: primaryName(names.de),
     name_da: primaryName(names.da),

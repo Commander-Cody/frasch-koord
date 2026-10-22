@@ -59,6 +59,7 @@ const WORKLIST: CurateWorklist = {
   kind_order: ['settlement', 'warft'],
   frisian_columns: ['mooring', 'local', 'fering'],
   all_name_columns: ['mooring', 'local', 'fering', 'de', 'nds', 'jut', 'da'],
+  naming_columns: ['mooring', 'local', 'fering', 'de', 'da', 'nds', 'jut'],
   polygon_kinds: ['koog'],
   class_keys: ['place', 'boundary'],
   settlement_places: ['village', 'town'],
@@ -564,6 +565,16 @@ describe('CuratePanel, new places', () => {
     });
   });
 
+  it('names a new place by its Synnejysk name when it has no other', async () => {
+    await renderPanel();
+    fireEvent.click(screen.getByRole('button', { name: 'New place' }));
+    fillPlace({ 'new place kind': 'settlement', 'new place jut': 'Lym' });
+
+    fireEvent.click(savePlaceButton());
+
+    expect(posts[0].entry).toMatchObject({ name: 'Lym' });
+  });
+
   it('saves no new place without a kind', async () => {
     await renderPanel();
     fireEvent.click(screen.getByRole('button', { name: 'New place' }));
@@ -612,6 +623,15 @@ describe('CuratePanel, new places', () => {
     await renderWithHoorne();
 
     within(newPlacesList()).getByText('Hoorne');
+  });
+
+  it('lists a created place by its Synnejysk name when it has no other', async () => {
+    patchEntries = [{ id: KEY, action: 'create', kind: 'settlement', names: { jut: 'Lym' } }];
+    render(<CuratePanel map={new FakeMap().map} />);
+
+    expect(
+      await within(await screen.findByRole('list', { name: /^New places/ })).findByText('Lym'),
+    ).toBeDefined();
   });
 
   it('lists a created place that is decided, though done rows are hidden', async () => {

@@ -57,6 +57,10 @@ def test_a_new_id_is_the_german_name_before_a_synnejysk_one() -> None:
     assert placelist.new_id(row, set(), REGISTRY) == "suderlugum"
 
 
+def test_a_new_id_is_the_synnejysk_name_of_a_row_with_no_other() -> None:
+    assert placelist.new_id(place(jut="Lym"), set(), REGISTRY) == "lym"
+
+
 # ------------------------------------------------------------------ state ---
 def named(**cells: str) -> placelist.PlaceRow:
     """A settlement row with a Frisian name."""

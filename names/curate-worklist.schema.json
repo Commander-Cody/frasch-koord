@@ -9,6 +9,7 @@
     "kind_order",
     "frisian_columns",
     "all_name_columns",
+    "naming_columns",
     "polygon_kinds",
     "class_keys",
     "settlement_places",
@@ -37,6 +38,11 @@
     },
     "all_name_columns": {
       "description": "Every name column of places.csv in the order of the list: `frisian_columns`, `de`, the other languages' varieties of names/dialects.csv (`nds`, `jut`), `da`. A new place's form has a cell for each.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "naming_columns": {
+      "description": "Every name column in the order a place's one name is looked for (`placelist.naming_columns`, which also makes a row's id): `frisian_columns`, `de`, `da`, then the other languages' varieties (`nds`, `jut`). A place the view creates goes by its first name among these.",
       "type": "array",
       "items": { "type": "string" }
     },

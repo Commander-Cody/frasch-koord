@@ -5,7 +5,9 @@ Saxon and Synnejysk, the other local languages of Schleswig.
 North Frisian is not one language variety but a dozen, and the map shows more
 than one of them.  Wherever the code says "Frisian" it means the rows of
 `language` `frr`; Low Saxon (`nds`) and Synnejysk (`jut`) have names of their
-own in the list, but no row is named by them and no map view is in them.
+own in the list, but they are never a row's Frisian name, a row is named by
+them only when it has no Frisian, German or Danish one
+(`placelist.naming_columns`), and no map view is in them.
 Everything else derives from this list: the name columns of
 names/places.csv (frasch.placelist), the `name:<tag>` tags the injector
 writes, Planetiler's `--languages` list (`frasch dialects --tags` in
