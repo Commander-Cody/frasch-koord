@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
 import { FakeMap, FakeMarker } from '../../testing/fakeMap';
+import { queryParamWhenShown } from '../../testing/queryParamWhenShown';
 import CuratePanel from './CuratePanel';
 import type { PatchEntry } from './patch';
 import type { CurateCandidate, CurateRow, CurateWorklist } from './worklist';
@@ -215,9 +216,9 @@ describe('CuratePanel', () => {
     await renderPanel();
     await openRow('Naibel');
     worklist = { ...WORKLIST, rows: [] };
+    const row = queryParamWhenShown('row', 'nothing matches the filter');
     fireEvent.click(screen.getByRole('button', { name: 'Reload' }));
-    await screen.findByText('nothing matches the filter');
-    expect(new URLSearchParams(window.location.search).get('row')).toBeNull();
+    expect(await row).toBeUndefined();
   });
 
   it('keeps the row the keys moved to in view', async () => {

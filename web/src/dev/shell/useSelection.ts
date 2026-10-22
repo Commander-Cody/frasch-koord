@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useLayoutEffect, useState } from 'react';
 import type { RefCallback } from 'react';
 
 import { replaceQueryParams } from '../../url/queryParams';
@@ -76,7 +76,8 @@ export function useSelection({ param, keys, ready, resolve, show }: SelectionOpt
 /**
  * Keeps the selection on its item when the data is reloaded: the key the
  * data now gives it (a rebuild can change it), or none once the item is gone
- * — in the URL too, so a later reload cannot bring it back unasked.
+ * — in the URL too, so a later reload cannot bring it back unasked. A
+ * layout effect, so that both settle in the commit that shows the reload.
  */
 function useFollowReload({
   param,
@@ -88,7 +89,7 @@ function useFollowReload({
   selected: string | null;
   setSelected: (key: string | null) => void;
 }): void {
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!ready || selected === null) return;
     const key = resolve(selected) ?? null;
     if (key === selected) return;
