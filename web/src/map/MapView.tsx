@@ -3,6 +3,7 @@ import type { Ref, RefObject } from 'react';
 import { Marker } from 'maplibre-gl';
 import type { LngLat, LngLatLike, Map as MapLibreMap, MapGeoJSONFeature, Point } from 'maplibre-gl';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 
 import CloseButton from '../ui/CloseButton';
 import { createMap, removeMap } from './createMap';
@@ -72,7 +73,7 @@ export default function MapView({
 }: MapViewProps) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const { mapRef, map } = useMapInstance(containerRef, view);
+  const { mapRef, map } = useMapInstance(containerRef, view, t);
   useMapHandle(ref, mapRef);
   useReady(map, onReady);
   useViewStyle(map, view);
@@ -94,19 +95,21 @@ export default function MapView({
 }
 
 /**
- * The map in `containerRef`, created once on mount in `initialView`. As a ref
- * for the handle, whose methods have to reach it in the effects of the
- * parent's first render, and as state for the hooks that set it up.
+ * The map in `containerRef`, created once on mount in `initialView`, its
+ * controls labelled by `t`. As a ref for the handle, whose methods have to
+ * reach it in the effects of the parent's first render, and as state for the
+ * hooks that set it up.
  */
 function useMapInstance(
   containerRef: RefObject<HTMLDivElement | null>,
   initialView: string,
+  t: TFunction,
 ): { mapRef: RefObject<MapLibreMap | null>; map: MapLibreMap | null } {
   const mapRef = useRef<MapLibreMap | null>(null);
   const [map, setMap] = useState<MapLibreMap | null>(null);
   useEffect(() => {
     if (!containerRef.current) return;
-    const created = createMap(containerRef.current, styleFor(initialView));
+    const created = createMap(containerRef.current, styleFor(initialView), t);
     mapRef.current = created;
     setMap(created);
     return () => {
@@ -115,6 +118,7 @@ function useMapInstance(
       setMap(null);
     };
     // Only the initial view matters here; changes are handled by useViewStyle.
+    // The controls keep the strings of the first `t` (see createMap).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return { mapRef, map };

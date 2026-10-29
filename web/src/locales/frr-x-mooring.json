@@ -28,6 +28,10 @@
     "nds": "Plååtjüsch",
     "jut": "Jütsch"
   },
+  "geolocate": {
+    "label": "",
+    "unavailable": ""
+  },
   "share": {
     "label": "Link diilje",
     "copied": "Link kopiird",
