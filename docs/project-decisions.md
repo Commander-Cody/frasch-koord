@@ -1887,3 +1887,23 @@ Frisian columns, German and Danish.
   name?", and a row whose only names are `nds`/`jut` still stays off the map.
 - The other single-name chains that still leave languages out (reports,
   `describe`, `point_name`) are #156.
+
+## Decided 2026-10-29: the geolocate button (issue #5)
+
+- **MapLibre's `GeolocateControl`**, top right below the zoom buttons, on the
+  public map and the dev views alike (`map/createMap.ts`). One fix per tap
+  (`trackUserLocation: false`); the map fits the fix's accuracy circle, at
+  most zoom 14 (village level), and marks the position with MapLibre's dot.
+- **Its labels come from the locale files** (`geolocate.label`,
+  `geolocate.unavailable`), handed to MapLibre's `locale` map option. MapLibre
+  reads that option once and has no API to change it, so the button keeps the
+  UI language the map was created in. No selectable view switches the UI
+  language at runtime today (owner's choice: no live relabelling).
+- **Mooring strings empty** until the owner writes them (#7); they fall back
+  to German.
+- **Left out** (owner's choice): MapLibre's other control labels (zoom,
+  compass, attribution toggle) stay English, see #162; no special
+  case for the phone sheet covering the dot, or for a position outside the
+  map's area.
+- **Tested in the smoke test**, the only place with a real map: a faked
+  position, one tap, the dot shows and the URL hash lands on it at zoom 14.
