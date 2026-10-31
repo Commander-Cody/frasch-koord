@@ -7,6 +7,8 @@ settlement,Seebel,,Seebel,,,,,,,,,,Seebüll,,,,Søbøl,node/1662227786,,auto,,se
 settlement,Löst,,Löst,,,,,,,,,,Lyst,,,,,node/3033265752,,auto,,lost
 settlement,Oowentuft,,Oowentoft,,,,,,,,,,Aventoft,,Awntåwt,,Aventoft,node/240051016,Q506341,auto,,oowentuft
 settlement,Hååsbärj,,Haasbärj,,,,,,,,,,Haasberg,,,,,node/8538774011,,auto,,haasbarj
+settlement,Brämsbel,,,,,,,,,,,,Bremsbüll,,,,Bremsbøl,node/8538831610,,auto,,bramsbel
+settlement,Meelenhüs,,,,,,,,,,,,Mühlenhaus,,,,Møllehus,node/3059174719,,auto,,meelenhus
 settlement,Fascherhüsinge,,Fäskerhüsinge,,,,,,,,,,Fischerhäuser,,,,,node/8536636783,,auto,,fascherhusinge
 settlement,Fiilätj,,Fiiläit,,,,,,,,,,Verlath,,,,,,,,,fiilatj
 settlement,Weestre,,Weestre,,,,,,,,,,Westre,,,,,node/240123246,Q506431,auto,,weestre
@@ -135,6 +137,10 @@ settlement,Meelbüü,,,Melbü,,,,,,,,,Medelby,,,,,node/240072510,Q629653,auto,un
 settlement,Hol,,,,,,,,,,,,Holt,,Holjt,Medelby,,node/240048173,Q545710,auto,uncertain,hol
 settlement,Brik,,,,,,,,,,,,Riesbriek,,,,,node/2359344446,Q97479219,auto,,brik
 settlement,Schååflem,,,,,,,,,,,,Schafflund,,,,,node/240090603,Q551483,auto,,schaaflem
+settlement,Norderhåkst,,,,,,,,,,,,Nordhackstedt,,,,,node/240105063,Q528837,auto,,norderhakst
+settlement,Grute Wiie,,,,,,,,,,,,Großenwiehe,,,,,node/240082703,Q544597,auto,,grute-wiie
+settlement,Latje Wiie,,,,,,,,,,,,Kleinwiehe,,,,,node/343685147,,auto,,latje-wiie
+settlement,Schööbel,,,,,,Schööbel,,,,Skööbel,,Schobüll,,Skofel,,,node/2728693162,Q97483974,auto,,schoobel-2
 settlement,Bousbel,,,,,,,,,,,,Bosbüll,,,,,node/240040753,Q559456,auto,,bousbel
 settlement,Hoonebel,,,Hoonebel,,,,,,,,,Hunnebüll; Hundebüll,,,,,,,,uncertain,hoonebel
 settlement,e Houlme,,,,e Hoolme,,,,,,,,Ockholm,,,,,node/240080339,Q522875,auto,,e-houlme
@@ -384,7 +390,7 @@ koog,Naie Krisen-Albrechen-Kuuch,,,,,,,,,,,,Neuer Christian-Albrechts-Koog,,,,,,
 koog,Störtewärkskuuch,,,,,,,,,,,,Störtewerkerkoog,,,,Størteværkkog,,,,,stortewarkskuuch
 koog,Mariinkuuch,,,,,,,,,,,,Marienkoog,,,,,,,,,mariienkuuch
 koog,Gamsbel-Kuuch,,,,,,,,,,,,Galmsbüllkoog,,,Galmsbüll,,node/6268414191,,,,galmsbelkuuch
-koog,Steerdebelinge Üülje Kuuch,,,,,,,,,,,,Alter Sterdebüller Koog,,,,,,,,,steerdebelinge-uulje-kuuch
+koog,Steerdebelinge Üülje Kuuch,,,,Steerdebelinge Uule Kuuch,,,,,,,,Alter Sterdebüller Koog,,,,,,,,,steerdebelinge-uulje-kuuch
 koog,Steerdebelinge Naie Kuuch,,,,,,,,,,,,Neuer Sterdebüller Koog,,,,,,,,,steerdebelinge-naie-kuuch
 koog,Bluumenkuuch,,,,,,,,,,,,Blumenkoog; Blomenkoog,,,,Blomekog,,,,,bluumenkuuch
 koog,Broorskuuch,,,,,,,,,,,,Broderskoog,,,Wiedingharde,,node/8538649031,,auto,,broorskuuch
@@ -544,7 +550,8 @@ warft,Brouderswärw,Brouersweerw (Foortuftinge),,,,,,,,,,,Broderswarft,,,Fahreto
 warft,Bounenswärw,Bounensweerw,,,,,,,,,,,Bahnenswarft,,,Fahretoft,,node/1594721069,,auto,,bounenswarw
 warft,Tuunswärw,Tuunsweerw,,,,,,,,,,,Tudenswarft,,,Fahretoft,,node/1594588996,,auto,,tuunswarw
 warft,Goobrielswärw,Goobrielsweerw,,,,,,,,,,,Gabrielswarft,,,Fahretoft,,node/1594735507,,auto,,goobrielswarw
-warft,Jåkebswärw,Jakebsweerw,,,,,,,,,,,Jakobswarft,,,Fahretoft,,,,,,jakebswarw
+warft,Weester-Jåkebswärw,Weester-Jåkebsweerw,,,,,,,,,,,Westjakobswarft,,,Fahretoft,,node/14204794494,,auto,,weester-jakebswarw
+warft,Ååster-Jåkebswärw,Ååster-Jåkebsweerw,,,,,,,,,,,Ostjakobswarft,,,Fahretoft,,node/1594735514,,auto,,aaster-jakebswarw
 warft,Moienswärw,Moiensweerw,,,,,,,,,,,Maienswarft,,,Fahretoft,,node/14204794497,,auto,,moienswarw-2
 warft,Rouerdswärw,Rouerdsweerw,,,,,,,,,,,Richardswarft,,,Fahretoft,,node/1594588994,,auto,,rouerdswarw
 warft,Janenswärw,Janensweerw,,,,,,,,,,,Jannenswarft,,,Dagebüll,,node/14204794495,,,,janensweerw
@@ -594,6 +601,7 @@ warft,Eekenswärw,,,,Eekensweerw,,,,,,,,Eggerswarft,,,Ockholm,,node/1331341983,,
 warft,Latje Guurd,,,,Läitje Guurd,,,,,,,,Kleine Gaarde,,,Ockholm,,node/1333738474,,auto,,latje-guurd
 warft,Grute Guurd,,,,Gråte Guurd,,,,,,,,Große Gaarde,,,Ockholm,,node/1333738476,,auto,,grute-guurd
 warft,Gräinewärw,,,,Greeneweerw,,,,,,,,Grünewarft,,,Ockholm,,node/1331340281,,ok,,grainewarw
+warft,Åmtmoonsjarn,,,,Åmtmoonsheern,,,,,,,,Amtmannseck,,,Ockholm,,node/1331344311,,auto,,amtmoonsjarn
 warft,Schörkewärw,,,,Schörkeweerw,,,,,,,,Kirchwarft,,,Ockholm,,node/1333738478,,ok,,schorkewarw-5
 warft,Nordwärw,,,,Noordweerw,,,,,,,,Nordwarft,,,Ockholm,,node/1332249790,,ok,,nordwarw
 warft,Sööderwärw,,,,Sårweerw,,,,,,,,Süderwarft,,,Ockholm,,node/1333738472,,auto,,sooderwarw
@@ -716,7 +724,7 @@ warft,Kooldoomerdik,,,,,,,,,,,,Kohldammerdeich,,,,,,,,,kooldoomerdik
 warft,Kiningseeker,,,,,,,,,,,,Königsacker,,,,,node/8454780815,,auto,,kiningseeker
 warft,Korndik,,,,,,,,,,,,Korndeich,,,,,way/295547353,,ok,,korndik
 warft,,,,e Hiarn,,,,,,,,,Hörn,,,,,local/horn-enge,,ok,,e-hiarn
-warft,Warkshuuch,,,Wirkshuuch; Ranzelbärj,,,,,,,,,Rantzauhöhe,,,,,node/1595173924,Q2131154,ok,uncertain,warkshuuch
+warft,Warkshuuch,,,Wiarkshuuch,,,,,,,,,Rantzauhöhe,,,,,node/1595173924,Q2131154,ok,uncertain,warkshuuch
 warft,Lungendik,,,,,,,,,,,,Langedeich,,,,,,,,,lungendik
 warft,Ååsterhorningerfälj,,,,Aasterhoorningerfäil,,,,,,,,Oster-Langenhornfeld,,,,,,,,,aasterhorningerfalj
 warft,Weesterhorningerfälj,,,,Weesterhoorningerfäil,,,,,,,,Wester-Langenhornfeld,,,,,,,,,weesterhorningerfalj
@@ -838,8 +846,8 @@ water,Üülj Ääder,,,,,,,,,,,,Alte Eider,,,,,relation/531652,,auto,,uulj-aader
 water,Treen,,,,,,,,,,,,Treene,Treen,,,Trenen,relation/407966,Q20777,auto,,treen
 water,Arlou,,,,,Arluu,,,,,,,Arlau,,,,,relation/535603,Q315952,auto,uncertain,arlou
 water,Oowentuft Siie,,Oowentoft Säie,,,,,,,,,,Aventofter See,,,,,,,,,oowentuft-siie
-water,Üülj Tooch,,Uuil Tooch,,,,,,,,,,Alter Sielzug,,,,,way/99011041; way/99011061; way/120409783; way/169015254; way/169015255; way/261250342; way/1184341914; way/1184341915,,auto,,uulj-tooch
-water,Butslüütjer Siie,Butsluuter Säi,,,Butslüütjer Siie,,,,,,,,Bottschlott See,,,,,way/18886458,,ok,,butsluutjer-siie
+water,Üülje Tooch,,Uuil Tooch,,,,,,,,,,Alter Sielzug,,,,,way/99011041; way/99011061; way/120409783; way/169015254; way/169015255; way/261250342; way/1184341914; way/1184341915,,auto,,uulj-tooch
+water,Butslüütjer Siie,Butsluuter Säi,,,,,,,,,,,Bottschlott See,,,,,way/18886458,,ok,,butsluutjer-siie
 water,Dikslüütj,,,,Diksluut,,,,,,,,Deichschlott,,,,,,,,,diksluutj
 water,Grute Riinslüütj,,Grote Riinsluuit,,,,,,,,,,Großer Rienschlot,,,,,,,,,grute-riinsluutj
 water,Huuder Diip,,,,,,,,,Huager Diip,,,Hoyer Tief,,,,Højer Dyb,,,,,huuder-diip
@@ -931,3 +939,4 @@ road,Sööderiinje,,,,,Sööderinde,,,,,,,Süderende,,,Bohmstedt,,,,,,sooderiinj
 road,Norderiinje,,,,,Noorderinde,,,,,,,Norderende,,,Bohmstedt,,,,,,norderiinje
 road,Weesteriinje,,,,,Wäästerinde,,,,,,,Westerende,,,Bohmstedt,,,,,,weesteriinje
 road,,,,,,,Oastermäärsch,,,,,,Ostermarsch,,,,,way/27775517; way/33711014; way/112386516; way/255667474; way/255667475; way/255667476; way/435195586; way/668410441; way/668410442,,auto,,oastermaarsch
+road,Steerdebelinge Üülje Dik,,,,Steerdebelinge Uule Dik,,,,,,,,Sterdebüller Alter Deich,,,,,way/207157123,,auto,,steerdebelinge-uulje-dik
