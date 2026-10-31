@@ -1907,3 +1907,15 @@ Frisian columns, German and Danish.
   map's area.
 - **Tested in the smoke test**, the only place with a real map: a faked
   position, one tap, the dot shows and the URL hash lands on it at zoom 14.
+
+## Decided 2026-10-31: `just tiles` links its build for the dev server
+
+- **`tiles/build.sh` links its archive for the dev server** once it is in
+  place (`tiles/devlink.sh`): `web/public/tiles/<pinned name>` →
+  `tiles/data/<stem>.pmtiles`. Only a build whose file name is the one
+  `web/tiles.lock` pins is linked, since the dev server serves only that
+  name; another region's build says so and links nothing.
+- **`just setup` undoes it**: `npm run fetch-assets` always links the
+  pinned archive again (#169, which supersedes keeping a tile builder's own
+  link, 2026-10-03, #53). That is the owner's choice over a `--reset` flag
+  for `just setup` alone.

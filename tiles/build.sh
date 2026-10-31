@@ -17,6 +17,8 @@
 #        2. run Planetiler (stock OpenMapTiles profile, no fork) on the result,
 #           stamping the archive with what it was built from (the same
 #           `built_from` names.json carries, see frasch/provenance.py)
+#        3. link the archive for the web dev server, when it has the name
+#           web/tiles.lock pins (devlink.sh); `just setup` undoes that
 #
 # Env: JAVA_HOME (default ~/.local/opt/jdk-21*, else `java` on PATH),
 #      XMX (default 3g),
@@ -42,6 +44,8 @@ source ./java.sh
 source ./workspace.sh
 # shellcheck source=tiles/nametags.sh
 source ./nametags.sh
+# shellcheck source=tiles/devlink.sh
+source ./devlink.sh
 
 # Planetiler and its global inputs, each pinned in sources.lock; see fetch.sh
 # for why a plain download is not enough.
@@ -137,3 +141,5 @@ echo "== building $OUT"
   --force "$@"
 mv "$OUT_TMP" "$OUT"
 ls -la "$OUT"
+
+link_dev_archive ../web/tiles.lock ../web/public/tiles "../../../tiles/$OUT"

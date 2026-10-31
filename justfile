@@ -59,7 +59,7 @@ names_check_summary := if summary == "" { "" } else { "--summary " + quote(summa
 default:
     @{{just_executable()}} --list --unsorted
 
-# once, and after a lockfile change: the venv, web/'s packages, the glyphs and tiles, the smoke test's browser
+# once, and after a lockfile change: the venv, web/'s packages, the glyphs and published tiles (replacing a `just tiles` link), the smoke test's browser
 [group('everyday')]
 setup:
     uv sync
@@ -121,7 +121,7 @@ check-outputs:
     {{frasch}} check-outputs
 
 # SNAPSHOT=yymmdd builds from Geofabrik's extract of that day instead of the latest one
-# build the tiles of a region (tiles/data/<region>.pmtiles); extra args go to Planetiler
+# build the tiles of a region (tiles/data/<region>.pmtiles) and link them for the dev server; extra args go to Planetiler
 [group('tiles')]
 tiles region=region *args:
     tiles/build.sh {{region}} {{args}}
