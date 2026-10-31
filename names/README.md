@@ -708,7 +708,12 @@ rather than the square (see below).
   put the label 2 km from the village. Now a 50 km² square (about the real
   area, which is what sets OMT's rank and first zoom) sits on the village node,
   carries "e Strönj" as an island through z11 (`maxzoom=11`), and the village
-  node, held to z12, takes over at the same spot. The square is only ever a
+  node, held to z12, takes over at the same spot. Ääderstää (Eiderstedt) is
+  the second case: OpenMapTiles labels neither its `natural=peninsula` node
+  nor the Amt boundary, so a 340 km² square on the peninsula node carries the
+  name from z8 through z10 (`maxzoom=10`), before the villages crowd the
+  peninsula. It keeps the row's `frasch:kind=landscape`, which the style's
+  `place-landscape` layer draws like an island. The square is only ever a
   label carrier: `place=island` feeds nothing but the place layer. For a local
   reference — no OSM node to centre on — the square is centred on the curation
   row's own `lat`/`lon` instead, and no node is written at all; see *Places
