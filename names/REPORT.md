@@ -15,12 +15,12 @@ Hand-review worklist: for every **ambiguous** row below pick the right object an
 | hallig | 12 | 1 | 2 | 0 | 9 | 0 | 0 | 0 | 24 |
 | sand | 6 | 4 | 0 | 0 | 1 | 0 | 0 | 0 | 11 |
 | warft | 120 | 76 | 38 | 3 | 55 | 0 | 0 | 0 | 292 |
-| landscape | 7 | 0 | 0 | 0 | 5 | 0 | 0 | 0 | 12 |
+| landscape | 6 | 1 | 0 | 0 | 5 | 0 | 0 | 0 | 12 |
 | water | 28 | 7 | 0 | 0 | 16 | 0 | 0 | 0 | 51 |
 | country | 18 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 18 |
 | road | 14 | 1 | 0 | 14 | 1 | 0 | 0 | 0 | 30 |
 | helgoland | 7 | 0 | 0 | 0 | 3 | 0 | 0 | 0 | 10 |
-| **total** | **503** | **135** | **66** | **25** | **212** | **0** | **0** | **0** | **941** |
+| **total** | **502** | **136** | **66** | **25** | **212** | **0** | **0** | **0** | **941** |
 
 ## Ambiguous (25)
 
@@ -273,4 +273,4 @@ Either the feature is not in OSM at all, or OSM spells it differently. `near mis
 | wasklaow | 908 | helgoland | Waskläow | Westklippe | no name match in OSM |  |
 | nathoawen | 912 | helgoland | Nathoawen | Nordhafen | no name match in OSM |  |
 
-<!-- built_from: {"places.csv":"4ca8a37c1bfe3b59920b3ae76f7dc6acf9966c77","dialects.csv":"2d5f081ffa3a1c22f66643dfad72a2b3d3001d18","extracts":[{"file":"schleswig-holstein-latest.osm.pbf","replication_timestamp":"2026-09-22T20:22:59Z"},{"file":"denmark-latest.osm.pbf","replication_timestamp":"2026-09-26T20:22:51Z"}]} -->
+<!-- built_from: {"places.csv":"45238af9f48963f630eaaee110cecb90de0cbe8a","dialects.csv":"2d5f081ffa3a1c22f66643dfad72a2b3d3001d18","extracts":[{"file":"schleswig-holstein-latest.osm.pbf","replication_timestamp":"2026-09-22T20:22:59Z"},{"file":"denmark-latest.osm.pbf","replication_timestamp":"2026-09-26T20:22:51Z"}]} -->

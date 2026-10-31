@@ -819,7 +819,7 @@ warft,Weesterdik,,,,Weesterdik,,,,,,,,Westerdeich,,,,,node/1333738471; node/6188
 warft,Weestrefälj,,,,,,,,,,,,Westrefeld,,,,,,,,,weestrefalj
 warft,Winertfälj,,,,,,Winertfeel,,,,,,Winnertfeld,,,,,way/64454533; way/121085662; way/64454444,,ok,,winertfalj
 warft,Witlönj,,,,,,Witlöön,,,,,,Wittland,,,,,way/33885102; way/33885103; way/255391288; way/391127653; way/1419428502; way/1419428503,,ok,,witlonj
-landscape,Ääderstää,,Irestäär,,Ääjerstää,,,,,,,,Eiderstedt,,,,,relation/1573499,Q20861,auto,,aaderstaa
+landscape,Ääderstää,,Irestäär,,Ääjerstää,,,,,,,,Eiderstedt,,,,,node/6337086101,Q20741,ok,"the peninsula (natural=peninsula), not the Amt relation/1573499 the matcher had picked; labelled by a synthetic island square on this node (see curation.csv)",aaderstaa
 landscape,e gååst,,,,,,,,,,,,Die Geest,,,,,,,,,e-gaast
 landscape,e hiis; e hii,,,,,,,,,,,,Die Heide,,,,,,,,,e-hiis
 landscape,dåt Büterlönj,,,,,,,,,,,,Uthlande,,,,,,,,Halligen und Inseln,dat-buterlonj
