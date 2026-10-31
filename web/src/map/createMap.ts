@@ -1,5 +1,7 @@
+import type { TFunction } from 'i18next';
 import {
   AttributionControl,
+  GeolocateControl,
   Map as MapLibreMap,
   NavigationControl,
   setWorkerUrl,
@@ -21,9 +23,21 @@ setWorkerUrl(maplibreWorkerUrl);
 
 const NORTH_FRISIA_CENTER: [number, number] = [8.85, 54.6];
 const INITIAL_ZOOM = 9;
+/** Where a fix of the geolocate button zooms to at most: a village and its surroundings. */
+const GEOLOCATE_MAX_ZOOM = 14;
 
-/** A MapLibre map in `container`, styled with `style`, with the site's controls. */
-export function createMap(container: HTMLElement, style: StyleSpecification): MapLibreMap {
+/** A key of MapLibre's own UI strings, e.g. `GeolocateControl.FindMyLocation`. */
+type MapLibreUIString = Parameters<MapLibreMap['_getUIString']>[0];
+
+/**
+ * A MapLibre map in `container`, styled with `style`, with the site's
+ * controls, labelled by `t` where the locale files have their words.
+ */
+export function createMap(
+  container: HTMLElement,
+  style: StyleSpecification,
+  t: TFunction,
+): MapLibreMap {
   registerPmtilesProtocol();
   const map = new MapLibreMap({
     container,
@@ -36,8 +50,15 @@ export function createMap(container: HTMLElement, style: StyleSpecification): Ma
     // the open place ride along in the query (url/linkState.ts).
     hash: true,
     attributionControl: false,
+    locale: controlStrings(t),
   });
   map.addControl(new NavigationControl(), 'top-right');
+  // One fix per tap, no tracking: the map goes where the user is, and stays
+  // put when they walk on.
+  map.addControl(
+    new GeolocateControl({ fitBoundsOptions: { maxZoom: GEOLOCATE_MAX_ZOOM } }),
+    'top-right',
+  );
   map.addControl(new AttributionControl({ compact: false }), 'bottom-right');
   // For the production-build smoke check (scripts/smoke.ts), which has no
   // other way to see the map load.
@@ -45,6 +66,18 @@ export function createMap(container: HTMLElement, style: StyleSpecification): Ma
     map.getContainer().dataset.state = 'loaded';
   });
   return map;
+}
+
+/**
+ * The strings of MapLibre's controls that the locale files have words for;
+ * the others stay MapLibre's English. MapLibre reads them once, so the
+ * controls keep the UI language the map was created in.
+ */
+function controlStrings(t: TFunction): Partial<Record<MapLibreUIString, string>> {
+  return {
+    'GeolocateControl.FindMyLocation': t('geolocate.label'),
+    'GeolocateControl.LocationNotAvailable': t('geolocate.unavailable'),
+  };
 }
 
 /**

@@ -57,7 +57,7 @@ a build differ from `npm run dev`, and each has a check:
 
 ```sh
 npm run build   # checks dist/: it has the worker the bundle names; no dev tool, no dialect-area review data or notes
-npm run smoke   # build, then vite preview + headless Chromium: map loads, search, card
+npm run smoke   # build, then vite preview + headless Chromium: map loads, search, card, geolocate
 ```
 
 A build stops at its start, naming everything that is wrong at once, when
@@ -758,6 +758,9 @@ the dialect names under `dialects.*`, which German takes from the registry:
   and the OpenMapTiles `class` values a place outside the name list has). This
   is the fallback language (`fallbackLng: 'de'`). The map's attribution is not
   among them: it is a fixed licence notice (`src/map/style/index.ts`).
+  The geolocate button's labels (`geolocate.*`) reach MapLibre through its
+  `locale` option (`src/map/createMap.ts`), once, when the map is created;
+  MapLibre's other controls keep their English labels.
 - `frr-x-mooring.json` — Mooring UI strings. A string nobody has written yet
   is left as an **empty string — never invented** — so the UI falls back to
   German rather than showing blank text (`returnEmptyString: false` makes

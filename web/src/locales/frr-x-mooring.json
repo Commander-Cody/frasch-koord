@@ -28,6 +28,10 @@
     "nds": "Plååtjüsch",
     "jut": "Jütsch"
   },
+  "geolocate": {
+    "label": "Wis weer ik ban",
+    "unavailable": "Koon ai uugenblaklik stää fine"
+  },
   "share": {
     "label": "Link diilje",
     "copied": "Link kopiird",

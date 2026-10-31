@@ -13,6 +13,10 @@
     "label": "Dialekt",
     "local": "Ortsdialekt"
   },
+  "geolocate": {
+    "label": "Meinen Standort anzeigen",
+    "unavailable": "Standort nicht verfügbar"
+  },
   "share": {
     "label": "Link teilen",
     "copied": "Link kopiert",

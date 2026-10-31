@@ -1,6 +1,7 @@
 // Smoke check of the production build: serves dist/ with `vite preview`,
 // opens it in headless Chromium and checks that the map loads, search finds a
-// place, its card opens and the map marks it, and that the dev tools stay off. `npm run smoke`
+// place, its card opens and the map marks it, that the geolocate button takes
+// the map to where the browser is, and that the dev tools stay off. `npm run smoke`
 // builds first, then runs this. The build needs the fetched assets (`npm run
 // fetch-assets`, or VITE_TILES_URL for the tiles), see README.md.
 //
@@ -13,7 +14,20 @@ import { preview } from 'vite';
 /** Niebüll and around: the name list is densest here. */
 const VIEW = '#11/54.79/8.83';
 const SEARCH = 'Naibel';
+/** Where the browser says it is: Dagebüll, away from VIEW. */
+const POSITION = { latitude: 54.73, longitude: 8.69 };
+/** The zoom a fix lands on (map/createMap.ts); the faked position is exact, so the map zooms all the way. */
+const GEOLOCATE_ZOOM = 14;
+/** MapLibre's own English label, which the app replaces with its UI language's. */
+const MAPLIBRE_GEOLOCATE_LABEL = 'Find my location';
 const TIMEOUT = 60_000;
+
+/** Whether the camera in `url`'s hash (`#zoom/lat/lon`) is on POSITION at GEOLOCATE_ZOOM. */
+function showsPosition(url: URL): boolean {
+  const [zoom, lat, lon] = url.hash.slice(1).split('/').map(Number);
+  const near = (a: number, b: number) => Math.abs(a - b) < 0.001;
+  return zoom === GEOLOCATE_ZOOM && near(lat, POSITION.latitude) && near(lon, POSITION.longitude);
+}
 
 const server = await preview({ preview: { port: 4173, strictPort: false, open: false } });
 const url = server.resolvedUrls?.local[0];
@@ -28,7 +42,11 @@ try {
   browser = await chromium.launch({
     args: ['--enable-unsafe-swiftshader', '--use-angle=swiftshader'],
   });
-  const page = await browser.newPage();
+  const context = await browser.newContext({
+    geolocation: POSITION,
+    permissions: ['geolocation'],
+  });
+  const page = await context.newPage();
   page.on('pageerror', (err) => problems.push(`page error: ${err.message}`));
   page.on('console', (msg) => {
     if (msg.type() === 'error') problems.push(`console error: ${msg.text()}`);
@@ -57,6 +75,21 @@ try {
   // The marker is the map's own: no unit test has a map to put it on.
   await page.waitForSelector(`.maplibregl-marker[title="${SEARCH}"]`, { timeout: TIMEOUT });
 
+  // The geolocate button: one tap marks the position and moves the map there
+  // (the camera reads from the URL hash), and it is labelled in the UI
+  // language. MapLibre labels it once it knows geolocation is there, which
+  // the click waits for.
+  const geolocate = page.locator('button.maplibregl-ctrl-geolocate');
+  await geolocate.click({ timeout: TIMEOUT });
+  await page.waitForSelector('.maplibregl-user-location-dot', { timeout: TIMEOUT });
+  await page.waitForURL(showsPosition, { timeout: TIMEOUT });
+  const label = await geolocate.getAttribute('aria-label');
+  if (!label || label === MAPLIBRE_GEOLOCATE_LABEL) {
+    problems.push(
+      `the geolocate button is labelled ${JSON.stringify(label)}, not in the UI language`,
+    );
+  }
+
   // The dev tools are not in the build: their parameters open the public map.
   for (const tool of ['curate', 'areas']) {
     await page.goto(`${url}?${tool}${VIEW}`);
@@ -76,4 +109,4 @@ if (problems.length > 0) {
   for (const p of problems) console.error(`smoke: ${p}`);
   process.exit(1);
 }
-console.log('smoke: ok (map loaded, search, card and marker work, no dev tools)');
+console.log('smoke: ok (map loaded, search, card, marker and geolocate work, no dev tools)');
