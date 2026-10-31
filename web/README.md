@@ -172,14 +172,15 @@ assets of this repository (`tiles-<yyyymmdd>-<sha8>`), and `tiles.lock` pins
 the one the site uses: its URL and sha256. `npm run fetch-assets`
 downloads it into `.cache/tiles/<sha256>.pmtiles`
 (gitignored), verifies it and links
-`public/tiles/<its name>` to it. It skips an archive that is
+`public/tiles/<its name>` to it, replacing whatever link is there, so a setup
+leaves a clean state. It skips an archive that is
 already there, and drops those of earlier pins, and its own links of them
 under another name. A new archive is published
 from `tiles/` with `uv run just publish-tiles`, which rewrites `tiles.lock`
 (see `tiles/README.md`).
 
-**Your own tiles.** If you build tiles yourself (`tiles/README.md`), link the
-build there instead, for the dev server. The dev server serves only the
+**Your own tiles.** If you build tiles yourself (`tiles/README.md`), you can
+link the build there for the dev server. The dev server serves only the
 archive of the pinned name, so the link has to carry it (currently
 `schleswig-holstein.pmtiles`):
 
@@ -188,16 +189,17 @@ ln -sfn ../../../tiles/data/schleswig-holstein.pmtiles \
   web/public/tiles/schleswig-holstein.pmtiles
 ```
 
-`npm run fetch-assets` leaves such a link alone (it only replaces links into
-`.cache/tiles/`), and `npm run build` still ships the pinned archive, never
-the linked one.
+`npm run fetch-assets` (and so `setup`) replaces that link with one to the
+pinned archive, so your build is served only until the next setup. `npm run
+build` ships the pinned archive either way, never the linked one.
 
-A link whose target does not exist, e.g. that one before the tiles are built,
-shows no map in the dev server, and Vite cannot copy it into a build. So
+A link whose target does not exist, e.g. one to tiles not built yet, shows
+no map in the dev server, and Vite cannot copy it into a build. So
 `npm run build` stops at its start and names every such link in
-`public/tiles/` (`vite-plugins/build/tiles.ts`), and `npm run fetch-assets`
-keeps it but warns. Either build the tiles, or remove the link and run
-`npm run fetch-assets`, which then links the pinned archive.
+`public/tiles/` (`vite-plugins/build/tiles.ts`). Building the tiles, or
+running `npm run fetch-assets`, which then links the pinned archive, fixes it.
+A regular file at that path (not a link) is kept, and `npm run fetch-assets`
+warns about it.
 
 The `pmtiles://` protocol is registered once with MapLibre in
 `src/map/pmtiles.ts` (`addProtocol('pmtiles', protocol.tile)`); MapLibre

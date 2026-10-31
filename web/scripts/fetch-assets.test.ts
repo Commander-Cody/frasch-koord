@@ -109,26 +109,35 @@ describe('fetchTiles', () => {
     expect(readFileSync(join(web.path, LINK), 'utf8')).toBe(PUBLISHED);
   });
 
-  it("keeps a tile builder's own archive linked, and says so", async () => {
+  it("repoints a tile builder's link to its own archive to the pinned one", async () => {
     web.put('own-tiles/schleswig-holstein.pmtiles', 'a local build');
     web.link(LINK, '../../own-tiles/schleswig-holstein.pmtiles');
 
     await fetchTiles(web.path, report);
 
-    expect(readlinkSync(join(web.path, LINK))).toBe('../../own-tiles/schleswig-holstein.pmtiles');
-    expect(info).toContainEqual(expect.stringContaining(`kept ${LINK}`));
+    expect(readlinkSync(join(web.path, LINK))).toBe(
+      `../../.cache/tiles/${PUBLISHED_SHA256}.pmtiles`,
+    );
   });
 
-  it("keeps a tile builder's link to an archive that is not built, and warns", async () => {
+  it("repoints a tile builder's link to an archive that is not built, without a warning", async () => {
     web.link(LINK, '../../own-tiles/schleswig-holstein.pmtiles');
 
     await fetchTiles(web.path, report);
 
-    expect(readlinkSync(join(web.path, LINK))).toBe('../../own-tiles/schleswig-holstein.pmtiles');
-    expect(info).not.toContainEqual(expect.stringContaining('kept'));
-    expect(warnings).toEqual([
-      `${LINK} links to ../../own-tiles/schleswig-holstein.pmtiles, which does not exist: the dev server shows no map and \`npm run build\` stops. Build the tiles, or remove the link and run \`npm run fetch-assets\``,
-    ]);
+    expect(readlinkSync(join(web.path, LINK))).toBe(
+      `../../.cache/tiles/${PUBLISHED_SHA256}.pmtiles`,
+    );
+    expect(warnings).toEqual([]);
+  });
+
+  it('keeps a regular file at the link, and warns', async () => {
+    web.put(LINK, 'a copy of a build');
+
+    await fetchTiles(web.path, report);
+
+    expect(readFileSync(join(web.path, LINK), 'utf8')).toBe('a copy of a build');
+    expect(warnings).toEqual([expect.stringContaining(LINK)]);
   });
 
   it('moves on from an earlier pinned archive, and drops it', async () => {

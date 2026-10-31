@@ -44,7 +44,7 @@ import {
   TILE_CACHE_DIR,
   type TilesPin,
 } from '../vite-plugins/build/pins.ts';
-import { exists, sha256Of } from '../vite-plugins/build/files.ts';
+import { sha256Of } from '../vite-plugins/build/files.ts';
 import { FONTS_DIR, glyphInstall } from '../vite-plugins/build/glyphInstall.ts';
 import { danglingLinkProblems } from '../vite-plugins/build/tiles.ts';
 
@@ -120,23 +120,21 @@ async function linkTarget(path: string): Promise<string | undefined> {
 }
 
 /**
- * Links public/tiles/ to the fetched archive when the link there is ours to
- * (re)point: no archive there yet, or a link to an earlier fetch. Anything
- * else is someone's own archive, e.g. a link to tiles/data/, and is kept;
- * one that leads nowhere is danglingLinkProblems' to warn about.
+ * Links public/tiles/ to the fetched archive, whatever it links to now: the
+ * clean state a setup leaves. A regular file there is not a link, so it is
+ * kept, and warned about.
  */
 async function linkForDevServer(root: string, pin: TilesPin, report: Report): Promise<void> {
   const linkPath = `${PUBLIC_TILES}/${pin.name}`;
   const link = join(root, linkPath);
-  const target = await linkTarget(link);
-  if (target === undefined || isFetchedArchive(target)) {
-    await rm(link, { force: true });
-    await symlink(`../../${pin.cachePath}`, link);
-  } else if (await exists(link)) {
-    report.info(
-      `kept ${linkPath} (-> ${target}): the dev server serves that, a build the fetched archive`,
+  if ((await linkTarget(link)) === 'a file') {
+    report.warn(
+      `${linkPath} is a file, not a link: kept, and the dev server serves it instead of the pinned archive. Remove it and run \`npm run fetch-assets\``,
     );
+    return;
   }
+  await rm(link, { force: true });
+  await symlink(`../../${pin.cachePath}`, link);
 }
 
 /**
