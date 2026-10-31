@@ -179,15 +179,11 @@ under another name. A new archive is published
 from `tiles/` with `uv run just publish-tiles`, which rewrites `tiles.lock`
 (see `tiles/README.md`).
 
-**Your own tiles.** If you build tiles yourself (`tiles/README.md`), you can
-link the build there for the dev server. The dev server serves only the
-archive of the pinned name, so the link has to carry it (currently
-`schleswig-holstein.pmtiles`):
-
-```sh
-ln -sfn ../../../tiles/data/schleswig-holstein.pmtiles \
-  web/public/tiles/schleswig-holstein.pmtiles
-```
+**Your own tiles.** `uv run just tiles` (`tiles/README.md`) links its build
+for the dev server, as `public/tiles/<the pinned name>` →
+`../../../tiles/data/<stem>.pmtiles`. The dev server serves only the archive
+of the pinned name (currently `schleswig-holstein.pmtiles`), so a build of
+another name is not linked.
 
 `npm run fetch-assets` (and so `setup`) replaces that link with one to the
 pinned archive, so your build is served only until the next setup. `npm run
