@@ -46,3 +46,9 @@ it('draws a landscape that is a point by place-landscape alone', () => {
 
   expect(layersDrawing(landscapePoint, 12)).toEqual(['place-landscape']);
 });
+
+it('leaves a landscape of an admin class to its admin layer', () => {
+  const schleswigHolstein = { class: 'state', 'frasch:kind': 'landscape' };
+
+  expect(layersDrawing(schleswigHolstein, 6)).toEqual(['place-state']);
+});
