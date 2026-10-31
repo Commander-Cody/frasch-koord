@@ -5591,7 +5591,8 @@
                 "island",
                 "hallig",
                 "sand",
-                "warft"
+                "warft",
+                "landscape"
               ]
             ]
           ]
@@ -6093,6 +6094,134 @@
       },
       "paint": {
         "text-color": "#333",
+        "text-halo-color": "rgba(255,255,255,0.8)",
+        "text-halo-width": 1.2
+      }
+    },
+    {
+      "id": "place-landscape",
+      "type": "symbol",
+      "metadata": {
+        "frasch:label": true
+      },
+      "source": "openmaptiles",
+      "source-layer": "place",
+      "filter": [
+        "all",
+        [
+          "!",
+          [
+            "in",
+            [
+              "get",
+              "class"
+            ],
+            [
+              "literal",
+              [
+                "city",
+                "town",
+                "village",
+                "state",
+                "country",
+                "continent"
+              ]
+            ]
+          ]
+        ],
+        [
+          "==",
+          [
+            "get",
+            "frasch:kind"
+          ],
+          "landscape"
+        ],
+        [
+          ">=",
+          [
+            "zoom"
+          ],
+          [
+            "to-number",
+            [
+              "coalesce",
+              [
+                "get",
+                "frasch:minzoom"
+              ],
+              0
+            ]
+          ]
+        ],
+        [
+          "<=",
+          [
+            "zoom"
+          ],
+          [
+            "to-number",
+            [
+              "coalesce",
+              [
+                "get",
+                "frasch:maxzoom"
+              ],
+              99
+            ]
+          ]
+        ]
+      ],
+      "layout": {
+        "text-field": [
+          "get",
+          "name"
+        ],
+        "text-font": [
+          "Noto Sans Bold"
+        ],
+        "text-letter-spacing": 0.1,
+        "text-max-width": 9,
+        "text-size": {
+          "base": 1.2,
+          "stops": [
+            [
+              3,
+              10
+            ],
+            [
+              8,
+              12
+            ],
+            [
+              15,
+              16
+            ]
+          ]
+        },
+        "text-transform": "uppercase",
+        "symbol-sort-key": [
+          "+",
+          [
+            "*",
+            2,
+            100
+          ],
+          [
+            "to-number",
+            [
+              "coalesce",
+              [
+                "get",
+                "rank"
+              ],
+              0
+            ]
+          ]
+        ]
+      },
+      "paint": {
+        "text-color": "#633",
         "text-halo-color": "rgba(255,255,255,0.8)",
         "text-halo-width": 1.2
       }
