@@ -712,7 +712,8 @@ rather than the square (see below).
   the second case: OpenMapTiles labels neither its `natural=peninsula` node
   nor the Amt boundary, so a 340 km² square on the peninsula node carries the
   name from z8 through z10 (`maxzoom=10`), before the villages crowd the
-  peninsula. It keeps the row's `frasch:kind=landscape`, which the style's
+  peninsula. A square inherits only the names and `frasch:ref`, so its
+  `set_tags` give it `frasch:kind=landscape`, which the style's
   `place-landscape` layer draws like an island. The square is only ever a
   label carrier: `place=island` feeds nothing but the place layer. For a local
   reference — no OSM node to centre on — the square is centred on the curation
