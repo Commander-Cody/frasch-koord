@@ -485,7 +485,9 @@ it, and both ask `dialect_areas.dialect_at` which dialect an object lies in — 
 label and its search entry cannot disagree. An administrative area above
 municipality level (Kreis Nordfriesland, an Amt) gets no dialect: it spans
 several. A search entry lies where the first object of its row's `osm` cell
-lies.
+lies — unless that object is a way or relation with a square in
+`curation.csv`: then both read the square's centre, the row's `lat`/`lon`,
+in place of the file's point and outline (see *`curation.csv`*).
 
 Give a row a new `osm` reference and both stop until `just rebuild objects`
 has located it: a row on the map without a position would otherwise be
@@ -596,7 +598,8 @@ than the name where two places share one.
 The position lives in `curation.csv`, not in `places.csv`: a curation row
 keyed by the same local reference carries `lat`/`lon` (decimal degrees, from
 OSM or any map) — mandatory for a local reference, and empty for every row
-with a real `osm` reference. One local reference, one row per file.
+with a real `osm` reference but the square of a way or relation (see
+*`curation.csv`*). One local reference, one row per file.
 
 * **Without `polygon_km2`**, `frasch inject` adds a **new node** at
   `lat`/`lon` to the extract it writes (id above the extract's highest node
@@ -613,8 +616,8 @@ with a real `osm` reference. One local reference, one row per file.
   `hamlet` nodes z11, the style's Warft layer starts at z13, and OSM's own
   Hallig Warften are `place=hamlet` already.)
 * **With `polygon_km2`**, no labelled node is written at all — only the
-  synthetic square of that area centred on `lat`/`lon` (as for an OSM node's
-  square, see *`curation.csv`* below), carrying the name / `frasch:*` tags
+  synthetic square of that area centred on `lat`/`lon` (as for an OSM
+  object's square, see *`curation.csv`* below), carrying the name / `frasch:*` tags
   plus the row's `set_tags`/`minzoom`/`maxzoom`. This is the route for an
   area-like place (a Koog) that should be labelled from a lower zoom than a
   node would get.
@@ -628,7 +631,8 @@ OpenMapTiles takes hamlets and villages from *points* only, so any other
 instead.
 
 The search index takes the position of a local-reference row from
-`curation.csv` (`--curation`, default `names/curation.csv`).
+`curation.csv` (`--curation`, default `names/curation.csv`), as it does the
+centre of a way's or relation's square.
 
 `frasch match` leaves a row with a local reference alone (`own point` in
 `REPORT.md`).
@@ -661,19 +665,17 @@ keyed by a local reference (`local/<slug>`, the same one in `places.csv`'s
 `osm` column) instead *creates* the object it tunes — a node or, with
 `polygon_km2`, a square — at the row's `lat`/`lon`; see *Places OSM does not
 have* above. One row per object: a second row for the same reference is an
-error. The one exception is a node with a
-`polygon_km2` row, which can have a second row of its own that tunes the node
-rather than the square (see below).
+error, a square's row included.
 
 | column | meaning |
 |---|---|
 | `osm` | `node/123`, `way/123`, `relation/123`; several separated by `;`, as in `places.csv` — or a local reference `local/<slug>` matching a `places.csv` row |
 | `name` | free-text label so a human can read the row — **not** written to the data |
-| `lat`, `lon` | decimal degrees — mandatory for a local reference (the position of the node/square it creates), empty for a real OSM reference |
+| `lat`, `lon` | decimal degrees — mandatory for a local reference (the position of the node/square it creates) and for a way's or relation's square (its centre), empty on any other row |
 | `set_tags` | `k=v` pairs separated by `;`, e.g. `place=island;frasch:kind=island` |
 | `minzoom` | integer 0–24, or empty |
 | `maxzoom` | integer 0–24, not below `minzoom`, or empty — the last zoom (inclusive) the label is shown at |
-| `polygon_km2` | positive number, or empty — add a synthetic label polygon of this area around the node in `osm` (see below) |
+| `polygon_km2` | positive number, or empty — add a synthetic label polygon of this area for the one object in `osm` (see below) |
 | `note` | why the row exists |
 
 ### The two columns do very different things
@@ -695,30 +697,49 @@ rather than the square (see below).
   emitted at z8 cannot be conjured up by an attribute.
 * **`maxzoom`** is the mirror image: it becomes `frasch:maxzoom`, the last zoom
   at which the style shows the label.
-* **`polygon_km2`** adds a **synthetic polygon** to the extract instead of
-  changing the node: a square of that area centred on the node, carrying the
-  node's `name` / `name:*` tags (after the node's own curation) plus the row's
-  `set_tags`, `minzoom` and `maxzoom`. The node itself is untouched, so it can
-  have its own row. Why: OpenMapTiles labels `place=island` *nodes* only from
-  z12, but *polygons* from z8–10 depending on their area, and Planetiler puts a
-  polygon's label at its interior point — for a square, its centre. So this is
-  the lever for a landform that has no polygon in OSM but should be labelled
-  at a chosen point from a low zoom. Nordstrand is the case: it is a peninsula
-  now, so no island polygon exists; using the municipality boundary instead
-  put the label 2 km from the village. Now a 50 km² square (about the real
-  area, which is what sets OMT's rank and first zoom) sits on the village node,
-  carries "e Strönj" as an island through z11 (`maxzoom=11`), and the village
-  node, held to z12, takes over at the same spot. Ääderstää (Eiderstedt) is
-  the second case: OpenMapTiles labels neither its `natural=peninsula` node
-  nor the Amt boundary, so a 340 km² square on the peninsula node carries the
-  name from z8 through z10 (`maxzoom=10`), before the villages crowd the
-  peninsula. A square inherits only the names and `frasch:ref`, so its
-  `set_tags` give it `frasch:kind=landscape`, which the style's
-  `place-landscape` layer draws like an island. The square is only ever a
-  label carrier: `place=island` feeds nothing but the place layer. For a local
-  reference — no OSM node to centre on — the square is centred on the curation
-  row's own `lat`/`lon` instead, and no node is written at all; see *Places
-  OSM does not have*.
+* **`polygon_km2`** adds a **synthetic polygon** to the extract: a square of
+  that area that carries the label of the row's object. Why: OpenMapTiles
+  labels `place=island` *nodes* only from z12, but *polygons* from z8–10
+  depending on their area, and Planetiler puts a polygon's label at its
+  interior point — for a square, its centre. So this is the lever for a
+  landform that has no fitting polygon in OSM but should be labelled at a
+  chosen point from a low zoom. Every square follows **one rule**:
+
+  > A square belongs to the **row's own object**. It is centred on that
+  > object if it is a node, or on the curation row's `lat`/`lon` if it is a
+  > way or relation. The square replaces the object's own place label. The
+  > row's position (search entry, dialect lookup, `check-tiles`) is the
+  > centre of the square.
+
+  The square carries the object's `name` / `name:*` / `frasch:dialect` /
+  `frasch:local` / `frasch:variety` / `frasch:ref` (after the object's own
+  names and curation) plus the row's `set_tags`, `minzoom` and `maxzoom`, and
+  `frasch:square=yes`. It inherits only the names and `frasch:ref`, so
+  `frasch:kind` goes into `set_tags`. The object itself keeps every tag but
+  `place`, which the injector drops so that OpenMapTiles labels it only once;
+  `place=island` feeds nothing but the place layer, and `natural=coastline`
+  stays. The loader stops the build on `lat`/`lon` on a real reference
+  without `polygon_km2`, on `lat`/`lon` on a node (its square is centred on
+  the node), and on `polygon_km2` on a way or relation without `lat`/`lon`.
+
+  The cases: **Nordstrand** is a peninsula now, so no island polygon exists,
+  and the municipality relation's interior point lies 2 km from the village.
+  The square on the relation (50 km², about the real area, which is what sets
+  OMT's rank and first zoom) is centred on the village node's position,
+  carries "e Strönj" as an island through z11 (`maxzoom=11`), and the
+  village node, held to z12 by a row of its own, takes over at the same spot.
+  **Ääderstää** (Eiderstedt): OpenMapTiles labels neither its
+  `natural=peninsula` node nor the Amt boundary, so a 340 km² square on the
+  peninsula node carries the name from z8 through z10 (`maxzoom=10`), before
+  the villages crowd the peninsula; its `set_tags` give it
+  `frasch:kind=landscape`, which the style's `place-landscape` layer draws
+  like an island. **Üülönj** (Oland): its coastline way also covers the
+  foreshore along the rail dam, so its interior point lay outside the
+  Sommerdeich; a square of the coastline polygon's own 2.1 km² (so rank and
+  first zoom stay) sits at the centroid of the Sommerdeich ring. For a local
+  reference — no OSM object at all — the square is centred on the curation
+  row's own `lat`/`lon`, and no node is written; see *Places OSM does not
+  have*.
 
 `frasch:kind` comes from the name list (`places.csv`'s `kind` column) for every
 injected row; `set_tags` is how an object the list does not mention gets one.

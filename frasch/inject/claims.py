@@ -30,6 +30,9 @@ PLACE_LIKE_KEYS = ("place", "boundary", "natural", "water", "waterway")
 # a member way of a claimed waterway relation -> (the relation, its OSM name)
 Members = dict[OsmRef, tuple[OsmRef, str]]
 
+# an object's tags: as the extract streams past, or as a pre-pass read them
+Tags = osmium.osm.TagList | Mapping[str, str]
+
 
 class NameList(NamedTuple):
     """The name list as the injector uses it: the rows on the map, each
@@ -80,7 +83,7 @@ def scan_waterways(path: str, by_id: Iterable[Ref]) -> Members:
     return members
 
 
-def is_place_like(tags: osmium.osm.TagList) -> bool:
+def is_place_like(tags: Tags) -> bool:
     """Whether an object is a place, an area or a water -- not a shop, a
     building or anything else that may carry a place's QID."""
     return tags.get("type") == "waterway" or any(k in tags for k in PLACE_LIKE_KEYS)
@@ -104,7 +107,7 @@ class Claims:
         self._members = members
         self._stats = stats
 
-    def row_for(self, key: OsmRef, tags: osmium.osm.TagList) -> Claim | None:
+    def row_for(self, key: OsmRef, tags: Tags) -> Claim | None:
         """The claim on this object, None when no row holds it -- by its own
         reference, as a same-named member way of a waterway relation, or by
         its QID."""
@@ -115,13 +118,13 @@ class Claims:
             return Claim(row, key)
         return self._as_member(key, tags) or self._by_qid(key, tags)
 
-    def _note_qid(self, tags: osmium.osm.TagList) -> None:
+    def _note_qid(self, tags: Tags) -> None:
         """Remember the row QID this object carries, if any, as present."""
         qid = tags.get("wikidata")
         if qid is not None and qid in self._names.by_qid:
             self._stats.present_qids.add(qid)
 
-    def _as_member(self, key: OsmRef, tags: osmium.osm.TagList) -> Claim | None:
+    def _as_member(self, key: OsmRef, tags: Tags) -> Claim | None:
         """The claim of the waterway relation this way is a member of, if it
         carries the relation's name."""
         member = self._members.get(key)
@@ -134,7 +137,7 @@ class Claims:
         self._stats.member_ways += 1
         return Claim(self._names.by_id[relation], relation)
 
-    def _by_qid(self, key: OsmRef, tags: osmium.osm.TagList) -> Claim | None:
+    def _by_qid(self, key: OsmRef, tags: Tags) -> Claim | None:
         """The claim of the row whose `wikidata` QID this object carries, if
         any and if the object is place-like."""
         qid = tags.get("wikidata")

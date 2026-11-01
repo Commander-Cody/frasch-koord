@@ -15,6 +15,7 @@ from frasch.curationlist import Curation, LocalPoint
 from frasch.dialect_areas import AreaIndex
 from frasch.dialects import Registry
 from frasch.errors import PipelineError
+from frasch.geo import LonLat
 from frasch.inject.claims import Members, NameList, load_names, scan_waterways
 from frasch.inject.synthetic import LocalPlace, local_places
 from frasch.objects import LocatedObject, read_objects
@@ -34,7 +35,8 @@ class Inputs:
     names: NameList
     areas: AreaIndex
     curation: Curation
-    # where the name list's objects lie, and what OSM says of them
+    # where the name list's objects lie -- a way or relation with a square
+    # where curation puts it -- and what OSM says of them
     objects: dict[OsmRef, LocatedObject]
     # the places OSM does not have that a row uses, with their tags
     local_places: list[LocalPlace]
@@ -44,6 +46,9 @@ class Inputs:
     # name and lie in a Frisian or Low Saxon area
     members: Members
     osm_local: dict[OsmRef, dict[str, str]]
+    # and the OSM tags of the ways and relations with a square, which is
+    # written before the first way and so before they come by
+    square_objects: dict[OsmRef, dict[str, str]]
 
 
 def load_inputs(ws: Workspace, reg: Registry, extract: str) -> Inputs:
@@ -58,10 +63,11 @@ def load_inputs(ws: Workspace, reg: Registry, extract: str) -> Inputs:
         names=names,
         areas=areas,
         curation=curation,
-        objects=_read_objects(ws.objects, names.by_id),
+        objects=_read_objects(ws.objects, names.by_id, curation.centres),
         local_places=places,
         members=scan_waterways(extract, names.by_id),
         osm_local=scan_osm_local(extract, areas, names.by_id, reg),
+        square_objects=scan_tags(extract, curation.centres),
     )
 
 
@@ -96,14 +102,30 @@ def _require_positions(
     )
 
 
-def _read_objects(path: str, by_id: Mapping[Ref, PlaceRow]) -> dict[OsmRef, LocatedObject]:
+def _read_objects(
+    path: str, by_id: Mapping[Ref, PlaceRow], centres: Mapping[OsmRef, LonLat]
+) -> dict[OsmRef, LocatedObject]:
     """Where the name list's objects lie -- needed for every one of them:
     without a position an object would get no dialect, and the search index,
-    which reads the same file, refuses it too."""
+    which reads the same file, refuses it too.  A way or relation with a
+    square lies at its centre (`centres`), as its search entry does."""
     objects = read_objects(path)
     located = {osm: row for key, row in by_id.items() if (osm := refs.as_osm_ref(key))}
     placeobjects.require_located(objects, path, located)
-    return objects.by_ref
+    return {
+        ref: placeobjects.at_position(obj, centres[ref]) if ref in centres else obj
+        for ref, obj in objects.by_ref.items()
+    }
+
+
+def scan_tags(extract: str, keys: Collection[OsmRef]) -> dict[OsmRef, dict[str, str]]:
+    """The tags of the ways and relations `keys` that the extract holds, in
+    id-filtered passes."""
+    ways = osmscan.ways(extract, refs.ids_of(keys, "w"))
+    relations = osmscan.relations(extract, refs.ids_of(keys, "r"))
+    return {("w", i): way["tags"] for i, way in ways.items()} | {
+        ("r", i): relation["tags"] for i, relation in relations.items()
+    }
 
 
 def scan_osm_local(

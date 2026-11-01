@@ -226,6 +226,34 @@ def test_a_place_osm_does_not_have_gets_the_generic_name_of_its_map_point(
     assert export([waasterhias])["waasterhias"]["name_osm"] == "Westerheide"
 
 
+def square_on_the_hamburger_hallig(paths: Path) -> None:
+    """A curation square on the Hamburger Hallig, centred in the
+    Südergoesharde strip of AREAS -- away from where OSM's relation lies."""
+    curation_file(
+        paths,
+        {
+            "osm": "relation/5615880",
+            "lat": "54.72",
+            "lon": "9.05",
+            "set_tags": "place=island",
+            "polygon_km2": "1",
+        },
+    )
+
+
+def test_an_object_with_a_square_lies_where_its_square_is(paths: Path, export: Export) -> None:
+    square_on_the_hamburger_hallig(paths)
+    entry = export([HAMBORJER_HALI])["hamborjer-hali"]
+    assert (entry["lon"], entry["lat"]) == (9.05, 54.72)
+
+
+def test_an_object_with_a_square_gets_the_dialect_of_where_its_square_is(
+    paths: Path, export: Export
+) -> None:
+    square_on_the_hamburger_hallig(paths)
+    assert export([HAMBORJER_HALI])["hamborjer-hali"]["dialect"] == "frr-x-suedgoes"
+
+
 def test_a_row_whose_object_was_never_located_stops_the_export(paths: Path) -> None:
     moved = NAIBEL | {"osm": "node/99"}
     with pytest.raises(PipelineError, match=r"naibel.*node/99"):

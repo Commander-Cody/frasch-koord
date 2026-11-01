@@ -47,9 +47,12 @@ VARIETY_KEY = "frasch:variety"
 # the row a label comes from: its `id`.  The injector writes it; a curation
 # row may set it by hand (frasch.check_inputs makes sure it names a row)
 REF_KEY = "frasch:ref"
-# not a place's names: the zooms names/curation.csv gives a feature
+# not a place's names: the zooms names/curation.csv gives a feature, and
+# the mark of a synthetic square (frasch.inject.synthetic), by which
+# `frasch check-tiles` holds its label to the entry of its row
 MINZOOM_KEY = "frasch:minzoom"
 MAXZOOM_KEY = "frasch:maxzoom"
+SQUARE_KEY = "frasch:square"
 # a name in one language, `name:de`: Planetiler carries these by language
 # (its --languages), every other key by name (--extra_name_tags)
 LANGUAGE_PREFIX = "name:"
@@ -76,7 +79,7 @@ def dialect_key(tag: str) -> str:
 
 def attribute_keys() -> list[str]:
     """The tile keys that are no name in a language -- the `frasch:*` ones."""
-    keys = [*TILE_KEY.values(), MINZOOM_KEY, MAXZOOM_KEY]
+    keys = [*TILE_KEY.values(), MINZOOM_KEY, MAXZOOM_KEY, SQUARE_KEY]
     return [key for key in keys if not key.startswith(LANGUAGE_PREFIX)]
 
 

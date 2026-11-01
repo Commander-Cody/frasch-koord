@@ -43,6 +43,7 @@ EMPTY = Inputs(
     local_places=[],
     members={},
     osm_local={},
+    square_objects={},
 )
 
 HULM = PlaceRow({"mooring": "Hulm", "de": "Holm"}, 2)
@@ -159,10 +160,10 @@ def test_the_curation_line_is_there_without_osm_ids() -> None:
 
 
 def test_the_synthetic_line_counts_the_squares_to_add() -> None:
-    square: Square = {"tags": {}, "label": "", "km2": 50.0}
+    square: Square = {"tags": {}, "label": "", "km2": 50.0, "centre": None}
     squares: dict[Ref, Square] = {("n", 1): square, ("n", 2): square}
     lines = input_lines(replace(EMPTY, curation=curation(squares=squares)), WS)
-    assert line_starting(lines, "synthetic") == "synthetic : 2 polygon(s) to add around nodes"
+    assert line_starting(lines, "synthetic") == "synthetic : 2 polygon(s) to add"
 
 
 def test_the_local_line_counts_the_positioned_local_references() -> None:
@@ -392,13 +393,13 @@ def test_an_added_synthetic_polygon_is_listed_with_its_nodes_and_area() -> None:
     ]
 
 
-def test_a_synthetic_polygon_whose_node_the_extract_lacks_is_named() -> None:
+def test_a_synthetic_polygon_whose_object_the_extract_lacks_is_named() -> None:
     squares: dict[Ref, Square] = {
-        ("n", 97): {"tags": {"place": "island"}, "label": "Gone island", "km2": 5.0}
+        ("n", 97): {"tags": {"place": "island"}, "label": "Gone island", "km2": 5.0, "centre": None}
     }
     assert optional_sections(Stats(), replace(EMPTY, curation=curation(squares=squares))) == [
         [
             "added 0 synthetic polygon(s):",
-            "  ! node/97 Gone island: node not in in.osm.pbf, no polygon added",
+            "  ! node/97 Gone island: not in in.osm.pbf, no polygon added",
         ]
     ]

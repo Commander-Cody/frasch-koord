@@ -6,10 +6,13 @@ It becomes a new node at that position (`point_tags`) -- or, with the row's
 `polygon_km2`, only a synthetic square.
 
 A *synthetic square* is a closed way of a given area (`square_around`):
-around a local place, or around a node of the extract whose curation row has
-a `polygon_km2`.  It is how a landform without an OSM polygon gets a label
-from the zoom OpenMapTiles gives polygons of that size, instead of the z12 it
-gives `place=island` nodes.
+around a local place, or for an object of the extract whose curation row
+has a `polygon_km2` -- centred on a node, or on the row's `lat`/`lon` for a
+way or relation.  It is how a landform without a fitting OSM polygon gets a
+label where it lies, from the zoom OpenMapTiles gives polygons of that size,
+instead of the z12 it gives `place=island` nodes.  It replaces the object's
+own place label, and carries `frasch:square` so that `frasch check-tiles`
+holds it to the entry of its row.
 
 `SyntheticObjects` gives them their ids and writes them where the file's
 order wants them.
@@ -39,12 +42,13 @@ from frasch.placenames import (
     LANGUAGE_PREFIX,
     LOCAL_KEY,
     REF_KEY,
+    SQUARE_KEY,
     VARIETY_KEY,
 )
 from frasch.refs import OsmRef, Ref
 
-# what a square around a node of the extract takes over from the node, with
-# its `name` and every `name:*`
+# what the square of an object of the extract takes over from the object,
+# with its `name` and every `name:*`
 INHERITED_KEYS = ("name", DIALECT_KEY, LOCAL_KEY, VARIETY_KEY, REF_KEY)
 
 
@@ -173,9 +177,9 @@ class SyntheticObjects:
     def add_square(
         self, key: OsmRef, square: Square, centre: LonLat, node_tags: Mapping[str, str]
     ) -> None:
-        """Queue the square curation puts around a node of the extract: it
-        inherits the node's (curated) names and dialect, then gets the tags
-        of its own curation row."""
+        """Queue the square curation puts on an object of the extract,
+        centred on `centre`: it inherits the object's names and dialect, then
+        gets the tags of its own curation row."""
         tags = {
             k: v
             for k, v in node_tags.items()
@@ -241,7 +245,7 @@ class SyntheticObjects:
                 version=1,
                 visible=True,
                 nodes=square.node_ids + square.node_ids[:1],
-                tags=square.tags,
+                tags=square.tags | {SQUARE_KEY: "yes"},
             )
         )
         self._stats.added_squares.append(

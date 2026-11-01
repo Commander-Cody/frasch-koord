@@ -8,8 +8,10 @@ import pytest
 
 from frasch import placelist, placeobjects
 from frasch.errors import PipelineError
+from frasch.geo import LonLat
 from frasch.objects import LocatedObject, Objects
 from frasch.provenance import Stamp
+from frasch.refs import Ref
 from conftest import REGISTRY
 
 NAIBEL: LocatedObject = {"lon": 8.83, "lat": 54.79}
@@ -40,7 +42,7 @@ WAASTERHIAS = place(
 
 def test_the_object_of_a_place_osm_does_not_have_is_the_point_the_injector_adds() -> None:
     # at its curation position, with the generic name the point gets: the German one
-    positions = {"westerheide-amrum": (8.34019, 54.65097)}
+    positions: dict[Ref, LonLat] = {("l", "westerheide-amrum"): (8.34019, 54.65097)}
     assert placeobjects.for_row(LOCATED, WAASTERHIAS, positions, REGISTRY) == {
         "lon": 8.34019,
         "lat": 54.65097,

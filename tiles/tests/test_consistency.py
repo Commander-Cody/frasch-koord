@@ -11,8 +11,9 @@ same way.
 The places are the kinds that disagreed before: an island whose vertex
 average lies in the sea (Sylt, Amrum), a node near a dialect border
 (Stiardebel), a Kreis, a place whose inside point misses its area while its
-outline hits it (Oland), and a row with two objects in two areas
-(Nordwärw).  And the places whose local name may be OSM's own `name:frr`
+outline hits it (Oland), a row with two objects in two areas (Nordwärw),
+and an island whose label a curation square carries, centred in another
+area than its own polygon (Strönj).  And the places whose local name may be OSM's own `name:frr`
 (#81): one in an area whose row has no local name (Slütsil), one whose row
 has one (Oland), one outside every area (Kil) -- and in a Synnejysk area,
 where OSM's Frisian name is none (#83): one with a Synnejysk name (Läigem),
@@ -54,6 +55,9 @@ SYLT = U_SHAPE
 SYLT_NODES, SYLT_RING = ring(100, *SYLT)
 # Oland: its inside point lies east of the Langeneß strip, its first vertex in it
 OLAND_NODES, OLAND_RING = ring(200, (9.50, 54.60), (9.70, 54.60), (9.70, 54.62), (9.50, 54.62))
+# Strönj: its polygon lies outside every area, its square's centre in the
+# Hallig one
+STRONJ_NODES, STRONJ_RING = ring(300, *box(9.46, 54.40, 9.50, 54.45))
 NODES = (
     {
         1: ((9.25, 54.5), {"name": "Stadum"}),  # Stiardebel
@@ -80,12 +84,14 @@ NODES = (
     }
     | SYLT_NODES
     | OLAND_NODES
+    | STRONJ_NODES
 )
 WAYS = {
     10: (SYLT_RING, {"natural": "coastline"}),
     11: (OLAND_RING, {"place": "island", "name:frr": "Ualöön"}),
-    12: ([4, 2], {"landuse": "residential"}),
-}  # Nordwärw's way
+    12: ([4, 2], {"landuse": "residential"}),  # Nordwärw's way
+    13: (STRONJ_RING, {"place": "island", "name": "Nordstrand"}),
+}
 RELATIONS = {
     20: ([("w", 10, "outer")], {"type": "multipolygon", "place": "island"}),
     27019: (
@@ -118,6 +124,7 @@ ROWS = [
         "osm": "relation/27019",
     },
     {"id": "olun", "kind": "hallig", "mooring": "Olun", "hallig": "Ualöönj", "osm": "way/11"},
+    {"id": "stronj", "kind": "island", "mooring": "Strönj", "hallig": "Ströön", "osm": "way/13"},
     {
         "id": "nordwarw",
         "kind": "warft",
@@ -198,10 +205,17 @@ AREAS = areas_geojson(
 )
 
 
+CURATION = """osm,name,lat,lon,set_tags,minzoom,maxzoom,polygon_km2,note
+way/13,Strönj,54.5,9.4,place=island;frasch:kind=island,,,10,
+"""
+
+
 def injected_features(pbf: Path) -> list[Label]:
-    """The injected extract's labelled objects, as check_tiles reads tiles."""
+    """The injected extract's labelled objects, as check_tiles reads tiles:
+    a node and a synthetic square, which Planetiler labels at its centre,
+    with a position."""
     out: list[Label] = []
-    for o in osmium.FileProcessor(str(pbf)):
+    for o in osmium.FileProcessor(str(pbf)).with_locations():
         if "frasch:ref" not in o.tags:
             continue
         feature: Label = {
@@ -210,6 +224,12 @@ def injected_features(pbf: Path) -> list[Label]:
         }
         if isinstance(o, osmium.osm.Node):
             feature |= {"lon": o.location.lon, "lat": o.location.lat}
+        elif isinstance(o, osmium.osm.Way) and "frasch:square" in o.tags:
+            corners = [n.location for n in o.nodes][:-1]
+            feature |= {
+                "lon": sum(c.lon for c in corners) / len(corners),
+                "lat": sum(c.lat for c in corners) / len(corners),
+            }
         out.append(feature)
     return out
 
@@ -218,9 +238,7 @@ def injected_features(pbf: Path) -> list[Label]:
 def built(tmp_path_factory: pytest.TempPathFactory) -> Built:
     d = tmp_path_factory.mktemp("consistency")
     (d / "places.csv").write_text(places_text(ROWS), encoding="utf-8")
-    (d / "curation.csv").write_text(
-        "osm,name,lat,lon,set_tags,minzoom,maxzoom,polygon_km2,note\n", encoding="utf-8"
-    )
+    (d / "curation.csv").write_text(CURATION, encoding="utf-8")
     (d / "areas.geojson").write_text(json.dumps(AREAS), encoding="utf-8")
     write_extract(d / "in.osm.pbf", NODES, WAYS, RELATIONS)
     ws = flat_workspace(d)
@@ -243,6 +261,7 @@ def test_every_row_on_the_map_is_checked(built: Built) -> None:
         "stiardebel",
         "kris",
         "olun",
+        "stronj",
         "nordwarw",
         "hulm",
         "slutsil",
@@ -255,11 +274,18 @@ def test_every_row_on_the_map_is_checked(built: Built) -> None:
         "stiardebel",
         "kris",
         "olun",
+        "stronj",
         "nordwarw",
         "slutsil",
         "kil",
         *LISTED_REFS,
     }
+
+
+def test_a_squares_label_is_held_to_its_entry(built: Built) -> None:
+    entries, features = built
+    squares = [f for f in features if "frasch:square" in f["props"]]
+    assert "stronj" in check_tiles.checked_entries(entries, squares)
 
 
 @pytest.mark.parametrize(
@@ -269,6 +295,7 @@ def test_every_row_on_the_map_is_checked(built: Built) -> None:
         ("stiardebel", "frr-x-suedgoes", "Stiardebel"),
         ("kris", None, None),
         ("olun", "frr-x-hallig", "Ualöönj"),
+        ("stronj", "frr-x-hallig", "Ströön"),
         ("nordwarw", "frr-x-nordgoes", "Noordweerw"),
         ("slutsil", "frr-x-nordgoes", "Slütsiil"),
         ("kil", None, None),

@@ -36,8 +36,9 @@ import osmium
 
 from frasch import cli, dialects, locate, placenames
 from frasch.dialects import Registry
+from frasch.geo import LonLat
 from frasch.inject import report
-from frasch.inject.claims import Claim, Claims
+from frasch.inject.claims import Claim, Claims, Tags
 from frasch.inject.inputs import Inputs, load_inputs
 from frasch.inject.report import Report
 from frasch.inject.stats import Stats
@@ -51,50 +52,25 @@ from frasch.refs import OsmRef
 _OsmObject = osmium.osm.Node | osmium.osm.Way | osmium.osm.Relation
 
 
-class Injector:
-    """Copies the objects of the extract to `writer` as they stream past,
-    each with its tags (`handle`); what it does goes into `stats`."""
+class Tagger:
+    """The tags an object of the extract gets (`added_tags`); what it finds
+    goes into `stats`."""
 
-    def __init__(self, writer: Writer, inputs: Inputs, stats: Stats):
-        self._writer = writer
+    def __init__(self, inputs: Inputs, stats: Stats):
         self._inputs = inputs
         self._stats = stats
         self._claims = Claims(inputs.names, inputs.members, stats)
-        self._synthetic = SyntheticObjects(writer, inputs.local_places, stats)
 
-    def handle(self, o: _OsmObject) -> None:
-        """Copy one object of the extract, with the tags it gets; an object
-        that gets none is copied as it is."""
-        key = (o.type_str(), o.id)
-        self._stats.scanned += 1
-        self._synthetic.passing(key)
-        added = self._added_tags(key, o)
-        # curation puts a synthetic square around a node only
-        node = o if isinstance(o, osmium.osm.Node) else None
-        square = self._inputs.curation.squares.get(key) if node is not None else None
-        if not added and square is None:
-            self._writer.add(o)
-            return
-        tags = dict(o.tags) | added
-        if node is not None and square is not None:
-            # the square inherits the node's names; the node keeps its own tags
-            centre = (node.location.lon, node.location.lat)
-            self._synthetic.add_square(key, square, centre, tags)
-        self._writer.add(o.replace(tags=tags))
-
-    def finish(self) -> None:
-        """The extract has ended."""
-        self._synthetic.finish()
-
-    def _added_tags(self, key: OsmRef, o: _OsmObject) -> dict[str, str]:
-        """The tags this object gets: its row's -- or, when no row claims
-        it, OSM's name in the language of its area (`name:frr`, or `name:nds`
-        in a Low Saxon one) as its local one, with that area (#81) -- and
-        then the curation's, which win."""
+    def added_tags(self, key: OsmRef, own: Tags, location: LonLat | None) -> dict[str, str]:
+        """The tags this object (its own tags `own`, a node's `location`)
+        gets: its row's -- or, when no row claims it, OSM's name in the
+        language of its area (`name:frr`, or `name:nds` in a Low Saxon one)
+        as its local one, with that area (#81) -- and then the curation's,
+        which win."""
         tags: dict[str, str] = {}
-        claim = self._claims.row_for(key, o.tags)
+        claim = self._claims.row_for(key, own)
         if claim is not None:
-            tags = self._row_tags(claim, o)
+            tags = self._row_tags(claim, own, location)
             self._stats.tag(key[0], tags)
         elif local := self._inputs.osm_local.get(key):
             self._stats.osm_local_unclaimed += 1
@@ -105,24 +81,80 @@ class Injector:
             tags.update(tuning["tags"])
         return tags
 
-    def _row_tags(self, claim: Claim, o: _OsmObject) -> dict[str, str]:
+    def _row_tags(self, claim: Claim, own: Tags, location: LonLat | None) -> dict[str, str]:
         """The tags the row claiming this object gives it (placenames.resolve)."""
-        obj = self._located(claim.located_as, o)
+        obj = self._located(claim.located_as, own, location)
         names = placenames.resolve(claim.row, obj, self._inputs.areas, self._inputs.reg)
         if names.local_from_osm:
             self._stats.osm_local_claimed += 1
         return placenames.as_tags(names)
 
-    def _located(self, key: OsmRef, o: _OsmObject) -> LocatedObject | None:
+    def _located(self, key: OsmRef, own: Tags, location: LonLat | None) -> LocatedObject | None:
         """Where the object of `key` lies and what OSM says of it: from the
         objects file (`frasch build objects`), which the search index reads
         too.  A node found only through its QID is asked itself; a way or
         relation found that way has no position, and so no dialect."""
         if key in self._inputs.objects:
             return self._inputs.objects[key]
-        if isinstance(o, osmium.osm.Node) and o.location.valid():
-            return point(o.location.lon, o.location.lat, **locate.object_facts(dict(o.tags)))
-        return None
+        if location is None:
+            return None
+        return point(*location, **locate.object_facts(dict(own)))
+
+
+class Injector:
+    """Copies the objects of the extract to `writer` as they stream past,
+    each with its tags (`handle`); what it does goes into `stats`."""
+
+    def __init__(self, writer: Writer, inputs: Inputs, stats: Stats):
+        self._writer = writer
+        self._inputs = inputs
+        self._tagger = Tagger(inputs, stats)
+        self._stats = stats
+        self._synthetic = SyntheticObjects(writer, inputs.local_places, stats)
+        self._queue_squares_of_ways_and_relations()
+
+    def handle(self, o: _OsmObject) -> None:
+        """Copy one object of the extract, with the tags it gets; an object
+        that gets none is copied as it is.  An object with a square loses
+        its place label to it."""
+        key = (o.type_str(), o.id)
+        self._stats.scanned += 1
+        self._synthetic.passing(key)
+        location = _location(o)
+        added = self._tagger.added_tags(key, o.tags, location)
+        square = self._inputs.curation.squares.get(key)
+        if not added and square is None:
+            self._writer.add(o)
+            return
+        tags = dict(o.tags) | added
+        if square is not None:
+            if location is not None:  # a node's, centred on it; any other is queued
+                self._synthetic.add_square(key, square, location, tags)
+            tags.pop("place", None)
+        self._writer.add(o.replace(tags=tags))
+
+    def finish(self) -> None:
+        """The extract has ended."""
+        self._synthetic.finish()
+
+    def _queue_squares_of_ways_and_relations(self) -> None:
+        """The squares on ways and relations: their nodes are written before
+        the first way, so their tags are worked out now, from the tags the
+        pre-pass read.  The object itself is counted when it comes by, so
+        what this tagger finds is thrown away."""
+        uncounted = Tagger(self._inputs, Stats())
+        centres = self._inputs.curation.centres
+        for key, own in self._inputs.square_objects.items():
+            tags = own | uncounted.added_tags(key, own, None)
+            self._synthetic.add_square(key, self._inputs.curation.squares[key], centres[key], tags)
+
+
+def _location(o: _OsmObject) -> LonLat | None:
+    """Where a node is; None for a way or relation, or a node without a
+    valid location."""
+    if isinstance(o, osmium.osm.Node) and o.location.valid():
+        return o.location.lon, o.location.lat
+    return None
 
 
 def run(ws: Workspace, reg: Registry, inp: str, out: str, *, dry_run: bool = False) -> Report:

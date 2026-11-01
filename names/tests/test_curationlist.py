@@ -68,8 +68,33 @@ def test_polygon_km2_row_describes_a_square_not_a_tag_change(tmp_path: Path) -> 
     assert synthetic == {
         ("n", 85929111): {
             "km2": 50.0,
+            "centre": None,
             "tags": {"place": "island", "frasch:maxzoom": "11"},
             "label": "Nordstrand",
+        }
+    }
+
+
+def test_a_square_on_a_way_is_centred_on_its_rows_position(tmp_path: Path) -> None:
+    path = curation_file(
+        tmp_path,
+        {
+            "osm": "way/1163568825",
+            "name": "Oland",
+            "lat": "54.6760",
+            "lon": "8.6981",
+            "set_tags": "place=island",
+            "polygon_km2": "2.1",
+        },
+    )
+    by_id, synthetic, points = curationlist.read(path)
+    assert by_id == {} and points == {}
+    assert synthetic == {
+        ("w", 1163568825): {
+            "km2": 2.1,
+            "centre": (8.6981, 54.6760),
+            "tags": {"place": "island"},
+            "label": "Oland",
         }
     }
 
@@ -92,7 +117,18 @@ def test_local_reference_row_positions_a_place(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     "bad,message",
     [
-        ({"osm": "node/85929111", "lat": "54.48", "lon": "8.86"}, "only go with a local"),
+        (
+            {"osm": "way/1163568825", "lat": "54.676", "lon": "8.698"},
+            "lat/lon on way/1163568825 only centre the square of a way or relation",
+        ),
+        (
+            {"osm": "node/6337086101", "lat": "54.35", "lon": "8.79", "polygon_km2": "340"},
+            "lat/lon on node/6337086101: a node's square is centred on the node",
+        ),
+        (
+            {"osm": "node/85929111", "lat": "54.48", "lon": "8.86"},
+            "lat/lon on node/85929111: a node has a position of its own -- empty them",
+        ),
         ({"osm": "local/westerheide-amrum"}, "needs `lat` and `lon`"),
         ({"osm": "node/355956234", "minzoom": "ten"}, "not an integer"),
         ({"osm": "node/355956234", "minzoom": "--5"}, "not an integer"),
@@ -105,8 +141,11 @@ def test_local_reference_row_positions_a_place(tmp_path: Path) -> None:
         ({"osm": "node/85929111", "polygon_km2": "0"}, "not a positive number"),
         ({"osm": "node/85929111", "polygon_km2": "fifty"}, "not a positive number"),
         ({"osm": "node/85929111", "polygon_km2": "inf"}, "not a positive number"),
-        ({"osm": "way/177387348", "polygon_km2": "5"}, "exactly one node"),
-        ({"osm": "node/1; node/2", "polygon_km2": "5"}, "exactly one node"),
+        (
+            {"osm": "relation/1420555", "polygon_km2": "50"},
+            "polygon_km2 on relation/1420555 needs `lat` and `lon`",
+        ),
+        ({"osm": "node/1; node/2", "polygon_km2": "5"}, "exactly one object"),
     ],
 )
 def test_bad_curation_row_stops_the_build(
@@ -122,12 +161,6 @@ def test_second_row_for_one_local_reference_stops_the_build(tmp_path: Path) -> N
         curationlist.read(curation_file(tmp_path, row, row))
 
 
-def test_second_polygon_for_one_node_stops_the_build(tmp_path: Path) -> None:
-    row = {"osm": "node/85929111", "polygon_km2": "50"}
-    with pytest.raises(ValidationError, match="second polygon_km2"):
-        curationlist.read(curation_file(tmp_path, row, row))
-
-
 @pytest.mark.parametrize("first", ["way/44051131", "way/44051130; way/44051131"])
 def test_second_row_for_one_osm_object_stops_the_build(tmp_path: Path, first: str) -> None:
     path = curation_file(
@@ -140,15 +173,15 @@ def test_second_row_for_one_osm_object_stops_the_build(tmp_path: Path, first: st
     assert exc.value.problems == [Problem(path, 3, "second row for way/44051131 (line 2)")]
 
 
-def test_a_node_with_a_square_may_have_a_row_of_its_own(tmp_path: Path) -> None:
+def test_an_object_with_a_square_has_no_second_row(tmp_path: Path) -> None:
     path = curation_file(
         tmp_path,
         {"osm": "node/85929111", "polygon_km2": "50"},
         {"osm": "node/85929111", "minzoom": "12"},
     )
-    by_id, synthetic, _ = curationlist.read(path)
-    assert by_id[("n", 85929111)]["tags"] == {"frasch:minzoom": "12"}
-    assert set(synthetic) == {("n", 85929111)}
+    with pytest.raises(ValidationError) as exc:
+        curationlist.read(path)
+    assert exc.value.problems == [Problem(path, 3, "second row for node/85929111 (line 2)")]
 
 
 def test_every_broken_row_is_reported_at_once(tmp_path: Path) -> None:
@@ -176,13 +209,20 @@ def test_a_file_without_one_of_its_columns_is_refused(tmp_path: Path) -> None:
     assert exc.value.problems == [Problem(str(path), 1, "missing column(s) set_tags")]
 
 
-def test_the_local_points_are_the_positions_of_the_local_references(tmp_path: Path) -> None:
+def test_the_positions_are_those_of_the_local_references_and_the_squares_on_ways(
+    tmp_path: Path,
+) -> None:
     path = curation_file(
         tmp_path,
         {"osm": "local/westerheide-amrum", "lat": "54.65097", "lon": "8.34019"},
+        {"osm": "way/1163568825", "lat": "54.676", "lon": "8.6981", "polygon_km2": "2.1"},
+        {"osm": "node/6337086101", "polygon_km2": "340"},
         {"osm": "node/1", "set_tags": "place=island"},
     )
-    assert curationlist.local_points(path) == {"westerheide-amrum": (8.34019, 54.65097)}
+    assert curationlist.positions(path) == {
+        ("l", "westerheide-amrum"): (8.34019, 54.65097),
+        ("w", 1163568825): (8.6981, 54.676),
+    }
 
 
 # ------------------------------------------------------------- parse_point ---
