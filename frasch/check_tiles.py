@@ -8,12 +8,14 @@ says: every field of the table of tile keys (placenames.TILE_KEY) -- the same
 `frasch:kind`, `frasch:dialect`, `frasch:local` and `frasch:variety`, the
 same `name:de` where the list has a German name (the place card's German
 step reads the list's, the label the tile's, #61) -- the same name in every
-dialect of the registry and, for a node, the same position (a polygon's
-label point is Planetiler's own choice).  Only the feature of
-the entry's own object is held to that (the first reference of the row's
-`osm` cell, or its local reference): a row's other objects lie elsewhere and
-may lie in another dialect area, and objects found through a Wikidata QID
-have no entry to compare with.
+dialect of the registry and, for a node or a synthetic square, the same
+position (any other polygon's label point is Planetiler's own choice).  Only
+the feature of the entry's own object is held to that (the first reference
+of the row's `osm` cell, or its local reference), or the synthetic square
+that carries its label instead (marked `frasch:square`; its way is the
+injector's): a row's other objects lie elsewhere and may lie in another
+dialect area, and objects found through a Wikidata QID have no entry to
+compare with.
 
 Both sides are built from the same files (names/osm_objects.json,
 names/dialect_areas.geojson, names/places.csv) by the same rule
@@ -40,7 +42,14 @@ from pmtiles.reader import MmapSource, Reader
 from frasch import cli, dialects, refs
 from frasch.dialects import Registry
 from frasch.geo import LonLat
-from frasch.placenames import GERMAN_KEY, REF_KEY, TILE_KEY, SearchEntry, dialect_key
+from frasch.placenames import (
+    GERMAN_KEY,
+    REF_KEY,
+    SQUARE_KEY,
+    TILE_KEY,
+    SearchEntry,
+    dialect_key,
+)
 
 # OpenMapTiles feature ids: the OSM id times ten plus the type
 # (web/src/names/links.ts's osmRefFromFeatureId)
@@ -114,19 +123,26 @@ def checked_entries(entries: Mapping[str, SearchEntry], features: Sequence[Label
 
 
 def _is_point_object(feature: Label) -> bool:
-    """Whether a point feature is where the object is: a node, or a node the
-    injector added (no OSM id).  A way or relation labelled as a point sits
-    where Planetiler put its label, which is its business, not ours."""
+    """Whether a point feature is where the object is: a node, a node the
+    injector added (no OSM id), or a synthetic square, labelled at its
+    centre.  Any other way or relation labelled as a point sits where
+    Planetiler put its label, which is its business, not ours."""
     object_types = {kind for kind, _ in refs.parse(feature["osm"])}
-    return "lon" in feature and object_types <= {refs.OSM_TYPES["node"]}
+    return "lon" in feature and (_is_square(feature) or object_types <= {refs.OSM_TYPES["node"]})
 
 
 def _is_entry_object(entry: SearchEntry, feature: Label) -> bool:
-    """Whether the feature is the object the entry was placed by."""
+    """Whether the feature is the object the entry was placed by -- or the
+    square that carries its label, whose way the injector made up."""
     placed_by = refs.parse(entry.get("osm"))
-    if refs.local_of(placed_by):
+    if refs.local_of(placed_by) or _is_square(feature):
         return True
     return feature["osm"] == refs.format(placed_by[:1])
+
+
+def _is_square(feature: Label) -> bool:
+    """Whether the feature is a synthetic square (frasch.inject.synthetic)."""
+    return feature["props"].get(SQUARE_KEY) == "yes"
 
 
 # ------------------------------------------------------------- the archive ----

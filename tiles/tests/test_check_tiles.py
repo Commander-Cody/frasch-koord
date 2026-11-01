@@ -142,6 +142,25 @@ def test_a_polygons_label_point_is_planetilers_own() -> None:
     assert compare(pellworm, label) == []
 
 
+# Stiardebel as if its row's object were a relation with a curation square:
+# the square's label has the id of the way the injector made up
+SQUARED = STIARDEBEL | {"osm": "relation/3"}
+SQUARE = with_props(AGREEING | {"osm": "way/1561415191"}, frasch_square="yes")
+
+
+def test_a_squares_label_is_compared_with_the_entry_of_its_row() -> None:
+    (problem,) = compare(SQUARED, with_props(SQUARE, frasch_kind="warft"))
+    assert "'warft'" in problem
+
+
+def test_a_squares_label_somewhere_else_is_reported() -> None:
+    assert len(compare(SQUARED, SQUARE | {"lon": 9.26})) == 1
+
+
+def test_an_entry_whose_square_is_labelled_counts_as_checked() -> None:
+    assert check_tiles.checked_entries({"stiardebel": SQUARED}, [SQUARE]) == {"stiardebel"}
+
+
 def test_only_entries_whose_own_object_is_labelled_count_as_checked() -> None:
     # Stiardebel's second object is labelled, its own is not; Pellworm's is
     pellworm = entry("pelweerm", "way/1472528448", 8.64, 54.52)
