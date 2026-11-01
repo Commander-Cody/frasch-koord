@@ -6,8 +6,8 @@
     "label": "Stää säke",
     "placeholder": "Säk en stää…",
     "noResults": "Niinj riseltoote",
-    "loading": "Toorpslist wårt leesed…",
-    "error": "E toorpslist köö ai leesed wårde, et koon ai am stäänge soocht wårde"
+    "loading": "Toorpslist wårt lääsen…",
+    "error": "E toorpslist köö ai lääsen wårde, et koon ai am stäänge soocht wårde"
   },
   "view": {
     "label": "Spräkewise",
@@ -49,7 +49,7 @@
     "wikidata": "Wikidata"
   },
   "errors": {
-    "map": "Diile foon e koord köön ai leesed wårde",
+    "map": "Diile foon e koord köön ai lääsen wårde",
     "panel": "Heer as wat ferkiird lim",
     "dismiss": "Wis ai mör"
   },
