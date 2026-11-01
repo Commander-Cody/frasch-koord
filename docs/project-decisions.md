@@ -1919,3 +1919,25 @@ Frisian columns, German and Danish.
   pinned archive again (#169, which supersedes keeping a tile builder's own
   link, 2026-10-03, #53). That is the owner's choice over a `--reset` flag
   for `just setup` alone.
+
+## Decided 2026-11-01: one rule for every synthetic square (issue #168)
+
+- **A square belongs to the row's own object**, centred on it if it is a
+  node, else on the curation row's `lat`/`lon`. It replaces the object's own
+  place label (the injector drops its `place` tag), and the row's position
+  — search entry, dialect lookup, `check-tiles` — is the square's centre.
+  Oland's coastline way covers the foreshore along the rail dam, so its
+  interior point, label and search entry lay outside the Sommerdeich; it now
+  has a 2.1 km² square at the centroid of the Sommerdeich ring. Changing OSM
+  was ruled out: the foreshore is land. Nordstrand's square moved from the
+  village node to the row's own object, the municipality relation, centred
+  on the village, so its search entry is where its label is; no node has a
+  second curation row any more, and that exception is gone.
+- **One source of positions**: `curationlist.positions` (local references
+  and the centres of way/relation squares); the search index and the
+  injector both read it. `osm_objects.json` keeps OSM's own positions.
+- **`frasch check-tiles` finds a square by `frasch:square=yes`** (owner's
+  choice), a tile attribute on every square: its way id is the injector's,
+  so nothing else ties its label to the row. A reserved id range (Planetiler's
+  node map and a jump in ids) and reading `curation.csv` in check-tiles (a
+  heuristic) were turned down. Squares were not compared at all before.
