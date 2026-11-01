@@ -125,6 +125,10 @@ def test_local_reference_row_positions_a_place(tmp_path: Path) -> None:
             {"osm": "node/6337086101", "lat": "54.35", "lon": "8.79", "polygon_km2": "340"},
             "lat/lon on node/6337086101: a node's square is centred on the node",
         ),
+        (
+            {"osm": "node/85929111", "lat": "54.48", "lon": "8.86"},
+            "lat/lon on node/85929111: a node has a position of its own -- empty them",
+        ),
         ({"osm": "local/westerheide-amrum"}, "needs `lat` and `lon`"),
         ({"osm": "node/355956234", "minzoom": "ten"}, "not an integer"),
         ({"osm": "node/355956234", "minzoom": "--5"}, "not an integer"),

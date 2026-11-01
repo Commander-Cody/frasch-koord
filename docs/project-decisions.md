@@ -1933,9 +1933,11 @@ Frisian columns, German and Danish.
   village node to the row's own object, the municipality relation, centred
   on the village, so its search entry is where its label is; no node has a
   second curation row any more, and that exception is gone.
-- **One source of positions**: `curationlist.positions` (local references
-  and the centres of way/relation squares); the search index and the
-  injector both read it. `osm_objects.json` keeps OSM's own positions.
+- **One derivation of positions**: `curationlist.read` gives the local
+  references' points (`Curation.points`) and the centres of way/relation
+  squares (`Curation.centres`); the injector reads those, and the search
+  index reads `curationlist.positions`, which is built from the same two.
+  `osm_objects.json` keeps OSM's own positions.
 - **`frasch check-tiles` finds a square by `frasch:square=yes`** (owner's
   choice), a tile attribute on every square: its way id is the injector's,
   so nothing else ties its label to the row. A reserved id range (Planetiler's

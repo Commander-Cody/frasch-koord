@@ -165,14 +165,16 @@ def _position_problems(
                 f"(a way or relation has no point of its own to centre it on)"
             ]
         return []
+    if on_a_node:
+        if km2 is not None:
+            return [f"lat/lon on {where}: a node's square is centred on the node -- empty them"]
+        return [f"lat/lon on {where}: a node has a position of its own -- empty them"]
     if km2 is None:
         return [
             f"lat/lon on {where} only centre the square of a way or relation: give the "
             f"row `polygon_km2`, or empty them (a position of its own is only a local "
             f"reference's, local/<slug>)"
         ]
-    if on_a_node:
-        return [f"lat/lon on {where}: a node's square is centred on the node -- empty them"]
     return []
 
 
@@ -337,7 +339,9 @@ def positions(path: str) -> dict[Ref, LonLat]:
     without the file."""
     if not os.path.exists(path):
         return {}
-    return {e["refs"][0]: pos for e in _valid_entries(_table(path)) if (pos := e["pos"])}
+    curation = read(path)
+    local: dict[Ref, LonLat] = {ref: (p["lon"], p["lat"]) for ref, p in curation.points.items()}
+    return local | dict(curation.centres)
 
 
 # -------------------------------------------------------------- appending ---

@@ -19,7 +19,7 @@ import io
 import json
 import math
 import re
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 
 import pytest
@@ -696,28 +696,34 @@ def test_a_way_with_a_square_gives_up_its_place_label_and_keeps_its_other_tags(
     }
 
 
-def test_a_square_on_a_relation_carries_the_relations_names(tmp_path: Path) -> None:
-    # Nordstrand: the municipality relation, its square on the village
+# the tags of OSM's Nordstrand: the municipality relation, the village node
+NORDSTRAND_RELATION_TAGS = {
+    "type": "boundary",
+    "boundary": "administrative",
+    "place": "island",
+    "name": "Nordstrand",
+}
+NORDSTRAND_NODE_TAGS = {"place": "village", "name": "Nordstrand"}
+
+
+def inject_relation_square(d: Path) -> Injected:
+    """A run over the Nordstrand relation, its square on the village and its
+    row in the name list."""
     ring_nodes, ring_ids = ring(1, *box(8.80, 54.48, 8.90, 54.54))
     write_extract(
-        tmp_path / "in.osm.pbf",
+        d / "in.osm.pbf",
         nodes=ring_nodes,
         ways={10: (ring_ids, {})},
-        relations={
-            1420555: (
-                [("w", 10, "outer")],
-                {"type": "boundary", "boundary": "administrative", "name": "Nordstrand"},
-            )
-        },
+        relations={1420555: ([("w", 10, "outer")], NORDSTRAND_RELATION_TAGS)},
     )
-    (tmp_path / "places.csv").write_text(
+    (d / "places.csv").write_text(
         places_text(
             [dict(id="e-stronj", kind="island", mooring="e Strönj", osm="relation/1420555")]
         ),
         encoding="utf-8",
     )
     curation_file(
-        tmp_path,
+        d,
         {
             "osm": "relation/1420555",
             "lat": "54.4873775",
@@ -726,15 +732,50 @@ def test_a_square_on_a_relation_carries_the_relations_names(tmp_path: Path) -> N
             "polygon_km2": "50",
         },
     )
-    (square,) = inject(tmp_path).stats.added_squares
-    by_key = {(t, i): tags for t, i, tags, _ in read_extract(tmp_path / "out.osm.pbf")}
-    assert by_key[("w", square.way_id)] == {
+    inject(d)
+    objs = read_extract(d / "out.osm.pbf")
+    return objs, {(t, i): (tags, extra) for t, i, tags, extra in objs}
+
+
+def inject_node_square(d: Path) -> Injected:
+    """A run over the Nordstrand village node with a square on it, no row
+    in the name list."""
+    write_extract(d / "in.osm.pbf", nodes={1: ((8.865286, 54.487378), NORDSTRAND_NODE_TAGS)})
+    (d / "places.csv").write_text(places_text([]), encoding="utf-8")
+    curation_file(d, {"osm": "node/1", "set_tags": "place=island", "polygon_km2": "50"})
+    inject(d)
+    objs = read_extract(d / "out.osm.pbf")
+    return objs, {(t, i): (tags, extra) for t, i, tags, extra in objs}
+
+
+def test_a_square_on_a_relation_carries_the_relations_names(tmp_path: Path) -> None:
+    _, by_key = inject_relation_square(tmp_path)
+    (square_tags,) = [tags for (t, i), (tags, _) in by_key.items() if t == "w" and i != 10]
+    assert square_tags == {
         "name": "Nordstrand",
         "name:frr-x-mooring": "e Strönj",
         "frasch:ref": "e-stronj",
         "place": "island",
         "frasch:square": "yes",
     }
+
+
+@pytest.mark.parametrize(
+    "inject_scene, key, own",
+    [
+        (inject_relation_square, ("r", 1420555), NORDSTRAND_RELATION_TAGS),
+        (inject_node_square, ("n", 1), NORDSTRAND_NODE_TAGS),
+    ],
+)
+def test_an_object_with_a_square_gives_up_its_place_label_and_keeps_its_other_tags(
+    tmp_path: Path,
+    inject_scene: Callable[[Path], Injected],
+    key: tuple[str, int],
+    own: dict[str, str],
+) -> None:
+    _, by_key = inject_scene(tmp_path)
+    tags, _ = by_key[key]
+    assert {k: tags.get(k) for k in own} == own | {"place": None}
 
 
 # ------------------------------------------------- what the run counted ---
