@@ -24,8 +24,8 @@ class AddedPoint(NamedTuple):
 
 
 class AddedSquare(NamedTuple):
-    """A synthetic polygon: its way and corner nodes, and what it is around
-    -- a node of the extract, or the position of a local reference."""
+    """A synthetic polygon: its way and corner nodes, and whose it is -- an
+    object of the extract's, or a local reference's."""
 
     way_id: int
     node_ids: list[int]

@@ -303,5 +303,6 @@ def test_the_command_prints_the_attribute_keys_planetiler_has_to_pass_through(
         "frasch:maxzoom",
         "frasch:minzoom",
         "frasch:ref",
+        "frasch:square",
         "frasch:variety",
     ]

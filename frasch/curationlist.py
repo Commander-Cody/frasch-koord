@@ -7,10 +7,12 @@ curation"):
 * `set_tags` -- `k=v` pairs separated by `;`, applied verbatim by the injector
 * `minzoom` / `maxzoom` -- become the tile attributes `frasch:minzoom` /
   `frasch:maxzoom`
-* `polygon_km2` -- a synthetic square of that area around one node (or local
-  reference) that carries the label instead
-* `lat` / `lon` -- the position of a place OSM does not have; required on a
-  local reference, forbidden on any other
+* `polygon_km2` -- a synthetic square of that area for one object (or local
+  reference) that carries its label instead
+* `lat` / `lon` -- the position of a place OSM does not have, required on a
+  local reference; and the centre of a way's or relation's square, required
+  with its `polygon_km2` -- that is where the place lies.  A node's square
+  is centred on the node; no other row has them
 
 This module is the one reading of the file's rules: the injector, the search
 export (for the positions), frasch.check_inputs and frasch.curate's `apply` (which
@@ -29,7 +31,7 @@ from frasch import files, refs, tables
 from frasch.errors import Invalid, Problem, ValidationError
 from frasch.geo import LonLat
 from frasch.placenames import MAXZOOM_KEY, MINZOOM_KEY
-from frasch.refs import LOCAL_TYPE, Ref
+from frasch.refs import OsmRef, Ref
 from frasch.tables import Table
 
 COLUMNS = ["osm", "name", "lat", "lon", "set_tags", "minzoom", "maxzoom", "polygon_km2", "note"]
@@ -112,16 +114,15 @@ def _km2(row: Mapping[str, str], found: list[str]) -> float | None:
 # ------------------------------------------------------------------- rows ---
 class _Seen:
     """What the rows above have claimed: one row per local reference, one
-    square per node, one tuning row (neither of those) per OSM object."""
+    row per OSM object."""
 
     def __init__(self) -> None:
         self.positioned: set[str] = set()
-        self.squares: set[Ref] = set()
         self.tuned: dict[Ref, int] = {}  # -> the line of its row
 
     def tune(self, n: int, objects: Sequence[Ref]) -> list[str]:
-        """Claim `objects` for the tuning row on line `n`; -> the objects an
-        earlier tuning row claimed already."""
+        """Claim `objects` for the row on line `n`; -> the objects an earlier
+        row claimed already."""
         found = [
             f"second row for {refs.format([ref])} (line {self.tuned[ref]})"
             for ref in objects
@@ -146,6 +147,35 @@ class Entry(TypedDict):
     label: str
 
 
+def _position_problems(
+    objects: Sequence[Ref], local: str | None, pos: LonLat | None, km2: float | None
+) -> list[str]:
+    """What is wrong with a row's `lat`/`lon`: a local reference needs them
+    (its position), a square on a way or relation needs them (its centre),
+    and no other row may have them -- a node's square is centred on the
+    node."""
+    if local:
+        return [] if pos else [f"local/{local} needs `lat` and `lon`"]
+    where = refs.format(objects)
+    on_a_node = objects[0][0] == "n"
+    if pos is None:
+        if km2 is not None and len(objects) == 1 and not on_a_node:
+            return [
+                f"polygon_km2 on {where} needs `lat` and `lon`, the centre of its square "
+                f"(a way or relation has no point of its own to centre it on)"
+            ]
+        return []
+    if km2 is None:
+        return [
+            f"lat/lon on {where} only centre the square of a way or relation: give the "
+            f"row `polygon_km2`, or empty them (a position of its own is only a local "
+            f"reference's, local/<slug>)"
+        ]
+    if on_a_node:
+        return [f"lat/lon on {where}: a node's square is centred on the node -- empty them"]
+    return []
+
+
 def _entry(n: int, row: Mapping[str, str], seen: _Seen) -> tuple[Entry | None, list[str]]:
     """-> (the entry of one row, what is wrong with it); no entry for a row
     without a reference (a spacer) or with a problem."""
@@ -158,12 +188,8 @@ def _entry(n: int, row: Mapping[str, str], seen: _Seen) -> tuple[Entry | None, l
         return None, []
     found: list[str] = []
     local = refs.local_of(objects)
-    if pos and not local:
-        found.append(
-            f"lat/lon only go with a local reference (local/<slug>), not with {row['osm']!r}"
-        )
-    if local and not pos:
-        found.append(f"local/{local} needs `lat` and `lon`")
+    km2 = _km2(row, found)
+    found += _position_problems(objects, local, pos, km2)
     if local and local in seen.positioned:
         found.append(f"second row for local/{local}")
     try:
@@ -171,17 +197,12 @@ def _entry(n: int, row: Mapping[str, str], seen: _Seen) -> tuple[Entry | None, l
     except Invalid as exc:
         found.append(exc.reason)
     minzoom, maxzoom = _zooms(row, found)
-    km2 = _km2(row, found)
-    if km2 is not None:
-        if len(objects) != 1 or objects[0][0] not in ("n", LOCAL_TYPE):
-            found.append("polygon_km2 needs exactly one node (or local reference) in `osm`")
-        elif not local and objects[0] in seen.squares:
-            found.append(f"second polygon_km2 row for {refs.format(objects)}")
-        seen.squares.add(objects[0])
-    elif not local:
-        found += seen.tune(n, objects)
+    if km2 is not None and len(objects) != 1:
+        found.append("polygon_km2 needs exactly one object (or local reference) in `osm`")
     if local:
         seen.positioned.add(local)
+    else:
+        found += seen.tune(n, objects)
     if found:
         return None, found
     return {
@@ -244,6 +265,7 @@ class Tuning(TypedDict):
 
 class Square(Tuning):
     km2: float
+    centre: LonLat | None
 
 
 class LocalPoint(Tuning):
@@ -258,9 +280,10 @@ class Curation(NamedTuple):
 
     objects  {('r', 1420555): {'tags': {...}, 'label': 'Nordstrand'}} -- the
              tags to set on an OSM object, the zooms among them
-    squares  {('n', 85929111): {'km2': 50.0, 'tags': {...}, 'label': ...}} --
-             a synthetic square to add around that node; the node itself is
-             left alone
+    squares  {('w', 1163568825): {'km2': 2.1, 'centre': (8.6981, 54.676),
+             'tags': {...}, 'label': ...}} -- a synthetic square to add for
+             that object, centred on `centre` (None for a node: on the
+             node); it replaces the object's own place label
     points   {('l', 'westerheide-amrum'): {'lon', 'lat', 'km2', 'tags',
              'label', 'where'}} -- a place OSM does not have: the node (or,
              with `km2`, the square) to add for it"""
@@ -268,6 +291,16 @@ class Curation(NamedTuple):
     objects: dict[Ref, Tuning]
     squares: dict[Ref, Square]
     points: dict[Ref, LocalPoint]
+
+    @property
+    def centres(self) -> dict[OsmRef, LonLat]:
+        """The centre of each square on a way or relation: where that place
+        lies."""
+        return {
+            osm: centre
+            for ref, square in self.squares.items()
+            if (osm := refs.as_osm_ref(ref)) and (centre := square["centre"])
+        }
 
 
 def read(path: str) -> Curation:
@@ -279,8 +312,8 @@ def read(path: str) -> Curation:
         for key, zoom in ((MINZOOM_KEY, e["minzoom"]), (MAXZOOM_KEY, e["maxzoom"])):
             if zoom is not None:
                 tags[key] = str(zoom)  # tag values must be strings
-        ref, label, km2 = e["refs"][0], e["label"], e["km2"]
-        if (pos := e["pos"]) is not None:  # only a local reference has one
+        ref, label, km2, pos = e["refs"][0], e["label"], e["km2"], e["pos"]
+        if pos is not None and e["local"]:
             curation.points[ref] = {
                 "lon": pos[0],
                 "lat": pos[1],
@@ -290,23 +323,21 @@ def read(path: str) -> Curation:
                 "where": f"{path}:{e['line']}",
             }
         elif km2 is not None:
-            curation.squares[ref] = {"km2": km2, "tags": tags, "label": label}
+            curation.squares[ref] = {"km2": km2, "centre": pos, "tags": tags, "label": label}
         elif tags:  # else nothing to apply yet
             for ref in e["refs"]:  # one row per object (`rows`)
                 curation.objects[ref] = {"tags": dict(tags), "label": label}
     return curation
 
 
-def local_points(path: str) -> dict[str, LonLat]:
-    """`{slug: (lon, lat)}` for every local reference -- the positions of the
-    places OSM does not have; `{}` without the file."""
+def positions(path: str) -> dict[Ref, LonLat]:
+    """`{reference: (lon, lat)}` for every row with a position: where a
+    place OSM does not have lies (a local reference), and the centre of the
+    square on a way or relation, which is where that place lies; `{}`
+    without the file."""
     if not os.path.exists(path):
         return {}
-    return _local_points(_valid_entries(_table(path)))
-
-
-def _local_points(entries: Iterable[Entry]) -> dict[str, LonLat]:
-    return {local: pos for e in entries if (local := e["local"]) and (pos := e["pos"])}
+    return {e["refs"][0]: pos for e in _valid_entries(_table(path)) if (pos := e["pos"])}
 
 
 # -------------------------------------------------------------- appending ---
@@ -345,5 +376,5 @@ def read_for_appending(path: str) -> Appendable:
     if not os.path.exists(path):
         return Appendable(path, None, COLUMNS, frozenset())
     table = _table(path)
-    slugs = frozenset(_local_points(_valid_entries(table)))
+    slugs = frozenset(local for e in _valid_entries(table) if (local := e["local"]))
     return Appendable(path, table.data, table.header, slugs)

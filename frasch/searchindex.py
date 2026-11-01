@@ -79,14 +79,14 @@ def build(ws: Workspace, reg: Registry) -> SearchIndex:
     """The search index, `{"built_from", "places"}`, from its input files."""
     areas = dialect_areas.AreaIndex.from_geojson(ws.areas)
     objects = read_objects(ws.objects)
-    local_points = curationlist.local_points(ws.curation)
+    positions = curationlist.positions(ws.curation)
     rows = placelist.read(ws.names, reg).rows
 
     on_map = [r for r in rows if placelist.on_map(r, reg)]
     placeobjects.require_located(objects, ws.objects, entry_refs(on_map))
     places: list[SearchEntry] = []
     for r in on_map:
-        obj = placeobjects.for_row(objects, r, local_points, reg)
+        obj = placeobjects.for_row(objects, r, positions, reg)
         if obj is not None:
             places.append(placenames.as_entry(placenames.resolve(r, obj, areas, reg), obj, r))
     return {"built_from": provenance.stamp(ws).as_json(), "places": places}

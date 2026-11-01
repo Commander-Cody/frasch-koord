@@ -2,7 +2,8 @@
 (frasch.objects) has to be located for (`named`), what to do about one it
 has no object for (`unlocated`, `require_located`), and the object a row's
 search entry stands for (`for_row`) -- for a place OSM does not have, the
-point the injector adds (`local_point`).
+point the injector adds (`local_point`), and for a way or relation with a
+square, the object where curation puts it (`at_position`).
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ from frasch.errors import PipelineError, rebuild
 from frasch.geo import LonLat
 from frasch.objects import LocatedObject, Objects, point
 from frasch.placelist import PlaceRow, Row
-from frasch.refs import OsmRef
+from frasch.refs import OsmRef, Ref
 
 
 def named(rows: Iterable[PlaceRow], reg: Registry) -> dict[OsmRef, PlaceRow]:
@@ -51,21 +52,37 @@ def require_located(objects: Objects, path: str, rows: Mapping[OsmRef, PlaceRow]
 
 
 def for_row(
-    objects: Objects, row: PlaceRow, local_points: Mapping[str, LonLat], reg: Registry
+    objects: Objects, row: PlaceRow, positions: Mapping[Ref, LonLat], reg: Registry
 ) -> LocatedObject | None:
     """The object a row's search entry stands for: the object of the first
     reference in its `osm` cell, or for a local reference the point the
-    injector adds (`local_point`; `local_points`: the curation's position of
-    each slug).  None for a row keyed by its QID alone."""
+    injector adds (`local_point`; `positions`: the curation's position of
+    each reference that has one, `curationlist.positions`).  None for a row
+    keyed by its QID alone."""
     slug = row.local
     if slug:
-        if slug not in local_points:
+        key = (refs.LOCAL_TYPE, slug)
+        if key not in positions:
             raise PipelineError(
                 f"{row['id']} (line {row.line}): local/{slug} has no row with "
                 f"lat/lon in the curation file"
             )
-        return local_point(row, local_points[slug], reg)
-    return objects.by_ref[row.osm_refs[0]] if row.osm_refs else None
+        return local_point(row, positions[key], reg)
+    if not row.osm_refs:
+        return None
+    first = row.osm_refs[0]
+    obj = objects.by_ref[first]
+    return at_position(obj, positions[first]) if first in positions else obj
+
+
+def at_position(obj: LocatedObject, position: LonLat) -> LocatedObject:
+    """The object as it lies where curation puts it -- a way or relation
+    with a square, which is where the place is: what is known of it, but no
+    outline point, so the dialect is asked there alone."""
+    lon, lat = position
+    placed: LocatedObject = {**obj, "lon": lon, "lat": lat}
+    placed.pop("outline", None)
+    return placed
 
 
 def local_point(row: Row, position: LonLat, reg: Registry) -> LocatedObject:

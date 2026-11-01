@@ -65,7 +65,7 @@ def _curation_lines(inputs: Inputs, ws: Workspace) -> list[str]:
         f"{sum(1 for tuning in tunings if MAXZOOM_KEY in tuning['tags'])} with {MAXZOOM_KEY})"
     ]
     if curation.squares:
-        lines.append(f"synthetic : {len(curation.squares)} polygon(s) to add around nodes")
+        lines.append(f"synthetic : {len(curation.squares)} polygon(s) to add")
     if curation.points:
         lines.append(
             f"local     : {len(curation.points)} local reference(s) positioned in {ws.curation}"
@@ -216,7 +216,7 @@ def _curated_lines(stats: Stats, inputs: Inputs, in_file: str) -> list[str]:
 
 
 def _square_lines(stats: Stats, inputs: Inputs, in_file: str) -> list[str]:
-    """The synthetic polygons added, and those whose node the extract lacks."""
+    """The synthetic polygons added, and those whose object the extract lacks."""
     squares = inputs.curation.squares
     if not (squares or stats.added_squares):
         return []
@@ -228,7 +228,7 @@ def _square_lines(stats: Stats, inputs: Inputs, in_file: str) -> list[str]:
         for square in stats.added_squares
     ]
     lines += [
-        f"  ! {refs.format([key])} {squares[key]['label'] or '?'}: node not in "
+        f"  ! {refs.format([key])} {squares[key]['label'] or '?'}: not in "
         f"{in_file}, no polygon added"
         for key in sorted(set(squares) - {square.key for square in stats.added_squares})
     ]

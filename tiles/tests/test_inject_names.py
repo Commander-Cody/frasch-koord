@@ -6,8 +6,8 @@ The extract mirrors real places (ids and positions from the
 Schleswig-Holstein extract; ring nodes made up): the village Holm, a
 Nordwarft way on Ockholm (the id of the Warft on Habel, moved to where the
 row's Nordwarft lies; #135), the Hamburger Hallig relation, the Nordstrand
-village node that carries the synthetic island square, Tammensiel (curated,
-not in the name list), Westerheide on Amrum, a place OSM does not have, and
+village node (curated), the Eiderstedt peninsula node and the Oland
+coastline way that carry a synthetic square each, Tammensiel (curated, not in the name list), Westerheide on Amrum, a place OSM does not have, and
 the Kirchwarft, which no row claims but OSM names in Frisian (#81; moved into
 the Mooring box of AREAS)."""
 
@@ -43,6 +43,7 @@ from osm_fixture import (
     areas_geojson,
     box,
     read_extract,
+    ring,
     write_extract,
 )
 
@@ -73,11 +74,13 @@ def test_square_is_centred_on_the_node() -> None:
 # ------------------------------------------------------------ a whole run() ---
 HOLM = 240102263
 NORDSTRAND = 85929111
+EIDERSTEDT = 6337086101
 TAMMENSIEL = 355956234
 UNTOUCHED_NODE = 240000001
 JENSWARFT = 188786563
 NORDWARFT = 1347936331
 HALLIG_RING = 500000001
+OLAND = 1163568825
 UNTOUCHED_WAY = 600000001
 HAMBURGER_HALLIG = 5615880
 KREIS = 27019
@@ -104,6 +107,15 @@ HALLIG_NODES = {
     9100000003: (8.850, 54.600),
     9100000004: (8.825, 54.600),
 }
+# Oland: its inside point lies in the Mooring box of AREAS, the middle of the
+# Hallig -- its curation row's position -- in the Halligfriesisch one
+OLAND_NODES = {
+    9200000001: (8.855, 54.600),
+    9200000002: (8.900, 54.600),
+    9200000003: (8.900, 54.620),
+    9200000004: (8.855, 54.620),
+}
+OLAND_CENTRE = (8.857, 54.602)
 MAX_NODE = KIRCHWARFT
 MAX_WAY = NORDWARFT
 
@@ -147,6 +159,15 @@ PLACES = [
         status="ok",
     ),
     dict(
+        id="uulonj",
+        kind="hallig",
+        mooring="Üülönj",
+        hallig="Ualöön",
+        de="Oland",
+        osm=f"way/{OLAND}",
+        status="ok",
+    ),
+    dict(
         id="waasterhias",
         kind="settlement",
         oomrang="Waasterhias",
@@ -158,17 +179,25 @@ PLACES = [
 
 CURATION = [
     {
-        "osm": f"node/{NORDSTRAND}",
-        "name": "Nordstrand (synthetic island polygon)",
-        "set_tags": "place=island;frasch:kind=island",
-        "maxzoom": "11",
-        "polygon_km2": "50",
+        "osm": f"node/{EIDERSTEDT}",
+        "name": "Eiderstedt (synthetic landscape polygon)",
+        "set_tags": "place=island;frasch:kind=landscape",
+        "maxzoom": "10",
+        "polygon_km2": "340",
     },
     {
         "osm": f"node/{NORDSTRAND}",
         "name": "Nordstrand (village node)",
         "set_tags": "name:frr-x-mooring=e Strönj;frasch:ref=relation/1420555",
         "minzoom": "12",
+    },
+    {
+        "osm": f"way/{OLAND}",
+        "name": "Oland (synthetic island polygon)",
+        "lat": str(OLAND_CENTRE[1]),
+        "lon": str(OLAND_CENTRE[0]),
+        "set_tags": "place=island;frasch:kind=hallig",
+        "polygon_km2": "2.1",
     },
     {"osm": f"node/{TAMMENSIEL}", "name": "Tammensiel", "minzoom": "10"},
     {
@@ -203,6 +232,7 @@ def write_scene(path: Path) -> None:
     Hamburger Hallig and the objects no row names."""
     nodes: dict[int, tuple[LonLat, dict[str, str]]] = {
         NORDSTRAND: ((8.865286, 54.487378), {"place": "village", "name": "Nordstrand"}),
+        EIDERSTEDT: ((8.79035, 54.35), {"natural": "peninsula", "name": "Eiderstedt"}),
         HOLM: ((8.866668, 54.833305), {"place": "village", "name": "Holm", "wikidata": "Q559369"}),
         UNTOUCHED_NODE: ((8.9, 54.6), {"place": "village", "name": "Bredstedt"}),
         TAMMENSIEL: ((8.7033, 54.7433), {"place": "hamlet", "name": "Tammensiel"}),
@@ -212,7 +242,7 @@ def write_scene(path: Path) -> None:
         ),
         PINNEBERG: ((9.80, 53.66), {"place": "town", "name": "Pinneberg", "name:frr": "Pinebärj"}),
     }
-    for ring_nodes in (NORDWARFT_NODES, JENSWARFT_NODES, HALLIG_NODES):
+    for ring_nodes in (NORDWARFT_NODES, JENSWARFT_NODES, HALLIG_NODES, OLAND_NODES):
         nodes.update({i: (loc, {}) for i, loc in ring_nodes.items()})
 
     def closed(ring_nodes: Mapping[int, LonLat]) -> list[int]:
@@ -228,6 +258,10 @@ def write_scene(path: Path) -> None:
                 {"name": "Jenswarft", "name:frr": "Jenswäärw", "landuse": "residential"},
             ),
             HALLIG_RING: (closed(HALLIG_NODES), {"natural": "coastline"}),
+            OLAND: (
+                closed(OLAND_NODES),
+                {"natural": "coastline", "place": "island", "name": "Oland", "name:frr": "Ualöön"},
+            ),
             UNTOUCHED_WAY: ([NORDSTRAND, HOLM], {"highway": "track"}),
             NORDWARFT: (
                 closed(NORDWARFT_NODES),
@@ -359,6 +393,7 @@ def test_every_input_object_is_still_there(injected: Injected) -> None:
     _, by_key = injected
     for key in [
         ("n", NORDSTRAND),
+        ("n", EIDERSTEDT),
         ("n", HOLM),
         ("n", UNTOUCHED_NODE),
         ("n", TAMMENSIEL),
@@ -547,82 +582,191 @@ def test_local_reference_becomes_the_first_new_node(injected: Injected) -> None:
     }
 
 
-def test_synthetic_square_is_one_new_closed_way(injected: Injected) -> None:
+def square_of(
+    injected: Injected, stats: Stats, key: tuple[str, int]
+) -> tuple[dict[str, str], list[LonLat]]:
+    """The tags and corners of the synthetic square curation puts on the
+    object `key`."""
     _, by_key = injected
-    ((wid, (_, refs)),) = new_objects(by_key, "w", MAX_WAY)
-    assert wid == MAX_WAY + 1
-    corners = [MAX_NODE + 2, MAX_NODE + 3, MAX_NODE + 4, MAX_NODE + 5]
-    assert refs == corners + corners[:1]
+    (way_id,) = [square.way_id for square in stats.added_squares if square.key == key]
+    tags, node_ids = by_key[("w", way_id)]
+    assert isinstance(node_ids, list)
+    return tags, [loc for i in node_ids[:-1] if isinstance(loc := by_key[("n", i)][1], tuple)]
+
+
+def test_each_synthetic_square_is_a_new_closed_way_through_four_new_nodes(
+    injected: Injected,
+) -> None:
+    _, by_key = injected
+    squares = new_objects(by_key, "w", MAX_WAY)
+    assert [wid for wid, _ in squares] == [MAX_WAY + 1, MAX_WAY + 2]
+    corners = [nid for nid, _ in new_objects(by_key, "n", MAX_NODE + 1)]
+    assert [refs for _, (_, refs) in squares] == [
+        corners[:4] + corners[:1],
+        corners[4:] + corners[4:5],
+    ]
 
 
 def test_synthetic_square_nodes_are_written_as_untagged_nodes(injected: Injected) -> None:
     _, by_key = injected
     corners = new_objects(by_key, "n", MAX_NODE + 1)
-    assert [nid for nid, _ in corners] == [MAX_NODE + 2, MAX_NODE + 3, MAX_NODE + 4, MAX_NODE + 5]
+    assert len(corners) == 8
     assert all(tags == {} for _, (tags, _) in corners)
 
 
-def test_synthetic_square_is_fifty_km2_around_the_village_node(injected: Injected) -> None:
-    _, by_key = injected
-    corners = [
-        loc for _, (_, loc) in new_objects(by_key, "n", MAX_NODE + 1) if isinstance(loc, tuple)
-    ]
+def test_synthetic_square_is_340_km2_around_the_peninsula_node(
+    injected: Injected, stats: Stats
+) -> None:
+    _, corners = square_of(injected, stats, ("n", EIDERSTEDT))
     lon = sum(x for x, _ in corners) / 4
     lat = sum(y for _, y in corners) / 4
-    assert (lon, lat) == pytest.approx((8.865286, 54.487378), abs=1e-6)
+    assert (lon, lat) == pytest.approx((8.79035, 54.35), abs=1e-6)
     side_ns = (max(y for _, y in corners) - min(y for _, y in corners)) * 111.32
     side_ew = (
         (max(x for x, _ in corners) - min(x for x, _ in corners))
         * 111.32
-        * math.cos(math.radians(54.487378))
+        * math.cos(math.radians(54.35))
     )
-    assert side_ns == pytest.approx(math.sqrt(50), rel=1e-4)
-    assert side_ew == pytest.approx(math.sqrt(50), rel=1e-4)
+    assert side_ns == pytest.approx(math.sqrt(340), rel=1e-4)
+    assert side_ew == pytest.approx(math.sqrt(340), rel=1e-4)
 
 
-def test_synthetic_square_carries_the_nodes_names_and_its_own_tags(injected: Injected) -> None:
-    # names and ref from the (curated) node; place/kind/maxzoom from the
-    # polygon row -- but not the node's own minzoom, which holds it to z12
-    _, by_key = injected
-    ((_, (tags, _)),) = new_objects(by_key, "w", MAX_WAY)
+def test_synthetic_square_carries_the_nodes_names_and_its_own_tags(
+    injected: Injected, stats: Stats
+) -> None:
+    # the name from the node; place/kind/maxzoom from the polygon row
+    tags, _ = square_of(injected, stats, ("n", EIDERSTEDT))
     assert tags == {
+        "name": "Eiderstedt",
+        "place": "island",
+        "frasch:kind": "landscape",
+        "frasch:maxzoom": "10",
+        "frasch:square": "yes",
+    }
+
+
+def test_a_square_on_a_way_is_centred_on_its_rows_position(
+    injected: Injected, stats: Stats
+) -> None:
+    _, corners = square_of(injected, stats, ("w", OLAND))
+    lon = sum(x for x, _ in corners) / 4
+    lat = sum(y for _, y in corners) / 4
+    assert (lon, lat) == pytest.approx(OLAND_CENTRE, abs=1e-6)
+
+
+def test_a_square_on_a_way_carries_the_ways_names_and_its_own_tags(
+    injected: Injected, stats: Stats
+) -> None:
+    # OSM's names and the row's, and the dialect and local name of where the
+    # square is; place and kind from its curation row
+    tags, _ = square_of(injected, stats, ("w", OLAND))
+    assert tags == {
+        "name": "Oland",
+        "name:frr": "Ualöön",
+        "name:frr-x-mooring": "Üülönj",
+        "name:frr-x-hallig": "Ualöön",
+        "name:de": "Oland",
+        "frasch:dialect": "frr-x-hallig",
+        "frasch:local": "Ualöön",
+        "frasch:ref": "uulonj",
+        "place": "island",
+        "frasch:kind": "hallig",
+        "frasch:square": "yes",
+    }
+
+
+def test_a_way_with_a_square_gives_up_its_place_label_and_keeps_its_other_tags(
+    injected: Injected,
+) -> None:
+    # its square has the label; the coastline stays, with its names, which
+    # are those of where its square is
+    _, by_key = injected
+    tags, _ = by_key[("w", OLAND)]
+    assert tags == {
+        "natural": "coastline",
+        "name": "Oland",
+        "name:frr": "Ualöön",
+        "name:frr-x-mooring": "Üülönj",
+        "name:frr-x-hallig": "Ualöön",
+        "name:de": "Oland",
+        "frasch:kind": "hallig",
+        "frasch:dialect": "frr-x-hallig",
+        "frasch:local": "Ualöön",
+        "frasch:ref": "uulonj",
+    }
+
+
+def test_a_square_on_a_relation_carries_the_relations_names(tmp_path: Path) -> None:
+    # Nordstrand: the municipality relation, its square on the village
+    ring_nodes, ring_ids = ring(1, *box(8.80, 54.48, 8.90, 54.54))
+    write_extract(
+        tmp_path / "in.osm.pbf",
+        nodes=ring_nodes,
+        ways={10: (ring_ids, {})},
+        relations={
+            1420555: (
+                [("w", 10, "outer")],
+                {"type": "boundary", "boundary": "administrative", "name": "Nordstrand"},
+            )
+        },
+    )
+    (tmp_path / "places.csv").write_text(
+        places_text(
+            [dict(id="e-stronj", kind="island", mooring="e Strönj", osm="relation/1420555")]
+        ),
+        encoding="utf-8",
+    )
+    curation_file(
+        tmp_path,
+        {
+            "osm": "relation/1420555",
+            "lat": "54.4873775",
+            "lon": "8.8652863",
+            "set_tags": "place=island",
+            "polygon_km2": "50",
+        },
+    )
+    (square,) = inject(tmp_path).stats.added_squares
+    by_key = {(t, i): tags for t, i, tags, _ in read_extract(tmp_path / "out.osm.pbf")}
+    assert by_key[("w", square.way_id)] == {
         "name": "Nordstrand",
         "name:frr-x-mooring": "e Strönj",
-        "frasch:ref": "relation/1420555",
+        "frasch:ref": "e-stronj",
         "place": "island",
-        "frasch:kind": "island",
-        "frasch:maxzoom": "11",
+        "frasch:square": "yes",
     }
 
 
 # ------------------------------------------------- what the run counted ---
 def test_the_objects_a_row_tags_are_counted_by_type(stats: Stats) -> None:
-    # Holm and the node added for Westerheide, the Nordwarft, the Hamburger
-    # Hallig and the Kreis -- not what curation alone or OSM's name:frr tags
-    assert stats.tagged == collections.Counter(n=2, w=1, r=2)
+    # Holm and the node added for Westerheide, the Nordwarft and Oland, the
+    # Hamburger Hallig and the Kreis -- not what curation alone or OSM's
+    # name:frr tags
+    assert stats.tagged == collections.Counter(n=2, w=2, r=2)
 
 
 def test_the_names_written_are_counted_per_key(stats: Stats) -> None:
     assert stats.names == collections.Counter(
         {
-            "name:frr-x-mooring": 4,
-            "name:de": 4,
+            "name:frr-x-mooring": 5,
+            "name:de": 5,
             "name:frr-x-nordgoes": 2,
             "name:frr-x-oomrang": 1,
+            "name:frr-x-hallig": 1,
         }
     )
 
 
 def test_the_tagged_objects_are_counted_per_dialect(stats: Stats) -> None:
-    # Holm and the Kreis lie in no dialect area
+    # Holm and the Kreis lie in no dialect area; Oland where its square is
     assert stats.dialects == collections.Counter(
-        {"frr-x-oomrang": 1, "frr-x-nordgoes": 1, "frr-x-hallig": 1}
+        {"frr-x-oomrang": 1, "frr-x-nordgoes": 1, "frr-x-hallig": 2}
     )
 
 
 def test_the_local_forms_rows_give_are_counted(stats: Stats) -> None:
-    # the Nordwarft, the Hamburger Hallig, Westerheide
-    assert stats.local == 3
+    # the Nordwarft, the Hamburger Hallig, Oland, Westerheide
+    assert stats.local == 4
 
 
 def test_the_local_forms_rows_take_from_osms_frisian_name_are_counted(stats: Stats) -> None:
@@ -643,7 +787,8 @@ def test_the_added_node_is_recorded_with_its_local_reference(stats: Stats) -> No
 
 def test_the_synthetic_square_is_recorded_with_its_curation_row(stats: Stats) -> None:
     assert [(square.key, square.label, square.km2) for square in stats.added_squares] == [
-        (("n", NORDSTRAND), "Nordstrand (synthetic island polygon)", 50.0)
+        (("w", OLAND), "Oland (synthetic island polygon)", 2.1),
+        (("n", EIDERSTEDT), "Eiderstedt (synthetic landscape polygon)", 340.0),
     ]
 
 
