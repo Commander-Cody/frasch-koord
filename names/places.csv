@@ -8,7 +8,9 @@ settlement,Löst,,Löst,,,,,,,,,,Lyst,,,,,node/3033265752,,auto,,lost
 settlement,Oowentuft,,Oowentoft,,,,,,,,,,Aventoft,,Awntåwt,,Aventoft,node/240051016,Q506341,auto,,oowentuft
 settlement,Hååsbärj,,Haasbärj,,,,,,,,,,Haasberg,,,,,node/8538774011,,auto,,haasbarj
 settlement,Brämsbel,,,,,,,,,,,,Bremsbüll,,,,Bremsbøl,node/8538831610,,auto,,bramsbel
+settlement,Gripenfälj,,,,,,,,,,,,Grippenfeld,,,,Grippenfelt,node/3059172701,Q135978321,auto,,gripenfalj
 settlement,Meelenhüs,,,,,,,,,,,,Mühlenhaus,,,,Møllehus,node/3059174719,,auto,,meelenhus
+settlement,Nai Meelenhüs,,,,,,,,,,,,,,,,Ny Møllehus,node/3059173802,,auto,,nai-meelenhus
 settlement,Fascherhüsinge,,Fäskerhüsinge,,,,,,,,,,Fischerhäuser,,,,,node/8536636783,,auto,,fascherhusinge
 settlement,Fiilätj,,Fiiläit,,,,,,,,,,Verlath,,,,,,,,,fiilatj
 settlement,Weestre,,Weestre,,,,,,,,,,Westre,,,,,node/240123246,Q506431,auto,,weestre
@@ -24,6 +26,8 @@ settlement,,,Foobel,,,,,,,,,,Fockebüll,,,,,local/fockebull,,ok,,foobel
 settlement,Siberhüsem,,Siberhüsem,,,,,,,,,,Sibbershusum,,,,,local/sibbershusum,,ok,,siberhusem
 settlement,Braamstäälönj,,,,,,,,,,,,Bramstedtlund,Braamsteedlund,,,Bramstedlund,node/2677829555,Q522802,auto,,braamstaalonj
 settlement,Braamstää,,,,,,,,,,,,Bramstedt,,,,,local/bramstedt,,ok,,braamstaa
+settlement,Seet,,,,,,,,,,,,Seth,,,,Sæd,node/240044502,Q643665,auto,,seet-2
+settlement,Seet-Gränse,,,,,,,,,,,,Seth-Grenze,,,,Sæd-Grænse,node/3059191108,,auto,,seet-granse
 settlement,Bööglem,,Bööglem,,,,,,,,,,Böglum,,,,,node/6058097234,,auto,,booglem
 settlement,Läigem,,,Leegem,,,,,,,,,Süderlügum,,Lym,,Sønder Løgum,node/240030510,Q559482,auto,,laigem
 settlement,Wimesbel,,,,,,,,,,,,Wimmersbüll,,,,,node/1801436990,Q104205553,auto,,wimesbel
@@ -51,7 +55,7 @@ settlement,Naihorbel,,Naihoorbel,,,,,,,,,,Neuhorsbüll,,,,,local/neuhorsbull,,ok
 settlement,,,Ülehüsem; Ülwehüsem,,,,,,,,,,Olfhusum,,,,,,,,uncertain,ulehusem
 settlement,,,Äbel,,,,,,,,,,Ebbüll,,,,,local/ebbull,,ok,,abel
 settlement,Naischösbel,,Naisjörsbel,,,,,,,,,,Neukirchen,,,,,node/240113783,Q524034,auto,,naischosbel
-settlement,Feegetas,,,,,,,,,,,,Fegetasch,,,,,local/fegetasch,,ok,,feegetas
+warft,Feegetas,,,,,,,,,,,,Fegetasch,,,,,local/fegetasch,,ok,,feegetas
 settlement,,,Damhüs,,,,,,,,,,Dammhusum,,,,,,,,,damhus
 settlement,,,Dükensweerw,,,,,,,,,,Dükenswarft,,,,,,,,,dukensweerw
 settlement,Heesbel,,Hjisbel,,,,,,,,,,Hesbüll,,,,,node/8536666273,,auto,,heesbel
@@ -67,6 +71,7 @@ settlement,Deesbel,,,,,,,,,,,,Deezbüll,,,,,node/10158150141,Q20651,auto,,deesbe
 settlement,Moosbel,,,,,,,,,,,,Maasbüll,,,,,node/5702535410,,,,moosbel
 settlement,Moosjarn,,,,,,,,,,,,Moorhäuser,,,,,node/10158150187,,auto,,moosjarn
 settlement,Risem,,,,,,,,,,,,Risum,,,,,node/3359116899,,auto,,risem
+settlement,Boogpårk Söödersönj,,,,,,,,,,,,Wohnpark Südersand,,,,,node/10073907386,,auto,,boogpark-soodersonj
 settlement,Lunham,,Luinham,,,,,,,,,,Lindholm,,,,,node/3359115318,,auto,,lunham
 settlement,Nordlunham,,Noordluinham,,,,,,,,,,Nordlindholm,,,,,,,,,nordlunham
 settlement,Süslunham,,Sörluinham,,,,,,,,,,Südlindholm,,,,,,,,,suslunham
@@ -89,6 +94,7 @@ settlement,Waiguurd,Woiguurd,,,Woiguurd,,,,,,,,Waygaard,,,,Vadgård,local/waygaa
 settlement,,,,Froodeguurd,,,,,,,,,Froddegaard,,,,,local/froddegaard,,ok,,froodeguurd
 settlement,,,,Troolebel,,,,,,,,,Trollebüll,,,,,node/4153335583,,auto,,troolebel
 settlement,Kuurlem,,Kuurlem,Kuurlem,,,,,,,,,Karlum,,,,Karlum,node/240030820,Q522890,auto,,kuurlem
+settlement,Kuurlemfälj,,Kuurlemfäil,Kuurlemfäil,,,,,,,,,Karlumfeld,,,,,node/8513521559,,ok,,kuurlemfalj
 settlement,e Lungbärj,,,,,,,,,,,,Langenberg,,,,,,,,,e-lungbarj
 settlement,Taningstää,,Täningstää,,,,,,,,,,Tinningstedt,,,,Tinningsted,node/240128333,Q506034,auto,,taningstaa
 settlement,Leek,,Leek,Leek,,,,,Lääk,,Leek,,Leck,,,,Læk,node/68608557,Q28001,auto,,leek
@@ -110,6 +116,8 @@ settlement,Peerebel,,,,,,,,,,,,Perebüll,,,,,,,,,peerebel
 settlement,Hulteeker,,,,,,,,,,,,Holzacker,,,,Holtager,node/4361759266,,auto,,hulteeker
 settlement,Späilbak,,,Späilbäk,,,,,,,,,Spölbek,,,,Spølbæk,way/96742417; way/96742426; way/96746876; way/96746884; way/266285663; way/266285664; way/266285665; way/266285666; way/266285667; way/266285668; way/266285669; way/266285670; way/683236024; way/683236025,,ok,,spailbak
 settlement,Huugelün,,,,,,,,,,,,Hogelund,,,,Høgelund,node/4121238437; node/8511958581,,ok,,huugelun
+settlement,Guurd,,,,,,,,,,,,Gaarde,,,Kårhiird,,node/8512003528,,auto,,guurd
+settlement,Schrublün,,,,,,,,,,,,Schruplund,,,,,node/8511993377,,auto,,schrublun
 settlement,Språkebel,,,,,,,,,,,,Sprakebüll,,Sprachbøl,,,node/240111106,Q559464,auto,,sprakebel
 settlement,Frienwale,,,,,,,,,,,,Freienwill,,,Sprakebüll,,node/1602173782,,,name:frr from OSM,frienwale
 settlement,Schårdebel,,,Schårdebel,,,,,,,,,Schardebüll,,,,,local/schardebull,,ok,,schardebel
@@ -118,13 +126,15 @@ settlement,Orerslääch,,,,,,,,,,,,Adersleben,,,,,,,,,orerslaach
 settlement,Däng-Sönj,,Ding-Suin,Ding-de-Sönj,,,,,,,,,Enge-Sande,Eng-De Sand,Æng-'Sanj,,,node/240026107,Q522968,auto,,dang-sonj
 settlement,Däng,,,Ding,,,,,,,,,Enge,,,,,node/5428982668,,auto,,dang
 settlement,e Sönj,,,de Sönj,,,,,,,,,Sande,,,,,node/5428982669,,auto,,e-sonj
-settlement,Däng Hii,,,de Hii; Ding Hii,,,,,,,,,Engerheide,,,,Enge Hede,,,,,dang-hii
+settlement,Däng Hii,,,de Hii; Ding Hii,,,,,,,,,Engerheide,,,,Enge Hede,node/7684693227,,,,dang-hii
 settlement,e Eekre,,,de Eekere,,,,,,,,,Ackern,,,Enge-Sande,,,,,,e-eekre
 settlement,,,,Kling,,,,,,,,,Kling,,,,,,,,,kling
 settlement,Däägel,,,,,,,,,,,,Degel,,,,,,,,,daagel
 settlement,Knorborj,,,Knurborig,,,,,,,,,Knorburg,,,,Knorborg,node/6534693694,,auto,,knorborj
 settlement,Stååsem,,,Ståårem,,,,,,,,,Stadum,,,,,node/240094328,Q523867,auto,,staasem
 settlement,Häärup,,,,,,,,,,,,Hörup,,,,,node/240103453,Q386507,auto,,haarup
+settlement,Häärupfälj,,,,,,,,,,,,Hörupfeld,,,,,node/343685801,,auto,,haarupfalj
+settlement,Nai Häärup,,,,,,,,,,,,Neu Hörup,,,,,node/1301225098,,auto,,nai-haarup
 settlement,Åktoorp,,,Ååchtoorp,,,,,,,,,Achtrup,,,,,node/240030054,Q341040,auto,,aktoorp
 settlement,Latjenhorn,,,Lätjenhoarn,,,,,,,,,Lütjenhorn,,,,,node/8511796321,,auto,,latjenhorn
 settlement,Bälsbel,,,,,,,,,,,,Büllsbüll,,,,,node/8541333528,,auto,,balsbel
@@ -133,14 +143,15 @@ settlement,Låålönj,,Laarlün,,,,,,,,,,Ladelund,,,,,node/240087827,Q522821,aut
 settlement,Brüüdjtoorp,,Braarep,Braarep,,,,,,,,,Braderup,,Brarp,Karrharde,Brarup,node/240098604,Q523770,auto,,bruudjtoorp
 settlement,Hulm,,,,,,,,,,,,Holm,,,,,relation/1420394,Q559369,,,hulm
 settlement,Hulm Gutskuuch,,,,,,,,,,,,Holm Gotteskoog,,,,,node/10696511556,,auto,,hulm-gutskuuch
-settlement,Meelbüü,,,Melbü,,,,,,,,,Medelby,,,,,node/240072510,Q629653,auto,uncertain,meelbuu
+settlement,Meelby,,,Melbü,,,,,,,,,Medelby,,,,,node/240072510,Q629653,auto,uncertain,meelbuu
 settlement,Hol,,,,,,,,,,,,Holt,,Holjt,Medelby,,node/240048173,Q545710,auto,uncertain,hol
 settlement,Brik,,,,,,,,,,,,Riesbriek,,,,,node/2359344446,Q97479219,auto,,brik
-settlement,Schååflem,,,,,,,,,,,,Schafflund,,,,,node/240090603,Q551483,auto,,schaaflem
+settlement,Schååflem,,,,,,,,,,,,Schafflund,,,,Skovlund,node/240090603,Q551483,auto,,schaaflem
 settlement,Norderhåkst,,,,,,,,,,,,Nordhackstedt,,,,,node/240105063,Q528837,auto,,norderhakst
 settlement,Grute Wiie,,,,,,,,,,,,Großenwiehe,,,,,node/240082703,Q544597,auto,,grute-wiie
 settlement,Latje Wiie,,,,,,,,,,,,Kleinwiehe,,,,,node/343685147,,auto,,latje-wiie
 settlement,Schööbel,,,,,,Schööbel,,,,Skööbel,,Schobüll,,Skofel,,,node/2728693162,Q97483974,auto,,schoobel-2
+settlement,Schööbelhüs,,,,,,Schööbelhüs,,,,Skööbelhus,,Schobüllhuus,,Skofelhuus,,,node/8528962461,,auto,,schoobelhus
 settlement,Bousbel,,,,,,,,,,,,Bosbüll,,,,,node/240040753,Q559456,auto,,bousbel
 settlement,Hoonebel,,,Hoonebel,,,,,,,,,Hunnebüll; Hundebüll,,,,,,,,uncertain,hoonebel
 settlement,e Houlme,,,,e Hoolme,,,,,,,,Ockholm,,,,,node/240080339,Q522875,auto,,e-houlme
@@ -161,7 +172,7 @@ settlement,Höögel,,,,Höögel,,,,,,,,Högel,,,,,node/240080809,Q523021,auto,,h
 settlement,Adebel,,,,Aadebel,,,,,,,,Addebüll,,,,,node/3000270826,,auto,,adebel
 settlement,Bätjebel,,,,Bötjebel,,,,,,,,Büttjebüll,,,,,node/2974350402,Q104771087,auto,,batjebel
 settlement,Iibel,,,,Iibel,,,,,,,,Ebüll,,,,,node/2974350403,,auto,,iibel
-settlement,Steerdebel,,,,Steerdebel,,Stiardebel,,,,,,Sterdebüll,,,,,node/2974350732; node/9893788232,,,uncertain,steerdebel
+settlement,Stjardebel,,,Stiardebel,Steerdebel,,Steerdebel,,,,,,Sterdebüll,,,,,node/2974350732; node/9893788232,,,uncertain,steerdebel
 settlement,Boorlem,,,,Boorlem,,,,,,,,Bordelum,,,,,node/240109895,Q31918233,auto,,boorlem
 settlement,Ååster Boorlem,,,,Aaster Boorlem,,,,,,,,Ost-Bordelum,,,,,node/2974350404,Q114685957,auto,,aaster-boorlem
 settlement,Ååster Boorlemfälj,,,,Aaster Boorlemfäil,,,,,,,,Ost-Bordelumfeld,,,Bordelum,,node/3000308223,,,,aaster-boorlemfeel
@@ -191,6 +202,7 @@ settlement,,,,,,Hansbäistååkbro,,,,,,,,,,,,local/hansbaistaakbro,,ok,uncertai
 settlement,Kolkerhii,,,,,Korgehii,,,,,,,Kolkerheide,,Kåldtjer'hie,,,node/240069004,Q506018,auto,,kolkerhii
 settlement,,,,,,Koksbel,,,,,,,Koxbüll,,,,,node/8309779958,,auto,,koksbel
 settlement,,,,,,Jöömst,,,,,,,Löwenstedt,,Lyngste,,,node/240046716,Q48258,auto,,joomst
+settlement,Ååstenou,,,,,Ååstenuu,,,,,,,Ostenau,,,,,node/3215589433,,auto,,aastenou-2
 settlement,Brook,,,,,,,,,,,,Brook,,,,,node/2104743182,,auto,,brook
 settlement,Hååselönj,,,,Haaselün,,,,,,,,Haselund,,Haslinj,,,node/180296677,Q48260,auto,uncertain,haaselonj
 settlement,,,,,Kolün,,,,,,,,Kollund,,,,,node/10147707528,Q127416918,ok,,kolun
@@ -214,7 +226,7 @@ settlement,Puubel,,,,,,,,,,,,Pobüll,,,,Pobøl; Påbøl,node/2092462863,,auto,,p
 settlement,Ornshood,,,,,Oornshaud,,,,,,,Ahrenshöft,,,,,node/168883042,Q402840,auto,uncertain,ornshood
 settlement,Ålwåt,,,,,,Alwat,,,,,,Arlewatt,,,,,node/180296627,Q20745,auto,uncertain,alwat
 settlement,Åldrop,,,,,,,,,,,,Olderup,,,,,node/240045915,Q20782,auto,,aldrop
-settlement,Amst,,,,,Ämst,,,,,,,Immenstedt,,Immingstej,,,node/240060714,,ok,,amst
+settlement,Ämst,,,,,Ämst,,,,,,,Immenstedt,,Immingstej,,,node/240060714,,ok,,amst
 settlement,Årnfjåål,,,,,,Arnfjaal,,,,,,Ahrenviöl,,,,,node/1831843206,Q402850,auto,,arnfjaal
 settlement,Årnfjåålfälj,,,,,,Arnfjaalfeel,,,,,,Ahrenviölfeld,,,,,node/240072860,Q48248,auto,,arnfjaal-2
 settlement,Uurst,,,,,,,,,,,,Ohrstedt,,,,,local/ohrstedt,,ok,,uurst
@@ -244,6 +256,12 @@ settlement,Hukensbelfälj,,,,,,Hukensbelfeel,,,,,,Hockensbüllfeld,,,,,node/3942
 settlement,e Lün,,,,,,de Lün,,,,,,Lund,,,,,node/253258966,,ok,,e-lun
 settlement,Kilsborj,,,,,,,,,,,,Kielsburg,,,,,node/4101288713,Q29184636,auto,,kilsborj
 settlement,Hüsem,,,Hüsem,,Höösem,,,,,,,Husum,,,,,node/240085119,Q21159,auto,,husem
+settlement,Üüljstää,,,,,,,,,,,,Altstadt,,,Husum,,node/4101288717,,ok,,uuljstaa
+settlement,Nordhüsem,,,,,,,,,,,,Nordhusum,,,,,node/4101288715,,auto,,nordhusem
+settlement,Schauendool,,,,,,,,,,,,Schauendahl,,,,,node/4104794415,,auto,,schauendool
+settlement,Gewerbegebiet Ååst,,,,,,,,,,,,Gewerbegebiet Ost,,,,,node/4101288714,,auto,,gewerbegebiet-aast
+settlement,Mameloodefirtel,,,,,,,,,,,,Marmeladenviertel,,,,,node/9447462298,,auto,,mameloodefirtel
+settlement,Nordersliik,,,,,,,,,,,,Norderschlag,,,,,node/177394858,,auto,,nordersliik
 settlement,e Moose,,,,,,,,,,,,Maas,,,Husum,,,,,,e-moose
 settlement,Rööms,,,,,,,,,,,,Rödemis,,,,,node/1561395491,,auto,,rooms
 settlement,Augsborj,,,,,,,,,,,,Augsburg,,,Husum,,node/666751908,,auto,,augsborj
@@ -255,16 +273,19 @@ settlement,,,e Wäsk,,,,,,,,,,Wisch,,,,Visk,node/7807525478; node/240113074,Q572
 settlement,Heme,,,,,,,,,,,,Hemme,,,,,,,,,heme
 settlement,Mälst,,,,,,,,,,,,Mildstedt,,,,,node/240096695,Q21011,auto,,malst
 settlement,Ååstenfälj,,,,,,Aastenfeel,,,,,,Ostenfeld (Husum),,,,,node/240104163,,ok,,aastenfalj
+settlement,Witbäk,,,,,,,,,,,,Wittbek,,,,,node/240080508,Q572994,auto,,witbak
+settlement,Ååsterwitbäkfälj,,,,,,,,,,,,Osterwittbekfeld,,,,,node/6276158973,,auto,,aasterwitbakfalj
 settlement,Winert,,,,,,,,,,,,Winnert,,,,,node/240099714,Q573057,auto,,winert
 settlement,Outrem,,,,,,,,,,,,Autrum,,,,,,,,,outrem
 settlement,Swåbstää,,,,,,,,,,,,Schwabstedt,,,,Svavsted,node/240026736,Q28050,auto,,swabstaa
+settlement,,,,,,,,,,,,,Fresendelf,Fresendelf,,,,,,,,fresendelf
 settlement,Ramstää,,,,,,,,,,,,Ramstedt,,,,,node/240092922,Q32246026,auto,,ramstaa
 settlement,Huude,,,,,,,,,,,,Hude,,,,,node/240109089,Q21016,auto,,huude
 settlement,Seet,,,,,,,,,,,,Seeth,,,,Sæd,node/240065161,Q28020,auto,,seet
 settlement,Draage,,,,,,,,,,,,Drage,,,,,node/240083242,Q20742,auto,,draage
 settlement,Fräärstää,,,,,,,,,,,,Friedrichstadt,,,,,node/240062039,Q21065,auto,,fraarstaa
 settlement,Koolnbütel,,,,,,,,,,,,Koldenbüttel,,,,,node/240041255,Q27598,auto,,koolnbutel
-settlement,Taning,,Täning,,,,,,,,,,Tönning,,,,Tønning,node/240125969,Q21018,auto,,taning
+settlement,Taning,,Täning,,,,,,,,,,Tönning,Tönnen,,,Tønning,node/240125969,Q21018,auto,,taning
 settlement,Kotsenbel,,,,,,,,,,,,Kotzenbüll,,,,,node/240118368,Q20791,auto,,kotsenbel
 settlement,Hülk,,,,,,,,,,,,Hülk,,,,,way/39035413,,ok,,hulk
 settlement,Haablek,,,,,,,,,,,,Harblek,,,,,node/3534285563,,auto,,haablek
@@ -276,8 +297,10 @@ settlement,Katriinenheerd,,,,,,,,,,,,Katharinenheerd,,,,,node/240041721,Q20781,a
 settlement,Huuchbuum,,,,,,,,,,,,Hochbohm,,,,,,,,,huuchbuum
 settlement,Folerwik,,,,,,,,,,,,Vollerwiek,,,,Follervig,node/240034034,Q20779,auto,,folerwik
 settlement,Wäljt,,,,,,Wäilt,,,,,,Welt,,,,,node/240034174,Q21051,auto,uncertain,waljt
-settlement,Hülkenbel,,,,,,,,,,,,Hülkenbüll,,,,,,,,,hulkenbel
+settlement,Hülkenbel,,,,,,,,,,,,Hülkenbüll,,,,,way/122457192; way/147470383; way/255246005,,ok,,hulkenbel
 settlement,Gaarding,,,,,,,,,,,,Garding,Garn,,,,node/240099545,Q27324,auto,,gaarding
+settlement,Olwersem,,,,,,,,,,,,Olversum,,,,,node/5711535195,,auto,,olwersem
+settlement,Grut-Olwersem,,,,,,,,,,,,Groß-Olversum,,,,,node/7815040683,,auto,,grut-olwersem
 settlement,Krim,,,,,,,,,,,,Krimm,,,,,node/1583651506,,auto,,krim
 settlement,Hääwereeker,,,,,,,,,,,,Haferacker,,,,,,,,,haawereeker
 settlement,Bröösem,,,,,,,,,,,,Brösum,,,St.-Peter,,node/835861201,,auto,,broosem
@@ -288,16 +311,29 @@ settlement,Siimensbärj,,,,,,Siimensbeeri,,,,,,Simonsberg,,,,,node/240104627,Q20
 settlement,Finkhüs,,,,,,,,,,,,Finkhaus,,,Simonsberg,,node/6268347879,,,,finkhus
 settlement,Finkhüshåli,,,,,,,,,,,,Finkhaushallig,,,Simonsberg,,node/6268347880,,,,finkhushali
 settlement,Tååting,,,,,,,,,,,,Tating,,,,,node/107261409,Q27313,auto,,taating
+settlement,Norderdik,,,,,,,,,,,,Norderdeich,,,Eiderstedt,,node/9936008226,Q127416934,ok,,norderdik
+settlement,Ååsterjarn,,,,,,,,,,,,Ostereck,,,Eiderstedt,,node/5831478201,,auto,,aasterjarn
+settlement,Sankt-Peter-Urdem,,,,,,,,,,,,Sankt-Peter-Ording,,,,,node/277749456,Q20749,auto,,sankt-peter-urdem
+settlement,Urdem,,,,,,,,,,,,Ording,,,,,node/6156983006,,auto,,urdem
+settlement,Sankt-Peter-Båd,,,,,,,,,,,,Sankt-Peter-Bad,,,,,node/276775030,,auto,,sankt-peter-bad
+settlement,Sankt-Peter-Bööl,,,,,,,,,,,,Sankt-Peter-Böhl,,,,,node/277749457,,auto,,sankt-peter-bool
 settlement,Eesing,,,,,,,,,,,,Esing,,,Tating,,node/277749514,,,,eesing
 settlement,Teedenbel,,,,,,,,,,,,Tetenbüll,,,,,node/240114426,Q20792,auto,,teedenbel
 settlement,Ülwesbel,,,,,,,,,,,,Uelvesbüll,,,,,node/240109849,Q572986,auto,,ulwesbel
 settlement,Widswort,,,,,,,,,,,,Witzwort,,,,,node/240071187,Q573006,auto,,widswort
+settlement,Åldenswort,,,,,,,,,,,,Oldenswort,,,,,node/240071855,Q20784,auto,,aldenswort
 settlement,Odebel,,,,,,,,,,,,Odenbüll,,,,,node/3049119229,,auto,,odebel
 settlement,Kiifhuk,,,,,,,,,,,,Kiefshuck,,,,,,,,,kiifhuk
 settlement,Norderhuuwen,,,,,,Noorderhuuwen,,,,,,Norderhafen,,,,,node/311120720,,auto,,norderhuuwen
 settlement,Sööderhuuwen,,,,,,Süürhuuwen,,,,,,Süderhafen,,,,,node/85925758,,auto,,sooderhuuwen
 settlement,Ängloun,,,,,,,,,,,,England,,,Nordstrand,,node/286036090,,auto,,angloun
 settlement,Mursem,,,,,,,,,,,,Morsum,,,Nordstrand,,,,,,mursem
+settlement,Mursemkuuch,,,,,,,,,,,,Morsumkoog,,,Nordstrand,,node/9893811895; node/85925774; node/14201511152,,ok,,mursemkuuch
+settlement,Sööden,,,,,,,,,,,,Süden,,,Nordstrand,,node/85925769,,auto,,sooden
+settlement,Weesten,,,,,,,,,,,,Westen,,,Nordstrand,,node/7875415151,,auto,,weesten
+settlement,Naidik,,,,,,,,,,,,Neudeich,,,Nordstrand,,node/7874806392,,auto,,naidik
+settlement,Tamensil,,,,,,,,,,,,Tammensiel,,,,,node/355956234,Q2391701,auto,,tamensil
+settlement,Tili,,,,,,,,,,,,Tilli,,,,,node/1259327161,,auto,,tili
 settlement,Weesterlönj,,,,,,,,,Weesterlön,,,Westerland,,,,,node/27385079,Q27998,auto,,weesterlonj
 settlement,,,,,,,,,,Aidem,,,Eidum,,,,,,,,,aidem
 settlement,,,,,,,,,Last,List,,,List,,,,,node/240043216,Q21160,auto,,list
@@ -365,12 +401,28 @@ settlement,Kolün,,,,,,,,,,,,Kollund,,,,Kollund,node/10083172307,Q1964129,,"the 
 settlement,Flansborj,,Flänsbori,Flänsborig,,Flänsbåårg,,Flensborag,,Flensborig,Flensborch,,Flensburg,,,,Flensborg,node/240033839,Q3798,auto,unsorted other-dialect name: Flänsborj,flansborj
 settlement,Luksborj,,Loksborj,,,,,,,,,,Glücksburg,,,,,node/240093758,Q494617,auto,uncertain,luksborj
 settlement,Hanewit,,,,,,,,,,,,Handewitt,,,,,node/240091054,Q551497,auto,,hanewit
+settlement,Sööderbraarep,,,,,,,,,,,,Süderbrarup,,,,,node/240107131,Q559153,auto,,sooderbraarep
+settlement,Norderbraarep,,,,,,,,,,,,Norderbrarup,,,,,node/240081966,Q526720,auto,,norderbraarep
 settlement,Slaswik,,,,Sleeswik,,,Sleeswich,,,,,Schleswig,,,,,node/43348147,Q501661,auto,,slaswik
 settlement,Ransborj,,,,,,,,,Rendsborig,,,Rendsburg,Rensborg,,,,node/43366937,Q490457,auto,,ransborj
+settlement,Gettoorp,,,,,,,,,,,,Gettorf,,,,,node/190970398,Q630251,auto,,gettoorp
 settlement,Kil,,,,,,,,,Kiil,,,Kiel,,,,,node/24487450,Q1707,auto,,kil
-settlement,Glükstää,,,,,,,,,,,,Glückstadt,,,,,node/96128316,Q377277,auto,,glukstaa
-settlement,Pinbärj,,,,,,,,,,,,Pinneberg,,,,,node/31167256,Q7074,,,pinebarj
-settlement,Hamborj,,Hambori,,,,,Hamborig,Hamborag,Hamborig,Hamborch,Hambörri,Hamburg,,,,,,,,unsorted other-dialect name: Hamburj,hamborj
+settlement,Büsem,,,,,,,,,,,,Büsum,Büsen,,,,node/28838514,Q20768,auto,,busem
+settlement,Meltoorp,,,,,,,,,,,,Meldorf,Meldörp,,,,node/240062147,Q498545,auto,,meltoorp
+settlement,Sankt Michelsdun,,,,,,,,,,,,Sankt Michaelisdonn,Sankt Micheelsdunn,,,,node/240034381,Q528499,auto,,sankt-michelsdun
+settlement,Wälster,,,,,,,,,,,,Wilster,De Welster,,,,node/240029827,Q506560,auto,,walster
+settlement,Brunsbütel,,,,,,,,,,,,Brunsbüttel,Bruunsbüddel,,,,node/2989680190,Q516635,auto,,brunsbutel
+settlement,Lukstää,,,,,,,,,,,,Glückstadt,,,,Lykstad,node/96128316,Q377277,auto,,glukstaa
+settlement,Olenborj,,,,,,,,,,,,Oldenburg,Ollenborg,,,,relation/382421,Q11797702,ok,,olenborj
+settlement,Naimünster,,,,,,,,,,,,Neumünster,Niemünster,,,,node/25076969,Q3879,auto,,naimunster
+settlement,Kälinghüsem,,,,,,,,,,,,Kellinghusen,,,,,node/329121027,Q515943,auto,,kalinghusem
+settlement,Båd Braamstää,,,,,,,,,,,,Bad Bramstedt,,,,,node/240052046,Q523987,auto,,bad-braamstaa
+settlement,Scheenfälj,,,,,,,,,,,,Schenefeld,Scheenfeld,,Steinburg,,node/240080007,,ok,,scheenfalj
+settlement,Pinbärj,,,,,,,,,,,,Pinneberg,Pinnbarg,,,,node/31167256,Q7074,,,pinebarj
+settlement,Scheenfälj,,,,,,,,,,,,Schenefeld,Scheenfeld,,Pinneberg,,node/240094457,Q503893,ok,,scheenfalj-2
+settlement,Norderstää,,,,,,,,,,,,Norderstedt,Noordersteed,,,,node/27453538,Q3928,auto,,norderstaa
+settlement,Wäädel,,,,,,,,,,,,Wedel,Wedel,,,,node/69358157,Q4356,auto,,waadel
+settlement,Hamborj,,Hambori,,,,,Hamborig,Hamborag,Hamborig,Hamborch,Hambörri,Hamburg,Hamborg,,,,,,,unsorted other-dialect name: Hamburj,hamborj
 settlement,,,,,,,,,,,,Lon'n,London,,,,,,,,,lon-n
 settlement,,,,,,,,,Cuxhuuwen,,,Trös; Tres,Cuxhaven,,,,,,,,unsorted other-dialect name: Tres,tros
 settlement,,,,,,,,,,,,Breämen,Bremen,,,,,,,,,breamen
@@ -382,7 +434,7 @@ koog,Deesblinge Kornkuuch,,,,,,,,,,,,Deezbüller Kornkoog; Westermooringer Kornk
 koog,Bräistinge Kuuch,,,,,Bräislinge Kuuch,,,,,,,Bredstedter Koog,,,,,,,,,braistinge-kuuch
 koog,Gutskuuch,,Gotskuuch,,,,,,,,,,Gotteskoog,,,,Gudskog,,,,,gutskuuch
 koog,Nordergutskuuch,,Noordergotskuuch,,,,,,,,,,Nordergotteskoog,,,,,node/10158150212,,auto,,nordergutskuuch
-koog,Söödergutskuuch,,Sörgotskuuch,,,,,,,,,,Südergotteskoog,,,,,,,,,soodergutskuuch
+koog,Söödergutskuuch,,Sörgotskuuch,,,,,,,,,,Südergotteskoog,,,,,node/10158150188; node/10158150148,,ok,,soodergutskuuch
 koog,Böökinghiirder Gutskuuch,,,,,,,,,,,,Bökingharder Gotteskoog,,,,,,,,,bookinghiirder-gutskuuch
 koog,Kårhiirder Gutskuuch,,,,,,,,,,,,Karrharder Gotteskoog,,,,,,,,,karhiirder-gutskuuch
 koog,Üülje Krisen-Albrechen-Kuuch,,,,,,,,,,,,Alter Christian-Albrechts-Koog,,,,Gammel Christian Albrechts Kog,,,,,uulje-krisen-albrechen-kuuch
@@ -501,7 +553,7 @@ hallig,Hååbel,,,,,,,,,,Haabel,,Habel,,,,,way/177387348,Q20670,auto,,haabel
 hallig,Beenshåli,,,,,,,,,,,,Beenshallig; Behnshallig,,,,,,,,uncertain,beenshali
 hallig,Haienshåli,,,,,,,,,,,,Hainshallig,,,,,,,,,haienshali
 hallig,Hamborjer Håli,,,,,,,,,,,,Hamburger Hallig,,,,,relation/5615880,,ok,confirmed onto the admin_level=10 relation; curation.csv turns it into the island polygon (the isolated_dwelling node only appears at z14),hamborjer-hali
-hallig,Latj Moos,,,,,,,,,,Lidj Muur; Lidj Möör,,Lütt Moor; Nordstrandischmoor,,,,,relation/3788045,Q20686,auto,,latj-moos
+hallig,Latj Moos,,,,,,,,,,Lidj Muur; Lidj Möör,,Nordstrandischmoor,Lütt Moor,,,,relation/3788045,Q20686,auto,,latj-moos
 hallig,Norderuug,,,,,,,,,,Noorderuuch,,Norderoog,,,,Nørreog,way/1472528449,Q20700,auto,,norderuug
 hallig,Sööderuug,,,,,,,,,,Saaruuch,,Süderoog,,,,,way/1472528447,Q20707,auto,,sooderuug
 hallig,Söödfål,,,,,,Süürfåål,,,,Sufaol,,Südfall,,,,,way/1472528446,Q20699,auto,,soodfal
@@ -511,7 +563,7 @@ sand,Jardsönj Flåk,,,,,,,,,Joortsön's Flak,,,Jordsands Flak,,,,Jordsand Flak,
 sand,Ruchelai Sönj,,,,,,,,,,Rochelai Söön,,Rocheley Sand,,,,,relation/4107990,,auto,uncertain,ruchelai-sonj
 sand,Runghult Sönj,,,,,,,,,,Rongholt Söön,,Rungholtsand,,,,,way/307147277,,ok,,runghult-sonj
 sand,Knipsönj,,,,,,,,Knip,,,,Kniepsand,,,,Knipsand,way/144075839,Q20624,auto,,knipsonj
-sand,Jåpsönj,,,,,,,,,,Japsöön,,Japsand,,,,,relation/5713403,Q20633,,,japsoon
+sand,Jåpsönj,,,,,,,,Japsun,,Japsöön,,Japsand,,,,,relation/5713403,Q20633,,,japsoon
 sand,Norderuug-Sönj,,,,,,,,,,Noorderuuch-Söön,,Norderoogsand,,,,Nørreogsand,relation/5713604,Q20631,auto,,norderuug-sonj
 sand,Sööderuug-Sönj,,,,,,,,,,Saruuch-Söön,,Süderoogsand,,,,,relation/5713606,Q20643,,,saruug-soon
 sand,Jungnååmen-Sönj,,,,,,,,Jongnaamen,,,,Jungnamensand,,,,,relation/12353150,Q20630,,,jongnaamen
@@ -612,6 +664,7 @@ warft,Sanenswärw,,,,Sanensweerw,,,,,,,,Sönnenswarft,,,Ockholm,,node/1333738473
 warft,Tåådenswärw,,,,Taadensweerw,,,,,,,,Tadenswarft,,,Ockholm,,node/1333738477,,auto,,taadenswarw
 warft,Tiirswärw,,,,Tiirsweerw,,,,,,,,Ditrichswarf,,,Ockholm,,node/1331229652,,ok,,tiirswarw
 warft,,,,,Munksbrüg,,,,,,,,Munksbrück,,,Ockholm,,node/1331227468,,auto,,munksbrug
+warft,Üülönjswärw,,,,,,,,,,Ualöönsweerw,,Olandwarft,,,,,node/7523598300,,auto,,uulonjswarw
 warft,Knüdswärw,,,,,,,,,,Knudsweerw,,Knudswarft,,,Gröde,,node/2197628968,,auto,,knudswarw
 warft,Schöljwärw,,,,,,,,,,Sköölweerw,,Schulwarft,,,Gröde,,node/2197628967,,auto,,scholjwarw
 warft,Nai-Paderswärw,,,,,,,,,,Nai-Padersweerw,,Neu-Peterswarft,,,Gröde,,node/2197605878,,,,naiweerew
@@ -649,7 +702,7 @@ warft,Ååsterheewer,,,,,,Aasterheewer,,,,,,Osterhever,,,,,node/240044084,,auto,
 warft,Sooneeker,,,Suneeker,,,,,,,Sööneeker,,Sandacker,,,Leck,,node/1602173781,,auto,,sooneeker
 warft,Rüüdj Klif,,,,,,,,,Ruar Klef,,,Rotes Kliff,,,,,way/120547840,Q314716,ok,,ruudj-klif
 warft,,,,,,Schiirl,,,,,,,Schirl,,,,,,,,,schiirl
-warft,,,,,,Hååkstfeel,,,,,,,Hackstedtfeld,,,nördlich von Koxbüll,,,,,,haakstfeel
+warft,Håkstfälj,,,,,Hååkstfeel,,,,,,,Hackstedtfeld,,,nördlich von Koxbüll,,,,,,haakstfeel
 warft,e Smeele,,e Smjile,,,,,,,,,,Schmale,,,,,way/145819821; way/836479122; relation/18140519,Q130468878,ok,,e-smeele
 warft,Småålfälj,,,,,,,,,,,,Schmalfeld,,,,,local/schmalfeld,,ok,,smaalfalj
 warft,Sniidik,,Snäidik,,,,,,,,,,Schneedeich,,,,,way/109786976,,ok,,sniidik
@@ -803,7 +856,6 @@ warft,Eest,,,,,,,,,,,,Ehst,,,,,node/276775388,,auto,,eest
 warft,Eestensil,,,,,,,,,,,,Ehstensiel,,,,,node/840642104,,auto,,eestensil
 warft,Älhoodfälj,,,,,,,,,,,,Ellhöftfeld,,,,,,,,,alhoodfalj
 warft,,,,,,,Ängelsborj,,,,,,Engelsburg,,,,,node/6268347876,,auto,,angelsborj
-warft,Tamensil,,,,,,,,,,,,Tammensiel,,,,,node/355956234,Q2391701,auto,,tamensil
 warft,,,Tägelmoark,,,,,,,,,,Teglmark,,,,,local/teglmark,,ok,,tagelmoark
 warft,Tätwung,,,,,,,,,,,,Tettwang,,,,,node/8511500476,,auto,,tatwung
 warft,Toolentoorp,,,,,,,,,,,,Tholendorf,,,,,node/1841181149,,auto,,toolentoorp
@@ -900,7 +952,7 @@ country,Eestlönj,,,,,,,,,,,,Estland,,,,,,Q191,auto,,eestlonj
 country,Lätlönj,,,,,,,,,,,,Lettland,,,,,,Q211,auto,,latlonj
 landscape,Kris Nordfraschlönj,,Krais Noordfreeskluin,Kris Noordfräisklönj,Noordfräischloun Krais,Noordfreeschloun Krais,Noordfreeschlöön Krais,Kreis Nuurdfresklun,Kreis Nuurdfresklun,Krais Nuurđfriislön,Nöördfreesklöön Krais,Noortfriislun Krais,Kreis Nordfriesland,,,,,relation/27019,Q2937,auto,,kris-nordfraschlonj
 landscape,,,,Sone,,,,,,,,,Sundewitt,,,,,relation/14683490,Q552668,auto,,sone
-road,,,,,,Schiirlbosch,,,,,,,Eichkratt Schirlbusch,,,,,,,,,schiirlbosch
+road,,,,,,Schiirlbosch,,,,,,,Eichkratt Schirlbusch,,,,,way/118020694,Q9337819,ok,,schiirlbosch
 helgoland,Bru,,,,,,,,,,,,Helgoländer Felswatt,,,,,,,,,bru
 helgoland,,,,,,,,,,,,Nathuurnstak,Lange Anna,,,,,way/223031936,Q896804,auto,,nathuurnstak
 helgoland,,,,,,,,,,,,Nathuurn,Nordhorn,,,,,node/5405937508,,auto,,nathuurn
@@ -915,6 +967,9 @@ road,Toorpstroote,,,,,,,,,,,,Dorfstraße,,,,,,,,,toorpstroote
 road,Hoodstroote,,,,,,,,,,,,Hauptstraße,,,,,,,,,hoodstroote
 road,Pätjer-Smas-Wäi,,,,,,,,,,,,Peter-Schmidts-Weg,,,,,way/18929360; way/18929365; way/24443532; way/91961664; way/108561427; way/140886573; way/179875434; way/387885476; way/441168489; way/441168492; way/1149256315; way/1237480046,,auto,,patjer-smas-wai
 road,Norderste Wäi,,,,,,,,,,,,Norderster Weg,,,,,way/55824581; way/55824591; way/61814026; way/113048314; way/113048315,,auto,,norderste-wai
+road,Klookris,,,,,,,,,,,,Klockries,,,,,way/33858601,,auto,,klookris-2
+road,Bai e B5,,,,,,,,,,,,An der B 5,,,,,way/597518230; way/597518394; way/233568542; way/597518218; way/597518229; way/597518216; way/597518228; way/47124724; way/233568541; way/29317408; way/1459130212; way/1459130209; way/729705885; way/1459130207; way/1459130206; way/1240751892; way/47124725; way/394436770; way/488206161; way/488206162; way/488206163; way/970737701; way/47124722; way/970737694; way/112014798; way/132694618; way/263645957; way/233441926; way/47124721; way/970737695; way/37050205; way/185409291; way/47249574; way/394819156; way/970347311; way/1145548492; way/970347307; way/729407333; way/970339475; way/1145548494; way/729407332,,ok,,bai-e-b5
+road,Deesblinge Stroote,,,,,,,,,,,,Deezbüller Straße,,,,,way/18929357; way/18929358; way/37216808; way/37216809; way/55824587; way/1239345399,,auto,,deesblinge-stroote
 road,Malste Wäi,,,,,,,,,,,,Mittelster Weg,,,,,way/24408744,,auto,,malste-wai
 road,Sööderste Wäi,,,,,,,,,,,,Süderster Weg,,,,,way/187795549,,auto,,sooderste-wai
 road,Sööderwäi,,,,,Sööderwai,,,,,,,Süderweg,,,,,,,,,sooderwai
@@ -929,10 +984,13 @@ road,Norddik,,,,,,,,,,,,Norddeich,,,,,,,,,norddik-2
 road,Heefdik,,,,,,,,,,,,Haffdeich,,,,,way/24422564; way/88196670; way/177290106; way/1185940769,,auto,,heefdik
 road,Doogebel Doom,,,,,,,,,,,,Dagebülldamm,,,,,way/61814027; way/61814028,,auto,,doogebel-doom
 road,Paderswäi,Paaderswäi,,,,,,,,,,,Petersweg,,,,,way/36892478; way/36892480,,auto,,paderswai
+road,Mariinkuuger Schasee,,,,,,,,,,,,Marienkooger Straße,,,Seelew ouerseet,,way/31052751; way/169015264; way/276676608; way/276676611,,auto,,mariinkuuger-schasee
+road,Mariinkuuch,,,,,,,,,,,,Marienkoog,,,,,way/24448362,,auto,,mariinkuuch
+road,Oosewulder Kuuch,,,,,,,,,,,,Osewoldter Koog,,,,,way/24422551; way/36946881; way/37109135; way/255943303; way/256680712,,auto,,oosewulder-kuuch-2
 road,,,,,,de Schesee,,,,,,,Am Forst,,,,,way/34837925; way/1162819362; way/1125745864; way/396262270; way/1162819361; way/710356144,,ok,,de-schesee
-road,Schörkwäi,,,,,Schäärkwai,,,,,,,Karkenweg,,,,,,,,,schorkwai
+road,Schörkewäi,,,,,Schäärkwai,,,,,,,Karkenweg,,,,,,,,,schorkwai
 road,,,,,,Äksendraft,,,,,,,Ochsendrift,,,,,way/27749986; way/475634945; way/475634949,,auto,,aksendraft
-road,,,,,,Uule Loonstraat,,,,,,,Alte Landstraße,,,,,,,,,uule-loonstraat
+road,,,,,,Uule Loonstraat,,,,,,,Alte Landstraße,,,,,way/18303155; way/110942242; way/1135808840; way/110942243,,ok,,uule-loonstraat
 road,,,,,,Täiswååd,,,,,,,Tayswatt,,,,,way/35321342,,auto,,taiswaad
 road,,,,,,et Ruusik,,,,,,,Rodesieck,,,,,way/200496157,,auto,,ruusik
 road,Sööderiinje,,,,,Sööderinde,,,,,,,Süderende,,,Bohmstedt,,,,,,sooderiinje-2
@@ -940,3 +998,4 @@ road,Norderiinje,,,,,Noorderinde,,,,,,,Norderende,,,Bohmstedt,,,,,,norderiinje
 road,Weesteriinje,,,,,Wäästerinde,,,,,,,Westerende,,,Bohmstedt,,,,,,weesteriinje
 road,,,,,,,Oastermäärsch,,,,,,Ostermarsch,,,,,way/27775517; way/33711014; way/112386516; way/255667474; way/255667475; way/255667476; way/435195586; way/668410441; way/668410442,,auto,,oastermaarsch
 road,Steerdebelinge Üülje Dik,,,,Steerdebelinge Uule Dik,,,,,,,,Sterdebüller Alter Deich,,,,,way/207157123,,auto,,steerdebelinge-uulje-dik
+road,Bräistinge Kuuch,,,,,Bräislinge Kuuch,,,,,,,Bredstedter Koog,,,,,way/27447670; way/365401131,,auto,,braistinge-kuuch-2
