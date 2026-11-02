@@ -172,7 +172,8 @@ settlement,Höögel,,,,Höögel,,,,,,,,Högel,,,,,node/240080809,Q523021,auto,,h
 settlement,Adebel,,,,Aadebel,,,,,,,,Addebüll,,,,,node/3000270826,,auto,,adebel
 settlement,Bätjebel,,,,Bötjebel,,,,,,,,Büttjebüll,,,,,node/2974350402,Q104771087,auto,,batjebel
 settlement,Iibel,,,,Iibel,,,,,,,,Ebüll,,,,,node/2974350403,,auto,,iibel
-settlement,Stjardebel,,,Stiardebel,Steerdebel,,Steerdebel,,,,,,Sterdebüll,,,,,node/2974350732; node/9893788232,,,uncertain,steerdebel
+settlement,Stjardebel,,,Stiardebel,Steerdebel,,Steerdebel,,,,,,Sterdebüll,,,,,node/2974350732,,,uncertain,steerdebel
+settlement,Stjardebel,,,Stiardebel,Steerdebel,,Steerdebel,,,,,,Sterdebüll,,,,,node/9893788232,,,uncertain,steerdebel-2
 settlement,Boorlem,,,,Boorlem,,,,,,,,Bordelum,,,,,node/240109895,Q31918233,auto,,boorlem
 settlement,Ååster Boorlem,,,,Aaster Boorlem,,,,,,,,Ost-Bordelum,,,,,node/2974350404,Q114685957,auto,,aaster-boorlem
 settlement,Ååster Boorlemfälj,,,,Aaster Boorlemfäil,,,,,,,,Ost-Bordelumfeld,,,Bordelum,,node/3000308223,,,,aaster-boorlemfeel
