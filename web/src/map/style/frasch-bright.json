@@ -4245,6 +4245,59 @@
       }
     },
     {
+      "id": "boundary-land-municipal",
+      "type": "line",
+      "source": "openmaptiles",
+      "source-layer": "boundary",
+      "filter": [
+        "all",
+        [
+          ">=",
+          "admin_level",
+          7
+        ],
+        [
+          "<=",
+          "admin_level",
+          8
+        ],
+        [
+          "!=",
+          "maritime",
+          1
+        ]
+      ],
+      "layout": {
+        "line-join": "round"
+      },
+      "paint": {
+        "line-color": "hsl(265, 20%, 62%)",
+        "line-dasharray": [
+          4,
+          1.5,
+          1,
+          1.5
+        ],
+        "line-width": {
+          "base": 1.4,
+          "stops": [
+            [
+              8,
+              0.6
+            ],
+            [
+              12,
+              1.2
+            ],
+            [
+              16,
+              2
+            ]
+          ]
+        }
+      }
+    },
+    {
       "id": "boundary-land-level-4",
       "type": "line",
       "source": "openmaptiles",
@@ -4260,7 +4313,7 @@
         [
           "<=",
           "admin_level",
-          8
+          6
         ],
         [
           "!=",
