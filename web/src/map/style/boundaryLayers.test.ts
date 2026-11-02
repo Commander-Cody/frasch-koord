@@ -32,16 +32,24 @@ it.each([7, 8])('draws a municipal boundary of admin_level %i by its own layer',
   expect(layersDrawingLandBoundary(adminLevel)).toEqual(['boundary-land-municipal']);
 });
 
-// 4 a Land, 6 a Kreis.
-it.each([4, 6])('leaves a boundary of admin_level %i to the regional layer', (adminLevel) => {
-  expect(layersDrawingLandBoundary(adminLevel)).toEqual(['boundary-land-level-4']);
+it('draws a Kreis boundary by its own layer', () => {
+  expect(layersDrawingLandBoundary(6)).toEqual(['boundary-land-district']);
 });
 
-it.each([8, 10, 12, 14, 16])(
-  'draws a municipal boundary thinner than a regional one at z%i',
-  (zoom) => {
-    expect(lineWidthAt('boundary-land-municipal', zoom)).toBeLessThan(
-      lineWidthAt('boundary-land-level-4', zoom),
-    );
-  },
-);
+it('leaves a Land boundary to the regional layer', () => {
+  expect(layersDrawingLandBoundary(4)).toEqual(['boundary-land-level-4']);
+});
+
+const ZOOMS = [8, 10, 12, 14, 16];
+
+it.each(ZOOMS)('draws a municipal boundary thinner than a Kreis boundary at z%i', (zoom) => {
+  expect(lineWidthAt('boundary-land-municipal', zoom)).toBeLessThan(
+    lineWidthAt('boundary-land-district', zoom),
+  );
+});
+
+it.each(ZOOMS)('draws a Kreis boundary thinner than a Land boundary at z%i', (zoom) => {
+  expect(lineWidthAt('boundary-land-district', zoom)).toBeLessThan(
+    lineWidthAt('boundary-land-level-4', zoom),
+  );
+});

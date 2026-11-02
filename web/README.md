@@ -216,10 +216,12 @@ then reads TileJSON straight out of the archive itself.
   metadata, the camera, and the source URL, sprite and glyphs, which named
   MapTiler and GitHub Pages; the file names no URL. Municipal boundaries
   (`admin_level` 7–8: Amt and Gemeinde) have a layer of their own,
-  `boundary-land-municipal`: thinner than the Kreis and Land lines of
-  `boundary-land-level-4`, so they do not compete with them, and in a muted
-  violet that no road or railway is drawn in, so a thin dashed line is not
-  mistaken for a tunnel railway or a path.
+  `boundary-land-municipal`: thinner than the Kreis lines
+  (`boundary-land-district`, 5–6), which are thinner than the Land lines of
+  `boundary-land-level-4`, so each rank stands back behind the one above.
+  The municipal lines are a muted violet that no road or railway is drawn
+  in, so a thin dashed line is not mistaken for a tunnel railway or a path;
+  the Kreis lines sit halfway between it and the Land lines' grey.
   Everything else in it is still stock OSM Bright.
 - **A layer that labels a feature by its name is marked**
   `"metadata": {"frasch:label": true}`, with `["get", "name"]` as its
