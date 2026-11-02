@@ -10,6 +10,9 @@ relation/5713403,Japsand,,,frasch:kind=sand,,,,"already place=island in OSM; not
 node/1259327161,Tilli,,,,10,,,no Frisian name; must not show before Dagebüll (z10)
 node/355956234,Tammensiel,,,,10,,,must not show before Dagebüll (z10)
 node/240074898,Friedrich-Wilhelm-Lübke-Koog,,,,11,,,"place=village with 166 inhabitants, first in the tiles at z9 like the real villages; far too prominent, so two zoom levels later"
+node/2974350732,Sterdebüll,,,population=200,,,,"no population in OSM, so OpenMapTiles ranks it by its German name's length and Ebüll, Büttjebüll and Uphusum win the label (#171); no published figure, the value is only there for ranking: above the villages around it without a population, below Bordelum (1983) and Langenhorn"
+node/240080059,Langenhorn,,,population=3341,,,,"the municipality's figure, 31 Dec 2025 (Statistikamt Nord, via de.wikipedia), on the main village node as OSM does for Bordelum; without it, Sterdebüll's ranking population would outrank it (#171)"
+node/240042366,Galmsbüll,,,,,9,,"its population gets it into the tiles from z9, and it stays next to Neugalmsbüll, which comes at z10 and takes over (#172)"
 node/954942814,Rodenäs - Kirche,,,place=hamlet,,,,"place=village in OSM but only the church end of Rodenäs; first at z9, far too prominent, so set to hamlet"
 node/85929111,Nordstrand (village node),,,name:frr-x-mooring=e Strönj;frasch:ref=e-stronj,12,,,"the municipality's place=village node: same name as the island, held back to z12 so it takes over from the synthetic island label above at the same spot (like Pellworm's village node); frasch:ref points it at the name-list row e-stronj (relation/1420555, whose square carries the island label), so the place card finds the other dialects and the QID"
 relation/5615880,Hamburger Hallig,,,place=island,12,,,"only a dwelling node and an admin_level=10 boundary in OSM; the boundary becomes the island polygon. Small Hallig, so z12 like Habel"
