@@ -15,11 +15,14 @@ function layersDrawingLandBoundary(adminLevel: number): string[] {
   return layersDrawing(BOUNDARY_LAYERS, feature, 12);
 }
 
+function boundaryLayer(id: string): LineLayerSpecification {
+  return BOUNDARY_LAYERS.find((candidate) => candidate.id === id) as LineLayerSpecification;
+}
+
 /** The width in pixels layer `id` draws its lines in at `zoom`. */
 function lineWidthAt(id: string, zoom: number): number {
-  const layer = BOUNDARY_LAYERS.find((candidate) => candidate.id === id) as LineLayerSpecification;
   const width = normalizePropertyExpression(
-    layer.paint?.['line-width'],
+    boundaryLayer(id).paint?.['line-width'],
     'line-width',
     // See testing/textField.ts: the style-spec JSON's type is looser than the parameter's.
     latest.paint_line['line-width'] as unknown as Parameters<typeof normalizePropertyExpression>[2],
@@ -51,5 +54,11 @@ it.each(ZOOMS)('draws a municipal boundary thinner than a Kreis boundary at z%i'
 it.each(ZOOMS)('draws a Kreis boundary thinner than a Land boundary at z%i', (zoom) => {
   expect(lineWidthAt('boundary-land-district', zoom)).toBeLessThan(
     lineWidthAt('boundary-land-level-4', zoom),
+  );
+});
+
+it('draws Kreis and municipal boundaries in the same colour', () => {
+  expect(boundaryLayer('boundary-land-district').paint?.['line-color']).toBe(
+    boundaryLayer('boundary-land-municipal').paint?.['line-color'],
   );
 });
