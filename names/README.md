@@ -688,6 +688,15 @@ error, a square's row included.
   — which OSM tags `place=islet` — get no label at all until `set_tags` promotes
   them to `place=island`. `set_tags` is applied **verbatim and last**, after the
   name list, so it can override `frasch:kind` or any other tag.
+  It is also the lever for which village wins a label collision: Planetiler
+  ranks the places of a label-grid cell by class, then `population` (largest
+  first), then the length of OSM's `name` (shortest first), and the style
+  sorts villages by that rank. A village without a population therefore loses
+  to a neighbour with a shorter German name, so Sterdebüll gets a
+  `population` that only serves the ranking (its note says so). Langenhorn gets
+  its real figure, so that it stays ahead of Sterdebüll (#171). The rank is
+  counted per cell but compared across cells, so check the result in the
+  built tiles.
 * **`minzoom` only becomes a tile attribute.** It is written as the tag
   `frasch:minzoom` (a string, like every OSM tag) and rides through Planetiler
   via `--extra_name_tags`. Planetiler still places the feature at whatever zoom
