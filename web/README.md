@@ -400,14 +400,14 @@ no-ops when the property is absent. Zoom expressions are allowed in filters
 in MapLibre 6.x (verified: no console errors, `getFilter()` round-trips the
 expression unchanged).
 
-**Nordstrand** is the one place that uses `frasch:maxzoom` today. OSM has
-no island polygon for it (it is a peninsula), so `names/curation.csv` makes
-the injector add a synthetic 50 km² `place=island` square centred on the
-village node: Planetiler then emits the island label at the node's position
-from z8 like the other islands' polygons. That feature has `frasch:maxzoom=11`;
-the village node itself has `frasch:minzoom=12`, so at z12 "e Strönj" turns
-from the island label into the village label at the same spot, and the two
-never show together.
+Two of the curated features end their label with `frasch:maxzoom`:
+**Ääderstää** (Eiderstedt), whose synthetic 340 km² square names the
+peninsula through z10 (`frasch:maxzoom=10`), before its villages crowd it,
+and **Galmsbüll**, which shows through z9 and then gives way to Neugalmsbüll
+(#172). **Nordstrand** no longer hands over between labels: its synthetic
+50 km² island square, centred on the village, labels "e Strönj" at every
+zoom, the village node has no `place` and so no label, and Nordstrand's
+parts show as hamlets beneath it, as on Pellworm (#174).
 
 ### Label classes and priority
 

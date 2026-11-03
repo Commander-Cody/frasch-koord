@@ -27,7 +27,7 @@ from typing import NamedTuple
 
 import osmium
 
-from frasch import kinds, placenames, placeobjects, refs
+from frasch import curationlist, kinds, placenames, placeobjects, refs
 from frasch.curationlist import LocalPoint, Square
 from frasch.dialect_areas import AreaIndex
 from frasch.dialects import Registry
@@ -88,14 +88,15 @@ def point_tags(
     its kind defaults to, a `name` (the German one -- the Frisian ones live
     in `name:<tag>` like everywhere else; without it OpenMapTiles would drop
     the node), the name tags, and last the curation row's own tags, which
-    win."""
+    win -- `place=` among them removes the default, and the node has no
+    `place` then."""
     obj = placeobjects.local_point(row, (point["lon"], point["lat"]), reg)
     place = kinds.rule(row["kind"]).point_place
     tags = {"place": place} if place else {}
     if "name" in obj:
         tags["name"] = obj["name"]
     tags.update(placenames.as_tags(placenames.resolve(row, obj, areas, reg)))
-    tags.update(point["tags"])
+    tags = curationlist.with_set_tags(tags, point["tags"])
     if "place" not in tags:
         raise PipelineError(
             f"{point['where']}: kind {row['kind']!r} (places.csv line "
@@ -185,7 +186,7 @@ class SyntheticObjects:
             for k, v in node_tags.items()
             if k in INHERITED_KEYS or k.startswith(LANGUAGE_PREFIX)
         }
-        tags.update(square["tags"])
+        tags = curationlist.with_set_tags(tags, square["tags"])
         self._squares.append(_Square(key, square["label"], square["km2"], centre, tags))
 
     def finish(self) -> None:

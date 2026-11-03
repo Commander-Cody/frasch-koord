@@ -538,7 +538,7 @@ island,e Halem,,,,,,,,,,,De Hallem,Helgoländer Düne,,,,,way/273992076,,ok,,e-h
 island,Räm,,,,,,,,,Rem,,,Röm,,,,Rømø,relation/5178496,Q21191,auto,uncertain,ram
 island,,,,,,,,,,,,Fuan,,,,,Fanø,relation/6125571,Q20837,auto,,fuan
 island,Pelweerm,,,,,,,,,,Pelweerm,,Pellworm,,,,,way/1472528448,Q17044067,auto,unsorted other-dialect name: Pelwärm; unsorted other-dialect name: Polwäärm,pelweerm
-island,e Strönj,,,de Strönj,,,,,Nuurdstrun,Nuurđströn,de Ströön,,Nordstrand,,,,,relation/1420555,Q15058181,ok,confirmed onto the municipality relation (the peninsula node never reaches the tiles); the label itself comes from a synthetic island polygon on the village node (see curation.csv),e-stronj
+island,e Strönj,,,de Strönj,,,,,Nuurdstrun,Nuurđströn,de Ströön,,Nordstrand,,,,,relation/1420555,Q15058181,ok,"confirmed onto the municipality relation (the peninsula node never reaches the tiles); the label comes from the synthetic island square curation.csv puts on that relation, centred on the village, and is its only one: the village node has none (#174)",e-stronj
 island,,,,,,Füünen,,,,,,,,,,,Fyn,relation/5175917,Q26503,auto,,fuunen
 island,,,,,,,,,,,,Teschel,Terschelling,,,,,,,,,teschel
 island,,,,,,,,,,,,Schorhörn,Scharhörn,,,,,relation/3788053,Q3073,auto,,schorhorn

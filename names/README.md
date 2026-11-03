@@ -611,7 +611,8 @@ with a real `osm` reference but the square of a way or relation (see
   `hallig` → `island`; a `kind` with no default needs `place=` in the
   curation row's `set_tags`, or the build stops). The curation row's
   `set_tags`/`minzoom`/`maxzoom` are applied last, so `set_tags` can override
-  `place=` or `frasch:kind`. (The warft default is `hamlet`, not
+  `place=` or `frasch:kind` — but not remove `place`: an empty `place=`
+  leaves the node without one, and the build stops. (The warft default is `hamlet`, not
   `isolated_dwelling`: OpenMapTiles gives `isolated_dwelling` nodes z14 but
   `hamlet` nodes z11, the style's Warft layer starts at z13, and OSM's own
   Hallig Warften are `place=hamlet` already.)
@@ -642,7 +643,7 @@ the injector puts on the map (not `skip`, not `not_a_place`, with a Frisian
 name) has no curation row; a curation row with a local reference lacks
 `lat`/`lon`; the same local reference appears twice in `curation.csv`; the
 node has no `place=` (a `kind` without a default and no `place=` in
-`set_tags`); a square would not be `place=island`.
+`set_tags`, or an empty `place=` there); a square would not be `place=island`.
 A curation local row that no `places.csv` row uses is reported and ignored —
 no nameless node is written for it.
 
@@ -672,7 +673,7 @@ error, a square's row included.
 | `osm` | `node/123`, `way/123`, `relation/123`; several separated by `;`, as in `places.csv` — or a local reference `local/<slug>` matching a `places.csv` row |
 | `name` | free-text label so a human can read the row — **not** written to the data |
 | `lat`, `lon` | decimal degrees — mandatory for a local reference (the position of the node/square it creates) and for a way's or relation's square (its centre), empty on any other row |
-| `set_tags` | `k=v` pairs separated by `;`, e.g. `place=island;frasch:kind=island` |
+| `set_tags` | `k=v` pairs separated by `;`, e.g. `place=island;frasch:kind=island`; `k=` (an empty value) removes the tag `k` |
 | `minzoom` | integer 0–24, or empty |
 | `maxzoom` | integer 0–24, not below `minzoom`, or empty — the last zoom (inclusive) the label is shown at |
 | `polygon_km2` | positive number, or empty — add a synthetic label polygon of this area for the one object in `osm` (see below) |
@@ -688,6 +689,12 @@ error, a square's row included.
   — which OSM tags `place=islet` — get no label at all until `set_tags` promotes
   them to `place=island`. `set_tags` is applied **verbatim and last**, after the
   name list, so it can override `frasch:kind` or any other tag.
+  An **empty value removes the tag**: `place=` takes `place` off the object,
+  so OpenMapTiles does not label it at all — Nordstrand's village node, so
+  that the island is the only label there (#174). The same holds on a
+  square and on a local reference's node, whose `place` is then missing
+  (see *Places OSM does not have*). A square's row sets no `place` but
+  `island`, an empty one included: the loader stops the build.
   It is also the lever for which village wins a label collision: Planetiler
   ranks the places of a label-grid cell by class, then `population` (largest
   first), then the length of OSM's `name` (shortest first), and the style
@@ -734,9 +741,13 @@ error, a square's row included.
   The cases: **Nordstrand** is a peninsula now, so no island polygon exists,
   and the municipality relation's interior point lies 2 km from the village.
   The square on the relation (50 km², about the real area, which is what sets
-  OMT's rank and first zoom) is centred on the village node's position,
-  carries "e Strönj" as an island through z11 (`maxzoom=11`), and the
-  village node, held to z12 by a row of its own, takes over at the same spot.
+  OMT's rank and first zoom) is centred on the village node's position and
+  carries "e Strönj", in every dialect of the row, at every zoom. It is the
+  only label: no settlement is called Nordstrand, so the village node's own
+  row removes its `place` (`place=`), and Nordstrand's parts are labelled
+  beneath the island, as Tilli and Tammensiel are on Pellworm — Odebel,
+  Sööderhuuwen, Norderhuuwen, Ängloun and Weesten promoted from
+  `neighbourhood` to `hamlet`, so that they show from z11 (#174).
   **Ääderstää** (Eiderstedt): OpenMapTiles labels neither its
   `natural=peninsula` node nor the Amt boundary, so a 340 km² square on the
   peninsula node carries the name from z8 through z10 (`maxzoom=10`), before

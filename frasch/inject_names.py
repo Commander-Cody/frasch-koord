@@ -15,7 +15,8 @@ row of the name list gives it (frasch.placenames, the rule the search index
 is built by too; which row holds it is frasch.inject.claims') -- or, when no
 row holds it and it lies in a dialect area, OSM's own `name:frr` as
 `frasch:local` -- and then the `set_tags` and zooms of its curation row,
-verbatim, so they may override `frasch:kind` or `place`.  All other tags
+verbatim, so they may override `frasch:kind` or `place`; an empty value
+(`place=`) removes the tag (curationlist.with_set_tags).  All other tags
 are preserved (`o.replace(tags=...)`), as are all objects no file mentions.
 The places OSM does not have and the synthetic squares are added in between
 (frasch.inject.synthetic).
@@ -34,7 +35,7 @@ from collections.abc import Sequence
 
 import osmium
 
-from frasch import cli, dialects, locate, placenames
+from frasch import cli, curationlist, dialects, locate, placenames
 from frasch.dialects import Registry
 from frasch.geo import LonLat
 from frasch.inject import report
@@ -126,7 +127,7 @@ class Injector:
         if not added and square is None:
             self._writer.add(o)
             return
-        tags = dict(o.tags) | added
+        tags = curationlist.with_set_tags(dict(o.tags), added)
         if square is not None:
             if location is not None:  # a node's, centred on it; any other is queued
                 self._synthetic.add_square(key, square, location, tags)
@@ -145,7 +146,7 @@ class Injector:
         uncounted = Tagger(self._inputs, Stats())
         centres = self._inputs.curation.centres
         for key, own in self._inputs.square_objects.items():
-            tags = own | uncounted.added_tags(key, own, None)
+            tags = curationlist.with_set_tags(own, uncounted.added_tags(key, own, None))
             self._synthetic.add_square(key, self._inputs.curation.squares[key], centres[key], tags)
 
 

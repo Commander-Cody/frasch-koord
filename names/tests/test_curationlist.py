@@ -146,6 +146,10 @@ def test_local_reference_row_positions_a_place(tmp_path: Path) -> None:
             "polygon_km2 on relation/1420555 needs `lat` and `lon`",
         ),
         ({"osm": "node/1; node/2", "polygon_km2": "5"}, "exactly one object"),
+        (
+            {"osm": "node/85929111", "set_tags": "place=", "polygon_km2": "50"},
+            r"polygon_km2 on node/85929111 needs place=island \(got place=;",
+        ),
     ],
 )
 def test_bad_curation_row_stops_the_build(
@@ -287,7 +291,7 @@ def test_set_tags_value_may_contain_an_equals_sign() -> None:
     assert curationlist.parse_set_tags("note=a=b") == {"note": "a=b"}
 
 
-def test_set_tags_value_may_be_empty() -> None:
+def test_an_empty_set_tags_value_is_kept_as_a_removal() -> None:
     assert curationlist.parse_set_tags("name:de=") == {"name:de": ""}
 
 

@@ -66,7 +66,7 @@ Three levels of map changes, all without forking Planetiler:
 2. **Own tile attributes**: Planetiler's `--extra_name_tags=frasch:kind,frasch:minzoom,frasch:maxzoom` copies arbitrary tags into the tiles. The injector writes `frasch:kind` (the sheet's own classification: island / hallig / sand / warft / koog / …) and `frasch:minzoom` (per-feature curation, e.g. Tilli and Tammensiel not before Dagebüll at z10; Süderoogsand together with Norderoogsand at z9). The style enforces `frasch:minzoom` with a zoom filter and styles/prioritises labels by `frasch:kind`.
 3. **Style** (`web/src/map/style/frasch-bright.json`, forked from OSM Bright): label layers per kind (`place-island`, `place-hallig`, `place-sand` from z10, `place-warft` from z13, …). Priority islands > Halligen > towns/villages > sands > hamlets > Warften. Important MapLibre detail: label collision is resolved in reverse layer order (the LAST symbol layer in the style wins), `symbol-sort-key` only orders within one layer — so the priority is expressed by the physical layer order, low-priority layers first.
 
-Resolved with this mechanism (2026-09-15): Habel/Norderoog/Südfall labelled (islet → island); Nordstrand styled and timed like Pellworm (municipality relation gets `place=island`, village node held to z12; revised 2026-09-16: the relation's label sat 2 km from the village and stayed on next to the village label, so the injector now adds a synthetic 50 km² `place=island` square centred on the village node via curation's `polygon_km2`; it carries the island label from z8 at the village's position and `frasch:maxzoom=11` hands over to the village label at z12 — see `names/README.md`); Süderoogsand and Norderoogsand both from z10 as sands; Tilli/Tammensiel not before Dagebüll (z10) and never over the island name. Second round: sands labelled whenever there is room (their OSM class is `island`, the filter had excluded it); smallest Halligen (OMT rank 6, e.g. Habel) wait until z12 by style rule; Hamburger Hallig via its admin_level=10 relation (z12); all Warften share one layer from z13 — Hallig Warften are `place=hamlet` in OSM and are recognised by name (*warf*, *weerw*, *wäärw*).
+Resolved with this mechanism (2026-09-15): Habel/Norderoog/Südfall labelled (islet → island); Nordstrand styled and timed like Pellworm (municipality relation gets `place=island`, village node held to z12; revised 2026-09-16: the relation's label sat 2 km from the village and stayed on next to the village label, so the injector now adds a synthetic 50 km² `place=island` square centred on the village node via curation's `polygon_km2`; it carries the island label from z8 at the village's position and `frasch:maxzoom=11` hands over to the village label at z12 — see `names/README.md`; revised 2026-11-03, #174: no hand-over any more, the square labels e Strönj at every zoom, the village node's `place` is removed and Nordstrand's parts show as hamlets beneath it); Süderoogsand and Norderoogsand both from z10 as sands; Tilli/Tammensiel not before Dagebüll (z10) and never over the island name. Second round: sands labelled whenever there is room (their OSM class is `island`, the filter had excluded it); smallest Halligen (OMT rank 6, e.g. Habel) wait until z12 by style rule; Hamburger Hallig via its admin_level=10 relation (z12); all Warften share one layer from z13 — Hallig Warften are `place=hamlet` in OSM and are recognised by name (*warf*, *weerw*, *wäärw*).
 
 Language chain in labels: `name:frr-x-mooring` → `name:frr` → `name:nds` → `name:de` → `name:latin` → `name` (revised 2026-09-16, see below: `frasch:local` now comes second, and the local view has a chain of its own). Planned: outside Germany drop `name:de` and use `name:en` (two symbol layers with a `within`-Germany filter).
 
@@ -1958,3 +1958,29 @@ Frisian columns, German and Danish.
   halfway from it to the south-western shore along the south-west ray
   (54.6004/8.8195 → shore 54.5970/8.8136), to 54.5987/8.8165; area, first
   zoom and `set_tags` stay.
+
+## Decided 2026-11-03: Nordstrand is labelled once, as the island (issue #174)
+
+Since #168 the island square carries the names of the row `e-stronj` in
+every dialect, while the village node that took over from z12 had only a
+Mooring name: in every other dialect view the label switched dialect at the
+hand-over.
+
+- **The village label goes, not the island's.** No settlement is called
+  Nordstrand; `node/85929111` is the municipality's label, and the places on
+  the ground are its parts. So, as on Pellworm, the island label shows at
+  every zoom (the square's `maxzoom=11` is gone) and the parts sit beneath
+  it. Giving the village node the row's other names was turned down.
+- **An empty `set_tags` value removes the tag**: `place=` takes `place` off
+  the object, so OpenMapTiles does not label it. It applies wherever
+  `set_tags` does (`curationlist.with_set_tags`): an object, a square, a
+  local reference's node, which then has no `place` and stops the build. A
+  square's row may set no `place` but `island`. A dedicated `hide` column and
+  `maxzoom=0` were turned down.
+- **The parts are promoted to `hamlet`** (Odebel, Sööderhuuwen,
+  Norderhuuwen, Ängloun, Weesten), as Norder-/Süder-Waygaard are, so they
+  show from z11 instead of a `neighbourhood`'s z14; Sööden, Naidik and
+  Ååsterdik stay neighbourhoods. Mursemkuuch shows once, on its hamlet node:
+  its neighbourhood node's `place` is removed.
+- **Ååsterdik is split** (#187): the Wiedingharde row is unmatched, and
+  Nordstrand's Osterdeich has a `settlement` row of its own.
