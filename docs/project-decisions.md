@@ -1943,3 +1943,12 @@ Frisian columns, German and Danish.
   so nothing else ties its label to the row. A reserved id range (Planetiler's
   node map and a jump in ids) and reading `curation.csv` in check-tiles (a
   heuristic) were turned down. Squares were not compared at all before.
+- **Hamborjer Håli (Hamburger Hallig), 2026-11-03 (#182)**, by the same
+  rule with no code change: its `admin_level=10` boundary, which the
+  curation row made the island polygon, includes a ~30 m strip along the dam
+  road to the mainland, and the interior point lay on it, 1.3 km east of the
+  Hallig. The relation now has a 0.84 km² square (the boundary's area, so
+  the rank stays) at the centroid of the boundary without the strip
+  (54.6004/8.8195), from z12 as before, with `frasch:kind=hallig` in its
+  `set_tags`. Changing OSM was ruled out: the strip is plausible as a
+  cadastral boundary.
