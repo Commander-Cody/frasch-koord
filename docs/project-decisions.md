@@ -1952,3 +1952,9 @@ Frisian columns, German and Danish.
   (54.6004/8.8195), from z12 as before, with `frasch:kind=hallig` in its
   `set_tags`. Changing OSM was ruled out: the strip is plausible as a
   cadastral boundary.
+- **Hamborjer Håli, further south-west, 2026-11-03 (#185)**: the centroid
+  of #182 lay on the Hallig's north-eastern edge, pulled there by the salt
+  marsh the boundary includes along the dam. The square's centre moved
+  halfway from it to the south-western shore along the south-west ray
+  (54.6004/8.8195 → shore 54.5970/8.8136), to 54.5987/8.8165; area, first
+  zoom and `set_tags` stay.

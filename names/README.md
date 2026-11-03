@@ -749,8 +749,9 @@ error, a square's row included.
   Håli** (Hamburger Hallig): OSM has only an `admin_level=10` boundary
   without a `place` tag, and it includes a ~30 m strip along the dam road to
   the mainland, on which its interior point lay; a square of the boundary's
-  0.84 km², from z12 like Habel, sits at the centroid of the boundary
-  without the strip. Its `set_tags` carry `place=island` and
+  0.84 km², from z12 like Habel, sits halfway between the centroid of the
+  boundary without the strip, which lies on the Hallig's north-eastern edge,
+  and its south-western shore. Its `set_tags` carry `place=island` and
   `frasch:kind=hallig`, so the relation itself no longer gets `place` at
   all. For a local
   reference — no OSM object at all — the square is centred on the curation
