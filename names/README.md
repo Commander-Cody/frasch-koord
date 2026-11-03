@@ -745,7 +745,14 @@ error, a square's row included.
   like an island. **Üülönj** (Oland): its coastline way also covers the
   foreshore along the rail dam, so its interior point lay outside the
   Sommerdeich; a square of the coastline polygon's own 2.1 km² (so rank and
-  first zoom stay) sits at the centroid of the Sommerdeich ring. For a local
+  first zoom stay) sits at the centroid of the Sommerdeich ring. **Hamborjer
+  Håli** (Hamburger Hallig): OSM has only an `admin_level=10` boundary
+  without a `place` tag, and it includes a ~30 m strip along the dam road to
+  the mainland, on which its interior point lay; a square of the boundary's
+  0.84 km², from z12 like Habel, sits at the centroid of the boundary
+  without the strip. Its `set_tags` carry `place=island` and
+  `frasch:kind=hallig`, so the relation itself no longer gets `place` at
+  all. For a local
   reference — no OSM object at all — the square is centred on the curation
   row's own `lat`/`lon`, and no node is written; see *Places OSM does not
   have*.
