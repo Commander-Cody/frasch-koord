@@ -693,7 +693,8 @@ warft,Norddik,,Noorddik,,Noorddik,,,,,,,,Norddeich,,,,,node/240056063; node/1331
 warft,Nordååsterdik,,Noordoasterdik,,,,,,,,,,Nordosterdeich,,,,,way/23644691; way/233398984; way/233398985; way/970339470; way/989209782,,ok,,nordaasterdik
 warft,,,,,,,,,,Nösi,,,Nösse,,,,Næsodde,relation/10254591,,ok,,nosi
 warft,Ååster-Höögelfälj,,,,Aaster-Höögelfäil,,,,,,,,Ost-Högelfeld,,,,,,,,,aaster-hoogelfalj
-warft,Ååsterdik,,Oasterdik,,,,,,,,,,Osterdeich,,,,,node/3049119230,,auto,,aasterdik
+warft,Ååsterdik,,Oasterdik,,,,,,,,,,Osterdeich,,,Wiedingharde,,,,,,aasterdik
+settlement,Ååsterdik,,Oasterdik,,,,,,,,,,Osterdeich,,,Nordstrand,,node/3049119230,,ok,,aasterdik-3
 warft,Ååstersil,,,,,,Aastersil,,,,Uustersil,,Ostersiel,,,,,way/110151376; way/14584895; way/14584926; way/14584927; way/87607484; way/202372735; way/576989968; way/576989970,,ok,,aastersil
 warft,Bai e Sil,,,,,,,,,,,,Beim Siel,,,Wiedingharde,,way/337540435; way/970347313; way/989209784,,ok,,bai-e-sil
 warft,Rollwagentooch,,,,,,,,,,,,Rollwagenzug,,,,,way/145819830; way/170107863; way/170107864; way/170107865; way/170107866; way/170107867; way/170107868; way/170107870; way/170107873; way/170107876; way/170107877; way/170107878; way/683419583; way/683419584; way/1219898095; way/1219898096,,ok,uncertain,rollwagentooch
