@@ -13,7 +13,9 @@ average lies in the sea (Sylt, Amrum), a node near a dialect border
 (Stiardebel), a Kreis, a place whose inside point misses its area while its
 outline hits it (Oland), a row with two objects in two areas (Nordwärw),
 and an island whose label a curation square carries, centred in another
-area than its own polygon (Strönj).  And the places whose local name may be OSM's own `name:frr`
+area than its own polygon (Strönj) -- whose village node, like Nordstrand's
+(#174), has its `place` removed, so that the island is labelled once, in
+one dialect.  And the places whose local name may be OSM's own `name:frr`
 (#81): one in an area whose row has no local name (Slütsil), one whose row
 has one (Oland), one outside every area (Kil) -- and in a Synnejysk area,
 where OSM's Frisian name is none (#83): one with a Synnejysk name (Läigem),
@@ -81,6 +83,7 @@ NODES = (
         # in a Synnejysk area: OSM's Frisian name is no local name there
         18: ((10.0, 55.05), {"place": "village", "name": "Süderlügum", "name:frr": "Läigem"}),
         19: ((10.05, 55.05), {"place": "village", "name": "Ladelund", "name:nds": "Lahnlunn"}),
+        21: ((9.4, 54.5), {"place": "village", "name": "Nordstrand"}),  # Strönj's village
     }
     | SYLT_NODES
     | OLAND_NODES
@@ -207,6 +210,7 @@ AREAS = areas_geojson(
 
 CURATION = """osm,name,lat,lon,set_tags,minzoom,maxzoom,polygon_km2,note
 way/13,Strönj,54.5,9.4,place=island;frasch:kind=island,,,10,
+node/21,Strönj's village,,,place=,,,,
 """
 
 
@@ -234,8 +238,20 @@ def injected_features(pbf: Path) -> list[Label]:
     return out
 
 
+def place_labels(pbf: Path, name: str) -> list[dict[str, str]]:
+    """The tags of every object of the extract called `name` that
+    OpenMapTiles would label as a place: those with a `place` tag."""
+    return [
+        dict(o.tags)
+        for o in osmium.FileProcessor(str(pbf))
+        if "place" in o.tags and o.tags.get("name") == name
+    ]
+
+
 @pytest.fixture(scope="module")
-def built(tmp_path_factory: pytest.TempPathFactory) -> Built:
+def pipeline_run(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """The directory of one run: its inputs, the injected extract
+    `out.osm.pbf` and the search index `names.json`."""
     d = tmp_path_factory.mktemp("consistency")
     (d / "places.csv").write_text(places_text(ROWS), encoding="utf-8")
     (d / "curation.csv").write_text(CURATION, encoding="utf-8")
@@ -245,8 +261,13 @@ def built(tmp_path_factory: pytest.TempPathFactory) -> Built:
     locate.run(ws, REGISTRY, [d / "in.osm.pbf"])
     inject_names.run(ws, REGISTRY, str(d / "in.osm.pbf"), str(d / "out.osm.pbf"))
     searchindex.run(ws, REGISTRY)
-    names = json.loads((d / "names.json").read_text(encoding="utf-8"))
-    return {e["id"]: e for e in names["places"]}, injected_features(d / "out.osm.pbf")
+    return d
+
+
+@pytest.fixture(scope="module")
+def built(pipeline_run: Path) -> Built:
+    names = json.loads((pipeline_run / "names.json").read_text(encoding="utf-8"))
+    return {e["id"]: e for e in names["places"]}, injected_features(pipeline_run / "out.osm.pbf")
 
 
 def test_tiles_and_search_index_agree_on_every_ref(built: Built) -> None:
@@ -280,6 +301,13 @@ def test_every_row_on_the_map_is_checked(built: Built) -> None:
         "kil",
         *LISTED_REFS,
     }
+
+
+def test_an_island_with_a_square_and_a_hidden_village_is_labelled_once(
+    pipeline_run: Path,
+) -> None:
+    labels = place_labels(pipeline_run / "out.osm.pbf", "Nordstrand")
+    assert [tags.get("frasch:square") for tags in labels] == ["yes"]
 
 
 def test_a_squares_label_is_held_to_its_entry(built: Built) -> None:

@@ -6,7 +6,7 @@ The extract mirrors real places (ids and positions from the
 Schleswig-Holstein extract; ring nodes made up): the village Holm, a
 Nordwarft way on Ockholm (the id of the Warft on Habel, moved to where the
 row's Nordwarft lies; #135), the Hamburger Hallig relation, the Nordstrand
-village node (curated), the Eiderstedt peninsula node and the Oland
+village node and its part Odebel (both curated), the Eiderstedt peninsula node and the Oland
 coastline way that carry a synthetic square each, Tammensiel (curated, not in the name list), Westerheide on Amrum, a place OSM does not have, and
 the Kirchwarft, which no row claims but OSM names in Frisian (#81; moved into
 the Mooring box of AREAS)."""
@@ -74,6 +74,7 @@ def test_square_is_centred_on_the_node() -> None:
 # ------------------------------------------------------------ a whole run() ---
 HOLM = 240102263
 NORDSTRAND = 85929111
+ODEBEL = 3049119229
 EIDERSTEDT = 6337086101
 TAMMENSIEL = 355956234
 UNTOUCHED_NODE = 240000001
@@ -188,8 +189,7 @@ CURATION = [
     {
         "osm": f"node/{NORDSTRAND}",
         "name": "Nordstrand (village node)",
-        "set_tags": "name:frr-x-mooring=e Strönj;frasch:ref=relation/1420555",
-        "minzoom": "12",
+        "set_tags": "place=",
     },
     {
         "osm": f"way/{OLAND}",
@@ -200,6 +200,7 @@ CURATION = [
         "polygon_km2": "2.1",
     },
     {"osm": f"node/{TAMMENSIEL}", "name": "Tammensiel", "minzoom": "10"},
+    {"osm": f"node/{ODEBEL}", "name": "Odebel", "set_tags": "place=hamlet"},
     {
         "osm": f"relation/{HAMBURGER_HALLIG}",
         "name": "Hamburger Hallig",
@@ -232,6 +233,7 @@ def write_scene(path: Path) -> None:
     Hamburger Hallig and the objects no row names."""
     nodes: dict[int, tuple[LonLat, dict[str, str]]] = {
         NORDSTRAND: ((8.865286, 54.487378), {"place": "village", "name": "Nordstrand"}),
+        ODEBEL: ((8.8498, 54.4935), {"place": "neighbourhood", "name": "Odebel"}),
         EIDERSTEDT: ((8.79035, 54.35), {"natural": "peninsula", "name": "Eiderstedt"}),
         HOLM: ((8.866668, 54.833305), {"place": "village", "name": "Holm", "wikidata": "Q559369"}),
         UNTOUCHED_NODE: ((8.9, 54.6), {"place": "village", "name": "Bredstedt"}),
@@ -506,15 +508,15 @@ def test_curation_applies_to_objects_the_name_list_does_not_know(injected: Injec
 
 
 def test_curation_tags_win_over_the_original_tags(injected: Injected) -> None:
-    # the village node keeps place=village; only the square becomes an island
     _, by_key = injected
-    assert by_key[("n", NORDSTRAND)][0] == {
-        "place": "village",
-        "name": "Nordstrand",
-        "name:frr-x-mooring": "e Strönj",
-        "frasch:ref": "relation/1420555",
-        "frasch:minzoom": "12",
-    }
+    assert by_key[("n", ODEBEL)][0] == {"place": "hamlet", "name": "Odebel"}
+
+
+def test_an_empty_curation_value_removes_the_tag_and_keeps_the_others(
+    injected: Injected,
+) -> None:
+    _, by_key = injected
+    assert by_key[("n", NORDSTRAND)][0] == {"name": "Nordstrand"}
 
 
 # ------------------------------------------- OSM's own Frisian name (#81) ---

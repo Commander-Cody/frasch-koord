@@ -4,7 +4,8 @@ One row per OSM object (or `local/<slug>` reference) the map treats
 differently from what OpenMapTiles would make of it (names/README.md, "Map
 curation"):
 
-* `set_tags` -- `k=v` pairs separated by `;`, applied verbatim by the injector
+* `set_tags` -- `k=v` pairs separated by `;`, applied verbatim by the
+  injector (`with_set_tags`); `k=` removes the tag `k`
 * `minzoom` / `maxzoom` -- become the tile attributes `frasch:minzoom` /
   `frasch:maxzoom`
 * `polygon_km2` -- a synthetic square of that area for one object (or local
@@ -75,6 +76,15 @@ def parse_set_tags(spec: str | None) -> dict[str, str]:
             raise Invalid(f"set_tags entry {pair!r} has an empty key")
         tags[k] = v
     return tags
+
+
+def with_set_tags(tags: Mapping[str, str], changes: Mapping[str, str]) -> dict[str, str]:
+    """`tags` with `changes` applied as `set_tags` applies them: each value
+    replaces the tag's, and an empty one removes the tag --
+    `{"place": "village", "name": "N"}` with `{"place": ""}` ->
+    `{"name": "N"}`."""
+    merged = {**tags, **changes}
+    return {k: v for k, v in merged.items() if v or k not in changes}
 
 
 def _zoom(row: Mapping[str, str], column: str, found: list[str]) -> int | None:
@@ -178,6 +188,20 @@ def _position_problems(
     return []
 
 
+def _square_place_problems(
+    objects: Sequence[Ref], km2: float | None, tags: Mapping[str, str]
+) -> list[str]:
+    """A square labels only as `place=island` -- OpenMapTiles takes
+    hamlets, villages etc. from points only -- so its row may set no other
+    `place`, nor remove it."""
+    if km2 is None or tags.get("place", "island") == "island":
+        return []
+    return [
+        f"polygon_km2 on {refs.format(objects)} needs place=island (got place={tags['place']}; "
+        f"OpenMapTiles labels polygons only as islands)"
+    ]
+
+
 def _entry(n: int, row: Mapping[str, str], seen: _Seen) -> tuple[Entry | None, list[str]]:
     """-> (the entry of one row, what is wrong with it); no entry for a row
     without a reference (a spacer) or with a problem."""
@@ -197,7 +221,9 @@ def _entry(n: int, row: Mapping[str, str], seen: _Seen) -> tuple[Entry | None, l
     try:
         tags = parse_set_tags(row["set_tags"])
     except Invalid as exc:
+        tags = {}
         found.append(exc.reason)
+    found += _square_place_problems(objects, km2, tags)
     minzoom, maxzoom = _zooms(row, found)
     if km2 is not None and len(objects) != 1:
         found.append("polygon_km2 needs exactly one object (or local reference) in `osm`")
