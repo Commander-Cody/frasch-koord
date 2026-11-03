@@ -1,8 +1,8 @@
 import { expect, it } from 'vitest';
-import { featureFilter } from '@maplibre/maplibre-gl-style-spec';
 import type { LayerSpecification } from 'maplibre-gl';
 
 import type { TileProps } from '../../names/tile';
+import { layersDrawing as styleLayersDrawing } from '../../testing/layersDrawing';
 import { BASE_STYLE, PLACE_LAYERS } from './index';
 
 function placeLayer(id: string): LayerSpecification {
@@ -11,22 +11,9 @@ function placeLayer(id: string): LayerSpecification {
   return layer;
 }
 
-function isShownAt(layer: LayerSpecification, zoom: number): boolean {
-  return zoom >= (layer.minzoom ?? 0) && zoom < (layer.maxzoom ?? 24);
-}
-
-/**
- * The place layers that draw a point feature with the properties `props` at
- * `zoom`: the layer's zoom range and its filter, by MapLibre's own evaluation.
- */
+/** The place layers that draw a point feature with the properties `props` at `zoom`. */
 function layersDrawing(props: TileProps, zoom: number): string[] {
-  return PLACE_LAYERS.map(placeLayer)
-    .filter((layer) => {
-      if (!isShownAt(layer, zoom)) return false;
-      const filter = 'filter' in layer ? layer.filter : undefined;
-      return featureFilter(filter, 'filter').filter({ zoom }, { properties: props, type: 1 });
-    })
-    .map((layer) => layer.id);
+  return styleLayersDrawing(PLACE_LAYERS.map(placeLayer), { properties: props, type: 1 }, zoom);
 }
 
 // What the tiles carry for a landscape labelled by a synthetic island square

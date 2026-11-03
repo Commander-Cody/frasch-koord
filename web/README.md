@@ -214,8 +214,14 @@ then reads TileJSON straight out of the archive itself.
   Frisian place kinds (see "Label classes" below). Since then it has lost
   what upstream needed and we do not (issue #112): the Mapbox Studio
   metadata, the camera, and the source URL, sprite and glyphs, which named
-  MapTiler and GitHub Pages; the file names no URL. Everything else in it is
-  still stock OSM Bright.
+  MapTiler and GitHub Pages; the file names no URL. Municipal boundaries
+  (`admin_level` 7–8: Amt and Gemeinde) have a layer of their own,
+  `boundary-land-municipal`: thinner than the Kreis lines
+  (`boundary-land-district`, 5–6), which are thinner than the Land lines of
+  `boundary-land-level-4`, so each rank stands back behind the one above.
+  Both are a muted violet that no road or railway is drawn in, so a thin
+  dashed line is not mistaken for a tunnel railway or a path.
+  Everything else in it is still stock OSM Bright.
 - **A layer that labels a feature by its name is marked**
   `"metadata": {"frasch:label": true}`, with `["get", "name"]` as its
   `text-field` in the file. A new name layer needs the marker, or it shows
