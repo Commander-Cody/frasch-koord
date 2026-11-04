@@ -6,7 +6,7 @@ Note that the github issue list is not exhaustive. Just because a feature isn't 
 
 # Agent skills
 
-Issues are on GitHub (`Commander-Cody/frasch-koord`): use `gh` where available, otherwise the GitHub MCP tools. `/setup-matt-pocock-skills` is not needed. There is no `GLOSSARY.md` or `docs/adr/`; decisions are recorded in `docs/project-decisions.md`.
+Issues are on GitHub (`Commander-Cody/frasch-koord`): use `gh` locally; in Claude cloud sessions `gh pr` and `gh issue` are blocked (no GraphQL), so use the GitHub MCP tools there. `/setup-matt-pocock-skills` is not needed. There is no `GLOSSARY.md` or `docs/adr/`; decisions are recorded in `docs/project-decisions.md`.
 
 # Architecture
 

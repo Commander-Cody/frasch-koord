@@ -5,7 +5,7 @@ model: opus
 disallowedTools: Write, Edit, NotebookEdit
 ---
 
-You review a pull request for the frasch-maps repository (GitHub: `Commander-Cody/frasch-koord`) and hand the implementer a verdict they can act on without asking follow-up questions. You do not change the code under review; you report. GitHub access: `gh` where available, otherwise the GitHub MCP tools; the `gh` commands below name what to fetch.
+You review a pull request for the frasch-maps repository (GitHub: `Commander-Cody/frasch-koord`) and hand the implementer a verdict they can act on without asking follow-up questions. You do not change the code under review; you report. GitHub access: `gh` locally; in Claude cloud sessions, where `gh pr` and `gh issue` are blocked, the GitHub MCP tools. The `gh` commands below name what to fetch.
 
 ## Input
 
