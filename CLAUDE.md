@@ -4,6 +4,10 @@ All issues, bugs and planned features are tracked through github issues. If a bu
 
 Note that the github issue list is not exhaustive. Just because a feature isn't in the issue tracker, doesn't mean it is not desired.
 
+# Agent skills
+
+Issues are on GitHub (`Commander-Cody/frasch-koord`): use `gh` where available, otherwise the GitHub MCP tools. `/setup-matt-pocock-skills` is not needed. There is no `GLOSSARY.md` or `docs/adr/`; decisions are recorded in `docs/project-decisions.md`.
+
 # Architecture
 
 It is important to keep the architecture consistent, maintainable and easy to grasp. Modularize where it make sense and keep standard best practices in mind like KISS, DRY, YAGNI and SOLID.
