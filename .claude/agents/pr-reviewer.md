@@ -15,13 +15,13 @@ The caller may also give you the path of a worktree that has the PR's head check
 
 ## 1. Get the code
 
-- PR: `gh pr view <N> --json number,title,body,headRefName,baseRefName,files,commits,closingIssuesReferences` and `gh pr checks <N>`.
+- PR (GitHub MCP, owner `Commander-Cody`, repo `frasch-koord`): `mcp__github__pull_request_read` with method `get` for title, body, head/base branch and head SHA; method `get_files` for the changed files; method `get_commits` for the commit messages; method `get_check_runs` for the CI checks (use `mcp__github__get_check_run` on a failing one for its output).
 - If the caller named a worktree, or the current checkout is already the PR's head (compare `git rev-parse HEAD` with the PR's head commit), work there. Otherwise fetch it into a detached worktree: `git fetch origin pull/<N>/head` and `git worktree add --detach .claude/worktrees/review-pr-<N> FETCH_HEAD`. Run everything below inside that worktree and remove it at the end (`git worktree remove`).
 - The fixed point is the merge-base with the PR's base branch (`origin/main` unless stated otherwise). Confirm the diff is non-empty.
 
 ## 2. Find the original task
 
-In this order: the issue(s) the caller named; `closingIssuesReferences` and `#N` references in the PR body and commit messages (`gh issue view <N> --comments`); the PR description itself. Read the issue comments too — decisions and scope changes are often recorded there. If no task description can be found at all, say so in the verdict and do not approve.
+In this order: the issue(s) the caller named; closing references (`Closes #N`, `Fixes #N`, `Resolves #N`) and `#N` references in the PR body and commit messages, read with `mcp__github__issue_read` (method `get` and `get_comments`); the PR description itself. Read the issue comments too — decisions and scope changes are often recorded there. If no task description can be found at all, say so in the verdict and do not approve.
 
 ## 3. Run the checks
 
@@ -31,13 +31,13 @@ In this order: the issue(s) the caller named; `closingIssuesReferences` and `#N`
 - `uv run just check`: every lint, format, type check and test, Python and web; it runs them all and ends with the list of the failed ones (`run-all: failed: …`)
 - `uv run just smoke`: the production build (checked), then the smoke test in headless Chromium
 
-Also look at `gh pr checks <N>`. Any failing check, local or in CI, blocks approval. If a check cannot run for an environmental reason (not because of the PR), say which one and why, and fall back to the CI result for it.
+Also look at the PR's CI checks (`get_check_runs`, step 1). Any failing check, local or in CI, blocks approval. If a check cannot run for an environmental reason (not because of the PR), say which one and why, and fall back to the CI result for it.
 
 ## 4. Review with the code-review skill
 
 Invoke the `code-review` skill with the fixed point from step 1 and the task from step 2. Adjustments for this repo:
 
-- The issue tracker is GitHub, accessed with `gh`. Ignore the skill's pointer to `docs/agents/issue-tracker.md` and do not run `setup-matt-pocock-skills`.
+- The issue tracker is GitHub, accessed with the GitHub MCP tools (`mcp__github__issue_read`, `mcp__github__list_issues`, `mcp__github__issue_write`). Ignore the skill's pointer to `docs/agents/issue-tracker.md` and do not run `setup-matt-pocock-skills`.
 - Standards sources include `CLAUDE.md` (notably: no TODOs in code and no parallel issue records in the repo — deferred work belongs in GitHub issues), the READMEs, and `docs/project-decisions.md`.
 - If you cannot spawn sub-agents, do both axes yourself, one after the other, keeping their findings separate until step 6.
 
