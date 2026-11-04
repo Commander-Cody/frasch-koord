@@ -1,14 +1,16 @@
 // Smoke check of the production build: serves dist/ with `vite preview`,
 // opens it in headless Chromium and checks that the map loads, search finds a
 // place, its card opens and the map marks it, that the geolocate button takes
-// the map to where the browser is, and that the dev tools stay off. `npm run smoke`
+// the map to where the browser is, that the dev tools stay off, and that the
+// error strip of a map whose tiles fail stays clear of the side panel and the
+// zoom buttons. `npm run smoke`
 // builds first, then runs this. The build needs the fetched assets (`npm run
 // fetch-assets`, or VITE_TILES_URL for the tiles), see README.md.
 //
 // Browser: Playwright's headless Chromium (`npx playwright install
 // chromium-headless-shell` once).
 
-import { type Browser, chromium } from 'playwright';
+import { type Browser, type Locator, chromium } from 'playwright';
 import { preview } from 'vite';
 
 /** Niebüll and around: the name list is densest here. */
@@ -22,11 +24,61 @@ const GEOLOCATE_ZOOM = 14;
 const MAPLIBRE_GEOLOCATE_LABEL = 'Find my location';
 const TIMEOUT = 60_000;
 
+/** Desktop widths, just wider than PHONE_MEDIA (src/layout.ts) and wide, the error strip is checked at. */
+const DESKTOP_WIDTHS = [700, 1280];
+/**
+ * How long the tile requests of the error strip check take to fail: a failure
+ * that comes back before the app listens for it is lost (#192).
+ */
+const TILE_FAILURE_DELAY_MS = 1000;
+
 /** Whether the camera in `url`'s hash (`#zoom/lat/lon`) is on POSITION at GEOLOCATE_ZOOM. */
 function showsPosition(url: URL): boolean {
   const [zoom, lat, lon] = url.hash.slice(1).split('/').map(Number);
   const near = (a: number, b: number) => Math.abs(a - b) < 0.001;
   return zoom === GEOLOCATE_ZOOM && near(lat, POSITION.latitude) && near(lon, POSITION.longitude);
+}
+
+interface Box {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+function overlaps(a: Box, b: Box): boolean {
+  return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+}
+
+async function boxOf(locator: Locator): Promise<Box> {
+  const box = await locator.boundingBox({ timeout: TIMEOUT });
+  if (!box) throw new Error(`${locator} is not displayed`);
+  return box;
+}
+
+/**
+ * What the map error strip covers at `width`, in a page whose tile requests
+ * fail: the side panel or the zoom buttons. A page of its own, so the errors
+ * it provokes stay out of the main check's problems.
+ */
+async function errorStripProblems(browser: Browser, url: string, width: number): Promise<string[]> {
+  const page = await browser.newPage({ viewport: { width, height: 800 } });
+  try {
+    await page.route('**/*.pmtiles', (route) => {
+      setTimeout(() => void route.abort(), TILE_FAILURE_DELAY_MS);
+    });
+    await page.goto(`${url}${VIEW}`);
+    const strip = await boxOf(page.locator('.map-error'));
+    const covered = {
+      'the side panel': await boxOf(page.locator('.side-panel')),
+      'the zoom buttons': await boxOf(page.locator('.maplibregl-ctrl-zoom-in').locator('..')),
+    };
+    return Object.entries(covered)
+      .filter(([, box]) => overlaps(strip, box))
+      .map(([what]) => `at ${width}px wide the map error strip runs under ${what}`);
+  } finally {
+    await page.close();
+  }
 }
 
 const server = await preview({ preview: { port: 4173, strictPort: false, open: false } });
@@ -98,6 +150,9 @@ try {
       problems.push(`?${tool} opens a dev tool`);
     }
   }
+
+  for (const width of DESKTOP_WIDTHS)
+    problems.push(...(await errorStripProblems(browser, url, width)));
 } catch (err) {
   problems.push(String(err));
 } finally {
@@ -109,4 +164,6 @@ if (problems.length > 0) {
   for (const p of problems) console.error(`smoke: ${p}`);
   process.exit(1);
 }
-console.log('smoke: ok (map loaded, search, card, marker and geolocate work, no dev tools)');
+console.log(
+  'smoke: ok (map loaded, search, card, marker and geolocate work, no dev tools, error strip clear of the panels)',
+);
