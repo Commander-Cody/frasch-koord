@@ -26,11 +26,6 @@ const TIMEOUT = 60_000;
 
 /** Desktop widths, just wider than PHONE_MEDIA (src/layout.ts) and wide, the error strip is checked at. */
 const DESKTOP_WIDTHS = [700, 1280];
-/**
- * How long the tile requests of the error strip check take to fail: a failure
- * that comes back before the app listens for it is lost (#192).
- */
-const TILE_FAILURE_DELAY_MS = 1000;
 
 /** Whether the camera in `url`'s hash (`#zoom/lat/lon`) is on POSITION at GEOLOCATE_ZOOM. */
 function showsPosition(url: URL): boolean {
@@ -64,9 +59,7 @@ async function boxOf(locator: Locator): Promise<Box> {
 async function errorStripProblems(browser: Browser, url: string, width: number): Promise<string[]> {
   const page = await browser.newPage({ viewport: { width, height: 800 } });
   try {
-    await page.route('**/*.pmtiles', (route) => {
-      setTimeout(() => void route.abort(), TILE_FAILURE_DELAY_MS);
-    });
+    await page.route('**/*.pmtiles', (route) => route.abort());
     await page.goto(`${url}${VIEW}`);
     const strip = await boxOf(page.locator('.map-error'));
     const covered = {
