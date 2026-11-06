@@ -29,9 +29,18 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+/** The failure state of a hook that watches `map`. */
+function watching(map: FailureMap) {
+  const { result } = renderHook(() => useMapFailure());
+  act(() => {
+    result.current.watch(map);
+  });
+  return result;
+}
+
 it('reports an error the map raises', () => {
   const { map, fire } = fakeMap();
-  const { result } = renderHook(() => useMapFailure(map));
+  const result = watching(map);
 
   fire('error', { error: new Error('tile 404') });
 
@@ -40,7 +49,7 @@ it('reports an error the map raises', () => {
 
 it('reports a map that has not loaded after 30 seconds', () => {
   const { map } = fakeMap();
-  const { result } = renderHook(() => useMapFailure(map));
+  const result = watching(map);
 
   act(() => vi.advanceTimersByTime(30_000));
 
@@ -49,7 +58,7 @@ it('reports a map that has not loaded after 30 seconds', () => {
 
 it('takes the timeout back when the map loads after all', () => {
   const { map, fire } = fakeMap();
-  const { result } = renderHook(() => useMapFailure(map));
+  const result = watching(map);
   act(() => vi.advanceTimersByTime(30_000));
 
   fire('load');
@@ -59,7 +68,7 @@ it('takes the timeout back when the map loads after all', () => {
 
 it('keeps an error when the map loads after it', () => {
   const { map, fire } = fakeMap();
-  const { result } = renderHook(() => useMapFailure(map));
+  const result = watching(map);
   fire('error', { error: new Error('glyphs 404') });
 
   fire('load');
@@ -69,10 +78,21 @@ it('keeps an error when the map loads after it', () => {
 
 it('reports nothing once dismissed', () => {
   const { map, fire } = fakeMap();
-  const { result } = renderHook(() => useMapFailure(map));
+  const result = watching(map);
   fire('error', { error: new Error('tile 404') });
 
   act(() => result.current.dismiss());
+
+  expect(result.current.failure).toBeNull();
+});
+
+it('reports nothing the map raises once unwatched', () => {
+  const { map, fire } = fakeMap();
+  const { result } = renderHook(() => useMapFailure());
+  const unwatch = result.current.watch(map);
+
+  unwatch();
+  fire('error', { error: new Error('tile 404') });
 
   expect(result.current.failure).toBeNull();
 });
