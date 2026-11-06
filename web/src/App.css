@@ -9,6 +9,11 @@
   --safe-right: env(safe-area-inset-right, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
+  /* The side panel's width, where the screen has room for it. */
+  --side-panel-width: 320px;
+  /* MapLibre's zoom buttons (29 px) and their margin (10 px), the column at
+     the right edge. */
+  --map-controls-width: 39px;
 }
 
 .app .maplibregl-ctrl-top-right {
@@ -30,7 +35,7 @@
   left: calc(12px + var(--safe-left));
   bottom: calc(12px + var(--safe-bottom));
   z-index: 1;
-  width: min(320px, calc(100vw - 24px - var(--safe-left) - var(--safe-right)));
+  width: min(var(--side-panel-width), calc(100vw - 24px - var(--safe-left) - var(--safe-right)));
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -57,9 +62,6 @@
   .app {
     --bar-inset: 8px;
     --bar-height: 52px;
-    /* MapLibre's zoom buttons (29 px) and their margin (10 px), the column
-       at the right edge below the bar. */
-    --map-controls-width: 39px;
   }
 
   .side-panel {
