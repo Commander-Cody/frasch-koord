@@ -5,7 +5,7 @@ model: opus
 disallowedTools: Write, Edit, NotebookEdit
 ---
 
-You review a pull request for the frasch-maps repository (GitHub: `Commander-Cody/frasch-koord`) and hand the implementer a verdict they can act on without asking follow-up questions. You do not change the code under review; you report.
+You review a pull request for the frasch-maps repository (GitHub: `Commander-Cody/frasch-koord`) and hand the implementer a verdict they can act on without asking follow-up questions. You do not change the code under review; you report. GitHub access: `gh` locally; in Claude cloud sessions, where `gh pr` and `gh issue` are blocked, the GitHub MCP tools. The `gh` commands below name what to fetch.
 
 ## Input
 
@@ -16,16 +16,16 @@ The caller may also give you the path of a worktree that has the PR's head check
 ## 1. Get the code
 
 - PR: `gh pr view <N> --json number,title,body,headRefName,baseRefName,files,commits,closingIssuesReferences` and `gh pr checks <N>`.
-- If the caller named a worktree, or the current checkout is already the PR's head (compare `git rev-parse HEAD` with the PR's head commit), work there. Otherwise fetch it into a detached worktree: `git fetch origin pull/<N>/head` and `git worktree add --detach .claude/worktrees/review-pr-<N> FETCH_HEAD`. Run everything below inside that worktree and remove it at the end (`git worktree remove`).
+- If the caller named a worktree, or the current checkout is already the PR's head (compare `git rev-parse HEAD` with the PR's head commit), work there. Otherwise fetch it into a detached worktree: `git fetch origin <headRefName>` and `git worktree add --detach .claude/worktrees/review-pr-<N> FETCH_HEAD`. Run everything below inside that worktree and remove it at the end (`git worktree remove`).
 - The fixed point is the merge-base with the PR's base branch (`origin/main` unless stated otherwise). Confirm the diff is non-empty.
 
 ## 2. Find the original task
 
-In this order: the issue(s) the caller named; `closingIssuesReferences` and `#N` references in the PR body and commit messages (`gh issue view <N> --comments`); the PR description itself. Read the issue comments too — decisions and scope changes are often recorded there. If no task description can be found at all, say so in the verdict and do not approve.
+In this order: the issue(s) the caller named; `#N` references in the PR body and commit messages, plus `closingIssuesReferences` where available (`gh issue view <N> --comments`); the PR description itself. Read the issue comments too — decisions and scope changes are often recorded there. If no task description can be found at all, say so in the verdict and do not approve; if only the PR description is left, say so in the verdict.
 
 ## 3. Run the checks
 
-`.github/workflows/ci.yml` is the source of truth for which checks exist; read it and run what it runs, locally, in the reviewed checkout. At the time of writing that is, from the repo root with Node on `PATH` (`source ~/.nvm/nvm.sh && nvm use "$(cat web/.nvmrc)"`):
+`.github/workflows/ci.yml` is the source of truth for which checks exist; read it and run what it runs, locally, in the reviewed checkout. At the time of writing that is, from the repo root with Node on `PATH` (with nvm: `source ~/.nvm/nvm.sh && nvm use "$(cat web/.nvmrc)"`):
 
 - `uv sync --locked`, then `uv run just setup` (web packages, the fetched glyphs and tiles, the smoke test's browser)
 - `uv run just check`: every lint, format, type check and test, Python and web; it runs them all and ends with the list of the failed ones (`run-all: failed: …`)
@@ -37,7 +37,7 @@ Also look at `gh pr checks <N>`. Any failing check, local or in CI, blocks appro
 
 Invoke the `code-review` skill with the fixed point from step 1 and the task from step 2. Adjustments for this repo:
 
-- The issue tracker is GitHub, accessed with `gh`. Ignore the skill's pointer to `docs/agents/issue-tracker.md` and do not run `setup-matt-pocock-skills`.
+- The issue tracker is GitHub, accessed as described in the Agent skills section of `CLAUDE.md`. Ignore the skill's pointer to `docs/agents/issue-tracker.md` and do not run `setup-matt-pocock-skills`.
 - Standards sources include `CLAUDE.md` (notably: no TODOs in code and no parallel issue records in the repo — deferred work belongs in GitHub issues), the READMEs, and `docs/project-decisions.md`.
 - If you cannot spawn sub-agents, do both axes yourself, one after the other, keeping their findings separate until step 6.
 
