@@ -11,6 +11,7 @@ import { placeHitTest } from './hitTest';
 import { oncePerFrame } from './oncePerFrame';
 import { PLACE_LAYERS, styleFor } from './style';
 import { useMapFailure } from './useMapFailure';
+import type { MapFailureState } from './useMapFailure';
 import './MapView.css';
 
 /** How close (px) to the edge of a bottom inset a place may sit before `reveal` pans. */
@@ -73,13 +74,13 @@ export default function MapView({
 }: MapViewProps) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const { mapRef, map } = useMapInstance(containerRef, view, t);
+  const { failure, dismiss, watch } = useMapFailure();
+  const { mapRef, map } = useMapInstance(containerRef, view, t, watch);
   useMapHandle(ref, mapRef);
   useReady(map, onReady);
   useViewStyle(map, view);
   usePlaceClicks(map, onSelectFeature);
   useMarker(map, marker);
-  const { failure, dismiss } = useMapFailure(map);
 
   return (
     <>
@@ -98,27 +99,33 @@ export default function MapView({
  * The map in `containerRef`, created once on mount in `initialView`, its
  * controls labelled by `t`. As a ref for the handle, whose methods have to
  * reach it in the effects of the parent's first render, and as state for the
- * hooks that set it up.
+ * hooks that set it up. `watchFailure` gets it as soon as it exists: the
+ * hooks only see it a render later, when a request that fails at once may
+ * already have come back.
  */
 function useMapInstance(
   containerRef: RefObject<HTMLDivElement | null>,
   initialView: string,
   t: TFunction,
+  watchFailure: MapFailureState['watch'],
 ): { mapRef: RefObject<MapLibreMap | null>; map: MapLibreMap | null } {
   const mapRef = useRef<MapLibreMap | null>(null);
   const [map, setMap] = useState<MapLibreMap | null>(null);
   useEffect(() => {
     if (!containerRef.current) return;
     const created = createMap(containerRef.current, styleFor(initialView), t);
+    const unwatch = watchFailure(created);
     mapRef.current = created;
     setMap(created);
     return () => {
+      unwatch();
       removeMap(created);
       mapRef.current = null;
       setMap(null);
     };
     // Only the initial view matters here; changes are handled by useViewStyle.
     // The controls keep the strings of the first `t` (see createMap).
+    // watchFailure is the same function on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return { mapRef, map };
